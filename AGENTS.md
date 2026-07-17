@@ -15,7 +15,22 @@ A web app (Next.js, hosted on Vercel) for cloning pages from **outrigger.com** a
 2. **Version** — every capture is an immutable **PageVersion**. "Sync Content" captures a new version; it never mutates an old one. Assets are content-addressed (stored by hash) for dedupe across versions and across both sites.
 3. **Prototype** — features are built as **overlays**: new, clearly-namespaced files (e.g. `/prototype/booking-widget.css`) plus declared injection points. The snapshot itself is read-only, always.
 4. **Deploy** — each prototype deploys to Vercel as a working clone of the page(s) with the feature integrated.
-5. **Handoff** — developers receive the overlay files + injection points + source-mapped integration notes referencing Outrigger's real source files.
+5. **Experiment (optional, before handoff)** — a feature can be promoted to an Optimizely **Web Experimentation** variation (same overlay → custom JS/CSS) to A/B test on the *live* site, or a Personalization experience to target a segment. Validates lift before committing devs to permanent integration.
+6. **Handoff** — developers receive the overlay files + injection points + source-mapped integration notes referencing Outrigger's real source files.
+
+## Optimizely (Web Experimentation)
+
+Same account: **OUHH Outrigger Hotels Hawaii** → Experimentation. Snippet is dynamic-website aware (MutationObservers), so live-DOM variation re-application works.
+
+| Env | Project | Site | Snippet |
+|---|---|---|---|
+| **Prep (sandbox)** | `24138040550` | prep.outrigger.com | `cdn.optimizely.com/js/24138040550.js` |
+| **Prod** | `21089662478` | www.outrigger.com | `cdn.optimizely.com/js/21089662478.js` |
+
+- **Prove all pushes against Prep first**, then flip project ID to Prod once trusted.
+- **Safety rail:** the console only ever creates experiments/experiences in a **paused/draft** state via API. A human starts them in Optimizely — the console NEVER turns on production traffic.
+- Auth: `OPTIMIZELY_API_TOKEN` (Personal Access Token, ideally a scoped service account), `OPTIMIZELY_PROJECT_ID`. User provides; Claude never handles the token in plaintext.
+- Our overlay = the variation. Exporter emits self-contained variation JS (CSS-inject + robust wait-for-element HTML insertion + overlay JS) because the live DOM is dynamic; brittle selectors are linted before promotion.
 
 ## Hard Rules (Invariants)
 

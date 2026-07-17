@@ -1,0 +1,23 @@
+{
+  "key": "trip-planner",
+  "name": "Trip Planner CTA",
+  "description": "A 'Plan Your Trip' banner injected after the property hero, driving guests to build an itinerary.",
+  "status": "draft",
+  "targets": [
+    {
+      "siteKey": "outrigger",
+      "slug": "hawaii__oahu__outrigger-waikiki-beach-resort",
+      "version": "latest"
+    }
+  ],
+  "injections": [
+    { "type": "css", "file": "overlay.css" },
+    { "type": "html", "fragment": "trip-planner.html", "selector": ".hero", "mode": "after" },
+    { "type": "js", "file": "overlay.js" }
+  ],
+  "liveUrls": [
+    "https://www.outrigger.com/hawaii/oahu/outrigger-waikiki-beach-resort"
+  ],
+  "createdAt": "2026-07-17T00:00:00.000Z",
+  "updatedAt": "2026-07-17T00:00:00.000Z"
+}
