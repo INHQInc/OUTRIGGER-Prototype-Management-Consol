@@ -1,37 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verifySession } from "@/lib/auth/session";
+import { SESSION_COOKIE } from "@/lib/auth/config";
 
 /**
- * Console-wide HTTP Basic Auth.
+ * Session gate for the whole console. Unauthenticated requests are redirected
+ * to /login (pages) or 401'd (API). Session is a signed 365-day JWT cookie;
+ * verification is stateless (jose), so this stays edge-fast with no DB hit.
  *
- * Vercel's free Standard Protection covers preview/deployment URLs but leaves
- * the production domain public; this middleware closes that gap (invariant:
- * no publicly reachable clones). Set CONSOLE_PASSWORD in the environment to
- * activate. Username is ignored. Local dev without the var runs open.
+ * Requires AUTH_SECRET. If unset (misconfigured deploy), we fail closed.
  */
-export function middleware(req: NextRequest) {
-  const password = process.env.CONSOLE_PASSWORD;
-  if (!password) return NextResponse.next(); // not configured (local dev)
+const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify"];
 
-  const header = req.headers.get("authorization") ?? "";
-  if (header.startsWith("Basic ")) {
-    try {
-      const [, pass] = atob(header.slice(6)).split(":");
-      if (pass === password) return NextResponse.next();
-    } catch {
-      /* fall through to 401 */
-    }
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  if (isPublic) return NextResponse.next();
+
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const session = process.env.AUTH_SECRET ? await verifySession(token) : null;
+
+  if (session) {
+    const res = NextResponse.next();
+    res.headers.set("x-console-user", session.sub);
+    res.headers.set("x-console-role", session.role);
+    return res;
   }
 
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Basic realm="OUTRIGGER Prototype Management Console"',
-      "X-Robots-Tag": "noindex, nofollow",
-    },
-  });
+  if (pathname.startsWith("/api/")) {
+    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json", "x-robots-tag": "noindex, nofollow" },
+    });
+  }
+
+  const url = req.nextUrl.clone();
+  url.pathname = "/login";
+  url.searchParams.set("next", pathname);
+  const res = NextResponse.redirect(url);
+  res.headers.set("x-robots-tag", "noindex, nofollow");
+  return res;
 }
 
 export const config = {
-  // Everything except Next.js internals and static chunks
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt).*)"],
 };
