@@ -1,1 +1,1 @@
-# Outrigger Prototype
+# OUTRIGGER Prototype Management Console
