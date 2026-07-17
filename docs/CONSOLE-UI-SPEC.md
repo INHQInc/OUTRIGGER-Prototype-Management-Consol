@@ -12,11 +12,13 @@ A user's sentence — "the Waikiki page with Trip Planner on, shareable" — map
 
 ## Screens
 
-1. **Sites & Pages (home)** — two site cards; page library (URL, last synced, version count, targeting features). Actions: Sync Content, Preview, History. Add Pages accepts pasted URLs + offers discovered sub-pages as checkboxes.
-2. **Page detail** — version timeline, live preview of any version, sanitization report (audit trail), upstream diff on Sync (before/after + changed assets) before rebasing pinned prototypes.
-3. **Features** — list (name, status draft/demo-ready/handed-off, target pages). Detail tabs: Files, Injection Points (structured selectors w/ click-to-pick), Targets (pages @ pinned versions).
-4. **Deploys** — builder (pick pages, toggle features matrix, Deploy → protected URL); history. Optional floating feature-switcher injected into demo deploys for live on/off.
-5. **Handoff** — per-feature package generator (see below).
+1. **Sites & Pages (home)** ✅ — two site cards; page library (URL, last synced, version count, targeting features). Actions: Sync Content, Preview, History. Add Pages accepts pasted URLs + offers discovered sub-pages as checkboxes.
+2. **Page detail** ✅ — version timeline, live preview of any version, sanitization report (audit trail), upstream diff on Sync (before/after + changed assets) before rebasing pinned prototypes.
+3. **Features** ⏳ — list (name, status draft/demo-ready/experimenting/handed-off, target pages). Detail tabs: Files, Injection Points (structured selectors w/ click-to-pick), Targets (pages @ pinned versions).
+4. **Deploys** ⏳ — builder (pick pages, toggle features matrix, Deploy → protected URL); history. Optional floating feature-switcher injected into demo deploys for live on/off.
+5. **Experiment** ⏳ — promote a feature to an Optimizely Web variation; binding + lock-while-running + modify/sync + drift indicator. Full design in [`EXPERIMENT-INTEGRATION.md`](EXPERIMENT-INTEGRATION.md).
+6. **Handoff** ⏳ — per-feature package generator (see below).
+7. **Users** ✅ (admin) — add/remove users, roles, generate one-time access links.
 
 ## Decisions (v1)
 

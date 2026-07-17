@@ -2,6 +2,8 @@
 
 *Last updated: 2026-07-17*
 
+> **New session? Read [`docs/HANDOFF.md`](docs/HANDOFF.md) first** for current state and how to continue.
+
 ## What This Is
 
 A web app (Next.js, hosted on Vercel) for cloning pages from **outrigger.com** and **hawaiivacationcondos.outrigger.com** into sanitized, versioned snapshots, building prototype features on top of them, and handing those features off to Outrigger's developers cleanly.
@@ -45,10 +47,28 @@ Same account: **OUHH Outrigger Hotels Hawaii** → Experimentation. Snippet is d
 
 ## Architecture
 
-- **Console:** Next.js on Vercel, password-protected. Browse sites/pages, trigger Sync Content, version history, prototype overlay management, diff view, deploy button.
-- **Capture pipeline:** Firecrawl (rendered HTML) → asset resolver → URL rewriter → sanitizer (strip + tracking-domain blocklist + report).
-- **Data:** Postgres (Neon) — sites, pages, page versions, prototypes, capture jobs, sanitization reports. Page bundles/assets in git or blob storage, content-addressed (decision pending real capture size).
-- **Data model:** Site → Page → PageVersion (immutable) ; Prototype = pinned PageVersion + overlay files + injection points.
+- **Console:** Next.js 16 (App Router, TS, Tailwind 4) on Vercel. Auth-gated. Browse sites/pages, Sync Content, version history, overlay features, deploys, experiments, handoff.
+- **Capture pipeline:** Firecrawl (rendered HTML) → asset resolver (curl-based; Node fetch is WAF-blocked by TLS fingerprint) → URL rewriter → sanitizer (strip + tracking-domain blocklist + report + runtime clone-guard).
+- **Persistence = seams, NOT a content database (v1 local-first):**
+  - Pages/versions → snapshot filesystem, `src/lib/registry.ts` (`meta.json` per version is the source of truth).
+  - Features/overlays → git files, `src/lib/features/registry.ts`.
+  - Auth users + experiment bindings → `src/lib/auth/store.ts` seam: JSON `.data/` local, **Neon** when `DATABASE_URL` set (hosted). This is the ONLY place a DB is used.
+  - Snapshot bytes stay on the filesystem now; go to blob storage when the console is hosted with real content (deferred).
+- **Data model:** Site → Page → PageVersion (immutable). Feature = overlay files + injection points, targeting pinned PageVersions. Deploy = (pages@versions) + (features on/off). Experiment = feature bound to an Optimizely variation.
+
+## Environment variables
+
+| Var | For | Notes |
+|---|---|---|
+| `FIRECRAWL_API_KEY` | capture | set (local `.env.local` + Vercel) |
+| `AUTH_SECRET` | session signing | required; generate random |
+| `ADMIN_EMAILS` | admin login allowlist | comma-separated |
+| `ADMIN_LOGIN_SECRET` | admin login | admin master secret |
+| `DATABASE_URL` | Neon (hosted auth/bindings) | absent → JSON `.data/` store (local) |
+| `OPTIMIZELY_API_TOKEN` | Optimizely draft-push | scoped service-account PAT; Claude never handles it in plaintext |
+| `OPTIMIZELY_PROJECT_ID` | Optimizely target | Prep `24138040550` first, then Prod `21089662478` |
+
+Claude never enters credentials — the user pastes them into Vercel / `.env.local`.
 
 ## Related Repos & Paths
 
@@ -59,14 +79,22 @@ Same account: **OUHH Outrigger Hotels Hawaii** → Experimentation. Snippet is d
 
 ## Build Order (Milestones)
 
-1. Spec doc in repo (this file is the summary; full spec in `docs/`)
-2. **M1:** Capture pipeline for a single outrigger.com page → sanitized, asset-complete local clone + sanitization report (scripts, no UI)
-3. **M2:** Console UI — add page, Sync Content, version list
-4. **M3:** Prototype overlays + diff view + deploy to protected Vercel URL
-5. **Later:** Automated Azure DevOps source-mapping inside the console
+- ✅ **M1 Capture pipeline** — sanitized, asset-complete clones + report. 21 pages captured.
+- ✅ **M2 Console UI** — Sites & Pages, Page detail (preview/versions/report), Add Pages, Sync Content.
+- ✅ **Auth** — session gate, admin login, member one-time links, users admin.
+- ✅ **Feature model + Optimizely exporter** — overlay → variation JS/CSS + lint; verified rendering on the clone.
+- ⏳ **Optimizely draft-push** — create paused experiment in Prep via API (needs `OPTIMIZELY_API_TOKEN`).
+- ⏳ **Experiment area UI** — binding, lock-while-running, modify+sync, drift ([`docs/EXPERIMENT-INTEGRATION.md`](docs/EXPERIMENT-INTEGRATION.md)).
+- ⏳ **Features UI** — list/detail, injection-point picker.
+- ⏳ **Deploys UI** — pages@versions + feature toggles → protected Vercel URL.
+- ⏳ **Handoff generator** — block-convention code + injection manifest + source-map notes + git patch.
+- ⏳ **Personalization mode**; later **hosted console** (Neon + Vercel Blob).
 
-## Open Items
+**Current state & continuity:** see [`docs/HANDOFF.md`](docs/HANDOFF.md).
 
-- Firecrawl API key needed (user's subscription) before M1 capture runs
-- Vercel token needed before M3 deploys
-- Storage decision (git vs blob for assets) after first real page capture
+## Open Items / pending user actions
+
+- Vercel env vars for hosted auth: `AUTH_SECRET`, `ADMIN_EMAILS`, `ADMIN_LOGIN_SECRET`, `DATABASE_URL`.
+- Neon `DATABASE_URL` (recommend a database separate from BrandGraph).
+- `OPTIMIZELY_API_TOKEN` (scoped service-account PAT) for the draft-push.
+- Decision: keep console local-first, or do Neon+Blob hosted-content work so the deployed console shows pages.
