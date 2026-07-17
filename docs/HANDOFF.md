@@ -52,12 +52,19 @@ No database for content. Two seams already abstract persistence so hosted = swap
 5. **Handoff generator** — block-convention code + injection manifest + source-map notes (via read-only Azure clone) + git patch.
 6. **Personalization mode**; later **hosted console** (Neon + Vercel Blob).
 
+## Hosted deployment — LIVE & auth-gated (configured 2026-07-17)
+
+- Production `outrigger-prototype-management-cons.vercel.app` is auth-gated; admin login + Neon-backed store verified end-to-end (successful admin login writes to Neon before issuing the session).
+- Vercel env set: `AUTH_SECRET`, `ADMIN_EMAILS=inhqinc@gmail.com`, `ADMIN_LOGIN_SECRET`, `DATABASE_URL`. Admin login: `inhqinc@gmail.com`.
+- **Neon:** dedicated project `outrigger-prototype-console` (id `delicate-frog-62798343`, US East), **separate from BrandGraph** (`hospitality-ai-bot`) and `shopgraph-ai`. Tables `console_user` / `access_code` auto-created on first login.
+- Note: hosted console still shows **0 captured pages** (snapshots are local-only; needs Neon+Blob content work — deferred). Local-first for capture/prototyping remains the workflow.
+
 ## Pending user actions (don't rebuild these — they're waiting on the user)
 
-- **Vercel env vars** for hosted auth: `AUTH_SECRET`, `ADMIN_EMAILS`, `ADMIN_LOGIN_SECRET`, `DATABASE_URL`. (Claude never enters credentials — user pastes.)
-- **Neon DB** — user to provide a `DATABASE_URL` (recommend a *separate* database from BrandGraph).
-- **`OPTIMIZELY_API_TOKEN`** — scoped service-account PAT for the draft-push.
-- Decide: keep console local-first, or do the Neon+Blob hosted-content work.
+- **`OPTIMIZELY_API_TOKEN`** — scoped service-account PAT for the draft-push (Prep project `24138040550`).
+- **Small cleanups:** flip `ADMIN_LOGIN_SECRET` back to *Sensitive* in Vercel (left non-sensitive during debugging); optionally rotate the Neon DB password (its connection string was pasted in chat) via Neon → Reset password, then update the one Vercel value.
+- Decide: keep console local-first, or do the Neon+Blob hosted-content work so the deployed console shows pages.
+- Login-form autofill gotcha: the browser will autofill a stale saved password on `/login`; sign in via an Incognito window (or clear the saved credential).
 
 ## Read-only reference (never push)
 
