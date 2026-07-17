@@ -1,65 +1,100 @@
-import Image from "next/image";
+import Link from "next/link";
+import { listSites, listPages } from "@/lib/registry";
+import { PageHeader, Badge, EmptyState, TimeAgo } from "@/components/ui";
+import { AddPages } from "@/components/AddPages";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const sites = await listSites();
+  const pagesBySite = await Promise.all(sites.map((s) => listPages(s.key)));
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <PageHeader
+        title="Sites & Pages"
+        subtitle="Frozen, sanitized clones of Outrigger properties"
+        actions={<AddPages />}
+      />
+
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
+        {/* Site summary cards */}
+        <div className="grid grid-cols-2 gap-4">
+          {sites.map((site) => (
+            <div key={site.key} className="rounded-xl border border-border bg-surface p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="text-[14px] font-semibold">{site.label}</div>
+                  <div className="text-[12px] text-muted-2 mt-0.5 font-mono">{new URL(site.origin).host}</div>
+                </div>
+                <Badge tone="accent">{site.key}</Badge>
+              </div>
+              <div className="flex gap-6 mt-4">
+                <div>
+                  <div className="text-[20px] font-semibold tabular-nums">{site.pageCount}</div>
+                  <div className="text-[11px] text-muted-2">pages</div>
+                </div>
+                <div>
+                  <div className="text-[20px] font-semibold tabular-nums">{site.versionCount}</div>
+                  <div className="text-[11px] text-muted-2">versions</div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+
+        {/* Page tables per site */}
+        {sites.map((site, i) => {
+          const pages = pagesBySite[i];
+          return (
+            <section key={site.key}>
+              <div className="flex items-center gap-2 mb-3">
+                <h2 className="text-[13px] font-semibold">{site.label}</h2>
+                <span className="text-[11px] text-muted-2">{pages.length} pages</span>
+              </div>
+
+              {pages.length === 0 ? (
+                <EmptyState title={`No pages captured for ${site.label} yet.`} hint="Use Add Pages to clone a URL." />
+              ) : (
+                <div className="rounded-xl border border-border bg-surface overflow-hidden">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="text-left text-muted-2 border-b border-border">
+                        <th className="font-medium px-4 py-2.5">Page</th>
+                        <th className="font-medium px-4 py-2.5">Last synced</th>
+                        <th className="font-medium px-4 py-2.5 text-right">Versions</th>
+                        <th className="font-medium px-4 py-2.5 text-right">Assets</th>
+                        <th className="font-medium px-4 py-2.5 text-right">Sanitized</th>
+                        <th className="font-medium px-4 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pages.map((p) => (
+                        <tr key={p.slug} className="border-b border-border last:border-0 hover:bg-surface-2/40">
+                          <td className="px-4 py-3">
+                            <Link href={`/pages/${site.key}/${p.slug}`} className="font-medium hover:text-accent">
+                              /{p.url.replace(/^https?:\/\/[^/]+\//, "")}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-muted"><TimeAgo iso={p.latestCapturedAt} /></td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted">{p.versionCount}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted">{p.latestAssetCount}</td>
+                          <td className="px-4 py-3 text-right">
+                            <Badge tone="ok">{p.latestRemovedCount} removed</Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Link href={`/pages/${site.key}/${p.slug}`} className="text-accent hover:text-accent-hover font-medium">Open →</Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </>
   );
 }
