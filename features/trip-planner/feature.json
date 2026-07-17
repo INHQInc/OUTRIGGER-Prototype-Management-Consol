@@ -11,13 +11,24 @@
     }
   ],
   "injections": [
-    { "type": "css", "file": "overlay.css" },
-    { "type": "html", "fragment": "trip-planner.html", "selector": ".hero", "mode": "after" },
-    { "type": "js", "file": "overlay.js" }
+    {
+      "type": "css",
+      "file": "overlay.css"
+    },
+    {
+      "type": "html",
+      "selector": ".hero",
+      "mode": "after",
+      "fragment": "trip-planner.html"
+    },
+    {
+      "type": "js",
+      "file": "overlay.js"
+    }
   ],
   "liveUrls": [
     "https://www.outrigger.com/hawaii/oahu/outrigger-waikiki-beach-resort"
   ],
   "createdAt": "2026-07-17T00:00:00.000Z",
-  "updatedAt": "2026-07-17T00:00:00.000Z"
+  "updatedAt": "2026-07-17T21:18:01.247Z"
 }

@@ -4,7 +4,7 @@ import { readManifest } from "@/lib/features/registry";
 import { buildVariationExport } from "@/lib/optimizely/export";
 import { getPageVersions } from "@/lib/registry";
 import { PageHeader, Badge } from "@/components/ui";
-import { FeaturePreview } from "@/components/FeaturePreview";
+import { FeatureBuilder } from "@/components/FeatureBuilder";
 import { CodeBlock } from "@/components/CodeBlock";
 import type { FeatureStatus } from "@/lib/features/types";
 
@@ -49,30 +49,18 @@ export default async function FeatureDetail({ params }: { params: Promise<{ key:
         )}
 
         <div className="grid grid-cols-[1fr_340px] gap-6">
-          {/* Live preview */}
+          {/* Prototype builder: preview + injection authoring */}
           <div className="space-y-6">
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[13px] font-semibold">QA preview</h2>
+                <h2 className="text-[13px] font-semibold">Prototype</h2>
                 {target && (
                   <Link href={`/pages/${target.siteKey}/${target.slug}`} className="text-[12px] text-accent hover:text-accent-hover font-medium">
                     /{target.slug.replace(/__/g, "/")} ↗
                   </Link>
                 )}
               </div>
-              <FeaturePreview featureKey={key} />
-              <p className="text-[11px] text-muted-2 mt-2">
-                Toggle Control ⇄ Variant to see the overlay. This is the exact variation JS exported to Optimizely — what you QA here is what ships.
-              </p>
-            </div>
-
-            {/* Optimizely variation export */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[13px] font-semibold">Optimizely variation</h2>
-                <span className="text-[11px] text-muted-2">{(exp.bytes / 1024).toFixed(1)} KB JS · {(exp.css.length / 1024).toFixed(1)} KB CSS</span>
-              </div>
-              <CodeBlock code={exp.variationJs} label="variation.js" />
+              <FeatureBuilder featureKey={key} initialInjections={manifest.injections} />
             </div>
           </div>
 
@@ -80,7 +68,7 @@ export default async function FeatureDetail({ params }: { params: Promise<{ key:
           <div className="space-y-6">
             {/* Target */}
             <div>
-              <h2 className="text-[13px] font-semibold mb-3">Target</h2>
+              <h2 className="text-[13px] font-semibold mb-3">Target page</h2>
               <div className="rounded-xl border border-border bg-surface p-4 space-y-2 text-[12px]">
                 {target ? (
                   <>
@@ -94,24 +82,7 @@ export default async function FeatureDetail({ params }: { params: Promise<{ key:
               </div>
             </div>
 
-            {/* Injections */}
-            <div>
-              <h2 className="text-[13px] font-semibold mb-3">Injection points <span className="text-muted-2 font-normal">({manifest.injections.length})</span></h2>
-              <div className="rounded-xl border border-border bg-surface divide-y divide-border">
-                {manifest.injections.map((inj, i) => (
-                  <div key={i} className="px-4 py-3 text-[12px]">
-                    <div className="flex items-center gap-2">
-                      <Badge tone={inj.type === "html" ? "accent" : "neutral"}>{inj.type}</Badge>
-                      {inj.mode && <span className="text-muted-2 text-[11px]">{inj.mode}</span>}
-                    </div>
-                    {inj.selector && <div className="font-mono text-muted mt-1.5 break-all">{inj.selector}</div>}
-                    <div className="text-muted-2 text-[11px] mt-0.5">{inj.fragment ?? inj.file ?? "—"}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Robustness lint */}
+            {/* Selector lint */}
             <div>
               <h2 className="text-[13px] font-semibold mb-3 flex items-center gap-2">
                 Selector lint
@@ -119,7 +90,7 @@ export default async function FeatureDetail({ params }: { params: Promise<{ key:
               </h2>
               <div className="rounded-xl border border-border bg-surface p-4">
                 {exp.lint.length === 0 ? (
-                  <p className="text-[12px] text-muted-2">No fragile selectors detected. Safe to promote to a live experiment.</p>
+                  <p className="text-[12px] text-muted-2">No fragile selectors detected.</p>
                 ) : (
                   <ul className="space-y-2">
                     {exp.lint.map((f, i) => (
@@ -134,17 +105,26 @@ export default async function FeatureDetail({ params }: { params: Promise<{ key:
               </div>
             </div>
 
-            {/* Live URLs */}
-            {manifest.liveUrls?.length ? (
-              <div>
-                <h2 className="text-[13px] font-semibold mb-3">Live URL targeting</h2>
-                <div className="rounded-xl border border-border bg-surface p-4 space-y-1.5">
-                  {manifest.liveUrls.map((u) => (
-                    <div key={u} className="text-[11px] font-mono text-muted break-all">{u}</div>
-                  ))}
-                </div>
+            {/* Optimizely — optional bolt-on */}
+            <details className="rounded-xl border border-border bg-surface overflow-hidden group">
+              <summary className="px-4 py-3 cursor-pointer list-none flex items-center justify-between">
+                <span className="text-[13px] font-semibold">Experiment <span className="text-muted-2 font-normal">· optional</span></span>
+                <span className="text-[11px] text-muted-2 group-open:hidden">Optimizely bolt-on ▸</span>
+              </summary>
+              <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+                <p className="text-[11px] text-muted-2 leading-relaxed">
+                  A prototype ships as a deploy or handoff on its own. Only promote to an Optimizely Web experiment if you want to A/B test it on the live site.
+                </p>
+                <div className="text-[11px] text-muted-2">Variation: {(exp.bytes / 1024).toFixed(1)} KB JS · {(exp.css.length / 1024).toFixed(1)} KB CSS</div>
+                <CodeBlock code={exp.variationJs} label="variation.js" />
+                {manifest.liveUrls?.length ? (
+                  <div>
+                    <div className="text-[11px] text-muted-2 mb-1">Live URL targeting</div>
+                    {manifest.liveUrls.map((u) => <div key={u} className="text-[11px] font-mono text-muted break-all">{u}</div>)}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </details>
           </div>
         </div>
       </div>
