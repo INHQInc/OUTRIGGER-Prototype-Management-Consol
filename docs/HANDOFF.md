@@ -88,3 +88,18 @@ No database for content. Two seams already abstract persistence so hosted = swap
 - `VERCEL_TOKEN` → **Deploys** (protected prototype URL for the agency). Placeholder keys already in `.env.local`.
 - `OPTIMIZELY_API_TOKEN` (+ `OPTIMIZELY_PROJECT_ID=24138040550`) → **Promote to Experiment** (paused draft + preview link in Prep).
 - Small cleanups still open: flip `ADMIN_LOGIN_SECRET` back to Sensitive in Vercel; optionally rotate the Neon DB password.
+
+---
+
+## Session 2026-07-18 (cont.) — Optimizely promote + Deploys landed
+
+Both token-gated features are built and verified. Tokens live in `.env.local` (gitignored).
+
+- **Promote to Experiment** (`src/lib/optimizely/{api,promote}.ts`, `scripts/opti-promote.ts`): creates a PAUSED (`not_started`) Optimizely draft in Prep from a prototype's variation. Safety rail holds — never starts traffic. Verified: created draft `4732726941581312` in Prep. Shareable invite-only preview = Optimizely's own preview/force-variation link.
+- **Deploys** (`src/lib/deploy/bundle.ts`, `scripts/deploy.ts`): bakes the target snapshot + overlay (variant) into a self-contained static bundle (transitive assets only), adds Basic-Auth edge middleware (per-deploy password) + noindex, deploys to Vercel via `VERCEL_TOKEN`. Verified live: 401 without password / 200 with; overlay renders; assets serve. Externally shareable for the agency. No Neon+Blob needed.
+
+**CLIs:** `npx tsx scripts/opti-promote.ts <key>` · `npx tsx scripts/deploy.ts <key>`.
+
+**Remaining = UI wiring only** (engines all work via CLI): a "Deploy" button + a "Promote to Experiment" button on the feature detail (Experiment/Deploy panels), and a Deploys index listing past deploys. Plus minor cleanups: one orphan Optimizely Page in Prep from a failed first attempt; rotate the Optimizely + Vercel tokens (pasted in chat) once confirmed.
+
+**Full loop now works:** capture → build → deploy (protected URL) → optional Optimizely experiment → handoff compare viewer + patch.
