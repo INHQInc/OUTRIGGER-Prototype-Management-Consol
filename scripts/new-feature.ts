@@ -23,6 +23,7 @@ import { mkdir, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { featuresRoot } from "../src/lib/features/registry";
 import { listPages, getPageVersions } from "../src/lib/registry";
+import { SITES } from "../src/lib/capture/capture";
 import type { FeatureManifest } from "../src/lib/features/types";
 
 function parseArgs(argv: string[]): { key?: string; opts: Record<string, string> } {
@@ -40,11 +41,11 @@ async function exists(p: string): Promise<boolean> {
   try { await stat(p); return true; } catch { return false; }
 }
 
-/** slug uses "__" for "/". home => "". */
+/** slug uses "__" for "/". home => "". Origin comes from the tenant's SITES config. */
 function liveUrlFor(siteKey: string, slug: string): string {
-  const host = siteKey === "hvc" ? "hawaiivacationcondos.outrigger.com" : "www.outrigger.com";
+  const origin = SITES[siteKey]?.origin ?? `https://${siteKey}`;
   const path = slug === "home" ? "" : "/" + slug.replace(/__/g, "/");
-  return `https://${host}${path}`;
+  return `${origin}${path}`;
 }
 
 function titleCase(key: string): string {
