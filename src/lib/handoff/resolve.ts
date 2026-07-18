@@ -18,6 +18,15 @@ export async function repoAvailable(): Promise<boolean> {
   try { await stat(join(outriggerRepoRoot(), "Features")); return true; } catch { return false; }
 }
 
+/** Read a source file from the read-only clone, guarded to stay inside it. */
+export async function readTargetFile(relPath: string): Promise<string | null> {
+  if (!relPath || relPath.includes("..")) return null;
+  const root = outriggerRepoRoot();
+  const abs = join(root, relPath);
+  if (!abs.startsWith(root)) return null;
+  try { return await readFile(abs, "utf8"); } catch { return null; }
+}
+
 export interface AnchorMatch {
   selector: string;
   /** Class/id tokens searched for. */

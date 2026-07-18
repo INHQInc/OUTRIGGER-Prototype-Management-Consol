@@ -23,6 +23,10 @@ export interface HandoffPiece {
   placement: string;
   confidence: "high" | "medium" | "low";
   note?: string;
+  /** HTML pieces: the anchor selector + candidate target views (dev picks). */
+  selector?: string;
+  anchorTokens?: string[];
+  candidates?: { block: string; file: string; hits: number }[];
 }
 
 export interface HandoffPackage {
@@ -73,6 +77,9 @@ export async function buildHandoff(feature: FeatureManifest): Promise<HandoffPac
       note: target
         ? undefined
         : "Anchor didn't resolve to a single block — likely a page template or layout; confirm with a dev.",
+      selector: inj.selector,
+      anchorTokens: anchor?.tokens ?? [],
+      candidates: anchor?.candidates ?? [],
     });
   }
 
