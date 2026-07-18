@@ -69,3 +69,22 @@ No database for content. Two seams already abstract persistence so hosted = swap
 ## Read-only reference (never push)
 
 `~/Projects/Outrigger_Website` = Azure DevOps clone of Outrigger's real site source (ASP.NET + Optimizely CMS, block-per-folder architecture). **Pull only, never push** (push URL already disabled). Used for source-mapping handoffs and matching their conventions.
+
+---
+
+## Session 2026-07-18 — locked decisions + handoff milestone
+
+**Lifecycle (locked):** build prototype (console, HTML/CSS/JS) → internal **approval** → *optional* Optimizely **experiment** (test) → devs **integrate into the Optimizely CMS** as the shippable product.
+
+**Directional decisions (locked):**
+1. **Authoring = dev-only** — build prototypes in Claude Code/Desktop on the repo; the console manages/previews/hands-off. No in-app AI builder (removed).
+2. **Live injection = Optimizely** — invite-only preview links via a paused Optimizely experiment; no homegrown loader (security). All-visitors = un-paused Opti campaign, needs Outrigger sign-off + human start.
+3. **Console = local-first** — build/capture locally; **Deploys** publishes a self-contained, protected prototype URL for the agency (no Neon+Blob content migration needed).
+4. **Handoff ships HTML/CSS/JS only — NOT C#.** We prototype front-end, so we hand off front-end mapped to their source. Making a feature an editor-managed CMS block (a C# content type) is the devs' call — the tool does not generate C#.
+
+**Done this session:** Features area (list/detail, live preview, selector lint), injection authoring (click-to-pick, placement presets, persistence), Optimizely variation exporter, and the **Handoff compare viewer** (`src/lib/handoff/*`, `/handoff`): resolver maps a prototype's anchors → owning Razor views in the read-only Azure clone (confidence + candidate picker, choice persisted to `features/<key>/handoff.json`); origin↔integrated side-by-side diff; `git apply` patch download. No tokens needed.
+
+**Pending (token-gated):**
+- `VERCEL_TOKEN` → **Deploys** (protected prototype URL for the agency). Placeholder keys already in `.env.local`.
+- `OPTIMIZELY_API_TOKEN` (+ `OPTIMIZELY_PROJECT_ID=24138040550`) → **Promote to Experiment** (paused draft + preview link in Prep).
+- Small cleanups still open: flip `ADMIN_LOGIN_SECRET` back to Sensitive in Vercel; optionally rotate the Neon DB password.
