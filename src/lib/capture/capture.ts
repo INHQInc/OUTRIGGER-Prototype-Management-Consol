@@ -1,10 +1,9 @@
 import { load } from "cheerio";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { AssetStore, captureAssets } from "./assets";
+import { AssetStore, captureAssets, absolutizeAssetUrls } from "./assets";
 import { sanitize, injectGuards, buildReport } from "./sanitize";
-import type { PageVersionMeta } from "./types";
+import type { AssetRecord, PageVersionMeta } from "./types";
 import { getSite } from "../sites";
+import { getContentStore } from "../content/store";
 
 // Sites now live in the site registry (built-in config + user-added).
 // Re-exported here for back-compat with existing importers.
@@ -13,8 +12,6 @@ export { CONFIG_SITES as SITES } from "../sites";
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1/scrape";
 
 export interface CaptureOptions {
-  /** Root dir where snapshots are stored (default: ./snapshots) */
-  snapshotsRoot?: string;
   onProgress?: (msg: string) => void;
 }
 
@@ -57,17 +54,12 @@ export async function capturePage(
   const cfg = await getSite(siteKey);
   if (!cfg) throw new Error(`Unknown site key: ${siteKey}`);
   const progress = opts.onProgress ?? (() => {});
-  const root = opts.snapshotsRoot ?? join(process.cwd(), "snapshots");
+  const store = await getContentStore();
 
   const version = new Date().toISOString().replace(/[:.]/g, "-");
   const pageSlug = slugForUrl(url);
-  const assetsDir = join(root, cfg.siteKey, "assets");
-  const versionDir = join(root, cfg.siteKey, "pages", pageSlug, version);
-  await mkdir(versionDir, { recursive: true });
-  await mkdir(assetsDir, { recursive: true });
-
-  // Asset URLs in the stored HTML are root-relative to the site's asset pool;
-  // the serving layer maps /snap-assets/<siteKey>/* onto the pool directory.
+  // Mirrored asset URLs are root-relative to the site's pool; the serving layer
+  // maps /snap-assets/<siteKey>/* onto the pool.
   const assetPublicPath = `/snap-assets/${cfg.siteKey}`;
 
   progress(`Scraping ${url} via Firecrawl...`);
@@ -80,26 +72,33 @@ export async function capturePage(
   const removed = sanitize($);
   progress(`Removed ${removed.length} tracking artifacts`);
 
-  progress("Downloading and rewriting assets...");
-  const store = new AssetStore(assetsDir, cfg);
-  const writeProcessedCss = async (fileName: string, content: string) => {
-    await writeFile(join(assetsDir, fileName), content, "utf8");
-  };
-  const assetNotes = await captureAssets($, url, store, assetPublicPath, writeProcessedCss);
-  const records = store.records;
-  const totalBytes = records.reduce((s, r) => s + r.bytes, 0);
-  progress(`Stored ${records.length} assets (${(totalBytes / 1024 / 1024).toFixed(1)} MB), ${store.failed.length} failures`);
+  let records: AssetRecord[] = [];
+  let totalBytes = 0;
+  let notes: string[] = [];
+
+  if (store.mirrorsAssets) {
+    // Local: download + rewrite assets into the frozen pool (uses curl).
+    progress("Downloading and rewriting assets...");
+    const assetStore = new AssetStore(store, cfg.siteKey, cfg);
+    const writeProcessedCss = async (fileName: string, content: string) => {
+      await store.putAsset(cfg.siteKey, fileName, Buffer.from(content, "utf8"), "text/css");
+    };
+    const assetNotes = await captureAssets($, url, assetStore, assetPublicPath, writeProcessedCss);
+    records = assetStore.records;
+    totalBytes = records.reduce((s, r) => s + r.bytes, 0);
+    notes = [...assetNotes, ...assetStore.failed.map((f) => `asset failed: ${f.url} (${f.error})`)];
+    progress(`Stored ${records.length} assets (${(totalBytes / 1024 / 1024).toFixed(1)} MB), ${assetStore.failed.length} failures`);
+  } else {
+    // Hosted/serverless: no curl, WAF blocks server fetch → HTML-only. Point
+    // assets at the origin CDN so the browser loads them directly.
+    progress("Hosted capture — referencing assets at origin CDN...");
+    absolutizeAssetUrls($, url);
+    notes = ["hosted capture: assets referenced at origin (not mirrored)"];
+  }
 
   injectGuards($);
-
-  const notes = [
-    ...assetNotes,
-    ...store.failed.map((f) => `asset failed: ${f.url} (${f.error})`),
-  ];
   const report = buildReport(url, removed, notes);
-
   const html = $.html();
-  await writeFile(join(versionDir, "index.html"), html, "utf8");
 
   const meta: PageVersionMeta = {
     url,
@@ -113,8 +112,8 @@ export async function capturePage(
     assets: records,
     report,
   };
-  await writeFile(join(versionDir, "meta.json"), JSON.stringify(meta, null, 2), "utf8");
+  await store.putPageVersion({ siteKey: cfg.siteKey, slug: pageSlug, version, html, meta });
 
-  progress(`Snapshot written: ${versionDir}`);
+  progress(`Snapshot stored: ${cfg.siteKey}/${pageSlug}/${version}`);
   return meta;
 }

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile, access, readFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { tmpdir } from "node:os";
@@ -8,6 +8,7 @@ import { join } from "node:path";
 const execFileAsync = promisify(execFile);
 import type { CheerioAPI } from "cheerio";
 import type { AssetRecord, CaptureConfig } from "./types";
+import type { ContentStore } from "../content/store";
 import { TRACKING_DOMAINS } from "./sanitize";
 
 const EXT_BY_TYPE: Record<string, string> = {
@@ -78,7 +79,7 @@ export class AssetStore {
   private byUrl = new Map<string, AssetRecord>();
   private failures = new Map<string, string>();
 
-  constructor(private assetsDir: string, private cfg: CaptureConfig) {}
+  constructor(private store: ContentStore, private siteKey: string, private cfg: CaptureConfig) {}
 
   get records(): AssetRecord[] {
     return [...this.byUrl.values()];
@@ -109,11 +110,8 @@ export class AssetStore {
       const hash = createHash("sha1").update(buf).digest("hex");
       const file = `${hash}.${extFor(absUrl, contentType)}`;
 
-      const path = join(this.assetsDir, file);
-      const alreadyStored = await access(path).then(() => true, () => false);
-      if (!alreadyStored) {
-        await mkdir(this.assetsDir, { recursive: true });
-        await writeFile(path, buf);
+      if (!(await this.store.hasAsset(this.siteKey, file))) {
+        await this.store.putAsset(this.siteKey, file, buf, contentType);
       }
 
       const rec: AssetRecord = { originalUrl: absUrl, hash, file, contentType, bytes: buf.length, via };
@@ -269,6 +267,36 @@ export async function captureAssets(
   }
 
   return notes;
+}
+
+/**
+ * HTML-only capture (serverless): don't mirror assets — instead make every
+ * asset URL absolute against the page origin, so the browser loads them
+ * straight from the live CDN (browsers pass the WAF that blocks server fetch).
+ * The HTML stays tracking-free (sanitize already ran).
+ */
+export function absolutizeAssetUrls($: CheerioAPI, pageUrl: string): void {
+  const abs = (raw?: string): string | null => {
+    if (!raw) return null;
+    const t = raw.trim();
+    if (!t || t.startsWith("data:") || t.startsWith("blob:") || t.startsWith("#") || t.startsWith("javascript:")) return null;
+    try { return new URL(t, pageUrl).href; } catch { return null; }
+  };
+  $("link[href], script[src], img[src], source[src], video[src], audio[src]").each((_, el) => {
+    const $el = $(el);
+    for (const attr of ["href", "src"]) {
+      const v = $el.attr(attr);
+      const a = abs(v);
+      if (a && a !== v) $el.attr(attr, a);
+    }
+  });
+  $("img[srcset], source[srcset]").each((_, el) => {
+    const $el = $(el);
+    const v = $el.attr("srcset");
+    if (!v) return;
+    const out = parseSrcset(v).map((c) => `${abs(c.url) ?? c.url} ${c.descriptor}`.trim()).join(", ");
+    $el.attr("srcset", out);
+  });
 }
 
 async function fetchText(url: string): Promise<string | null> {

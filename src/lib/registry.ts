@@ -1,12 +1,12 @@
-import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { getAllSites } from "./sites";
+import { getContentStore } from "./content/store";
 import type { PageVersionMeta } from "./capture/types";
 
 /**
- * The snapshot filesystem IS the page registry (v1, no database).
- *   snapshots/<siteKey>/pages/<slug>/<version>/meta.json
- *   snapshots/<siteKey>/assets/<sha1>.<ext>
+ * Page registry — reads captured content through the content store
+ * (filesystem locally, Neon when hosted). snapshotsRoot() is retained for the
+ * local deploy bundler, which operates on the filesystem directly.
  */
 export function snapshotsRoot(): string {
   return join(process.cwd(), "snapshots");
@@ -40,52 +40,29 @@ export interface PageSummary {
   latestRemovedCount: number;
 }
 
-async function exists(p: string): Promise<boolean> {
-  try { await stat(p); return true; } catch { return false; }
-}
-
-async function listVersionDirs(pageDir: string): Promise<string[]> {
-  try {
-    const entries = await readdir(pageDir, { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  } catch {
-    return [];
-  }
-}
-
 export async function readVersionMeta(
   siteKey: string,
   slug: string,
   version: string
 ): Promise<PageVersionMeta | null> {
-  try {
-    const raw = await readFile(
-      join(snapshotsRoot(), siteKey, "pages", slug, version, "meta.json"),
-      "utf8"
-    );
-    return JSON.parse(raw) as PageVersionMeta;
-  } catch {
-    return null;
-  }
+  const store = await getContentStore();
+  return store.getMeta(siteKey, slug, version);
 }
 
 export async function listPages(siteKey: string): Promise<PageSummary[]> {
-  const pagesDir = join(snapshotsRoot(), siteKey, "pages");
-  if (!(await exists(pagesDir))) return [];
-  const slugs = (await readdir(pagesDir, { withFileTypes: true }))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
+  const store = await getContentStore();
+  const slugs = await store.listSlugs(siteKey);
 
   const out: PageSummary[] = [];
   for (const slug of slugs) {
-    const versions = await listVersionDirs(join(pagesDir, slug));
+    const versions = await store.listVersions(siteKey, slug);
     const latest = versions[versions.length - 1] ?? null;
     let url = "";
     let capturedAt: string | null = null;
     let assetCount = 0;
     let removedCount = 0;
     if (latest) {
-      const meta = await readVersionMeta(siteKey, slug, latest);
+      const meta = await store.getMeta(siteKey, slug, latest);
       if (meta) {
         url = meta.url;
         capturedAt = meta.capturedAt;
@@ -124,10 +101,11 @@ export async function listSites(): Promise<SiteSummary[]> {
 }
 
 export async function getPageVersions(siteKey: string, slug: string): Promise<VersionSummary[]> {
-  const versions = await listVersionDirs(join(snapshotsRoot(), siteKey, "pages", slug));
+  const store = await getContentStore();
+  const versions = await store.listVersions(siteKey, slug);
   const out: VersionSummary[] = [];
   for (const v of versions) {
-    const meta = await readVersionMeta(siteKey, slug, v);
+    const meta = await store.getMeta(siteKey, slug, v);
     if (meta) {
       out.push({
         version: v,

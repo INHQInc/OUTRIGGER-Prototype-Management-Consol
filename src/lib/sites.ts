@@ -3,16 +3,15 @@
  *
  * Two layers:
  *   - CONFIG_SITES: built-in, code-defined sites (always present).
- *   - dynamic sites: user-added at runtime, persisted to snapshots/_sites.json
- *     (local-first, travels with the snapshot content just like pages do).
+ *   - dynamic sites: user-added at runtime, persisted through the content store
+ *     (filesystem locally, Neon when hosted — see src/lib/content/store.ts).
  *
  * A "site" is { siteKey, origin, assetHosts, label }. The capture pipeline
  * resolves a site's origin + assetHosts through getSite() so newly-added
  * websites are captured exactly like the built-in ones.
  */
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import type { CaptureConfig } from "./capture/types";
+import { getContentStore } from "./content/store";
 
 export interface SiteConfig extends CaptureConfig {
   /** Human-facing label for display. */
@@ -35,38 +34,19 @@ export const CONFIG_SITES: Record<string, SiteConfig> = {
   },
 };
 
-function snapshotsDir(): string {
-  return join(process.cwd(), "snapshots");
-}
-function sitesFile(): string {
-  return join(snapshotsDir(), "_sites.json");
-}
-
-async function readDynamicSites(): Promise<SiteConfig[]> {
-  try {
-    const arr = JSON.parse(await readFile(sitesFile(), "utf8"));
-    return Array.isArray(arr) ? (arr as SiteConfig[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function writeDynamicSites(sites: SiteConfig[]): Promise<void> {
-  await mkdir(snapshotsDir(), { recursive: true });
-  await writeFile(sitesFile(), JSON.stringify(sites, null, 2) + "\n", "utf8");
-}
-
 /** All sites (built-in + user-added), keyed by siteKey. Dynamic wins on clash. */
 export async function getAllSites(): Promise<Record<string, SiteConfig>> {
   const out: Record<string, SiteConfig> = { ...CONFIG_SITES };
-  for (const s of await readDynamicSites()) out[s.siteKey] = s;
+  const store = await getContentStore();
+  for (const s of await store.listDynamicSites()) out[s.siteKey] = s;
   return out;
 }
 
 /** Resolve one site's config, or null if unknown. */
 export async function getSite(siteKey: string): Promise<SiteConfig | null> {
   if (CONFIG_SITES[siteKey]) return CONFIG_SITES[siteKey];
-  return (await readDynamicSites()).find((s) => s.siteKey === siteKey) ?? null;
+  const store = await getContentStore();
+  return (await store.listDynamicSites()).find((s) => s.siteKey === siteKey) ?? null;
 }
 
 /** Derive a short, url-safe key from a hostname (e.g. www.marriott.com → marriott). */
@@ -114,8 +94,7 @@ export async function addSite(input: { origin: string; label?: string; assetHost
     label: input.label?.trim() || host.replace(/^www\./, ""),
   };
 
-  const dyn = await readDynamicSites();
-  dyn.push(site);
-  await writeDynamicSites(dyn);
+  const store = await getContentStore();
+  await store.addDynamicSite(site);
   return site;
 }

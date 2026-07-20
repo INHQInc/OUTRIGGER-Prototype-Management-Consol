@@ -1,9 +1,7 @@
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { readManifest } from "@/lib/features/registry";
 import { buildVariationExport } from "@/lib/optimizely/export";
-import { snapshotsRoot } from "@/lib/registry";
+import { getContentStore } from "@/lib/content/store";
 
 /**
  * Serve a captured page with a feature overlaid — the QA harness.
@@ -29,15 +27,16 @@ export async function GET(
   const variant = req.nextUrl.searchParams.get("variant") === "1";
   const pick = req.nextUrl.searchParams.get("pick") === "1";
 
-  const pageDir = join(snapshotsRoot(), target.siteKey, "pages", target.slug);
+  const store = await getContentStore();
   let version = target.version;
   try {
     if (version === "latest") {
-      const versions = (await readdir(pageDir)).sort();
+      const versions = await store.listVersions(target.siteKey, target.slug);
       if (!versions.length) return new NextResponse("No versions", { status: 404 });
       version = versions[versions.length - 1];
     }
-    let html = await readFile(join(pageDir, version, "index.html"), "utf8");
+    let html = await store.getHtml(target.siteKey, target.slug, version);
+    if (html === null) return new NextResponse("Not found", { status: 404 });
 
     if (variant) {
       const exp = await buildVariationExport(manifest);
