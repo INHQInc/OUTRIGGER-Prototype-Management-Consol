@@ -139,7 +139,10 @@ export async function addSite(input: { origin: string; orgId: string; label?: st
     origin,
     assetHosts: input.assetHosts?.length ? input.assetHosts : [host.replace(/^www\./, "")],
     label: input.label?.trim() || host.replace(/^www\./, ""),
-    mode: input.mode ?? "clone",
+    // Live-injection-first: a new site defaults to live. `mode` is legacy — the
+    // real clone/live decision is now per-prototype (target.source). Snapshots
+    // are captured on demand, not forced at add time.
+    mode: input.mode ?? "live",
     orgId: input.orgId,
   };
 

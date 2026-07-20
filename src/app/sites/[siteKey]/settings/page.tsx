@@ -5,7 +5,6 @@ import { getContentStore } from "@/lib/content/store";
 import { listEnvironments } from "@/lib/environments";
 import { RepoSettings } from "@/components/RepoSettings";
 import { EnvironmentsManager } from "@/components/EnvironmentsManager";
-import { SiteModeControl } from "@/components/SiteModeControl";
 import { LoaderSnippet } from "@/components/LoaderSnippet";
 import { DeleteSite } from "@/components/DeleteSite";
 
@@ -43,14 +42,11 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
         <Row label="Key"><span className="font-mono">{site.siteKey}</span></Row>
         <Row label="Origin"><span className="font-mono break-all">{site.origin}</span></Row>
         <Row label="Asset hosts"><span className="font-mono break-all">{site.assetHosts.join(", ")}</span></Row>
-        <Row label="Mode"><span className="capitalize">{site.mode}</span></Row>
       </div>
 
       <EnvironmentsManager siteKey={siteKey} initialEnvironments={environments} canManage />
 
-      <SiteModeControl siteKey={siteKey} initialMode={site.mode} />
-
-      {site.mode === "live" && <LoaderSnippet siteKey={siteKey} />}
+      <LoaderSnippet siteKey={siteKey} />
 
       <RepoSettings siteKey={siteKey} />
 
