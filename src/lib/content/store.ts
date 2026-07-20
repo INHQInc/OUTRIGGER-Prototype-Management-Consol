@@ -5,6 +5,8 @@ import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
+import type { Promotion, PromotionStatus } from "../promotions/types";
+import type { AuditEvent } from "../audit/types";
 
 /**
  * Persistence seam for CONTENT (sites, captured pages, assets) — the same
@@ -72,6 +74,15 @@ export interface ContentStore {
   // --- Artifact versions (immutable, git-SHA-pinned builds; append-only) ---
   listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]>;
   addArtifactVersion(version: ArtifactVersion): Promise<void>;
+
+  // --- Promotions (version → environment; append-only history) ---
+  listPromotions(prototypeKey: string): Promise<Promotion[]>;
+  addPromotion(promotion: Promotion): Promise<void>;
+  updatePromotionStatus(id: string, status: PromotionStatus): Promise<void>;
+
+  // --- Audit trail (append-only, org-scoped) ---
+  listAuditEvents(orgId: string, limit?: number): Promise<AuditEvent[]>;
+  addAuditEvent(event: AuditEvent): Promise<void>;
 
   // --- Pages ---
   /** Distinct page slugs captured for a site. */

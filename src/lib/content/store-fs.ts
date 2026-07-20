@@ -8,6 +8,8 @@ import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
+import type { Promotion, PromotionStatus } from "../promotions/types";
+import type { AuditEvent } from "../audit/types";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -30,6 +32,8 @@ export class FsContentStore implements ContentStore {
   private envsFile(): string { return join(this.root(), "_environments.json"); }
   private integrationsFile(): string { return join(this.root(), "_integrations.json"); }
   private versionsFile(): string { return join(this.root(), "_artifact-versions.json"); }
+  private promotionsFile(): string { return join(this.root(), "_promotions.json"); }
+  private auditFile(): string { return join(this.root(), "_audit.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -58,6 +62,8 @@ export class FsContentStore implements ContentStore {
     await this.writeJson(this.membersFile(), members);
     const integrations = (await this.readJson<ExperimentationConfig[]>(this.integrationsFile(), [])).filter((c) => c.orgId !== id);
     await this.writeJson(this.integrationsFile(), integrations);
+    const audit = (await this.readJson<AuditEvent[]>(this.auditFile(), [])).filter((e) => e.orgId !== id);
+    await this.writeJson(this.auditFile(), audit);
   }
 
   async getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null> {
@@ -171,6 +177,9 @@ export class FsContentStore implements ContentStore {
     // artifact versions
     const versions = (await this.readJson<ArtifactVersion[]>(this.versionsFile(), [])).filter((v) => v.siteKey !== siteKey);
     await this.writeJson(this.versionsFile(), versions);
+    // promotions
+    const promotions = (await this.readJson<Promotion[]>(this.promotionsFile(), [])).filter((p) => p.siteKey !== siteKey);
+    await this.writeJson(this.promotionsFile(), promotions);
     // pages + assets (whole site dir)
     await rm(join(this.root(), siteKey), { recursive: true, force: true });
   }
@@ -217,6 +226,37 @@ export class FsContentStore implements ContentStore {
     if (all.some((x) => x.id === v.id)) return; // append-only, idempotent
     all.push(v);
     await this.writeJson(this.versionsFile(), all);
+  }
+
+  async listPromotions(prototypeKey: string): Promise<Promotion[]> {
+    return (await this.readJson<Promotion[]>(this.promotionsFile(), []))
+      .filter((p) => p.prototypeKey === prototypeKey)
+      .sort((a, b) => b.promotedAt.localeCompare(a.promotedAt));
+  }
+  async addPromotion(p: Promotion): Promise<void> {
+    const all = await this.readJson<Promotion[]>(this.promotionsFile(), []);
+    if (all.some((x) => x.id === p.id)) return;
+    all.push(p);
+    await this.writeJson(this.promotionsFile(), all);
+  }
+  async updatePromotionStatus(id: string, status: PromotionStatus): Promise<void> {
+    const all = await this.readJson<Promotion[]>(this.promotionsFile(), []);
+    const i = all.findIndex((p) => p.id === id);
+    if (i === -1) return;
+    all[i] = { ...all[i], status };
+    await this.writeJson(this.promotionsFile(), all);
+  }
+
+  async listAuditEvents(orgId: string, limit = 100): Promise<AuditEvent[]> {
+    return (await this.readJson<AuditEvent[]>(this.auditFile(), []))
+      .filter((e) => e.orgId === orgId)
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, limit);
+  }
+  async addAuditEvent(e: AuditEvent): Promise<void> {
+    const all = await this.readJson<AuditEvent[]>(this.auditFile(), []);
+    all.push(e);
+    await this.writeJson(this.auditFile(), all);
   }
 
   async listSlugs(siteKey: string): Promise<string[]> {

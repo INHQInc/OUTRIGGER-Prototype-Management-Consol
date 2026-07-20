@@ -2,8 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
+import { listEnvironments } from "@/lib/environments";
+import { listPromotions } from "@/lib/promotions";
 import { Badge } from "@/components/ui";
 import { ArtifactVersions } from "@/components/ArtifactVersions";
+import { PromotePanel } from "@/components/PromotePanel";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +25,11 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p || p.siteKey !== siteKey) notFound();
-  const versions = await listArtifactVersions(key);
+  const [versions, environments, promotions] = await Promise.all([
+    listArtifactVersions(key),
+    listEnvironments(siteKey),
+    listPromotions(key),
+  ]);
 
   const h = p.hypothesis;
 
@@ -68,9 +75,13 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
 
       <ArtifactVersions prototypeKey={key} initialVersions={versions} />
 
-      <div className="rounded-xl border border-dashed border-border p-4 text-[12px] text-muted-2 leading-relaxed">
-        Next: promote a version through this site&apos;s environments (staging → production) — that&apos;s where the Optimizely experiment gets created.
-      </div>
+      <PromotePanel
+        prototypeKey={key}
+        environments={environments}
+        versions={versions}
+        initialPromotions={promotions}
+        canPromote
+      />
     </div>
   );
 }

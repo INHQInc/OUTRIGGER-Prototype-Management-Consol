@@ -7,6 +7,8 @@ import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment, EnvironmentKind } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
+import type { Promotion, PromotionStatus, PromotionVehicle } from "../promotions/types";
+import type { AuditEvent } from "../audit/types";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
@@ -134,6 +136,36 @@ export class NeonContentStore implements ContentStore {
       )`);
     await this.ddl(() => this.sql`create index if not exists artifact_version_proto_idx on artifact_version (prototype_key)`);
     await this.ddl(() => this.sql`
+      create table if not exists promotion (
+        id text primary key,
+        prototype_key text not null,
+        site_key text not null,
+        version_id text not null,
+        version_number int not null,
+        environment_id text not null,
+        environment_kind text not null,
+        environment_label text not null,
+        vehicle text not null,
+        status text not null,
+        experiment_id text,
+        experiment_url text,
+        detail text,
+        promoted_by text,
+        promoted_at timestamptz not null default now()
+      )`);
+    await this.ddl(() => this.sql`create index if not exists promotion_proto_idx on promotion (prototype_key)`);
+    await this.ddl(() => this.sql`
+      create table if not exists audit_event (
+        id text primary key,
+        org_id text not null,
+        actor text not null,
+        action text not null,
+        target text not null,
+        detail text,
+        at timestamptz not null default now()
+      )`);
+    await this.ddl(() => this.sql`create index if not exists audit_event_org_idx on audit_event (org_id, at desc)`);
+    await this.ddl(() => this.sql`
       create table if not exists content_meta (
         key text primary key,
         val text not null,
@@ -189,6 +221,55 @@ export class NeonContentStore implements ContentStore {
       on conflict (id) do nothing`;
   }
 
+  async listPromotions(prototypeKey: string): Promise<Promotion[]> {
+    const rows = await this.sql`select * from promotion where prototype_key = ${prototypeKey} order by promoted_at desc`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      prototypeKey: r.prototype_key as string,
+      siteKey: r.site_key as string,
+      versionId: r.version_id as string,
+      versionNumber: Number(r.version_number),
+      environmentId: r.environment_id as string,
+      environmentKind: r.environment_kind as EnvironmentKind,
+      environmentLabel: r.environment_label as string,
+      vehicle: r.vehicle as PromotionVehicle,
+      status: r.status as PromotionStatus,
+      experimentId: (r.experiment_id as string) || undefined,
+      experimentUrl: (r.experiment_url as string) || undefined,
+      detail: (r.detail as string) || undefined,
+      promotedBy: (r.promoted_by as string) || undefined,
+      promotedAt: new Date(r.promoted_at as string).toISOString(),
+    }));
+  }
+  async addPromotion(p: Promotion): Promise<void> {
+    await this.sql`
+      insert into promotion (id, prototype_key, site_key, version_id, version_number, environment_id, environment_kind, environment_label, vehicle, status, experiment_id, experiment_url, detail, promoted_by, promoted_at)
+      values (${p.id}, ${p.prototypeKey}, ${p.siteKey}, ${p.versionId}, ${p.versionNumber}, ${p.environmentId}, ${p.environmentKind}, ${p.environmentLabel}, ${p.vehicle}, ${p.status}, ${p.experimentId ?? null}, ${p.experimentUrl ?? null}, ${p.detail ?? null}, ${p.promotedBy ?? null}, ${p.promotedAt})
+      on conflict (id) do nothing`;
+  }
+  async updatePromotionStatus(id: string, status: PromotionStatus): Promise<void> {
+    await this.sql`update promotion set status = ${status} where id = ${id}`;
+  }
+
+  async listAuditEvents(orgId: string, limit = 100): Promise<AuditEvent[]> {
+    const rows = await this.sql`select * from audit_event where org_id = ${orgId} order by at desc limit ${limit}`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      orgId: r.org_id as string,
+      actor: r.actor as string,
+      action: r.action as string,
+      target: r.target as string,
+      detail: (r.detail as string) || undefined,
+      at: new Date(r.at as string).toISOString(),
+    }));
+  }
+  async addAuditEvent(e: AuditEvent): Promise<void> {
+    await this.sql`
+      insert into audit_event (id, org_id, actor, action, target, detail, at)
+      values (${e.id}, ${e.orgId}, ${e.actor}, ${e.action}, ${e.target}, ${e.detail ?? null}, ${e.at})
+      on conflict (id) do nothing`;
+  }
+
   async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {
     const rows = await this.sql`select config from repo_binding where site_key = ${siteKey}`;
     if (!rows[0]) return null;
@@ -239,6 +320,7 @@ export class NeonContentStore implements ContentStore {
   async deleteOrg(id: string): Promise<void> {
     await this.sql`delete from org_member where org_id = ${id}`;
     await this.sql`delete from experimentation_config where org_id = ${id}`;
+    await this.sql`delete from audit_event where org_id = ${id}`;
     await this.sql`delete from org where id = ${id}`;
   }
   async listMembers(orgId: string): Promise<OrgMember[]> {
@@ -302,6 +384,7 @@ export class NeonContentStore implements ContentStore {
     await this.sql`delete from page_version where site_key = ${siteKey}`;
     await this.sql`delete from asset where site_key = ${siteKey}`;
     await this.sql`delete from artifact_version where site_key = ${siteKey}`;
+    await this.sql`delete from promotion where site_key = ${siteKey}`;
     await this.sql`delete from prototype where site_key = ${siteKey}`;
     await this.sql`delete from repo_binding where site_key = ${siteKey}`;
     await this.sql`delete from environment where site_key = ${siteKey}`;
