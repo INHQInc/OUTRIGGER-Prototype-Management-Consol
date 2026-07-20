@@ -8,14 +8,19 @@ import type { SiteConfig } from "../sites";
  *   - Local dev (no DATABASE_URL): FsContentStore — the snapshots/ filesystem,
  *     full frozen asset mirror (uses curl, which the local machine has).
  *   - Hosted (DATABASE_URL set): NeonContentStore — Postgres. Serverless has no
- *     writable FS and no curl, so hosted capture is HTML-only: the sanitized
- *     HTML is stored and assets are referenced at their origin CDN URLs
- *     (`mirrorsAssets = false`). Browsers load those directly (they pass the
- *     WAF that blocks server-side fetch); the HTML stays tracking-free.
+ *     writable FS and no curl (`curlAvailable = false`), so capture tries Node
+ *     fetch per asset: what it can fetch is stored, and WAF-blocked assets are
+ *     left at their origin CDN (browsers load those directly). HTML stays
+ *     tracking-free either way.
  */
 export interface ContentStore {
-  /** FS: true (mirror assets to the pool). Serverless: false (HTML-only, assets stay remote). */
-  readonly mirrorsAssets: boolean;
+  /**
+   * Whether `curl` is available for downloads. Local shells out to curl (which
+   * passes the WAF that TLS-fingerprint-blocks Node fetch) and mirrors every
+   * asset. Serverless has no curl → capture falls back to Node fetch, storing
+   * what it can and leaving WAF-blocked assets at their origin CDN.
+   */
+  readonly curlAvailable: boolean;
 
   // --- Sites (dynamic layer; built-in CONFIG_SITES live in code) ---
   listDynamicSites(): Promise<SiteConfig[]>;

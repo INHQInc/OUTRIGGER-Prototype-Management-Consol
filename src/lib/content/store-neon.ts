@@ -5,13 +5,13 @@ import type { SiteConfig } from "../sites";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
- * first use (same pattern as the auth store). Serverless has no writable FS
- * and no curl, so capture is HTML-only here → mirrorsAssets = false. Assets
- * are stored as base64 text (reliable over the Neon HTTP driver) and only
- * populated by a future sync; hosted capture leaves assets at their origin.
+ * first use (same pattern as the auth store). Serverless has no curl
+ * (curlAvailable = false), so capture tries Node fetch per asset and stores
+ * what it can as base64 text (reliable over the Neon HTTP driver); assets it
+ * can't fetch (WAF-blocked) are left at their origin CDN by the caller.
  */
 export class NeonContentStore implements ContentStore {
-  readonly mirrorsAssets = false;
+  readonly curlAvailable = false;
 
   private constructor(private sql: NeonQueryFunction<false, false>) {}
 

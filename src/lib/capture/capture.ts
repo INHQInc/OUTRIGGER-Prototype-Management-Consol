@@ -1,7 +1,7 @@
 import { load } from "cheerio";
 import { AssetStore, captureAssets, absolutizeAssetUrls } from "./assets";
 import { sanitize, injectGuards, buildReport } from "./sanitize";
-import type { AssetRecord, PageVersionMeta } from "./types";
+import type { PageVersionMeta } from "./types";
 import { getSite } from "../sites";
 import { getContentStore } from "../content/store";
 
@@ -72,29 +72,24 @@ export async function capturePage(
   const removed = sanitize($);
   progress(`Removed ${removed.length} tracking artifacts`);
 
-  let records: AssetRecord[] = [];
-  let totalBytes = 0;
-  let notes: string[] = [];
-
-  if (store.mirrorsAssets) {
-    // Local: download + rewrite assets into the frozen pool (uses curl).
-    progress("Downloading and rewriting assets...");
-    const assetStore = new AssetStore(store, cfg.siteKey, cfg);
-    const writeProcessedCss = async (fileName: string, content: string) => {
-      await store.putAsset(cfg.siteKey, fileName, Buffer.from(content, "utf8"), "text/css");
-    };
-    const assetNotes = await captureAssets($, url, assetStore, assetPublicPath, writeProcessedCss);
-    records = assetStore.records;
-    totalBytes = records.reduce((s, r) => s + r.bytes, 0);
-    notes = [...assetNotes, ...assetStore.failed.map((f) => `asset failed: ${f.url} (${f.error})`)];
-    progress(`Stored ${records.length} assets (${(totalBytes / 1024 / 1024).toFixed(1)} MB), ${assetStore.failed.length} failures`);
-  } else {
-    // Hosted/serverless: no curl, WAF blocks server fetch → HTML-only. Point
-    // assets at the origin CDN so the browser loads them directly.
-    progress("Hosted capture — referencing assets at origin CDN...");
-    absolutizeAssetUrls($, url);
-    notes = ["hosted capture: assets referenced at origin (not mirrored)"];
-  }
+  // Best-effort freeze: mirror every asset we can into the pool (curl locally,
+  // Node fetch when hosted), then point anything we couldn't fetch at its
+  // origin CDN so the browser loads it directly. Frozen where possible,
+  // remote fallback where not.
+  progress(store.curlAvailable ? "Downloading + rewriting assets..." : "Fetching assets (store what we can, remote fallback)...");
+  const assetStore = new AssetStore(store, cfg.siteKey, cfg, store.curlAvailable);
+  const writeProcessedCss = async (fileName: string, content: string) => {
+    await store.putAsset(cfg.siteKey, fileName, Buffer.from(content, "utf8"), "text/css");
+  };
+  const assetNotes = await captureAssets($, url, assetStore, assetPublicPath, writeProcessedCss);
+  absolutizeAssetUrls($, url); // remote-fallback any asset that wasn't mirrored
+  const records = assetStore.records;
+  const totalBytes = records.reduce((s, r) => s + r.bytes, 0);
+  const notes = [
+    ...assetNotes,
+    ...assetStore.failed.map((f) => `asset left remote: ${f.url} (${f.error})`),
+  ];
+  progress(`Mirrored ${records.length} assets (${(totalBytes / 1024 / 1024).toFixed(1)} MB); ${assetStore.failed.length} left remote`);
 
   injectGuards($);
   const report = buildReport(url, removed, notes);

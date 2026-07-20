@@ -13,7 +13,7 @@ const TYPE_BY_EXT: Record<string, string> = {
 
 /** Local filesystem backend — the snapshots/ tree. Full asset mirror. */
 export class FsContentStore implements ContentStore {
-  readonly mirrorsAssets = true;
+  readonly curlAvailable = true;
 
   private root(): string { return join(process.cwd(), "snapshots"); }
   private sitesFile(): string { return join(this.root(), "_sites.json"); }

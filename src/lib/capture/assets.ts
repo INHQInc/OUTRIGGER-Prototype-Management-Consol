@@ -79,7 +79,7 @@ export class AssetStore {
   private byUrl = new Map<string, AssetRecord>();
   private failures = new Map<string, string>();
 
-  constructor(private store: ContentStore, private siteKey: string, private cfg: CaptureConfig) {}
+  constructor(private store: ContentStore, private siteKey: string, private cfg: CaptureConfig, readonly allowCurl: boolean) {}
 
   get records(): AssetRecord[] {
     return [...this.byUrl.values()];
@@ -100,9 +100,7 @@ export class AssetStore {
     if (!isDownloadable(absUrl, this.cfg)) return null;
 
     try {
-      // Node's fetch is blocked by the site's WAF via TLS fingerprinting;
-      // curl's TLS stack passes, so downloads shell out to curl.
-      const { contentType, buf, status } = await curlFetch(absUrl, this.cfg.origin);
+      const { contentType, buf, status } = await fetchAsset(absUrl, this.cfg.origin, this.allowCurl);
       if (status !== 200) {
         this.failures.set(absUrl, `HTTP ${status}`);
         return null;
@@ -196,7 +194,7 @@ export async function captureAssets(
     if (!rec) continue;
     if (rec.contentType.includes("css") || rec.file.endsWith(".css")) {
       // Reprocess CSS for nested url()/@import refs, store processed copy under same name
-      const raw = await fetchText(abs);
+      const raw = await fetchText(abs, store.allowCurl);
       if (raw !== null) {
         const processed = await processCss(raw, abs, store, assetPublicPath);
         await writeProcessedCss(rec.file, processed);
@@ -280,6 +278,7 @@ export function absolutizeAssetUrls($: CheerioAPI, pageUrl: string): void {
     if (!raw) return null;
     const t = raw.trim();
     if (!t || t.startsWith("data:") || t.startsWith("blob:") || t.startsWith("#") || t.startsWith("javascript:")) return null;
+    if (t.startsWith("/snap-assets/")) return null; // already mirrored → keep root-relative to us
     try { return new URL(t, pageUrl).href; } catch { return null; }
   };
   $("link[href], script[src], img[src], source[src], video[src], audio[src]").each((_, el) => {
@@ -299,12 +298,37 @@ export function absolutizeAssetUrls($: CheerioAPI, pageUrl: string): void {
   });
 }
 
-async function fetchText(url: string): Promise<string | null> {
+async function fetchText(url: string, allowCurl: boolean): Promise<string | null> {
   try {
-    const { status, buf } = await curlFetch(url, new URL(url).origin);
+    const { status, buf } = await fetchAsset(url, new URL(url).origin, allowCurl);
     return status === 200 ? buf.toString("utf8") : null;
   } catch {
     return null;
+  }
+}
+
+/** Download an asset: curl when available (passes the WAF), else Node fetch. */
+export async function fetchAsset(url: string, referer: string, allowCurl: boolean): Promise<{ status: number; contentType: string; buf: Buffer }> {
+  return allowCurl ? curlFetch(url, referer) : nodeFetchAsset(url, referer);
+}
+
+/** Node fetch fallback for serverless (no curl). Any failure → status 0, so the caller leaves the asset at its origin CDN. */
+async function nodeFetchAsset(url: string, referer: string): Promise<{ status: number; contentType: string; buf: Buffer }> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        Accept: "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        Referer: `${referer}/`,
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(20_000),
+    });
+    const buf = Buffer.from(await res.arrayBuffer());
+    return { status: res.status, contentType: res.headers.get("content-type") ?? "", buf };
+  } catch {
+    return { status: 0, contentType: "", buf: Buffer.alloc(0) };
   }
 }
 
