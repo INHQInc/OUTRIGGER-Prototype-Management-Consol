@@ -11,7 +11,7 @@
  * websites are captured exactly like the built-in ones.
  */
 import type { CaptureConfig } from "./capture/types";
-import { getContentStore, type ContentStore } from "./content/store";
+import { getContentStore } from "./content/store";
 
 export type SiteMode = "clone" | "live";
 
@@ -23,9 +23,9 @@ export interface SiteConfig extends CaptureConfig {
 }
 
 /**
- * Seed sites — inserted into the store ONCE on first run (see ensureSeeded).
- * After seeding, the store is the single source of truth: every site is a
- * normal, editable, deletable record. Nothing here is special-cased at runtime.
+ * Legacy constants kept only for the CLI scaffold/capture scripts (re-exported
+ * as SITES from capture.ts). NOT used by the app — the app reads sites purely
+ * from the store. Nothing is seeded or hardcoded at runtime.
  */
 export const CONFIG_SITES: Record<string, SiteConfig> = {
   outrigger: {
@@ -49,26 +49,10 @@ function withMode(s: SiteConfig): SiteConfig {
   return { ...s, mode: s.mode ?? "clone" }; // default legacy records to clone
 }
 
-// One-time seed of the initial sites into the store. Idempotent + guarded by a
-// marker so it never re-seeds (deletions stick). Nothing is hardcoded at runtime.
-let seedPromise: Promise<void> | null = null;
-async function ensureSeeded(store: ContentStore): Promise<void> {
-  if (!seedPromise) {
-    seedPromise = (async () => {
-      if (await store.getFlag("sites_seeded")) return;
-      const existing = new Set((await store.listDynamicSites()).map((s) => s.siteKey));
-      for (const s of Object.values(CONFIG_SITES)) {
-        if (!existing.has(s.siteKey)) await store.addDynamicSite(s);
-      }
-      await store.setFlag("sites_seeded", "1");
-    })();
-  }
-  return seedPromise;
-}
-
+// Every site is a store record. The app starts empty; nothing is pre-populated
+// or hardcoded. Users add sites deliberately (with a clone/live mode).
 export async function getAllSites(): Promise<Record<string, SiteConfig>> {
   const store = await getContentStore();
-  await ensureSeeded(store);
   const out: Record<string, SiteConfig> = {};
   for (const s of await store.listDynamicSites()) out[s.siteKey] = withMode(s);
   return out;
@@ -77,7 +61,6 @@ export async function getAllSites(): Promise<Record<string, SiteConfig>> {
 /** Resolve one site's config, or null if unknown. */
 export async function getSite(siteKey: string): Promise<SiteConfig | null> {
   const store = await getContentStore();
-  await ensureSeeded(store);
   const found = (await store.listDynamicSites()).find((s) => s.siteKey === siteKey);
   return found ? withMode(found) : null;
 }
