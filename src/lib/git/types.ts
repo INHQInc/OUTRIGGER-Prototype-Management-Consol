@@ -12,15 +12,30 @@ export interface RepoInfo extends RepoRef {
   permissions?: { push?: boolean; pull?: boolean; admin?: boolean };
 }
 
-/** Per-site (later per-prototype) binding to a source repository. */
-export interface RepoBinding {
+/** A single repository pointer. */
+export interface RepoConfig {
   provider: "github";
   owner: string;
   repo: string;
-  /** Branch new prototype branches are cut from + PR'd back into. */
+  /** Branch prototype branches are cut from / PR'd into. */
   baseBranch: string;
-  /** Prefix for prototype branches, e.g. "prototype/". */
-  branchPrefix: string;
+}
+
+/**
+ * Where a winner integrates, relative to the feature repo:
+ *   same     — the feature repo IS the source (native flow: PR to base = ships)
+ *   repo     — a different GitHub repo (winner PR'd there)
+ *   external — read-only / non-GitHub source (e.g. Outrigger Azure) → handoff, no push
+ */
+export type SourceMode = "same" | "repo" | "external";
+
+/** Per-site binding: where prototypes deploy from, and where winners integrate. */
+export interface SiteRepoBinding {
+  /** Where prototypes live as branches and deploy from (→ Vercel preview per branch). */
+  feature: RepoConfig & { branchPrefix: string };
+  sourceMode: SourceMode;
+  /** Present only when sourceMode === "repo". */
+  source?: RepoConfig;
 }
 
 export interface PullRequestResult {

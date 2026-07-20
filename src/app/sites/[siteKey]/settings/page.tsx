@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getSite, CONFIG_SITES } from "@/lib/sites";
 import { Badge } from "@/components/ui";
+import { RepoSettings } from "@/components/RepoSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -32,10 +33,11 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
         <Row label="Asset hosts"><span className="font-mono break-all">{site.assetHosts.join(", ")}</span></Row>
       </div>
 
+      <RepoSettings siteKey={siteKey} />
+
       <div className="rounded-xl border border-dashed border-border p-4 text-[12px] text-muted-2 leading-relaxed">
-        Coming soon: edit label/asset hosts, per-site <span className="text-muted">design context</span> (brand tokens),
-        and <span className="text-muted">connectors</span> (Optimizely project, source repo) — the wiring that makes
-        prototypes render on-brand and hand off to the right codebase.
+        Coming soon: edit label/asset hosts, and per-site <span className="text-muted">design context</span> (brand tokens)
+        + <span className="text-muted">Optimizely project</span> connector.
       </div>
     </div>
   );

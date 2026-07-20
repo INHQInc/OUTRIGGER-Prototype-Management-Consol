@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
+import type { SiteRepoBinding } from "../git/types";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -17,6 +18,7 @@ export class FsContentStore implements ContentStore {
 
   private root(): string { return join(process.cwd(), "snapshots"); }
   private sitesFile(): string { return join(this.root(), "_sites.json"); }
+  private repoFile(): string { return join(this.root(), "_repo-bindings.json"); }
   private pagesDir(siteKey: string): string { return join(this.root(), siteKey, "pages"); }
   private assetsDir(siteKey: string): string { return join(this.root(), siteKey, "assets"); }
 
@@ -38,6 +40,20 @@ export class FsContentStore implements ContentStore {
     sites.push(site);
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.sitesFile(), JSON.stringify(sites, null, 2) + "\n", "utf8");
+  }
+
+  async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {
+    try {
+      const map = JSON.parse(await readFile(this.repoFile(), "utf8")) as Record<string, SiteRepoBinding>;
+      return map[siteKey] ?? null;
+    } catch { return null; }
+  }
+  async setRepoBinding(siteKey: string, binding: SiteRepoBinding): Promise<void> {
+    let map: Record<string, SiteRepoBinding> = {};
+    try { map = JSON.parse(await readFile(this.repoFile(), "utf8")); } catch { /* new */ }
+    map[siteKey] = binding;
+    await mkdir(this.root(), { recursive: true });
+    await writeFile(this.repoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
   }
 
   async listSlugs(siteKey: string): Promise<string[]> {

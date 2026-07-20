@@ -2,6 +2,7 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
+import type { SiteRepoBinding } from "../git/types";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
@@ -50,6 +51,24 @@ export class NeonContentStore implements ContentStore {
         bytes_b64 text not null,
         primary key (site_key, name)
       )`;
+    await this.sql`
+      create table if not exists repo_binding (
+        site_key text primary key,
+        config text not null,
+        updated_at timestamptz not null default now()
+      )`;
+  }
+
+  async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {
+    const rows = await this.sql`select config from repo_binding where site_key = ${siteKey}`;
+    if (!rows[0]) return null;
+    try { return JSON.parse(rows[0].config as string) as SiteRepoBinding; } catch { return null; }
+  }
+  async setRepoBinding(siteKey: string, binding: SiteRepoBinding): Promise<void> {
+    await this.sql`
+      insert into repo_binding (site_key, config, updated_at)
+      values (${siteKey}, ${JSON.stringify(binding)}, now())
+      on conflict (site_key) do update set config = excluded.config, updated_at = now()`;
   }
 
   async listDynamicSites(): Promise<SiteConfig[]> {
