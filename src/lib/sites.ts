@@ -103,8 +103,27 @@ export async function addSite(input: { origin: string; orgId: string; label?: st
   const store = await getContentStore();
   const all = await store.listDynamicSites(); // global — siteKeys are unique across orgs
 
-  if (all.some((s) => s.origin === origin)) {
-    throw new Error(`A site for ${origin} already exists.`);
+  // Origin uniqueness is PER-ORG: one tenant can't hold the same site twice,
+  // but two tenants may legitimately have the same URL (siteKeys stay globally
+  // unique via the auto-suffix below).
+  if (all.some((s) => s.origin === origin && (s.orgId || "") === input.orgId)) {
+    throw new Error(`A site for ${origin} already exists in this workspace.`);
+  }
+
+  // Pre-tenancy orphan: same origin exists but is UNOWNED (org_id === ""). Claim
+  // it into the active org — preserving its key + captured pages/prototypes —
+  // rather than erroring or spawning a suffixed duplicate. The user's current
+  // label/mode input wins.
+  const orphan = all.find((s) => s.origin === origin && !(s.orgId || ""));
+  if (orphan) {
+    const claimed: SiteConfig = {
+      ...normalize(orphan),
+      orgId: input.orgId,
+      mode: input.mode ?? orphan.mode ?? "clone",
+      label: input.label?.trim() || orphan.label,
+    };
+    await store.updateDynamicSite(orphan.siteKey, { orgId: claimed.orgId, mode: claimed.mode, label: claimed.label });
+    return claimed;
   }
 
   const keys = new Set(all.map((s) => s.siteKey));
