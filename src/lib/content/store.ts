@@ -28,6 +28,8 @@ export interface ContentStore {
   listDynamicSites(): Promise<SiteConfig[]>;
   addDynamicSite(site: SiteConfig): Promise<void>;
   updateDynamicSite(siteKey: string, patch: Partial<SiteConfig>): Promise<void>;
+  /** Cascade-delete a site: its record + all pages/versions/assets + prototypes + repo binding. */
+  deleteSite(siteKey: string): Promise<void>;
 
   // --- Repo binding (per-site feature + source repos) ---
   getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null>;

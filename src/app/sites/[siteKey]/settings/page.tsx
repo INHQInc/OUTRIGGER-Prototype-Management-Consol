@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
 import { getSite, CONFIG_SITES } from "@/lib/sites";
+import { listPages } from "@/lib/registry";
+import { getContentStore } from "@/lib/content/store";
 import { Badge } from "@/components/ui";
 import { RepoSettings } from "@/components/RepoSettings";
 import { SiteModeControl } from "@/components/SiteModeControl";
+import { DeleteSite } from "@/components/DeleteSite";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +23,13 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
   const site = await getSite(siteKey);
   if (!site) notFound();
   const builtIn = siteKey in CONFIG_SITES;
+
+  const store = await getContentStore();
+  const [pages, protos, repo] = await Promise.all([
+    listPages(siteKey),
+    store.listPrototypes(siteKey),
+    store.getRepoBinding(siteKey),
+  ]);
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -43,6 +53,15 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
         Coming soon: edit label/asset hosts, and per-site <span className="text-muted">design context</span> (brand tokens)
         + <span className="text-muted">Optimizely project</span> connector.
       </div>
+
+      <DeleteSite
+        siteKey={siteKey}
+        siteLabel={site.label}
+        builtIn={builtIn}
+        pageCount={pages.length}
+        prototypeCount={protos.length}
+        hasRepo={!!repo}
+      />
     </div>
   );
 }

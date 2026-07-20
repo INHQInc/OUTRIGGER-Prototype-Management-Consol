@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllSites, addSite, updateSiteMode } from "@/lib/sites";
+import { getAllSites, addSite, updateSiteMode, deleteSite } from "@/lib/sites";
 import type { SiteMode } from "@/lib/sites";
 
 /** GET → all sites (built-in + user-added). */
@@ -41,6 +41,18 @@ export async function PATCH(req: NextRequest) {
   try {
     await updateSiteMode(body.siteKey, body.mode);
     return NextResponse.json({ ok: true, mode: body.mode });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+  }
+}
+
+/** DELETE ?site=<key> → cascade-delete a user-added site. */
+export async function DELETE(req: NextRequest) {
+  const siteKey = req.nextUrl.searchParams.get("site");
+  if (!siteKey) return NextResponse.json({ error: "site required" }, { status: 400 });
+  try {
+    await deleteSite(siteKey);
+    return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
   }

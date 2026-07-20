@@ -120,6 +120,13 @@ export class NeonContentStore implements ContentStore {
     if (patch.origin !== undefined) await this.sql`update site set origin = ${patch.origin} where site_key = ${siteKey}`;
     if (patch.assetHosts !== undefined) await this.sql`update site set asset_hosts = ${JSON.stringify(patch.assetHosts)} where site_key = ${siteKey}`;
   }
+  async deleteSite(siteKey: string): Promise<void> {
+    await this.sql`delete from page_version where site_key = ${siteKey}`;
+    await this.sql`delete from asset where site_key = ${siteKey}`;
+    await this.sql`delete from prototype where site_key = ${siteKey}`;
+    await this.sql`delete from repo_binding where site_key = ${siteKey}`;
+    await this.sql`delete from site where site_key = ${siteKey}`;
+  }
 
   async listSlugs(siteKey: string): Promise<string[]> {
     const rows = await this.sql`select distinct slug from page_version where site_key = ${siteKey}`;

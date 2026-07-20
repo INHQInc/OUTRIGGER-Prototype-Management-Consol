@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile, mkdir, stat } from "node:fs/promises";
+import { readdir, readFile, writeFile, mkdir, stat, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
@@ -50,6 +50,24 @@ export class FsContentStore implements ContentStore {
     sites[i] = { ...sites[i], ...patch };
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.sitesFile(), JSON.stringify(sites, null, 2) + "\n", "utf8");
+  }
+  async deleteSite(siteKey: string): Promise<void> {
+    // site record
+    const sites = (await this.listDynamicSites()).filter((s) => s.siteKey !== siteKey);
+    await mkdir(this.root(), { recursive: true });
+    await writeFile(this.sitesFile(), JSON.stringify(sites, null, 2) + "\n", "utf8");
+    // repo binding
+    try {
+      const map = JSON.parse(await readFile(this.repoFile(), "utf8"));
+      delete map[siteKey];
+      await writeFile(this.repoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
+    } catch { /* none */ }
+    // prototypes
+    const protos = await this.readProtos();
+    for (const k of Object.keys(protos)) if (protos[k].siteKey === siteKey) delete protos[k];
+    await writeFile(this.protoFile(), JSON.stringify(protos, null, 2) + "\n", "utf8");
+    // pages + assets (whole site dir)
+    await rm(join(this.root(), siteKey), { recursive: true, force: true });
   }
 
   async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {

@@ -117,3 +117,10 @@ export async function updateSiteMode(siteKey: string, mode: SiteMode): Promise<v
   const store = await getContentStore();
   await store.updateDynamicSite(siteKey, { mode });
 }
+
+/** Cascade-delete a user-added site (record + pages + prototypes + repo binding). */
+export async function deleteSite(siteKey: string): Promise<void> {
+  if (CONFIG_SITES[siteKey]) throw new Error("Built-in sites can't be deleted.");
+  const store = await getContentStore();
+  await store.deleteSite(siteKey);
+}
