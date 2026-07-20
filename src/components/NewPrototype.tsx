@@ -8,7 +8,7 @@ const lbl = "block text-[12px] font-medium text-muted mb-1.5";
 const section = "text-[11px] font-semibold uppercase tracking-wider text-muted-2 pt-1";
 
 /** "New prototype" button + structured creation form (brief + hypothesis + metrics). */
-export function NewPrototype({ siteKey }: { siteKey: string }) {
+export function NewPrototype({ siteKey, defaultSource = "clone" }: { siteKey: string; defaultSource?: "clone" | "live" }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -17,7 +17,7 @@ export function NewPrototype({ siteKey }: { siteKey: string }) {
   // identity + target
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const [source, setSource] = useState<"clone" | "live">("clone");
+  const [source, setSource] = useState<"clone" | "live">(defaultSource);
   // brief
   const [problem, setProblem] = useState("");
   const [change, setChange] = useState("");

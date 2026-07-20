@@ -27,6 +27,7 @@ export interface ContentStore {
   // --- Sites (dynamic layer; built-in CONFIG_SITES live in code) ---
   listDynamicSites(): Promise<SiteConfig[]>;
   addDynamicSite(site: SiteConfig): Promise<void>;
+  updateDynamicSite(siteKey: string, patch: Partial<SiteConfig>): Promise<void>;
 
   // --- Repo binding (per-site feature + source repos) ---
   getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null>;

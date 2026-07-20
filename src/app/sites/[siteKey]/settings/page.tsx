@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getSite, CONFIG_SITES } from "@/lib/sites";
 import { Badge } from "@/components/ui";
 import { RepoSettings } from "@/components/RepoSettings";
+import { SiteModeControl } from "@/components/SiteModeControl";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,10 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
         <Row label="Key"><span className="font-mono">{site.siteKey}</span></Row>
         <Row label="Origin"><span className="font-mono break-all">{site.origin}</span></Row>
         <Row label="Asset hosts"><span className="font-mono break-all">{site.assetHosts.join(", ")}</span></Row>
+        <Row label="Mode"><span className="capitalize">{site.mode}</span></Row>
       </div>
+
+      <SiteModeControl siteKey={siteKey} initialMode={site.mode} builtIn={builtIn} />
 
       <RepoSettings siteKey={siteKey} />
 

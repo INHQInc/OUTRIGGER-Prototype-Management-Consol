@@ -43,6 +43,14 @@ export class FsContentStore implements ContentStore {
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.sitesFile(), JSON.stringify(sites, null, 2) + "\n", "utf8");
   }
+  async updateDynamicSite(siteKey: string, patch: Partial<SiteConfig>): Promise<void> {
+    const sites = await this.listDynamicSites();
+    const i = sites.findIndex((s) => s.siteKey === siteKey);
+    if (i === -1) return;
+    sites[i] = { ...sites[i], ...patch };
+    await mkdir(this.root(), { recursive: true });
+    await writeFile(this.sitesFile(), JSON.stringify(sites, null, 2) + "\n", "utf8");
+  }
 
   async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {
     try {

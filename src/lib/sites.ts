@@ -13,9 +13,13 @@
 import type { CaptureConfig } from "./capture/types";
 import { getContentStore } from "./content/store";
 
+export type SiteMode = "clone" | "live";
+
 export interface SiteConfig extends CaptureConfig {
   /** Human-facing label for display. */
   label: string;
+  /** clone = snapshot pages & build against frozen copies; live = prototypes run on the real site (no capture). */
+  mode: SiteMode;
 }
 
 /** Built-in sites. Always available, even with no captured content. */
@@ -25,20 +29,26 @@ export const CONFIG_SITES: Record<string, SiteConfig> = {
     origin: "https://www.outrigger.com",
     assetHosts: ["outrigger.com", "outriggerhospitalityassets.com"],
     label: "Outrigger.com",
+    mode: "clone",
   },
   hvc: {
     siteKey: "hvc",
     origin: "https://hawaiivacationcondos.outrigger.com",
     assetHosts: ["outrigger.com", "outriggerhospitalityassets.com"],
     label: "Hawaii Vacation Condos",
+    mode: "clone",
   },
 };
 
 /** All sites (built-in + user-added), keyed by siteKey. Dynamic wins on clash. */
+function withMode(s: SiteConfig): SiteConfig {
+  return { ...s, mode: s.mode ?? "clone" }; // default legacy records to clone
+}
+
 export async function getAllSites(): Promise<Record<string, SiteConfig>> {
   const out: Record<string, SiteConfig> = { ...CONFIG_SITES };
   const store = await getContentStore();
-  for (const s of await store.listDynamicSites()) out[s.siteKey] = s;
+  for (const s of await store.listDynamicSites()) out[s.siteKey] = withMode(s);
   return out;
 }
 
@@ -46,7 +56,8 @@ export async function getAllSites(): Promise<Record<string, SiteConfig>> {
 export async function getSite(siteKey: string): Promise<SiteConfig | null> {
   if (CONFIG_SITES[siteKey]) return CONFIG_SITES[siteKey];
   const store = await getContentStore();
-  return (await store.listDynamicSites()).find((s) => s.siteKey === siteKey) ?? null;
+  const found = (await store.listDynamicSites()).find((s) => s.siteKey === siteKey);
+  return found ? withMode(found) : null;
 }
 
 /** Derive a short, url-safe key from a hostname (e.g. www.marriott.com → marriott). */
@@ -61,7 +72,7 @@ function keyFromHost(host: string): string {
  * Add a website. Derives a unique key + sensible assetHosts default from the
  * origin. Rejects invalid URLs and duplicate origins. Persists and returns it.
  */
-export async function addSite(input: { origin: string; label?: string; assetHosts?: string[] }): Promise<SiteConfig> {
+export async function addSite(input: { origin: string; label?: string; assetHosts?: string[]; mode?: SiteMode }): Promise<SiteConfig> {
   let url: URL;
   try {
     url = new URL(input.origin);
@@ -92,9 +103,17 @@ export async function addSite(input: { origin: string; label?: string; assetHost
     origin,
     assetHosts: input.assetHosts?.length ? input.assetHosts : [host.replace(/^www\./, "")],
     label: input.label?.trim() || host.replace(/^www\./, ""),
+    mode: input.mode ?? "clone",
   };
 
   const store = await getContentStore();
   await store.addDynamicSite(site);
   return site;
+}
+
+/** Change a user-added site's mode (clone/live). Built-in sites are fixed. */
+export async function updateSiteMode(siteKey: string, mode: SiteMode): Promise<void> {
+  if (CONFIG_SITES[siteKey]) throw new Error("Built-in site mode can't be changed.");
+  const store = await getContentStore();
+  await store.updateDynamicSite(siteKey, { mode });
 }

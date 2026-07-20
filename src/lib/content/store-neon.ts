@@ -33,6 +33,7 @@ export class NeonContentStore implements ContentStore {
         label text not null,
         created_at timestamptz not null default now()
       )`;
+    await this.sql`alter table site add column if not exists mode text not null default 'clone'`;
     await this.sql`
       create table if not exists page_version (
         site_key text not null,
@@ -104,13 +105,20 @@ export class NeonContentStore implements ContentStore {
       origin: r.origin as string,
       assetHosts: JSON.parse((r.asset_hosts as string) || "[]"),
       label: r.label as string,
+      mode: ((r.mode as string) || "clone") as SiteConfig["mode"],
     }));
   }
   async addDynamicSite(site: SiteConfig): Promise<void> {
     await this.sql`
-      insert into site (site_key, origin, asset_hosts, label)
-      values (${site.siteKey}, ${site.origin}, ${JSON.stringify(site.assetHosts)}, ${site.label})
+      insert into site (site_key, origin, asset_hosts, label, mode)
+      values (${site.siteKey}, ${site.origin}, ${JSON.stringify(site.assetHosts)}, ${site.label}, ${site.mode})
       on conflict (site_key) do nothing`;
+  }
+  async updateDynamicSite(siteKey: string, patch: Partial<SiteConfig>): Promise<void> {
+    if (patch.mode !== undefined) await this.sql`update site set mode = ${patch.mode} where site_key = ${siteKey}`;
+    if (patch.label !== undefined) await this.sql`update site set label = ${patch.label} where site_key = ${siteKey}`;
+    if (patch.origin !== undefined) await this.sql`update site set origin = ${patch.origin} where site_key = ${siteKey}`;
+    if (patch.assetHosts !== undefined) await this.sql`update site set asset_hosts = ${JSON.stringify(patch.assetHosts)} where site_key = ${siteKey}`;
   }
 
   async listSlugs(siteKey: string): Promise<string[]> {

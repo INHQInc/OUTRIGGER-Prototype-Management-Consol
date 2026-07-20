@@ -12,6 +12,7 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
   const [step, setStep] = useState<Step>("details");
   const [origin, setOrigin] = useState("");
   const [label, setLabel] = useState("");
+  const [mode, setMode] = useState<"clone" | "live">("clone");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +25,7 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
   const [results, setResults] = useState<CaptureResult[] | null>(null);
 
   function reset() {
-    setStep("details"); setOrigin(""); setLabel(""); setBusy(false); setStatus(""); setError(null);
+    setStep("details"); setOrigin(""); setLabel(""); setMode("clone"); setBusy(false); setStatus(""); setError(null);
     setSiteKey(""); setSiteLabel(""); setHomeOk(false); setLinks([]); setSelected(new Set()); setResults(null);
   }
   function close() {
@@ -40,11 +41,17 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
     setBusy(true); setError(null);
     try {
       setStatus("Adding site…");
-      const sRes = await fetch("/api/sites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ origin: value, label: label.trim() || undefined }) });
+      const sRes = await fetch("/api/sites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ origin: value, label: label.trim() || undefined, mode }) });
       const sData = await sRes.json();
       if (!sRes.ok) { setError(sData.error ?? "Could not add site"); setBusy(false); setStatus(""); return; }
       setSiteKey(sData.site.siteKey);
       setSiteLabel(sData.site.label);
+
+      if (mode === "live") {
+        // Live site — no cloning. Register and finish.
+        setStep("done");
+        return;
+      }
 
       setStatus("Capturing homepage… (this can take a minute)");
       const cRes = await fetch("/api/capture", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ siteKey: sData.site.siteKey, urls: [sData.site.origin] }) });
@@ -92,7 +99,8 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
 
   if (!open) return null;
 
-  const stepNum = step === "details" ? 1 : step === "pages" ? 2 : 3;
+  const total = mode === "live" ? 2 : 3;
+  const stepNum = step === "details" ? 1 : step === "pages" ? 2 : total;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-8 overflow-y-auto" onClick={close}>
@@ -100,7 +108,7 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <div>
             <h2 className="text-[14px] font-semibold">Add a website</h2>
-            <div className="text-[11px] text-muted-2 mt-0.5">Step {stepNum} of 3 · {step === "details" ? "details" : step === "pages" ? "pick pages" : "done"}</div>
+            <div className="text-[11px] text-muted-2 mt-0.5">Step {stepNum} of {total} · {step === "details" ? "details" : step === "pages" ? "pick pages" : "done"}</div>
           </div>
           <button onClick={close} disabled={busy} className="text-muted-2 hover:text-foreground text-lg leading-none disabled:opacity-40">×</button>
         </div>
@@ -109,6 +117,20 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
         {step === "details" && (
           <>
             <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-[12px] font-medium text-muted mb-1.5">How will you use this site?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ["clone", "Clone", "Snapshot pages; build against frozen copies."],
+                    ["live", "Live", "Prototypes run on the real site. No cloning."],
+                  ] as ["clone" | "live", string, string][]).map(([m, t, h]) => (
+                    <button key={m} onClick={() => setMode(m)} className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${mode === m ? "border-accent bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : "border-border hover:bg-surface-2/40"}`}>
+                      <div className="text-[13px] font-semibold">{t}</div>
+                      <div className="text-[11px] text-muted-2 mt-0.5 leading-snug">{h}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <label className="block text-[12px] font-medium text-muted mb-1.5">Website URL</label>
                 <input
@@ -120,7 +142,7 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
                   placeholder="https://www.example.com"
                   className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none"
                 />
-                <p className="text-[11px] text-muted-2 mt-1">Enter the homepage. We add the site, clone the homepage, and scan it for pages you can capture.</p>
+                <p className="text-[11px] text-muted-2 mt-1">{mode === "live" ? "Enter the site's base URL. Prototypes target live URLs on it — nothing is cloned." : "Enter the homepage. We clone it and scan for pages you can capture."}</p>
               </div>
               <div>
                 <label className="block text-[12px] font-medium text-muted mb-1.5">Label <span className="text-muted-2">(optional)</span></label>
@@ -139,7 +161,7 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
               <div className="flex gap-2">
                 <button onClick={close} disabled={busy} className="h-9 px-4 rounded-lg text-[13px] text-muted hover:text-foreground disabled:opacity-40">Cancel</button>
                 <button onClick={startScan} disabled={busy || !origin.trim()} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                  {busy ? "Working…" : "Add site & scan"}
+                  {busy ? "Working…" : mode === "live" ? "Add live site" : "Add site & scan"}
                 </button>
               </div>
             </div>
@@ -199,8 +221,9 @@ export function AddSiteModal({ open, onClose }: { open: boolean; onClose: () => 
             <div className="p-6 space-y-3">
               <div className="text-[13px] font-medium">✔ {siteLabel} is ready.</div>
               <div className="text-[12px] text-muted-2">
-                {homeOk ? "Homepage captured" : "Homepage not captured"}
-                {results ? ` · ${results.filter((r) => r.ok).length}/${results.length} selected pages captured` : ""}.
+                {mode === "live"
+                  ? "Live site — prototypes run on the real site. Set up the loader or Optimizely in Settings."
+                  : `${homeOk ? "Homepage captured" : "Homepage not captured"}${results ? ` · ${results.filter((r) => r.ok).length}/${results.length} selected pages captured` : ""}.`}
               </div>
               {results && results.some((r) => !r.ok) && (
                 <div className="space-y-1 max-h-32 overflow-y-auto">
