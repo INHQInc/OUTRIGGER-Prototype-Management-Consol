@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
-import { getSite, CONFIG_SITES } from "@/lib/sites";
+import { getSite } from "@/lib/sites";
 import { listPages } from "@/lib/registry";
 import { getContentStore } from "@/lib/content/store";
-import { Badge } from "@/components/ui";
 import { RepoSettings } from "@/components/RepoSettings";
 import { SiteModeControl } from "@/components/SiteModeControl";
 import { DeleteSite } from "@/components/DeleteSite";
@@ -22,7 +21,6 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
   const { siteKey } = await params;
   const site = await getSite(siteKey);
   if (!site) notFound();
-  const builtIn = siteKey in CONFIG_SITES;
 
   const store = await getContentStore();
   const [pages, protos, repo] = await Promise.all([
@@ -34,9 +32,8 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
   return (
     <div className="space-y-5 max-w-2xl">
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-border">
           <span className="text-[13px] font-semibold">Site configuration</span>
-          <Badge tone={builtIn ? "neutral" : "accent"}>{builtIn ? "built-in" : "user-added"}</Badge>
         </div>
         <Row label="Label">{site.label}</Row>
         <Row label="Key"><span className="font-mono">{site.siteKey}</span></Row>
@@ -45,7 +42,7 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
         <Row label="Mode"><span className="capitalize">{site.mode}</span></Row>
       </div>
 
-      <SiteModeControl siteKey={siteKey} initialMode={site.mode} builtIn={builtIn} />
+      <SiteModeControl siteKey={siteKey} initialMode={site.mode} />
 
       <RepoSettings siteKey={siteKey} />
 
@@ -57,7 +54,6 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
       <DeleteSite
         siteKey={siteKey}
         siteLabel={site.label}
-        builtIn={builtIn}
         pageCount={pages.length}
         prototypeCount={protos.length}
         hasRepo={!!repo}

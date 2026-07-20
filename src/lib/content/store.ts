@@ -24,6 +24,10 @@ export interface ContentStore {
    */
   readonly curlAvailable: boolean;
 
+  // --- Key/value flags (one-time migrations, seed markers) ---
+  getFlag(key: string): Promise<string | null>;
+  setFlag(key: string, value: string): Promise<void>;
+
   // --- Sites (dynamic layer; built-in CONFIG_SITES live in code) ---
   listDynamicSites(): Promise<SiteConfig[]>;
   addDynamicSite(site: SiteConfig): Promise<void>;

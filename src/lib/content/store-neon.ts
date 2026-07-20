@@ -67,6 +67,22 @@ export class NeonContentStore implements ContentStore {
         updated_at timestamptz not null default now()
       )`;
     await this.sql`create index if not exists prototype_site_idx on prototype (site_key)`;
+    await this.sql`
+      create table if not exists content_meta (
+        key text primary key,
+        val text not null,
+        updated_at timestamptz not null default now()
+      )`;
+  }
+
+  async getFlag(key: string): Promise<string | null> {
+    const rows = await this.sql`select val from content_meta where key = ${key}`;
+    return rows[0] ? (rows[0].val as string) : null;
+  }
+  async setFlag(key: string, value: string): Promise<void> {
+    await this.sql`
+      insert into content_meta (key, val, updated_at) values (${key}, ${value}, now())
+      on conflict (key) do update set val = excluded.val, updated_at = now()`;
   }
 
   async listPrototypes(siteKey?: string): Promise<PrototypeRecord[]> {

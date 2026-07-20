@@ -7,14 +7,12 @@ import { useRouter } from "next/navigation";
 export function DeleteSite({
   siteKey,
   siteLabel,
-  builtIn,
   pageCount,
   prototypeCount,
   hasRepo,
 }: {
   siteKey: string;
   siteLabel: string;
-  builtIn: boolean;
   pageCount: number;
   prototypeCount: number;
   hasRepo: boolean;
@@ -24,14 +22,6 @@ export function DeleteSite({
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (builtIn) {
-    return (
-      <div className="rounded-xl border border-border bg-surface p-4 text-[12px] text-muted-2">
-        This is a built-in site — it can’t be deleted.
-      </div>
-    );
-  }
 
   async function del() {
     setBusy(true); setError(null);

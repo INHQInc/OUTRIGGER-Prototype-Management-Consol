@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 /** Per-site mode (clone/live). Built-in sites are fixed; user-added sites can switch. */
-export function SiteModeControl({ siteKey, initialMode, builtIn }: { siteKey: string; initialMode: "clone" | "live"; builtIn: boolean }) {
+export function SiteModeControl({ siteKey, initialMode }: { siteKey: string; initialMode: "clone" | "live" }) {
   const router = useRouter();
   const [mode, setMode] = useState<"clone" | "live">(initialMode);
   const [busy, setBusy] = useState(false);
@@ -31,26 +31,22 @@ export function SiteModeControl({ siteKey, initialMode, builtIn }: { siteKey: st
         {saved && <span className="text-[11px] text-ok">saved</span>}
       </div>
       <div className="p-4">
-        {builtIn ? (
-          <div className="text-[12px] text-muted-2">Built-in site — mode is <span className="text-muted">{mode}</span> (fixed).</div>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            {([
-              ["clone", "Clone", "Snapshot pages; build against frozen copies."],
-              ["live", "Live", "Prototypes run on the real site; no cloning."],
-            ] as ["clone" | "live", string, string][]).map(([m, t, h]) => (
-              <button
-                key={m}
-                onClick={() => save(m)}
-                disabled={busy}
-                className={`text-left px-3 py-2.5 rounded-lg border transition-colors disabled:opacity-60 ${mode === m ? "border-accent bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : "border-border hover:bg-surface-2/40"}`}
-              >
-                <div className="text-[13px] font-semibold">{t}</div>
-                <div className="text-[11px] text-muted-2 mt-0.5 leading-snug">{h}</div>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            ["clone", "Clone", "Snapshot pages; build against frozen copies."],
+            ["live", "Live", "Prototypes run on the real site; no cloning."],
+          ] as ["clone" | "live", string, string][]).map(([m, t, h]) => (
+            <button
+              key={m}
+              onClick={() => save(m)}
+              disabled={busy}
+              className={`text-left px-3 py-2.5 rounded-lg border transition-colors disabled:opacity-60 ${mode === m ? "border-accent bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : "border-border hover:bg-surface-2/40"}`}
+            >
+              <div className="text-[13px] font-semibold">{t}</div>
+              <div className="text-[11px] text-muted-2 mt-0.5 leading-snug">{h}</div>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

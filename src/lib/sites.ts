@@ -11,7 +11,7 @@
  * websites are captured exactly like the built-in ones.
  */
 import type { CaptureConfig } from "./capture/types";
-import { getContentStore } from "./content/store";
+import { getContentStore, type ContentStore } from "./content/store";
 
 export type SiteMode = "clone" | "live";
 
@@ -22,7 +22,11 @@ export interface SiteConfig extends CaptureConfig {
   mode: SiteMode;
 }
 
-/** Built-in sites. Always available, even with no captured content. */
+/**
+ * Seed sites — inserted into the store ONCE on first run (see ensureSeeded).
+ * After seeding, the store is the single source of truth: every site is a
+ * normal, editable, deletable record. Nothing here is special-cased at runtime.
+ */
 export const CONFIG_SITES: Record<string, SiteConfig> = {
   outrigger: {
     siteKey: "outrigger",
@@ -45,17 +49,35 @@ function withMode(s: SiteConfig): SiteConfig {
   return { ...s, mode: s.mode ?? "clone" }; // default legacy records to clone
 }
 
+// One-time seed of the initial sites into the store. Idempotent + guarded by a
+// marker so it never re-seeds (deletions stick). Nothing is hardcoded at runtime.
+let seedPromise: Promise<void> | null = null;
+async function ensureSeeded(store: ContentStore): Promise<void> {
+  if (!seedPromise) {
+    seedPromise = (async () => {
+      if (await store.getFlag("sites_seeded")) return;
+      const existing = new Set((await store.listDynamicSites()).map((s) => s.siteKey));
+      for (const s of Object.values(CONFIG_SITES)) {
+        if (!existing.has(s.siteKey)) await store.addDynamicSite(s);
+      }
+      await store.setFlag("sites_seeded", "1");
+    })();
+  }
+  return seedPromise;
+}
+
 export async function getAllSites(): Promise<Record<string, SiteConfig>> {
-  const out: Record<string, SiteConfig> = { ...CONFIG_SITES };
   const store = await getContentStore();
+  await ensureSeeded(store);
+  const out: Record<string, SiteConfig> = {};
   for (const s of await store.listDynamicSites()) out[s.siteKey] = withMode(s);
   return out;
 }
 
 /** Resolve one site's config, or null if unknown. */
 export async function getSite(siteKey: string): Promise<SiteConfig | null> {
-  if (CONFIG_SITES[siteKey]) return CONFIG_SITES[siteKey];
   const store = await getContentStore();
+  await ensureSeeded(store);
   const found = (await store.listDynamicSites()).find((s) => s.siteKey === siteKey);
   return found ? withMode(found) : null;
 }
@@ -111,16 +133,14 @@ export async function addSite(input: { origin: string; label?: string; assetHost
   return site;
 }
 
-/** Change a user-added site's mode (clone/live). Built-in sites are fixed. */
+/** Change a site's mode (clone/live). */
 export async function updateSiteMode(siteKey: string, mode: SiteMode): Promise<void> {
-  if (CONFIG_SITES[siteKey]) throw new Error("Built-in site mode can't be changed.");
   const store = await getContentStore();
   await store.updateDynamicSite(siteKey, { mode });
 }
 
-/** Cascade-delete a user-added site (record + pages + prototypes + repo binding). */
+/** Cascade-delete a site (record + pages + prototypes + repo binding). */
 export async function deleteSite(siteKey: string): Promise<void> {
-  if (CONFIG_SITES[siteKey]) throw new Error("Built-in sites can't be deleted.");
   const store = await getContentStore();
   await store.deleteSite(siteKey);
 }

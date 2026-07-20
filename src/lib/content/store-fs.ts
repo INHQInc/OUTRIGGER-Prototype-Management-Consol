@@ -21,6 +21,18 @@ export class FsContentStore implements ContentStore {
   private sitesFile(): string { return join(this.root(), "_sites.json"); }
   private repoFile(): string { return join(this.root(), "_repo-bindings.json"); }
   private protoFile(): string { return join(this.root(), "_prototypes.json"); }
+  private metaFile(): string { return join(this.root(), "_meta.json"); }
+
+  async getFlag(key: string): Promise<string | null> {
+    try { return (JSON.parse(await readFile(this.metaFile(), "utf8")) as Record<string, string>)[key] ?? null; } catch { return null; }
+  }
+  async setFlag(key: string, value: string): Promise<void> {
+    let m: Record<string, string> = {};
+    try { m = JSON.parse(await readFile(this.metaFile(), "utf8")); } catch { /* new */ }
+    m[key] = value;
+    await mkdir(this.root(), { recursive: true });
+    await writeFile(this.metaFile(), JSON.stringify(m, null, 2) + "\n", "utf8");
+  }
   private pagesDir(siteKey: string): string { return join(this.root(), siteKey, "pages"); }
   private assetsDir(siteKey: string): string { return join(this.root(), siteKey, "assets"); }
 
