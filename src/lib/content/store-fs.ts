@@ -6,6 +6,7 @@ import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
+import type { Environment } from "../environments";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -25,6 +26,7 @@ export class FsContentStore implements ContentStore {
   private metaFile(): string { return join(this.root(), "_meta.json"); }
   private orgsFile(): string { return join(this.root(), "_orgs.json"); }
   private membersFile(): string { return join(this.root(), "_members.json"); }
+  private envsFile(): string { return join(this.root(), "_environments.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -67,6 +69,27 @@ export class FsContentStore implements ContentStore {
   }
   async orgIdsForMember(email: string): Promise<string[]> {
     return (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((m) => m.email === email).map((m) => m.orgId);
+  }
+
+  async listEnvironments(siteKey: string): Promise<Environment[]> {
+    return (await this.readJson<Environment[]>(this.envsFile(), [])).filter((e) => e.siteKey === siteKey);
+  }
+  async addEnvironment(env: Environment): Promise<void> {
+    const envs = await this.readJson<Environment[]>(this.envsFile(), []);
+    if (envs.some((e) => e.id === env.id)) return; // on-conflict-do-nothing
+    envs.push(env);
+    await this.writeJson(this.envsFile(), envs);
+  }
+  async updateEnvironment(id: string, patch: Partial<Environment>): Promise<void> {
+    const envs = await this.readJson<Environment[]>(this.envsFile(), []);
+    const i = envs.findIndex((e) => e.id === id);
+    if (i === -1) return;
+    envs[i] = { ...envs[i], ...patch };
+    await this.writeJson(this.envsFile(), envs);
+  }
+  async deleteEnvironment(id: string): Promise<void> {
+    const envs = (await this.readJson<Environment[]>(this.envsFile(), [])).filter((e) => e.id !== id);
+    await this.writeJson(this.envsFile(), envs);
   }
 
   async getFlag(key: string): Promise<string | null> {
@@ -124,6 +147,9 @@ export class FsContentStore implements ContentStore {
     const protos = await this.readProtos();
     for (const k of Object.keys(protos)) if (protos[k].siteKey === siteKey) delete protos[k];
     await writeFile(this.protoFile(), JSON.stringify(protos, null, 2) + "\n", "utf8");
+    // environments
+    const envs = (await this.readJson<Environment[]>(this.envsFile(), [])).filter((e) => e.siteKey !== siteKey);
+    await this.writeJson(this.envsFile(), envs);
     // pages + assets (whole site dir)
     await rm(join(this.root(), siteKey), { recursive: true, force: true });
   }

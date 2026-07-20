@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { getSite } from "@/lib/sites";
 import { listPages } from "@/lib/registry";
 import { getContentStore } from "@/lib/content/store";
+import { listEnvironments } from "@/lib/environments";
 import { RepoSettings } from "@/components/RepoSettings";
+import { EnvironmentsManager } from "@/components/EnvironmentsManager";
 import { SiteModeControl } from "@/components/SiteModeControl";
 import { LoaderSnippet } from "@/components/LoaderSnippet";
 import { DeleteSite } from "@/components/DeleteSite";
@@ -24,10 +26,11 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
   if (!site) notFound();
 
   const store = await getContentStore();
-  const [pages, protos, repo] = await Promise.all([
+  const [pages, protos, repo, environments] = await Promise.all([
     listPages(siteKey),
     store.listPrototypes(siteKey),
     store.getRepoBinding(siteKey),
+    listEnvironments(siteKey),
   ]);
 
   return (
@@ -42,6 +45,8 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
         <Row label="Asset hosts"><span className="font-mono break-all">{site.assetHosts.join(", ")}</span></Row>
         <Row label="Mode"><span className="capitalize">{site.mode}</span></Row>
       </div>
+
+      <EnvironmentsManager siteKey={siteKey} initialEnvironments={environments} canManage />
 
       <SiteModeControl siteKey={siteKey} initialMode={site.mode} />
 

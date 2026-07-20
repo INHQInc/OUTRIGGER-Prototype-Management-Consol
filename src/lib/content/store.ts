@@ -3,6 +3,7 @@ import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
+import type { Environment } from "../environments";
 
 /**
  * Persistence seam for CONTENT (sites, captured pages, assets) — the same
@@ -43,8 +44,15 @@ export interface ContentStore {
   listDynamicSites(): Promise<SiteConfig[]>;
   addDynamicSite(site: SiteConfig): Promise<void>;
   updateDynamicSite(siteKey: string, patch: Partial<SiteConfig>): Promise<void>;
-  /** Cascade-delete a site: its record + all pages/versions/assets + prototypes + repo binding. */
+  /** Cascade-delete a site: its record + all pages/versions/assets + prototypes + repo binding + environments. */
   deleteSite(siteKey: string): Promise<void>;
+
+  // --- Environments (per-site deploy targets: dev/staging/production) ---
+  listEnvironments(siteKey: string): Promise<Environment[]>;
+  /** Insert an environment; idempotent on id (on-conflict-do-nothing) so the production seed is race-safe. */
+  addEnvironment(env: Environment): Promise<void>;
+  updateEnvironment(id: string, patch: Partial<Environment>): Promise<void>;
+  deleteEnvironment(id: string): Promise<void>;
 
   // --- Repo binding (per-site feature + source repos) ---
   getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null>;

@@ -5,6 +5,7 @@ import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
+import type { Environment, EnvironmentKind } from "../environments";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
@@ -68,6 +69,16 @@ export class NeonContentStore implements ContentStore {
         primary key (org_id, email)
       )`);
     await this.ddl(() => this.sql`create index if not exists org_member_email_idx on org_member (email)`);
+    await this.ddl(() => this.sql`
+      create table if not exists environment (
+        id text primary key,
+        site_key text not null,
+        label text not null,
+        url text not null,
+        kind text not null default 'production',
+        created_at timestamptz not null default now()
+      )`);
+    await this.ddl(() => this.sql`create index if not exists environment_site_idx on environment (site_key)`);
     await this.ddl(() => this.sql`
       create table if not exists page_version (
         site_key text not null,
@@ -203,11 +214,38 @@ export class NeonContentStore implements ContentStore {
     const rows = await this.sql`select org_id from org_member where email = ${email}`;
     return rows.map((r) => r.org_id as string);
   }
+
+  async listEnvironments(siteKey: string): Promise<Environment[]> {
+    const rows = await this.sql`select * from environment where site_key = ${siteKey} order by created_at`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      siteKey: r.site_key as string,
+      label: r.label as string,
+      url: r.url as string,
+      kind: r.kind as EnvironmentKind,
+      createdAt: new Date(r.created_at as string).toISOString(),
+    }));
+  }
+  async addEnvironment(env: Environment): Promise<void> {
+    await this.sql`
+      insert into environment (id, site_key, label, url, kind, created_at)
+      values (${env.id}, ${env.siteKey}, ${env.label}, ${env.url}, ${env.kind}, ${env.createdAt})
+      on conflict (id) do nothing`;
+  }
+  async updateEnvironment(id: string, patch: Partial<Environment>): Promise<void> {
+    if (patch.label !== undefined) await this.sql`update environment set label = ${patch.label} where id = ${id}`;
+    if (patch.url !== undefined) await this.sql`update environment set url = ${patch.url} where id = ${id}`;
+    if (patch.kind !== undefined) await this.sql`update environment set kind = ${patch.kind} where id = ${id}`;
+  }
+  async deleteEnvironment(id: string): Promise<void> {
+    await this.sql`delete from environment where id = ${id}`;
+  }
   async deleteSite(siteKey: string): Promise<void> {
     await this.sql`delete from page_version where site_key = ${siteKey}`;
     await this.sql`delete from asset where site_key = ${siteKey}`;
     await this.sql`delete from prototype where site_key = ${siteKey}`;
     await this.sql`delete from repo_binding where site_key = ${siteKey}`;
+    await this.sql`delete from environment where site_key = ${siteKey}`;
     await this.sql`delete from site where site_key = ${siteKey}`;
   }
 
