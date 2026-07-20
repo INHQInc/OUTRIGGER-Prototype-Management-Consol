@@ -1,7 +1,7 @@
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
-import type { PrototypeRecord } from "../prototypes/types";
+import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
@@ -68,6 +68,10 @@ export interface ContentStore {
   listPrototypes(siteKey?: string): Promise<PrototypeRecord[]>;
   getPrototype(key: string): Promise<PrototypeRecord | null>;
   putPrototype(record: PrototypeRecord): Promise<void>;
+
+  // --- Artifact versions (immutable, git-SHA-pinned builds; append-only) ---
+  listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]>;
+  addArtifactVersion(version: ArtifactVersion): Promise<void>;
 
   // --- Pages ---
   /** Distinct page slugs captured for a site. */

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
+import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { Badge } from "@/components/ui";
+import { ArtifactVersions } from "@/components/ArtifactVersions";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +22,7 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p || p.siteKey !== siteKey) notFound();
+  const versions = await listArtifactVersions(key);
 
   const h = p.hypothesis;
 
@@ -63,8 +66,10 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
         <Field label="Ticket">{p.ticketUrl ? <a href={p.ticketUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover font-mono break-all">{p.ticketUrl}</a> : ""}</Field>
       </div>
 
+      <ArtifactVersions prototypeKey={key} initialVersions={versions} />
+
       <div className="rounded-xl border border-dashed border-border p-4 text-[12px] text-muted-2 leading-relaxed">
-        Next: attach the feature repo + branch, build the overlay, and deploy — the Deploys tab will track versions.
+        Next: promote a version through this site&apos;s environments (staging → production) — that&apos;s where the Optimizely experiment gets created.
       </div>
     </div>
   );

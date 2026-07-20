@@ -72,6 +72,24 @@ export interface PrototypeMetrics {
   guardrails: string[];  // what must not regress
 }
 
+/**
+ * An immutable build of a prototype, pinned to a git SHA. This is the unit that
+ * gets PROMOTED across environments unchanged — "build once, promote immutably"
+ * (docs/LIFECYCLE-ARCHITECTURE.md). Append-only: versions are never edited, only
+ * cut and superseded.
+ */
+export interface ArtifactVersion {
+  id: string;
+  prototypeKey: string;
+  siteKey: string;        // denormalized for cascade on site delete
+  version: number;        // monotonic per prototype (1, 2, 3, …)
+  gitSha: string;         // the immutable pin
+  gitRef?: string;        // branch/tag it was cut from
+  notes?: string;
+  createdAt: string;
+  createdBy?: string;
+}
+
 export interface PrototypeRecord {
   key: string;
   siteKey: string;

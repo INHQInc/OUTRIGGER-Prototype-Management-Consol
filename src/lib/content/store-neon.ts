@@ -3,7 +3,7 @@ import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
-import type { PrototypeRecord } from "../prototypes/types";
+import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment, EnvironmentKind } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
@@ -121,6 +121,19 @@ export class NeonContentStore implements ContentStore {
       )`);
     await this.ddl(() => this.sql`create index if not exists prototype_site_idx on prototype (site_key)`);
     await this.ddl(() => this.sql`
+      create table if not exists artifact_version (
+        id text primary key,
+        prototype_key text not null,
+        site_key text not null,
+        version int not null,
+        git_sha text not null,
+        git_ref text,
+        notes text,
+        created_at timestamptz not null default now(),
+        created_by text
+      )`);
+    await this.ddl(() => this.sql`create index if not exists artifact_version_proto_idx on artifact_version (prototype_key)`);
+    await this.ddl(() => this.sql`
       create table if not exists content_meta (
         key text primary key,
         val text not null,
@@ -153,6 +166,27 @@ export class NeonContentStore implements ContentStore {
       insert into prototype (key, site_key, data, updated_at)
       values (${record.key}, ${record.siteKey}, ${JSON.stringify(record)}, now())
       on conflict (key) do update set site_key = excluded.site_key, data = excluded.data, updated_at = now()`;
+  }
+
+  async listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
+    const rows = await this.sql`select * from artifact_version where prototype_key = ${prototypeKey} order by version desc`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      prototypeKey: r.prototype_key as string,
+      siteKey: r.site_key as string,
+      version: Number(r.version),
+      gitSha: r.git_sha as string,
+      gitRef: (r.git_ref as string) || undefined,
+      notes: (r.notes as string) || undefined,
+      createdAt: new Date(r.created_at as string).toISOString(),
+      createdBy: (r.created_by as string) || undefined,
+    }));
+  }
+  async addArtifactVersion(v: ArtifactVersion): Promise<void> {
+    await this.sql`
+      insert into artifact_version (id, prototype_key, site_key, version, git_sha, git_ref, notes, created_at, created_by)
+      values (${v.id}, ${v.prototypeKey}, ${v.siteKey}, ${v.version}, ${v.gitSha}, ${v.gitRef ?? null}, ${v.notes ?? null}, ${v.createdAt}, ${v.createdBy ?? null})
+      on conflict (id) do nothing`;
   }
 
   async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {
@@ -267,6 +301,7 @@ export class NeonContentStore implements ContentStore {
   async deleteSite(siteKey: string): Promise<void> {
     await this.sql`delete from page_version where site_key = ${siteKey}`;
     await this.sql`delete from asset where site_key = ${siteKey}`;
+    await this.sql`delete from artifact_version where site_key = ${siteKey}`;
     await this.sql`delete from prototype where site_key = ${siteKey}`;
     await this.sql`delete from repo_binding where site_key = ${siteKey}`;
     await this.sql`delete from environment where site_key = ${siteKey}`;

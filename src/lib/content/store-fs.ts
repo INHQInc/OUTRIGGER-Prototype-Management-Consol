@@ -4,7 +4,7 @@ import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
-import type { PrototypeRecord } from "../prototypes/types";
+import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
@@ -29,6 +29,7 @@ export class FsContentStore implements ContentStore {
   private membersFile(): string { return join(this.root(), "_members.json"); }
   private envsFile(): string { return join(this.root(), "_environments.json"); }
   private integrationsFile(): string { return join(this.root(), "_integrations.json"); }
+  private versionsFile(): string { return join(this.root(), "_artifact-versions.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -167,6 +168,9 @@ export class FsContentStore implements ContentStore {
     // environments
     const envs = (await this.readJson<Environment[]>(this.envsFile(), [])).filter((e) => e.siteKey !== siteKey);
     await this.writeJson(this.envsFile(), envs);
+    // artifact versions
+    const versions = (await this.readJson<ArtifactVersion[]>(this.versionsFile(), [])).filter((v) => v.siteKey !== siteKey);
+    await this.writeJson(this.versionsFile(), versions);
     // pages + assets (whole site dir)
     await rm(join(this.root(), siteKey), { recursive: true, force: true });
   }
@@ -201,6 +205,18 @@ export class FsContentStore implements ContentStore {
     map[record.key] = record;
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.protoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
+  }
+
+  async listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
+    return (await this.readJson<ArtifactVersion[]>(this.versionsFile(), []))
+      .filter((v) => v.prototypeKey === prototypeKey)
+      .sort((a, b) => b.version - a.version);
+  }
+  async addArtifactVersion(v: ArtifactVersion): Promise<void> {
+    const all = await this.readJson<ArtifactVersion[]>(this.versionsFile(), []);
+    if (all.some((x) => x.id === v.id)) return; // append-only, idempotent
+    all.push(v);
+    await this.writeJson(this.versionsFile(), all);
   }
 
   async listSlugs(siteKey: string): Promise<string[]> {
