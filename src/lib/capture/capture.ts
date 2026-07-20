@@ -23,7 +23,7 @@ export function slugForUrl(url: string): string {
 
 async function firecrawlScrape(url: string): Promise<string> {
   const key = process.env.FIRECRAWL_API_KEY;
-  if (!key) throw new Error("FIRECRAWL_API_KEY is not set");
+  if (!key) throw new Error("FIRECRAWL_API_KEY is not set on the server — add it in Vercel → Settings → Environment Variables (Production), then redeploy.");
   const res = await fetch(FIRECRAWL_API, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
