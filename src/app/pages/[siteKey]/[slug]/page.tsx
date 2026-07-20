@@ -24,7 +24,7 @@ export default async function PageDetail({ params }: { params: Promise<{ siteKey
   return (
     <>
       <PageHeader
-        title={`/${meta.url.replace(/^https?:\/\/[^/]+\//, "")}`}
+        title={`/${meta.url.replace(/^https?:\/\/[^/]+\/?/, "")}`}
         subtitle={meta.url}
         actions={
           <div className="flex items-center gap-2">

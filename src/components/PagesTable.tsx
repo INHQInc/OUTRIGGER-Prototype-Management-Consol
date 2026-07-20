@@ -25,7 +25,7 @@ export function PagesTable({ siteKey, pages, emptyLabel }: { siteKey: string; pa
             <tr key={p.slug} className="border-b border-border last:border-0 hover:bg-surface-2/40">
               <td className="px-4 py-3">
                 <Link href={`/pages/${siteKey}/${p.slug}`} className="font-medium hover:text-accent">
-                  /{p.url.replace(/^https?:\/\/[^/]+\//, "")}
+                  /{p.url.replace(/^https?:\/\/[^/]+\/?/, "")}
                 </Link>
               </td>
               <td className="px-4 py-3 text-muted"><TimeAgo iso={p.latestCapturedAt} /></td>
