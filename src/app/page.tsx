@@ -14,7 +14,7 @@ export default async function Home() {
       <PageHeader
         title="Sites & Pages"
         subtitle="Frozen, sanitized clones of Outrigger properties"
-        actions={<AddPages />}
+        actions={<AddPages sites={sites.map((s) => ({ key: s.key, label: s.label }))} />}
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">

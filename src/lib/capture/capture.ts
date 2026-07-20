@@ -3,20 +3,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { AssetStore, captureAssets } from "./assets";
 import { sanitize, injectGuards, buildReport } from "./sanitize";
-import type { CaptureConfig, PageVersionMeta } from "./types";
+import type { PageVersionMeta } from "./types";
+import { getSite } from "../sites";
 
-export const SITES: Record<string, CaptureConfig> = {
-  outrigger: {
-    siteKey: "outrigger",
-    origin: "https://www.outrigger.com",
-    assetHosts: ["outrigger.com", "outriggerhospitalityassets.com"],
-  },
-  hvc: {
-    siteKey: "hvc",
-    origin: "https://hawaiivacationcondos.outrigger.com",
-    assetHosts: ["outrigger.com", "outriggerhospitalityassets.com"],
-  },
-};
+// Sites now live in the site registry (built-in config + user-added).
+// Re-exported here for back-compat with existing importers.
+export { CONFIG_SITES as SITES } from "../sites";
 
 const FIRECRAWL_API = "https://api.firecrawl.dev/v1/scrape";
 
@@ -59,10 +51,10 @@ async function firecrawlScrape(url: string): Promise<string> {
  */
 export async function capturePage(
   url: string,
-  siteKey: keyof typeof SITES,
+  siteKey: string,
   opts: CaptureOptions = {}
 ): Promise<PageVersionMeta> {
-  const cfg = SITES[siteKey];
+  const cfg = await getSite(siteKey);
   if (!cfg) throw new Error(`Unknown site key: ${siteKey}`);
   const progress = opts.onProgress ?? (() => {});
   const root = opts.snapshotsRoot ?? join(process.cwd(), "snapshots");

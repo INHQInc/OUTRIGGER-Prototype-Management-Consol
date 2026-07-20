@@ -2,7 +2,25 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppFrame } from "@/components/AppFrame";
+import type { SiteNavNode } from "@/components/SitesTree";
 import { currentUser } from "@/lib/auth/current";
+import { getAllSites } from "@/lib/sites";
+import { listPages } from "@/lib/registry";
+
+async function buildSiteNav(): Promise<SiteNavNode[]> {
+  const sites = await getAllSites();
+  return Promise.all(
+    Object.values(sites).map(async (s) => {
+      const pages = await listPages(s.siteKey);
+      return {
+        key: s.siteKey,
+        label: s.label,
+        origin: s.origin,
+        pages: pages.map((p) => ({ slug: p.slug, path: p.url.replace(/^https?:\/\/[^/]+/, "") || "/" })),
+      };
+    })
+  );
+}
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,13 +44,14 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await currentUser();
+  const sites = user ? await buildSiteNav() : [];
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex">
-        <AppFrame user={user}>{children}</AppFrame>
+        <AppFrame user={user} sites={sites}>{children}</AppFrame>
       </body>
     </html>
   );

@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { SITES } from "./capture/capture";
+import { getAllSites } from "./sites";
 import type { PageVersionMeta } from "./capture/types";
 
 /**
@@ -39,11 +39,6 @@ export interface PageSummary {
   latestAssetCount: number;
   latestRemovedCount: number;
 }
-
-const SITE_LABELS: Record<string, string> = {
-  outrigger: "Outrigger.com",
-  hvc: "Hawaii Vacation Condos",
-};
 
 async function exists(p: string): Promise<boolean> {
   try { await stat(p); return true; } catch { return false; }
@@ -115,12 +110,12 @@ export async function listPages(siteKey: string): Promise<PageSummary[]> {
 
 export async function listSites(): Promise<SiteSummary[]> {
   const out: SiteSummary[] = [];
-  for (const [key, cfg] of Object.entries(SITES)) {
+  for (const [key, cfg] of Object.entries(await getAllSites())) {
     const pages = await listPages(key);
     out.push({
       key,
       origin: cfg.origin,
-      label: SITE_LABELS[key] ?? key,
+      label: cfg.label,
       pageCount: pages.length,
       versionCount: pages.reduce((s, p) => s + p.versionCount, 0),
     });

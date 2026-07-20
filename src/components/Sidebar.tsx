@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionPayload } from "@/lib/auth/types";
+import { SitesTree, type SiteNavNode } from "./SitesTree";
 
+const OVERVIEW = { href: "/", label: "Sites & Pages", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" };
 const NAV = [
-  { href: "/", label: "Sites & Pages", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" },
   { href: "/features", label: "Features", icon: "M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z" },
   { href: "/deploys", label: "Deploys", icon: "M12 2L2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5" },
   { href: "/handoff", label: "Handoff", icon: "M4 4h16v12H5.2L4 17.2zM8 9h8M8 12h5" },
 ];
 
-export function Sidebar({ user }: { user: SessionPayload | null }) {
+export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: SiteNavNode[] }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -21,10 +22,28 @@ export function Sidebar({ user }: { user: SessionPayload | null }) {
     router.refresh();
   }
 
-  const nav = [...NAV];
+  const navItems = [...NAV];
   if (user?.role === "admin") {
-    nav.push({ href: "/settings/users", label: "Users", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" });
+    navItems.push({ href: "/settings/users", label: "Users", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" });
   }
+
+  const renderLink = (item: { href: string; label: string; icon: string }) => {
+    const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+          active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/50"
+        }`}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? "text-accent" : ""}>
+          <path d={item.icon} />
+        </svg>
+        {item.label}
+      </Link>
+    );
+  };
 
   return (
     <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
@@ -36,24 +55,12 @@ export function Sidebar({ user }: { user: SessionPayload | null }) {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-0.5">
-        {nav.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-                active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/50"
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? "text-accent" : ""}>
-                <path d={item.icon} />
-              </svg>
-              {item.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 p-3 overflow-y-auto space-y-0.5">
+        {renderLink(OVERVIEW)}
+        {user && <SitesTree sites={sites} />}
+        <div className="pt-3 mt-1 border-t border-border space-y-0.5">
+          {navItems.map(renderLink)}
+        </div>
       </nav>
 
       {user ? (
