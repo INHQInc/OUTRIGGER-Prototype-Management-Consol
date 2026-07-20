@@ -78,7 +78,8 @@ export class GitHubClient {
       const r = await this.gh<{ sha: string }>(`/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`);
       return r.sha;
     } catch (e) {
-      if (e instanceof GitError && e.status === 404) return null;
+      // 404 = file absent; 409 = empty repo — both mean "no existing file".
+      if (e instanceof GitError && (e.status === 404 || e.status === 409)) return null;
       throw e;
     }
   }
@@ -95,6 +96,40 @@ export class GitHubClient {
         ...(sha ? { sha } : {}),
       }),
     });
+  }
+
+  /**
+   * Commit multiple files to `branch` as ONE commit (Git Data API: blobs →
+   * tree → commit → move ref). The branch must already exist. Never touches
+   * the base branch.
+   */
+  async commitFiles(
+    owner: string,
+    repo: string,
+    opts: { branch: string; baseSha: string; message: string; files: { path: string; content: Buffer }[] }
+  ): Promise<{ sha: string; url: string }> {
+    const tree: { path: string; mode: "100644"; type: "blob"; sha: string }[] = [];
+    for (const f of opts.files) {
+      const blob = await this.gh<{ sha: string }>(`/repos/${owner}/${repo}/git/blobs`, {
+        method: "POST",
+        body: JSON.stringify({ content: f.content.toString("base64"), encoding: "base64" }),
+      });
+      tree.push({ path: f.path, mode: "100644", type: "blob", sha: blob.sha });
+    }
+    const baseCommit = await this.gh<{ tree: { sha: string } }>(`/repos/${owner}/${repo}/git/commits/${opts.baseSha}`);
+    const newTree = await this.gh<{ sha: string }>(`/repos/${owner}/${repo}/git/trees`, {
+      method: "POST",
+      body: JSON.stringify({ base_tree: baseCommit.tree.sha, tree }),
+    });
+    const commit = await this.gh<{ sha: string; html_url: string }>(`/repos/${owner}/${repo}/git/commits`, {
+      method: "POST",
+      body: JSON.stringify({ message: opts.message, tree: newTree.sha, parents: [opts.baseSha] }),
+    });
+    await this.gh(`/repos/${owner}/${repo}/git/refs/heads/${opts.branch}`, {
+      method: "PATCH",
+      body: JSON.stringify({ sha: commit.sha, force: true }),
+    });
+    return { sha: commit.sha, url: commit.html_url };
   }
 
   /** Open a PR from `head` into `base`. */
