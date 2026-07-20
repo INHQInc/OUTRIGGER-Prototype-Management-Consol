@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
-import type { SiteNavNode } from "./SitesTree";
+import type { SiteNavNode } from "./SiteSwitcher";
 import type { SessionPayload } from "@/lib/auth/types";
 
 export function AppFrame({ user, sites, children }: { user: SessionPayload | null; sites: SiteNavNode[]; children: React.ReactNode }) {

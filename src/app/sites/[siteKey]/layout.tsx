@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSite } from "@/lib/sites";
-import { SiteTabs } from "@/components/SiteTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +24,7 @@ export default async function SiteLayout(props: LayoutProps<"/sites/[siteKey]">)
         </a>
       </div>
 
-      <SiteTabs siteKey={siteKey} />
-
-      <div className="flex-1 overflow-y-auto px-8 py-6">{children}</div>
+      <div className="flex-1 overflow-y-auto px-8 pb-6 border-t border-border pt-6">{children}</div>
     </div>
   );
 }

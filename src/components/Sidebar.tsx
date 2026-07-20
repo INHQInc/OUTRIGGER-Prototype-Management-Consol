@@ -3,18 +3,26 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionPayload } from "@/lib/auth/types";
-import { SitesTree, type SiteNavNode } from "./SitesTree";
+import { SiteSwitcher, type SiteNavNode } from "./SiteSwitcher";
 
-const OVERVIEW = { href: "/", label: "Sites & Pages", icon: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" };
-const NAV = [
-  { href: "/features", label: "Features", icon: "M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z" },
-  { href: "/deploys", label: "Deploys", icon: "M12 2L2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5" },
-  { href: "/handoff", label: "Handoff", icon: "M4 4h16v12H5.2L4 17.2zM8 9h8M8 12h5" },
-];
+interface NavItem { href: string; label: string; icon: string; exact?: boolean }
+
+const ICON = {
+  overview: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
+  prototypes: "M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z",
+  pages: "M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z",
+  deploys: "M12 2L2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
+  settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
+  handoff: "M4 4h16v12H5.2L4 17.2zM8 9h8M8 12h5",
+  users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+};
 
 export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: SiteNavNode[] }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  const m = pathname.match(/^\/sites\/([^/]+)/);
+  const currentSiteKey = m ? decodeURIComponent(m[1]) : null;
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -22,13 +30,27 @@ export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: S
     router.refresh();
   }
 
-  const navItems = [...NAV];
-  if (user?.role === "admin") {
-    navItems.push({ href: "/settings/users", label: "Users", icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" });
-  }
+  const siteNav: NavItem[] = currentSiteKey
+    ? [
+        { href: `/sites/${currentSiteKey}`, label: "Overview", icon: ICON.overview, exact: true },
+        { href: `/sites/${currentSiteKey}/prototypes`, label: "Prototypes", icon: ICON.prototypes },
+        { href: `/sites/${currentSiteKey}/pages`, label: "Pages", icon: ICON.pages },
+        { href: `/sites/${currentSiteKey}/deploys`, label: "Deploys", icon: ICON.deploys },
+        { href: `/sites/${currentSiteKey}/settings`, label: "Settings", icon: ICON.settings },
+      ]
+    : [];
 
-  const renderLink = (item: { href: string; label: string; icon: string }) => {
-    const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+  const globalNav: NavItem[] = [
+    { href: "/", label: "All sites", icon: ICON.overview, exact: true },
+    { href: "/features", label: "Prototypes", icon: ICON.prototypes },
+    { href: "/handoff", label: "Handoff", icon: ICON.handoff },
+    ...(user?.role === "admin" ? [{ href: "/settings/users", label: "Users", icon: ICON.users }] : []),
+  ];
+
+  const items = currentSiteKey ? siteNav : globalNav;
+
+  const renderLink = (item: NavItem) => {
+    const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
     return (
       <Link
         key={item.href}
@@ -47,20 +69,16 @@ export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: S
 
   return (
     <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
-      <div className="px-5 h-16 flex items-center gap-2.5 border-b border-border">
-        <div className="w-7 h-7 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold text-sm">O</div>
-        <div className="leading-tight">
-          <div className="text-[13px] font-semibold tracking-tight">Prototype Console</div>
-          <div className="text-[11px] text-muted-2">Outrigger</div>
-        </div>
+      <div className="px-5 h-14 flex items-center gap-2.5 border-b border-border">
+        <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold text-[13px]">O</div>
+        <div className="text-[13px] font-semibold tracking-tight">Prototype Console</div>
       </div>
 
-      <nav className="flex-1 p-3 overflow-y-auto space-y-0.5">
-        {renderLink(OVERVIEW)}
-        {user && <SitesTree sites={sites} />}
-        <div className="pt-3 mt-1 border-t border-border space-y-0.5">
-          {navItems.map(renderLink)}
-        </div>
+      <SiteSwitcher sites={sites} currentSiteKey={currentSiteKey} />
+
+      <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+        {currentSiteKey && <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-2">Site</div>}
+        {items.map(renderLink)}
       </nav>
 
       {user ? (
@@ -80,13 +98,7 @@ export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: S
             </button>
           </div>
         </div>
-      ) : (
-        <div className="p-3 border-t border-border">
-          <div className="px-3 py-2 text-[11px] text-muted-2 leading-relaxed">
-            Snapshots are frozen & sanitized.<br />No tracking ships in clones.
-          </div>
-        </div>
-      )}
+      ) : null}
     </aside>
   );
 }

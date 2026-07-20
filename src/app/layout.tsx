@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppFrame } from "@/components/AppFrame";
-import type { SiteNavNode } from "@/components/SitesTree";
+import type { SiteNavNode } from "@/components/SiteSwitcher";
 import { currentUser } from "@/lib/auth/current";
 import { getAllSites } from "@/lib/sites";
 import { listPages } from "@/lib/registry";
