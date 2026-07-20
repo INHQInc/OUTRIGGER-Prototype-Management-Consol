@@ -56,19 +56,28 @@ export function SitesTree({ sites }: { sites: SiteNavNode[] }) {
             const isOpen = openKeys.has(site.key);
             return (
               <div key={site.key}>
-                <button
-                  onClick={() => toggle(site.key)}
-                  className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[13px] font-medium text-muted hover:text-foreground hover:bg-surface-2/50 transition-colors"
+                <div
+                  className={`flex items-center gap-1 rounded-lg pr-2 transition-colors ${
+                    pathname.startsWith(`/sites/${site.key}`) ? "bg-surface-2/60" : "hover:bg-surface-2/50"
+                  }`}
                 >
-                  <svg
-                    width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-                    className={`shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                  <button
+                    onClick={() => toggle(site.key)}
+                    title={isOpen ? "Collapse" : "Expand"}
+                    className="pl-2 py-1.5 text-muted-2 hover:text-foreground"
                   >
-                    <path d="M9 6l6 6-6 6" />
-                  </svg>
-                  <span className="truncate flex-1 text-left">{site.label}</span>
+                    <svg
+                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+                      className={`shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                    >
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                  <Link href={`/sites/${site.key}`} className="flex-1 min-w-0 py-1.5 text-[13px] font-medium text-muted hover:text-foreground truncate">
+                    {site.label}
+                  </Link>
                   <span className="text-[10px] text-muted-2 tabular-nums">{site.pages.length}</span>
-                </button>
+                </div>
 
                 {isOpen && (
                   <div className="ml-3 pl-2 border-l border-border space-y-0.5 py-0.5">
