@@ -9,7 +9,10 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
  *
  * Requires AUTH_SECRET. If unset (misconfigured deploy), we fail closed.
  */
-const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify"];
+// Public: auth entry points + the Live loader (runs on customers' external
+// pages for anonymous visitors, gated by the ?opmc preview token, not by the
+// console session).
+const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

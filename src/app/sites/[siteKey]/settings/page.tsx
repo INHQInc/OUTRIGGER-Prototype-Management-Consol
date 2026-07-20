@@ -4,6 +4,7 @@ import { listPages } from "@/lib/registry";
 import { getContentStore } from "@/lib/content/store";
 import { RepoSettings } from "@/components/RepoSettings";
 import { SiteModeControl } from "@/components/SiteModeControl";
+import { LoaderSnippet } from "@/components/LoaderSnippet";
 import { DeleteSite } from "@/components/DeleteSite";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,8 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
       </div>
 
       <SiteModeControl siteKey={siteKey} initialMode={site.mode} />
+
+      {site.mode === "live" && <LoaderSnippet siteKey={siteKey} />}
 
       <RepoSettings siteKey={siteKey} />
 
