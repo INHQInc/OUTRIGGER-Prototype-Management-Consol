@@ -25,32 +25,50 @@ export class NeonContentStore implements ContentStore {
     return store;
   }
 
+  /**
+   * Run one idempotent DDL statement, tolerating the Postgres catalog race.
+   * `create table/index if not exists` checks the catalog and inserts the new
+   * pg_type/pg_class row non-atomically, so two concurrent bootstraps can still
+   * collide (23505 on pg_type_typname_nsp_index, or 42P07/42710 duplicate
+   * object). All of those mean "it already exists" — exactly the end state we
+   * want — so they're safe to swallow.
+   */
+  private async ddl(run: () => Promise<unknown>): Promise<void> {
+    try {
+      await run();
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
+      if (code === "23505" || code === "42P07" || code === "42710") return;
+      throw e;
+    }
+  }
+
   private async ensureSchema(): Promise<void> {
-    await this.sql`
+    await this.ddl(() => this.sql`
       create table if not exists site (
         site_key text primary key,
         origin text not null,
         asset_hosts text not null,
         label text not null,
         created_at timestamptz not null default now()
-      )`;
-    await this.sql`alter table site add column if not exists mode text not null default 'clone'`;
-    await this.sql`alter table site add column if not exists org_id text not null default ''`;
-    await this.sql`
+      )`);
+    await this.ddl(() => this.sql`alter table site add column if not exists mode text not null default 'clone'`);
+    await this.ddl(() => this.sql`alter table site add column if not exists org_id text not null default ''`);
+    await this.ddl(() => this.sql`
       create table if not exists org (
         id text primary key,
         name text not null,
         created_at timestamptz not null default now()
-      )`;
-    await this.sql`
+      )`);
+    await this.ddl(() => this.sql`
       create table if not exists org_member (
         org_id text not null,
         email text not null,
         role text not null default 'member',
         primary key (org_id, email)
-      )`;
-    await this.sql`create index if not exists org_member_email_idx on org_member (email)`;
-    await this.sql`
+      )`);
+    await this.ddl(() => this.sql`create index if not exists org_member_email_idx on org_member (email)`);
+    await this.ddl(() => this.sql`
       create table if not exists page_version (
         site_key text not null,
         slug text not null,
@@ -59,36 +77,36 @@ export class NeonContentStore implements ContentStore {
         meta text not null,
         captured_at timestamptz not null default now(),
         primary key (site_key, slug, version)
-      )`;
-    await this.sql`create index if not exists page_version_site_slug_idx on page_version (site_key, slug)`;
-    await this.sql`
+      )`);
+    await this.ddl(() => this.sql`create index if not exists page_version_site_slug_idx on page_version (site_key, slug)`);
+    await this.ddl(() => this.sql`
       create table if not exists asset (
         site_key text not null,
         name text not null,
         content_type text not null,
         bytes_b64 text not null,
         primary key (site_key, name)
-      )`;
-    await this.sql`
+      )`);
+    await this.ddl(() => this.sql`
       create table if not exists repo_binding (
         site_key text primary key,
         config text not null,
         updated_at timestamptz not null default now()
-      )`;
-    await this.sql`
+      )`);
+    await this.ddl(() => this.sql`
       create table if not exists prototype (
         key text primary key,
         site_key text not null,
         data text not null,
         updated_at timestamptz not null default now()
-      )`;
-    await this.sql`create index if not exists prototype_site_idx on prototype (site_key)`;
-    await this.sql`
+      )`);
+    await this.ddl(() => this.sql`create index if not exists prototype_site_idx on prototype (site_key)`);
+    await this.ddl(() => this.sql`
       create table if not exists content_meta (
         key text primary key,
         val text not null,
         updated_at timestamptz not null default now()
-      )`;
+      )`);
   }
 
   async getFlag(key: string): Promise<string | null> {

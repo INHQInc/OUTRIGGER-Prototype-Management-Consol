@@ -70,16 +70,24 @@ export interface ContentStore {
   getAsset(siteKey: string, name: string): Promise<{ bytes: Buffer; contentType: string } | null>;
 }
 
-let cached: ContentStore | null = null;
+// Memoize the in-flight create promise (not just the resolved store) so
+// concurrent cold-start requests share ONE create()/ensureSchema() instead of
+// each racing to bootstrap the schema. On failure we clear it so a later
+// request retries.
+let cached: Promise<ContentStore> | null = null;
 
-export async function getContentStore(): Promise<ContentStore> {
+export function getContentStore(): Promise<ContentStore> {
   if (cached) return cached;
-  if (process.env.DATABASE_URL) {
-    const { NeonContentStore } = await import("./store-neon");
-    cached = await NeonContentStore.create();
-  } else {
+  cached = (async () => {
+    if (process.env.DATABASE_URL) {
+      const { NeonContentStore } = await import("./store-neon");
+      return NeonContentStore.create();
+    }
     const { FsContentStore } = await import("./store-fs");
-    cached = new FsContentStore();
-  }
+    return new FsContentStore();
+  })().catch((e) => {
+    cached = null;
+    throw e;
+  });
   return cached;
 }
