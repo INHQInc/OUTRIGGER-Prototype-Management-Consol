@@ -3,6 +3,7 @@ import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
+import type { PrototypeRecord } from "../prototypes/types";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
@@ -57,6 +58,31 @@ export class NeonContentStore implements ContentStore {
         config text not null,
         updated_at timestamptz not null default now()
       )`;
+    await this.sql`
+      create table if not exists prototype (
+        key text primary key,
+        site_key text not null,
+        data text not null,
+        updated_at timestamptz not null default now()
+      )`;
+    await this.sql`create index if not exists prototype_site_idx on prototype (site_key)`;
+  }
+
+  async listPrototypes(siteKey?: string): Promise<PrototypeRecord[]> {
+    const rows = siteKey
+      ? await this.sql`select data from prototype where site_key = ${siteKey} order by updated_at desc`
+      : await this.sql`select data from prototype order by updated_at desc`;
+    return rows.map((r) => JSON.parse(r.data as string) as PrototypeRecord);
+  }
+  async getPrototype(key: string): Promise<PrototypeRecord | null> {
+    const rows = await this.sql`select data from prototype where key = ${key}`;
+    return rows[0] ? (JSON.parse(rows[0].data as string) as PrototypeRecord) : null;
+  }
+  async putPrototype(record: PrototypeRecord): Promise<void> {
+    await this.sql`
+      insert into prototype (key, site_key, data, updated_at)
+      values (${record.key}, ${record.siteKey}, ${JSON.stringify(record)}, now())
+      on conflict (key) do update set site_key = excluded.site_key, data = excluded.data, updated_at = now()`;
   }
 
   async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {

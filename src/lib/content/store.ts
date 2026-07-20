@@ -1,6 +1,7 @@
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
+import type { PrototypeRecord } from "../prototypes/types";
 
 /**
  * Persistence seam for CONTENT (sites, captured pages, assets) — the same
@@ -30,6 +31,11 @@ export interface ContentStore {
   // --- Repo binding (per-site feature + source repos) ---
   getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null>;
   setRepoBinding(siteKey: string, binding: SiteRepoBinding): Promise<void>;
+
+  // --- Prototypes (metadata / brief / hypothesis / lifecycle) ---
+  listPrototypes(siteKey?: string): Promise<PrototypeRecord[]>;
+  getPrototype(key: string): Promise<PrototypeRecord | null>;
+  putPrototype(record: PrototypeRecord): Promise<void>;
 
   // --- Pages ---
   /** Distinct page slugs captured for a site. */

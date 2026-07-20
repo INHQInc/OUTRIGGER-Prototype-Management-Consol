@@ -4,6 +4,7 @@ import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
+import type { PrototypeRecord } from "../prototypes/types";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -19,6 +20,7 @@ export class FsContentStore implements ContentStore {
   private root(): string { return join(process.cwd(), "snapshots"); }
   private sitesFile(): string { return join(this.root(), "_sites.json"); }
   private repoFile(): string { return join(this.root(), "_repo-bindings.json"); }
+  private protoFile(): string { return join(this.root(), "_prototypes.json"); }
   private pagesDir(siteKey: string): string { return join(this.root(), siteKey, "pages"); }
   private assetsDir(siteKey: string): string { return join(this.root(), siteKey, "assets"); }
 
@@ -54,6 +56,24 @@ export class FsContentStore implements ContentStore {
     map[siteKey] = binding;
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.repoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
+  }
+
+  private async readProtos(): Promise<Record<string, PrototypeRecord>> {
+    try { return JSON.parse(await readFile(this.protoFile(), "utf8")); } catch { return {}; }
+  }
+  async listPrototypes(siteKey?: string): Promise<PrototypeRecord[]> {
+    const all = Object.values(await this.readProtos());
+    const rows = siteKey ? all.filter((p) => p.siteKey === siteKey) : all;
+    return rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+  async getPrototype(key: string): Promise<PrototypeRecord | null> {
+    return (await this.readProtos())[key] ?? null;
+  }
+  async putPrototype(record: PrototypeRecord): Promise<void> {
+    const map = await this.readProtos();
+    map[record.key] = record;
+    await mkdir(this.root(), { recursive: true });
+    await writeFile(this.protoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
   }
 
   async listSlugs(siteKey: string): Promise<string[]> {
