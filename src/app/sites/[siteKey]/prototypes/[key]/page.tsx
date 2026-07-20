@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
 import { Badge } from "@/components/ui";
-import { STATUS_TONE } from "@/components/PrototypeGroups";
+import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
         <Link href={`/sites/${siteKey}/prototypes`} className="text-[11px] text-muted-2 hover:text-foreground">← Prototypes</Link>
         <div className="flex items-center gap-3 mt-1">
           <h1 className="text-[16px] font-semibold">{p.name}</h1>
-          <Badge tone={STATUS_TONE[p.status]}>{p.status}</Badge>
+          <Badge tone={STAGE_TONE[normalizeStage(p.status)]}>{STAGE_LABEL[normalizeStage(p.status)]}</Badge>
         </div>
       </div>
 

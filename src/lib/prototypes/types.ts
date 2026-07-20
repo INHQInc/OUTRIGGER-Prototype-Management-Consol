@@ -6,7 +6,43 @@
  * everything about the prototype except its code.
  */
 
-export type ProtoStatus = "draft" | "demo-ready" | "experimenting" | "handed-off";
+/**
+ * Lifecycle stage — where the prototype is on its journey (see
+ * docs/LIFECYCLE-ARCHITECTURE.md). The `status` field holds this. Advances
+ * draft → review → live → shipped, or ends archived.
+ */
+export type PrototypeStage = "draft" | "review" | "live" | "shipped" | "archived";
+export const PROTOTYPE_STAGES: PrototypeStage[] = ["draft", "review", "live", "shipped", "archived"];
+
+/** Old status values → lifecycle stages (records predating the rename). */
+const LEGACY_STAGE: Record<string, PrototypeStage> = {
+  draft: "draft",
+  "demo-ready": "review",
+  experimenting: "live",
+  "handed-off": "shipped",
+};
+
+export function normalizeStage(value: string | undefined): PrototypeStage {
+  if (!value) return "draft";
+  if ((PROTOTYPE_STAGES as string[]).includes(value)) return value as PrototypeStage;
+  return LEGACY_STAGE[value] ?? "draft";
+}
+
+export const STAGE_LABEL: Record<PrototypeStage, string> = {
+  draft: "Draft",
+  review: "In review",
+  live: "Live",
+  shipped: "Shipped",
+  archived: "Archived",
+};
+export const STAGE_TONE: Record<PrototypeStage, "neutral" | "ok" | "warn" | "danger" | "accent"> = {
+  draft: "neutral",
+  review: "accent",
+  live: "warn",
+  shipped: "ok",
+  archived: "neutral",
+};
+
 export type TargetSource = "clone" | "live";
 
 export interface PrototypeTarget {
@@ -40,7 +76,8 @@ export interface PrototypeRecord {
   key: string;
   siteKey: string;
   name: string;
-  status: ProtoStatus;
+  /** Lifecycle stage (see PrototypeStage). Normalize on read with normalizeStage(). */
+  status: PrototypeStage;
   targets: PrototypeTarget[];
   brief: PrototypeBrief;
   hypothesis: PrototypeHypothesis;

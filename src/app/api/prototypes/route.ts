@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
-import type { PrototypeRecord } from "@/lib/prototypes/types";
+import { normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
 
 function slug(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "prototype";
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     key,
     siteKey: b.siteKey,
     name: b.name.trim(),
-    status: b.status ?? "draft",
+    status: normalizeStage(b.status),
     targets: (b.targets ?? []).filter((t) => t.url?.trim()).map((t) => ({ url: t.url.trim(), source: t.source === "live" ? "live" : "clone" })),
     brief: {
       problem: b.brief?.problem?.trim() ?? "",

@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { listFeatures } from "@/lib/features/registry";
 import { getContentStore } from "@/lib/content/store";
-import { getSite } from "@/lib/sites";
-import { PagePrototypeGroups, STATUS_TONE } from "@/components/PrototypeGroups";
+import { PagePrototypeGroups } from "@/components/PrototypeGroups";
 import { NewPrototype } from "@/components/NewPrototype";
 import { Badge, EmptyState } from "@/components/ui";
-import type { PrototypeRecord } from "@/lib/prototypes/types";
+import { STAGE_TONE, STAGE_LABEL, normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +16,7 @@ function ProtoCard({ siteKey, p }: { siteKey: string; p: PrototypeRecord }) {
           <div className="text-[13px] font-semibold truncate">{p.name}</div>
           {p.targets[0] && <div className="text-[11px] text-muted-2 mt-0.5 font-mono truncate">{p.targets[0].url} · {p.targets[0].source}</div>}
         </div>
-        <Badge tone={STATUS_TONE[p.status]}>{p.status}</Badge>
+        <Badge tone={STAGE_TONE[normalizeStage(p.status)]}>{STAGE_LABEL[normalizeStage(p.status)]}</Badge>
       </div>
       {p.hypothesis.outcome && (
         <p className="text-[12px] text-muted mt-2.5 leading-relaxed line-clamp-2">
@@ -35,16 +34,16 @@ function ProtoCard({ siteKey, p }: { siteKey: string; p: PrototypeRecord }) {
 export default async function SitePrototypes({ params }: { params: Promise<{ siteKey: string }> }) {
   const { siteKey } = await params;
   const store = await getContentStore();
-  const [protos, features, site] = await Promise.all([store.listPrototypes(siteKey), listFeatures(), getSite(siteKey)]);
+  const [protos, features] = await Promise.all([store.listPrototypes(siteKey), listFeatures()]);
   const siteFeatures = features.filter((f) => f.targets[0]?.siteKey === siteKey);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="text-[12px] text-muted-2">
-          {protos.length} prototype{protos.length === 1 ? "" : "s"} · {site?.mode === "live" ? "live site" : "clone site"}
+          {protos.length} prototype{protos.length === 1 ? "" : "s"}
         </div>
-        <NewPrototype siteKey={siteKey} defaultSource={site?.mode ?? "clone"} />
+        <NewPrototype siteKey={siteKey} defaultSource="live" />
       </div>
 
       {protos.length === 0 && siteFeatures.length === 0 ? (

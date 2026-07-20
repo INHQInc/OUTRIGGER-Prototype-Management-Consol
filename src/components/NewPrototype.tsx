@@ -8,7 +8,7 @@ const lbl = "block text-[12px] font-medium text-muted mb-1.5";
 const section = "text-[11px] font-semibold uppercase tracking-wider text-muted-2 pt-1";
 
 /** "New prototype" button + structured creation form (brief + hypothesis + metrics). */
-export function NewPrototype({ siteKey, defaultSource = "clone" }: { siteKey: string; defaultSource?: "clone" | "live" }) {
+export function NewPrototype({ siteKey, defaultSource = "live" }: { siteKey: string; defaultSource?: "clone" | "live" }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,7 +34,7 @@ export function NewPrototype({ siteKey, defaultSource = "clone" }: { siteKey: st
   const [ticketUrl, setTicketUrl] = useState("");
 
   function reset() {
-    setName(""); setUrl(""); setSource("clone"); setProblem(""); setChange(""); setDone("");
+    setName(""); setUrl(""); setSource(defaultSource); setProblem(""); setChange(""); setDone("");
     setHChange(""); setHAudience(""); setHOutcome(""); setHRationale(""); setPrimary(""); setGuardrails("");
     setOwner(""); setTicketUrl(""); setError(null); setBusy(false);
   }
