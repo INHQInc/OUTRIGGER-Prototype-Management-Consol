@@ -45,6 +45,7 @@ export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: S
     { href: "/", label: "All sites", icon: ICON.overview, exact: true },
     { href: "/features", label: "Prototypes", icon: ICON.prototypes },
     { href: "/handoff", label: "Handoff", icon: ICON.handoff },
+    { href: "/settings/brand", label: "Brand settings", icon: ICON.settings },
     { href: "/members", label: "Members", icon: ICON.users },
     ...(user?.role === "admin" ? [{ href: "/settings/users", label: "Users", icon: ICON.users }] : []),
   ];

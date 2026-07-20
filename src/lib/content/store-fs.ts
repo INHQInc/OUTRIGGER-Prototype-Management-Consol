@@ -7,6 +7,7 @@ import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
+import type { ExperimentationConfig } from "../experimentation/types";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -27,6 +28,7 @@ export class FsContentStore implements ContentStore {
   private orgsFile(): string { return join(this.root(), "_orgs.json"); }
   private membersFile(): string { return join(this.root(), "_members.json"); }
   private envsFile(): string { return join(this.root(), "_environments.json"); }
+  private integrationsFile(): string { return join(this.root(), "_integrations.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -53,6 +55,21 @@ export class FsContentStore implements ContentStore {
     await this.writeJson(this.orgsFile(), orgs);
     const members = (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((m) => m.orgId !== id);
     await this.writeJson(this.membersFile(), members);
+    const integrations = (await this.readJson<ExperimentationConfig[]>(this.integrationsFile(), [])).filter((c) => c.orgId !== id);
+    await this.writeJson(this.integrationsFile(), integrations);
+  }
+
+  async getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null> {
+    return (await this.readJson<ExperimentationConfig[]>(this.integrationsFile(), [])).find((c) => c.orgId === orgId) ?? null;
+  }
+  async setExperimentationConfig(config: ExperimentationConfig): Promise<void> {
+    const all = (await this.readJson<ExperimentationConfig[]>(this.integrationsFile(), [])).filter((c) => c.orgId !== config.orgId);
+    all.push(config);
+    await this.writeJson(this.integrationsFile(), all);
+  }
+  async deleteExperimentationConfig(orgId: string): Promise<void> {
+    const all = (await this.readJson<ExperimentationConfig[]>(this.integrationsFile(), [])).filter((c) => c.orgId !== orgId);
+    await this.writeJson(this.integrationsFile(), all);
   }
 
   async listMembers(orgId: string): Promise<OrgMember[]> {

@@ -6,6 +6,7 @@ import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment, EnvironmentKind } from "../environments";
+import type { ExperimentationConfig } from "../experimentation/types";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
@@ -79,6 +80,13 @@ export class NeonContentStore implements ContentStore {
         created_at timestamptz not null default now()
       )`);
     await this.ddl(() => this.sql`create index if not exists environment_site_idx on environment (site_key)`);
+    await this.ddl(() => this.sql`
+      create table if not exists experimentation_config (
+        org_id text primary key,
+        provider text not null,
+        config text not null,
+        updated_at timestamptz not null default now()
+      )`);
     await this.ddl(() => this.sql`
       create table if not exists page_version (
         site_key text not null,
@@ -196,6 +204,7 @@ export class NeonContentStore implements ContentStore {
   }
   async deleteOrg(id: string): Promise<void> {
     await this.sql`delete from org_member where org_id = ${id}`;
+    await this.sql`delete from experimentation_config where org_id = ${id}`;
     await this.sql`delete from org where id = ${id}`;
   }
   async listMembers(orgId: string): Promise<OrgMember[]> {
@@ -239,6 +248,21 @@ export class NeonContentStore implements ContentStore {
   }
   async deleteEnvironment(id: string): Promise<void> {
     await this.sql`delete from environment where id = ${id}`;
+  }
+
+  async getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null> {
+    const rows = await this.sql`select config from experimentation_config where org_id = ${orgId}`;
+    if (!rows[0]) return null;
+    try { return JSON.parse(rows[0].config as string) as ExperimentationConfig; } catch { return null; }
+  }
+  async setExperimentationConfig(config: ExperimentationConfig): Promise<void> {
+    await this.sql`
+      insert into experimentation_config (org_id, provider, config, updated_at)
+      values (${config.orgId}, ${config.provider}, ${JSON.stringify(config)}, now())
+      on conflict (org_id) do update set provider = excluded.provider, config = excluded.config, updated_at = now()`;
+  }
+  async deleteExperimentationConfig(orgId: string): Promise<void> {
+    await this.sql`delete from experimentation_config where org_id = ${orgId}`;
   }
   async deleteSite(siteKey: string): Promise<void> {
     await this.sql`delete from page_version where site_key = ${siteKey}`;

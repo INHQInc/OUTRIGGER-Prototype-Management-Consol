@@ -4,6 +4,7 @@ import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
+import type { ExperimentationConfig } from "../experimentation/types";
 
 /**
  * Persistence seam for CONTENT (sites, captured pages, assets) — the same
@@ -39,6 +40,11 @@ export interface ContentStore {
   putMember(m: OrgMember): Promise<void>;
   removeMember(orgId: string, email: string): Promise<void>;
   orgIdsForMember(email: string): Promise<string[]>;
+
+  // --- Brand-level experimentation config (org-scoped A/B platform connection) ---
+  getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null>;
+  setExperimentationConfig(config: ExperimentationConfig): Promise<void>;
+  deleteExperimentationConfig(orgId: string): Promise<void>;
 
   // --- Sites (dynamic layer; built-in CONFIG_SITES live in code) ---
   listDynamicSites(): Promise<SiteConfig[]>;
