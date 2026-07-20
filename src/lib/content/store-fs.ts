@@ -5,6 +5,7 @@ import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
+import type { Org, OrgMember } from "../orgs";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -22,6 +23,51 @@ export class FsContentStore implements ContentStore {
   private repoFile(): string { return join(this.root(), "_repo-bindings.json"); }
   private protoFile(): string { return join(this.root(), "_prototypes.json"); }
   private metaFile(): string { return join(this.root(), "_meta.json"); }
+  private orgsFile(): string { return join(this.root(), "_orgs.json"); }
+  private membersFile(): string { return join(this.root(), "_members.json"); }
+
+  private async readJson<T>(file: string, fallback: T): Promise<T> {
+    try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
+  }
+  private async writeJson(file: string, data: unknown): Promise<void> {
+    await mkdir(this.root(), { recursive: true });
+    await writeFile(file, JSON.stringify(data, null, 2) + "\n", "utf8");
+  }
+
+  async listOrgs(): Promise<Org[]> {
+    const orgs = await this.readJson<Org[]>(this.orgsFile(), []);
+    return orgs.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  async getOrg(id: string): Promise<Org | null> {
+    return (await this.readJson<Org[]>(this.orgsFile(), [])).find((o) => o.id === id) ?? null;
+  }
+  async addOrg(org: Org): Promise<void> {
+    const orgs = await this.readJson<Org[]>(this.orgsFile(), []);
+    orgs.push(org);
+    await this.writeJson(this.orgsFile(), orgs);
+  }
+  async deleteOrg(id: string): Promise<void> {
+    const orgs = (await this.readJson<Org[]>(this.orgsFile(), [])).filter((o) => o.id !== id);
+    await this.writeJson(this.orgsFile(), orgs);
+    const members = (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((m) => m.orgId !== id);
+    await this.writeJson(this.membersFile(), members);
+  }
+
+  async listMembers(orgId: string): Promise<OrgMember[]> {
+    return (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((m) => m.orgId === orgId);
+  }
+  async putMember(m: OrgMember): Promise<void> {
+    const members = (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((x) => !(x.orgId === m.orgId && x.email === m.email));
+    members.push(m);
+    await this.writeJson(this.membersFile(), members);
+  }
+  async removeMember(orgId: string, email: string): Promise<void> {
+    const members = (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((m) => !(m.orgId === orgId && m.email === email));
+    await this.writeJson(this.membersFile(), members);
+  }
+  async orgIdsForMember(email: string): Promise<string[]> {
+    return (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((m) => m.email === email).map((m) => m.orgId);
+  }
 
   async getFlag(key: string): Promise<string | null> {
     try { return (JSON.parse(await readFile(this.metaFile(), "utf8")) as Record<string, string>)[key] ?? null; } catch { return null; }

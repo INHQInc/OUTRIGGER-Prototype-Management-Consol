@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionPayload } from "@/lib/auth/types";
 import { SiteSwitcher, type SiteNavNode } from "./SiteSwitcher";
+import { OrgSwitcher, type OrgOption } from "./OrgSwitcher";
 
 interface NavItem { href: string; label: string; icon: string; exact?: boolean }
 
@@ -17,7 +18,7 @@ const ICON = {
   users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
 };
 
-export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: SiteNavNode[] }) {
+export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: SessionPayload | null; sites: SiteNavNode[]; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -44,6 +45,7 @@ export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: S
     { href: "/", label: "All sites", icon: ICON.overview, exact: true },
     { href: "/features", label: "Prototypes", icon: ICON.prototypes },
     { href: "/handoff", label: "Handoff", icon: ICON.handoff },
+    { href: "/members", label: "Members", icon: ICON.users },
     ...(user?.role === "admin" ? [{ href: "/settings/users", label: "Users", icon: ICON.users }] : []),
   ];
 
@@ -73,6 +75,8 @@ export function Sidebar({ user, sites }: { user: SessionPayload | null; sites: S
         <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold text-[13px]">O</div>
         <div className="text-[13px] font-semibold tracking-tight">Prototype Console</div>
       </div>
+
+      <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
 
       <SiteSwitcher sites={sites} currentSiteKey={currentSiteKey} />
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllSites, addSite, updateSiteMode, deleteSite } from "@/lib/sites";
 import type { SiteMode } from "@/lib/sites";
+import { getActiveOrgId } from "@/lib/active-org";
 
 /** GET → all sites (built-in + user-added). */
 export async function GET() {
@@ -19,8 +20,12 @@ export async function POST(req: NextRequest) {
   if (!body.origin) {
     return NextResponse.json({ error: "origin is required" }, { status: 400 });
   }
+  const orgId = await getActiveOrgId();
+  if (!orgId) {
+    return NextResponse.json({ error: "No active org — create or select an org first." }, { status: 400 });
+  }
   try {
-    const site = await addSite({ origin: body.origin, label: body.label, assetHosts: body.assetHosts, mode: body.mode });
+    const site = await addSite({ origin: body.origin, orgId, label: body.label, assetHosts: body.assetHosts, mode: body.mode });
     return NextResponse.json({ site }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });

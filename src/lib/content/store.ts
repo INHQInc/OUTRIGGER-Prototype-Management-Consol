@@ -2,6 +2,7 @@ import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
+import type { Org, OrgMember } from "../orgs";
 
 /**
  * Persistence seam for CONTENT (sites, captured pages, assets) — the same
@@ -27,6 +28,16 @@ export interface ContentStore {
   // --- Key/value flags (one-time migrations, seed markers) ---
   getFlag(key: string): Promise<string | null>;
   setFlag(key: string, value: string): Promise<void>;
+
+  // --- Orgs (tenants) + membership ---
+  listOrgs(): Promise<Org[]>;
+  getOrg(id: string): Promise<Org | null>;
+  addOrg(org: Org): Promise<void>;
+  deleteOrg(id: string): Promise<void>;
+  listMembers(orgId: string): Promise<OrgMember[]>;
+  putMember(m: OrgMember): Promise<void>;
+  removeMember(orgId: string, email: string): Promise<void>;
+  orgIdsForMember(email: string): Promise<string[]>;
 
   // --- Sites (dynamic layer; built-in CONFIG_SITES live in code) ---
   listDynamicSites(): Promise<SiteConfig[]>;

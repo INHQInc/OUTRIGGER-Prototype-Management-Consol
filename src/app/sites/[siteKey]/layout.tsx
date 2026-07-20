@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSite } from "@/lib/sites";
+import { canAccessOrg } from "@/lib/active-org";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ export default async function SiteLayout(props: LayoutProps<"/sites/[siteKey]">)
   const { siteKey } = await props.params;
   const site = await getSite(siteKey);
   if (!site) notFound();
+  // Tenant isolation: only members of the site's org (or global admins) may view it.
+  if (site.orgId && !(await canAccessOrg(site.orgId))) notFound();
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">

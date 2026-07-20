@@ -6,6 +6,8 @@ import type { SiteNavNode } from "@/components/SiteSwitcher";
 import { currentUser } from "@/lib/auth/current";
 import { getAllSites } from "@/lib/sites";
 import { listPages } from "@/lib/registry";
+import { listOrgs } from "@/lib/orgs";
+import { accessibleOrgIds, getActiveOrgId } from "@/lib/active-org";
 
 async function buildSiteNav(): Promise<SiteNavNode[]> {
   const sites = await getAllSites();
@@ -44,14 +46,23 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await currentUser();
-  const sites = user ? await buildSiteNav() : [];
+  let sites: SiteNavNode[] = [];
+  let orgs: { id: string; name: string }[] = [];
+  let activeOrgId: string | null = null;
+  const canCreate = user?.role === "admin";
+  if (user) {
+    const accessible = new Set(await accessibleOrgIds());
+    orgs = (await listOrgs()).filter((o) => accessible.has(o.id)).map((o) => ({ id: o.id, name: o.name }));
+    activeOrgId = await getActiveOrgId();
+    sites = await buildSiteNav(); // scoped to the active org
+  }
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex">
-        <AppFrame user={user} sites={sites}>{children}</AppFrame>
+        <AppFrame user={user} sites={sites} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
       </body>
     </html>
   );

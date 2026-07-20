@@ -12,6 +12,7 @@
  */
 import type { CaptureConfig } from "./capture/types";
 import { getContentStore } from "./content/store";
+import { getActiveOrgId } from "./active-org";
 
 export type SiteMode = "clone" | "live";
 
@@ -20,6 +21,8 @@ export interface SiteConfig extends CaptureConfig {
   label: string;
   /** clone = snapshot pages & build against frozen copies; live = prototypes run on the real site (no capture). */
   mode: SiteMode;
+  /** Owning org (tenant). */
+  orgId: string;
 }
 
 /**
@@ -34,6 +37,7 @@ export const CONFIG_SITES: Record<string, SiteConfig> = {
     assetHosts: ["outrigger.com", "outriggerhospitalityassets.com"],
     label: "Outrigger.com",
     mode: "clone",
+    orgId: "",
   },
   hvc: {
     siteKey: "hvc",
@@ -41,28 +45,33 @@ export const CONFIG_SITES: Record<string, SiteConfig> = {
     assetHosts: ["outrigger.com", "outriggerhospitalityassets.com"],
     label: "Hawaii Vacation Condos",
     mode: "clone",
+    orgId: "",
   },
 };
 
-/** All sites (built-in + user-added), keyed by siteKey. Dynamic wins on clash. */
-function withMode(s: SiteConfig): SiteConfig {
-  return { ...s, mode: s.mode ?? "clone" }; // default legacy records to clone
+function normalize(s: SiteConfig): SiteConfig {
+  return { ...s, mode: s.mode ?? "clone", orgId: s.orgId ?? "" }; // defaults for legacy records
 }
 
-// Every site is a store record. The app starts empty; nothing is pre-populated
-// or hardcoded. Users add sites deliberately (with a clone/live mode).
+// Sites are store records scoped to an org. getAllSites returns the ACTIVE
+// org's sites (empty if no active org); getSite resolves a site by key across
+// orgs (page-level guards enforce access).
 export async function getAllSites(): Promise<Record<string, SiteConfig>> {
+  const orgId = await getActiveOrgId();
+  if (!orgId) return {};
   const store = await getContentStore();
   const out: Record<string, SiteConfig> = {};
-  for (const s of await store.listDynamicSites()) out[s.siteKey] = withMode(s);
+  for (const s of await store.listDynamicSites()) {
+    if ((s.orgId || "") === orgId) out[s.siteKey] = normalize(s);
+  }
   return out;
 }
 
-/** Resolve one site's config, or null if unknown. */
+/** Resolve one site by key (any org), or null if unknown. */
 export async function getSite(siteKey: string): Promise<SiteConfig | null> {
   const store = await getContentStore();
   const found = (await store.listDynamicSites()).find((s) => s.siteKey === siteKey);
-  return found ? withMode(found) : null;
+  return found ? normalize(found) : null;
 }
 
 /** Derive a short, url-safe key from a hostname (e.g. www.marriott.com → marriott). */
@@ -77,7 +86,8 @@ function keyFromHost(host: string): string {
  * Add a website. Derives a unique key + sensible assetHosts default from the
  * origin. Rejects invalid URLs and duplicate origins. Persists and returns it.
  */
-export async function addSite(input: { origin: string; label?: string; assetHosts?: string[]; mode?: SiteMode }): Promise<SiteConfig> {
+export async function addSite(input: { origin: string; orgId: string; label?: string; assetHosts?: string[]; mode?: SiteMode }): Promise<SiteConfig> {
+  if (!input.orgId) throw new Error("No active org — create or pick an org first.");
   let url: URL;
   try {
     url = new URL(input.origin);
@@ -90,16 +100,18 @@ export async function addSite(input: { origin: string; label?: string; assetHost
 
   const origin = url.origin;
   const host = url.hostname;
-  const all = await getAllSites();
+  const store = await getContentStore();
+  const all = await store.listDynamicSites(); // global — siteKeys are unique across orgs
 
-  if (Object.values(all).some((s) => s.origin === origin)) {
+  if (all.some((s) => s.origin === origin)) {
     throw new Error(`A site for ${origin} already exists.`);
   }
 
+  const keys = new Set(all.map((s) => s.siteKey));
   let key = keyFromHost(host);
-  if (all[key]) {
+  if (keys.has(key)) {
     let n = 2;
-    while (all[`${key}-${n}`]) n++;
+    while (keys.has(`${key}-${n}`)) n++;
     key = `${key}-${n}`;
   }
 
@@ -109,9 +121,9 @@ export async function addSite(input: { origin: string; label?: string; assetHost
     assetHosts: input.assetHosts?.length ? input.assetHosts : [host.replace(/^www\./, "")],
     label: input.label?.trim() || host.replace(/^www\./, ""),
     mode: input.mode ?? "clone",
+    orgId: input.orgId,
   };
 
-  const store = await getContentStore();
   await store.addDynamicSite(site);
   return site;
 }

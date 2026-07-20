@@ -4,6 +4,7 @@ import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
 import type { PrototypeRecord } from "../prototypes/types";
+import type { Org, OrgMember } from "../orgs";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
@@ -34,6 +35,21 @@ export class NeonContentStore implements ContentStore {
         created_at timestamptz not null default now()
       )`;
     await this.sql`alter table site add column if not exists mode text not null default 'clone'`;
+    await this.sql`alter table site add column if not exists org_id text not null default ''`;
+    await this.sql`
+      create table if not exists org (
+        id text primary key,
+        name text not null,
+        created_at timestamptz not null default now()
+      )`;
+    await this.sql`
+      create table if not exists org_member (
+        org_id text not null,
+        email text not null,
+        role text not null default 'member',
+        primary key (org_id, email)
+      )`;
+    await this.sql`create index if not exists org_member_email_idx on org_member (email)`;
     await this.sql`
       create table if not exists page_version (
         site_key text not null,
@@ -122,12 +138,13 @@ export class NeonContentStore implements ContentStore {
       assetHosts: JSON.parse((r.asset_hosts as string) || "[]"),
       label: r.label as string,
       mode: ((r.mode as string) || "clone") as SiteConfig["mode"],
+      orgId: (r.org_id as string) || "",
     }));
   }
   async addDynamicSite(site: SiteConfig): Promise<void> {
     await this.sql`
-      insert into site (site_key, origin, asset_hosts, label, mode)
-      values (${site.siteKey}, ${site.origin}, ${JSON.stringify(site.assetHosts)}, ${site.label}, ${site.mode})
+      insert into site (site_key, origin, asset_hosts, label, mode, org_id)
+      values (${site.siteKey}, ${site.origin}, ${JSON.stringify(site.assetHosts)}, ${site.label}, ${site.mode}, ${site.orgId})
       on conflict (site_key) do nothing`;
   }
   async updateDynamicSite(siteKey: string, patch: Partial<SiteConfig>): Promise<void> {
@@ -135,6 +152,38 @@ export class NeonContentStore implements ContentStore {
     if (patch.label !== undefined) await this.sql`update site set label = ${patch.label} where site_key = ${siteKey}`;
     if (patch.origin !== undefined) await this.sql`update site set origin = ${patch.origin} where site_key = ${siteKey}`;
     if (patch.assetHosts !== undefined) await this.sql`update site set asset_hosts = ${JSON.stringify(patch.assetHosts)} where site_key = ${siteKey}`;
+    if (patch.orgId !== undefined) await this.sql`update site set org_id = ${patch.orgId} where site_key = ${siteKey}`;
+  }
+  async listOrgs(): Promise<Org[]> {
+    const rows = await this.sql`select * from org order by created_at`;
+    return rows.map((r) => ({ id: r.id as string, name: r.name as string, createdAt: new Date(r.created_at as string).toISOString() }));
+  }
+  async getOrg(id: string): Promise<Org | null> {
+    const rows = await this.sql`select * from org where id = ${id}`;
+    return rows[0] ? { id: rows[0].id as string, name: rows[0].name as string, createdAt: new Date(rows[0].created_at as string).toISOString() } : null;
+  }
+  async addOrg(org: Org): Promise<void> {
+    await this.sql`insert into org (id, name) values (${org.id}, ${org.name}) on conflict (id) do nothing`;
+  }
+  async deleteOrg(id: string): Promise<void> {
+    await this.sql`delete from org_member where org_id = ${id}`;
+    await this.sql`delete from org where id = ${id}`;
+  }
+  async listMembers(orgId: string): Promise<OrgMember[]> {
+    const rows = await this.sql`select * from org_member where org_id = ${orgId} order by email`;
+    return rows.map((r) => ({ orgId: r.org_id as string, email: r.email as string, role: r.role as OrgMember["role"] }));
+  }
+  async putMember(m: OrgMember): Promise<void> {
+    await this.sql`
+      insert into org_member (org_id, email, role) values (${m.orgId}, ${m.email}, ${m.role})
+      on conflict (org_id, email) do update set role = excluded.role`;
+  }
+  async removeMember(orgId: string, email: string): Promise<void> {
+    await this.sql`delete from org_member where org_id = ${orgId} and email = ${email}`;
+  }
+  async orgIdsForMember(email: string): Promise<string[]> {
+    const rows = await this.sql`select org_id from org_member where email = ${email}`;
+    return rows.map((r) => r.org_id as string);
   }
   async deleteSite(siteKey: string): Promise<void> {
     await this.sql`delete from page_version where site_key = ${siteKey}`;
