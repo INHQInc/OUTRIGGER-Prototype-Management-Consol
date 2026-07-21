@@ -20,6 +20,13 @@ export async function middleware(req: NextRequest) {
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
   if (isPublic) return NextResponse.next();
 
+  // CLI tooling (the prototype skill) authenticates with a per-customer API
+  // token instead of a session cookie. Only /api/prototypes* may pass; the
+  // routes validate the token and enforce org scope themselves.
+  if (pathname.startsWith("/api/prototypes") && req.headers.get("authorization")?.startsWith("Bearer opmc_")) {
+    return NextResponse.next();
+  }
+
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = process.env.AUTH_SECRET ? await verifySession(token) : null;
 

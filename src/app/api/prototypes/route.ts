@@ -5,16 +5,26 @@ import { getSite } from "@/lib/sites";
 import { canAccessOrg } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
+import { apiOrgFromAuthHeader } from "@/lib/api-token";
 import { defaultOrgRepo } from "@/lib/git/org-repos";
 
 function slug(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "prototype";
 }
 
-/** GET ?site=<key> → list; ?key=<key> → one. */
+/** GET ?site=<key> → list; ?key=<key> → one. API tokens may read one key (org-scoped). */
 export async function GET(req: NextRequest) {
   const store = await getContentStore();
   const key = req.nextUrl.searchParams.get("key");
+  const tokenOrg = await apiOrgFromAuthHeader(req.headers.get("authorization"));
+  if (tokenOrg) {
+    if (!key) return NextResponse.json({ error: "API tokens may only read a single prototype (?key=)" }, { status: 403 });
+    const proto = await store.getPrototype(key);
+    if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
+    const site = await getSite(proto.siteKey);
+    if (site?.orgId !== tokenOrg) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ prototype: proto, site: site ? { label: site.label, origin: site.origin } : null });
+  }
   if (key) return NextResponse.json({ prototype: await store.getPrototype(key) });
   const site = req.nextUrl.searchParams.get("site") ?? undefined;
   return NextResponse.json({ prototypes: await store.listPrototypes(site) });

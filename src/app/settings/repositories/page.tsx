@@ -6,6 +6,9 @@ import { PageHeader, EmptyState } from "@/components/ui";
 import { RepoRegistry } from "@/components/RepoRegistry";
 import { GitHubConnection } from "@/components/GitHubConnection";
 import { getGitConnectionStatus } from "@/lib/git/connection";
+import { ensureApiToken } from "@/lib/api-token";
+import { ApiAccessTile } from "@/components/ApiAccessTile";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +22,8 @@ export default async function RepositoriesPage() {
       </>
     );
   }
-  const [org, repos, gitStatus] = await Promise.all([getOrg(orgId), listOrgRepos(orgId), getGitConnectionStatus(orgId)]);
+  const [org, repos, gitStatus, apiToken, hdrs] = await Promise.all([getOrg(orgId), listOrgRepos(orgId), getGitConnectionStatus(orgId), ensureApiToken(orgId), headers()]);
+  const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "console"}`;
   return (
     <>
       <PageHeader title="Repositories" subtitle={`${org?.name ?? orgId} — where prototype code and production source live`} />
@@ -27,6 +31,7 @@ export default async function RepositoriesPage() {
         <div className="max-w-2xl space-y-5">
           <GitHubConnection initialStatus={gitStatus} canManage={user?.role === "admin"} />
           <RepoRegistry initialRepos={repos} canManage={user?.role === "admin"} />
+          <ApiAccessTile initialToken={apiToken} consoleUrl={consoleUrl} canManage={user?.role === "admin"} />
         </div>
       </div>
     </>
