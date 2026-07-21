@@ -10,6 +10,7 @@ import { listOrgRepos } from "@/lib/git/org-repos";
 import { listAuditEvents } from "@/lib/audit";
 import { PageHeader, EmptyState, Badge, TimeAgo } from "@/components/ui";
 import { PrototypeCard } from "@/components/PrototypeCard";
+import { SetupChecklist, type SetupStep } from "@/components/SetupChecklist";
 import { NewPrototype } from "@/components/NewPrototype";
 import { PROTOTYPE_STAGES, STAGE_LABEL, STAGE_TONE, normalizeStage, type PrototypeStage } from "@/lib/prototypes/types";
 import type { Promotion } from "@/lib/promotions/types";
@@ -43,18 +44,33 @@ export default async function Dashboard() {
   ]);
   const sites = Object.values(sitesMap);
   const siteKeys = new Set(Object.keys(sitesMap));
+  const loaderDone = Boolean(await store.getFlag(`setup:loader:${orgId}`));
   const protos = (await store.listPrototypes())
     .filter((p) => siteKeys.has(p.siteKey))
     .map((p) => ({ ...p, siteLabel: sitesMap[p.siteKey]?.label ?? p.siteKey }));
   const promosByProto = await Promise.all(protos.map((p) => listPromotions(p.key)));
 
-  // ── Needs attention (cheap, store/env-only checks) ──
+  // ── Setup checklist (sequenced; owns the top of the page until complete) ──
+  const firstSiteKey = Object.keys(sitesMap)[0];
+  const steps: SetupStep[] = [
+    { label: "Add the customer's website", done: sites.length > 0, href: "/sites", action: "Add a site" },
+    { label: "Connect GitHub", done: Boolean(gitStatus.connected || gitStatus.envFallback), href: "/settings/repositories", action: "Connect" },
+    { label: "Register the prototype repo", done: orgRepos.some((r) => r.roles.includes("prototypes")), href: "/settings/repositories", action: "Register" },
+    { label: "Connect Optimizely & pick the default project", done: Boolean(expCfg?.optimizely?.apiToken && expCfg.optimizely.defaultProjectId), href: "/settings/experimentation", action: "Connect" },
+    {
+      label: "Install the loader tag on the environment",
+      done: loaderDone,
+      href: firstSiteKey ? `/sites/${firstSiteKey}/settings` : "/sites",
+      action: "Get the tag",
+      manualKey: "loader",
+      disabled: sites.length === 0,
+      hint: "One script tag in the CMS — inert without a review token. Mark installed once it's live.",
+    },
+  ];
+  const setupComplete = steps.every((st) => st.done);
+
+  // ── Needs attention: OPERATIONAL alerts only (setup lives in the checklist) ──
   const attention: Attention[] = [];
-  if (sites.length === 0) attention.push({ text: "No websites yet for this customer.", href: "/sites", action: "Add a site" });
-  if (!gitStatus.connected && !gitStatus.envFallback) attention.push({ text: "GitHub isn't connected — repo pulls will fail.", href: "/settings/repositories", action: "Connect GitHub" });
-  if (!orgRepos.some((r) => r.roles.includes("prototypes"))) attention.push({ text: "No prototype repo registered.", href: "/settings/repositories", action: "Register a repo" });
-  if (!expCfg?.optimizely?.apiToken) attention.push({ text: "Optimizely isn't connected — production promotion is unavailable.", href: "/settings/experimentation", action: "Connect Optimizely" });
-  else if (!expCfg.optimizely.defaultProjectId) attention.push({ text: "No default Optimizely project selected.", href: "/settings/experimentation", action: "Pick a project" });
   protos.forEach((p, i) => {
     const latest = promosByProto[i][0];
     if (latest?.status === "failed") attention.push({ text: `Promotion failed: ${p.name} → ${latest.environmentLabel}.`, href: `/prototypes/${p.key}`, action: "Open prototype" });
@@ -89,6 +105,8 @@ export default async function Dashboard() {
         actions={sites.length > 0 ? <NewPrototype sites={sites.map((s) => ({ key: s.siteKey, label: s.label }))} /> : undefined}
       />
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+        {!setupComplete && <SetupChecklist steps={steps} />}
+
         {/* Needs attention */}
         {attention.length > 0 && (
           <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] overflow-hidden">

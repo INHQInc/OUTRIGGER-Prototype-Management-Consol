@@ -15,6 +15,29 @@ interface SourceStatus {
   error?: string;
 }
 
+/** Copy-paste bootstrap for a branch that doesn't exist yet — the console
+ *  hands over exact commands; the repo (and Claude Code) do the rest. */
+function GetStarted({ repo, branch }: { repo: string; branch: string }) {
+  const [copied, setCopied] = useState(false);
+  const dir = repo.split("/")[1] ?? repo;
+  const cmds = `git clone git@github.com:${repo}.git  # once\ncd ${dir}\ngit checkout -b ${branch} origin/starter && git push -u origin ${branch}\nclaude`;
+  async function copy() {
+    try { await navigator.clipboard.writeText(cmds); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+  }
+  return (
+    <div className="rounded-lg border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
+      <div className="px-3 py-2 flex items-center justify-between border-b border-border/60">
+        <span className="text-[12px] font-medium">Get started — run this on your machine</span>
+        <button onClick={copy} className="text-[12px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
+      </div>
+      <pre className="px-3 py-2.5 text-[11px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
+      <div className="px-3 pb-2.5 text-[11px] text-muted-2">
+        Claude Code loads the repo&apos;s <span className="font-mono">opmc-prototype</span> skill, pulls this brief, and knows the whole loop. First time on this machine? Set the env exports from <Link href="/settings/repositories" className="text-accent hover:text-accent-hover">Settings → Repositories → API access</Link>.
+      </div>
+    </div>
+  );
+}
+
 /**
  * The prototype's code source: its feature-repo branch. The variation is built
  * in the repo (with Claude) and committed as a self-contained artifact; the
@@ -71,7 +94,14 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
       </div>
 
       <div className="p-4 space-y-3">
-        {loadErr && <div className="text-[12px] text-danger">{loadErr}</div>}
+        {loadErr && (
+          <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2.5 flex items-center justify-between gap-3">
+            <span className="text-[12px] text-danger">{loadErr}</span>
+            {loadErr.includes("No repo set") && (
+              <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">Pick a repo →</Link>
+            )}
+          </div>
+        )}
 
         {status && (
           <>
@@ -94,10 +124,12 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
                   {busy ? "Cutting…" : "Cut version from repo"}
                 </button>
               </div>
+            ) : !status.branchExists ? (
+              <GetStarted repo={status.repo} branch={status.branch} />
             ) : (
               <div className="rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3 py-2 text-[12px] text-muted">
                 {status.error ?? `Build the prototype on ${status.branch} and commit ${status.artifactPath}.`}
-                <div className="text-[11px] text-muted-2 mt-1">Build it in the repo with Claude — a self-contained script that finds its anchor and injects. The console pulls it here.</div>
+                <div className="text-[11px] text-muted-2 mt-1">Build it in the repo with Claude, run <span className="font-mono text-muted">node build.mjs</span>, commit <span className="font-mono text-muted">{status.artifactPath}</span>, push — the console pulls it here.</div>
               </div>
             )}
           </>
