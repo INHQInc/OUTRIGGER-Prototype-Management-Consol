@@ -1,22 +1,23 @@
 /**
- * Environment = a deploy target of a site (brand) — dev / staging / production.
- * The lifecycle promotes ONE immutable artifact version rightward across these:
- * local/dev → staging (review/QA) → production (experiment). See
- * docs/LIFECYCLE-ARCHITECTURE.md.
+ * Environment = a CUSTOMER's deploy/review target — dev / staging / production.
+ * The three nouns of the product are Customer (who), Environment (where),
+ * Prototype (what). Environments carry the loader (per-env tag + heartbeat);
+ * prototypes are reviewed and promoted across them.
  *
- * Every site always has at least one environment: the site's origin is lazily
- * seeded as `production` on first read, so existing sites migrate themselves
- * with no global migration step.
+ * Legacy: pre-refactor environments were keyed to a Site. listOrgEnvironments
+ * lazily migrates them (site.orgId → env.orgId) so existing data self-heals.
  */
 import { getContentStore } from "./content/store";
-import { getSite } from "./sites";
+import { getActiveOrgId } from "./active-org";
 
 export type EnvironmentKind = "development" | "staging" | "production";
 
 export interface Environment {
   id: string;
-  /** Owning site (brand). */
-  siteKey: string;
+  /** Owning customer. */
+  orgId: string;
+  /** Legacy: the pre-refactor site this env belonged to (kept for heartbeat + migration). */
+  siteKey?: string;
   label: string;
   /** Base URL prototypes run against in this environment. */
   url: string;
@@ -47,41 +48,38 @@ function sortEnvs(envs: Environment[]): Environment[] {
 }
 
 /**
- * A site's environments, production first. Lazily seeds `production` from the
- * site origin the first time (idempotent, race-safe via on-conflict-do-nothing)
- * so every site always has ≥1 environment — the promotion target the lifecycle
- * hangs on.
+ * The customer's environments, production first. Lazily adopts legacy
+ * site-keyed environments belonging to the org's sites (one-time, persisted).
  */
-export async function listEnvironments(siteKey: string): Promise<Environment[]> {
+export async function listOrgEnvironments(orgId: string): Promise<Environment[]> {
   const store = await getContentStore();
-  const envs = await store.listEnvironments(siteKey);
-  if (envs.length > 0) return sortEnvs(envs);
-  const site = await getSite(siteKey);
-  if (!site) return [];
-  const prod: Environment = {
-    id: `${siteKey}-production`,
-    siteKey,
-    label: "Production",
-    url: site.origin,
-    kind: "production",
-    createdAt: new Date().toISOString(),
-  };
-  await store.addEnvironment(prod);
-  return [prod];
+  const own = await store.listEnvironmentsByOrg(orgId);
+  // Legacy adoption: envs still keyed to this org's old sites.
+  const orgSiteKeys = (await store.listDynamicSites()).filter((s) => s.orgId === orgId).map((s) => s.siteKey);
+  const adopted: Environment[] = [];
+  for (const sk of orgSiteKeys) {
+    for (const legacy of await store.listEnvironments(sk)) {
+      if (legacy.orgId) continue; // already migrated
+      await store.updateEnvironment(legacy.id, { orgId });
+      adopted.push({ ...legacy, orgId });
+    }
+  }
+  const seen = new Set(own.map((e) => e.id));
+  return sortEnvs([...own, ...adopted.filter((e) => !seen.has(e.id))]);
 }
 
-export async function addEnvironment(siteKey: string, input: { label?: string; url: string; kind: EnvironmentKind }): Promise<Environment> {
+export async function addOrgEnvironment(orgId: string, input: { label?: string; url: string; kind: EnvironmentKind }): Promise<Environment> {
   const url = normalizeUrl(input.url);
   const store = await getContentStore();
-  const existing = await listEnvironments(siteKey); // ensures production seed exists too
-  if (existing.some((e) => e.url === url)) throw new Error(`An environment for ${url} already exists on this site.`);
+  const existing = await listOrgEnvironments(orgId);
+  if (existing.some((e) => e.url === url)) throw new Error(`An environment for ${url} already exists.`);
   const label = input.label?.trim() || KIND_LABEL[input.kind];
-  const base = `${siteKey}-${slugify(label) || input.kind}`;
+  const base = `${orgId}-${slugify(label) || input.kind}`;
   const ids = new Set(existing.map((e) => e.id));
   let id = base;
   let n = 2;
   while (ids.has(id)) id = `${base}-${n++}`;
-  const env: Environment = { id, siteKey, label, url, kind: input.kind, createdAt: new Date().toISOString() };
+  const env: Environment = { id, orgId, label, url, kind: input.kind, createdAt: new Date().toISOString() };
   await store.addEnvironment(env);
   return env;
 }
@@ -95,11 +93,25 @@ export async function updateEnvironment(id: string, patch: { label?: string; url
   await store.updateEnvironment(id, clean);
 }
 
-/** Delete an environment. A site must keep at least one. */
-export async function deleteEnvironment(siteKey: string, id: string): Promise<void> {
+export async function deleteOrgEnvironment(orgId: string, id: string): Promise<void> {
   const store = await getContentStore();
-  const envs = await store.listEnvironments(siteKey);
-  if (envs.length <= 1) throw new Error("A site must keep at least one environment.");
+  const envs = await listOrgEnvironments(orgId);
   if (!envs.some((e) => e.id === id)) return;
   await store.deleteEnvironment(id);
+}
+
+/** Last loader heartbeat for an environment (checks the env id and, for
+ *  migrated envs, the legacy site-keyed loader tag). ISO timestamp or null. */
+export async function envLoaderSeenAt(env: Environment): Promise<string | null> {
+  const store = await getContentStore();
+  const direct = await store.getFlag(`loader:seen:${env.id}`);
+  if (direct) return direct;
+  if (env.siteKey) return store.getFlag(`loader:seen:${env.siteKey}`);
+  return null;
+}
+
+/** Convenience for the active customer (API routes). */
+export async function listActiveOrgEnvironments(): Promise<Environment[]> {
+  const orgId = await getActiveOrgId();
+  return orgId ? listOrgEnvironments(orgId) : [];
 }

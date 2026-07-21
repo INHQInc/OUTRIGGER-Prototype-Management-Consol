@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
 
 /** Prototype summary card — used on the board and the site's filtered view. */
-export function PrototypeCard({ p, siteLabel }: { p: PrototypeRecord; siteLabel?: string }) {
+export function PrototypeCard({ p }: { p: PrototypeRecord }) {
   const stage = normalizeStage(p.status);
   return (
     <Link href={`/prototypes/${p.key}`} className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors block">
@@ -11,8 +11,6 @@ export function PrototypeCard({ p, siteLabel }: { p: PrototypeRecord; siteLabel?
         <div className="min-w-0">
           <div className="text-[13px] font-semibold truncate">{p.name}</div>
           <div className="text-[11px] text-muted-2 mt-0.5 truncate">
-            {siteLabel && <span>{siteLabel}</span>}
-            {siteLabel && p.targets[0] && <span> · </span>}
             {p.targets[0] && <span className="font-mono">{p.targets[0].url}</span>}
             {p.targets.length > 1 && <span className="text-muted-2"> +{p.targets.length - 1}</span>}
           </div>

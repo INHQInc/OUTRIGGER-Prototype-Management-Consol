@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
-import { getSite } from "@/lib/sites";
 import { canAccessOrg } from "@/lib/active-org";
+import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { Badge } from "@/components/ui";
 import { PrototypeTabs } from "@/components/PrototypeTabs";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
@@ -15,9 +15,9 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p) notFound();
-  const site = await getSite(p.siteKey);
-  // Tenant isolation via the owning site's org.
-  if (site?.orgId && !(await canAccessOrg(site.orgId))) notFound();
+  // Tenant isolation via the owning customer.
+  const orgId = await resolvePrototypeOrg(p);
+  if (orgId && !(await canAccessOrg(orgId))) notFound();
   const stage = normalizeStage(p.status);
 
   return (
@@ -32,10 +32,10 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
           <h1 className="text-[18px] font-semibold tracking-tight">{p.name}</h1>
           <Badge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</Badge>
         </div>
-        {site && (
+        {p.targets[0] && (
           <div className="text-[12px] text-muted-2 mt-0.5">
-            on <Link href={`/sites/${site.siteKey}`} className="text-muted hover:text-accent">{site.label}</Link>
-            {p.targets[0] && <span className="font-mono"> · {p.targets[0].url}</span>}
+            targets <a href={p.targets[0].url} target="_blank" rel="noreferrer" className="font-mono text-muted hover:text-accent">{p.targets[0].url}</a>
+            {p.targets.length > 1 && <span> +{p.targets.length - 1}</span>}
           </div>
         )}
         <div className="mt-4"><PrototypeTabs prototypeKey={key} /></div>

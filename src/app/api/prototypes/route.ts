@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
-import { getSite } from "@/lib/sites";
-import { canAccessOrg } from "@/lib/active-org";
+import { canAccessOrg, getActiveOrgId } from "@/lib/active-org";
+import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 import { apiOrgFromAuthHeader } from "@/lib/api-token";
@@ -21,9 +21,8 @@ export async function GET(req: NextRequest) {
     if (!key) return NextResponse.json({ error: "API tokens may only read a single prototype (?key=)" }, { status: 403 });
     const proto = await store.getPrototype(key);
     if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
-    const site = await getSite(proto.siteKey);
-    if (site?.orgId !== tokenOrg) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    return NextResponse.json({ prototype: proto, site: site ? { label: site.label, origin: site.origin } : null });
+    if ((await resolvePrototypeOrg(proto)) !== tokenOrg) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ prototype: proto });
   }
   if (key) return NextResponse.json({ prototype: await store.getPrototype(key) });
   const site = req.nextUrl.searchParams.get("site") ?? undefined;
@@ -35,17 +34,19 @@ export async function POST(req: NextRequest) {
   let b: Partial<PrototypeRecord> & { key?: string };
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  if (!b.siteKey) return NextResponse.json({ error: "siteKey required" }, { status: 400 });
   if (!b.name?.trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
+  const activeOrg = await getActiveOrgId();
+  if (!activeOrg && !b.key) return NextResponse.json({ error: "No active customer." }, { status: 400 });
 
   const store = await getContentStore();
   const now = new Date().toISOString();
 
   let key = b.key;
   let createdAt = now;
+  let existingOrg: string | undefined;
   if (key) {
     const existing = await store.getPrototype(key);
-    if (existing) createdAt = existing.createdAt;
+    if (existing) { createdAt = existing.createdAt; existingOrg = existing.orgId; }
   } else {
     // derive a unique key from the name
     const base = slug(b.name);
@@ -56,7 +57,8 @@ export async function POST(req: NextRequest) {
 
   const record: PrototypeRecord = {
     key,
-    siteKey: b.siteKey,
+    orgId: b.key ? existingOrg : activeOrg!,
+    siteKey: b.siteKey ?? "",
     name: b.name.trim(),
     status: normalizeStage(b.status),
     repo: b.repo?.fullName?.trim()
@@ -87,12 +89,9 @@ export async function POST(req: NextRequest) {
 
   // Stub-friendly: no repo given → attach the brand's default prototypes repo
   // with the conventional branch. Changeable later in the workspace Source panel.
-  if (!record.repo) {
-    const site = await getSite(record.siteKey);
-    if (site?.orgId) {
-      const def = await defaultOrgRepo(site.orgId, "prototypes");
-      if (def) record.repo = { fullName: def.fullName, branch: `prototype/${key}`, artifactPath: def.artifactPath };
-    }
+  if (!record.repo && record.orgId) {
+    const def = await defaultOrgRepo(record.orgId, "prototypes");
+    if (def) record.repo = { fullName: def.fullName, branch: `prototype/${key}`, artifactPath: def.artifactPath };
   }
 
   await store.putPrototype(record);
@@ -107,8 +106,8 @@ export async function PATCH(req: NextRequest) {
   const store = await getContentStore();
   const proto = await store.getPrototype(body.key);
   if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
-  const site = await getSite(proto.siteKey);
-  if (site?.orgId && !(await canAccessOrg(site.orgId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const protoOrg = await resolvePrototypeOrg(proto);
+  if (protoOrg && !(await canAccessOrg(protoOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const updated = { ...proto, updatedAt: new Date().toISOString() };
   const changes: string[] = [];
   if (body.status !== undefined) { updated.status = normalizeStage(body.status); changes.push(updated.status); }
@@ -139,7 +138,7 @@ export async function PATCH(req: NextRequest) {
   if (body.ticketUrl !== undefined) { updated.ticketUrl = body.ticketUrl?.trim() || undefined; changes.push("ticket"); }
   await store.putPrototype(updated);
   const user = await currentUser();
-  await audit(site?.orgId ?? "", user?.name ?? user?.sub ?? "system", "prototype.update", proto.name, changes.join(" · "));
+  await audit(protoOrg, user?.name ?? user?.sub ?? "system", "prototype.update", proto.name, changes.join(" · "));
   return NextResponse.json({ prototype: updated });
 }
 
@@ -150,10 +149,10 @@ export async function DELETE(req: NextRequest) {
   const store = await getContentStore();
   const proto = await store.getPrototype(key);
   if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
-  const site = await getSite(proto.siteKey);
-  if (site?.orgId && !(await canAccessOrg(site.orgId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const delOrg = await resolvePrototypeOrg(proto);
+  if (delOrg && !(await canAccessOrg(delOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   await store.deletePrototype(key);
   const user = await currentUser();
-  await audit(site?.orgId ?? "", user?.name ?? user?.sub ?? "system", "prototype.delete", proto.name, key);
+  await audit(delOrg, user?.name ?? user?.sub ?? "system", "prototype.delete", proto.name, key);
   return NextResponse.json({ ok: true });
 }

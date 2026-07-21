@@ -82,6 +82,8 @@ export class NeonContentStore implements ContentStore {
         created_at timestamptz not null default now()
       )`);
     await this.ddl(() => this.sql`create index if not exists environment_site_idx on environment (site_key)`);
+    await this.ddl(() => this.sql`alter table environment add column if not exists org_id text not null default ''`);
+    await this.ddl(() => this.sql`alter table environment alter column site_key set default ''`);
     await this.ddl(() => this.sql`
       create table if not exists experimentation_config (
         org_id text primary key,
@@ -415,27 +417,34 @@ export class NeonContentStore implements ContentStore {
     return rows.map((r) => r.org_id as string);
   }
 
+  private mapEnv = (r: Record<string, unknown>) => ({
+    id: r.id as string,
+    orgId: (r.org_id as string) || "",
+    siteKey: (r.site_key as string) || undefined,
+    label: r.label as string,
+    url: r.url as string,
+    kind: r.kind as EnvironmentKind,
+    createdAt: new Date(r.created_at as string).toISOString(),
+  });
+  async listEnvironmentsByOrg(orgId: string): Promise<Environment[]> {
+    const rows = await this.sql`select * from environment where org_id = ${orgId} order by created_at`;
+    return rows.map(this.mapEnv);
+  }
   async listEnvironments(siteKey: string): Promise<Environment[]> {
     const rows = await this.sql`select * from environment where site_key = ${siteKey} order by created_at`;
-    return rows.map((r) => ({
-      id: r.id as string,
-      siteKey: r.site_key as string,
-      label: r.label as string,
-      url: r.url as string,
-      kind: r.kind as EnvironmentKind,
-      createdAt: new Date(r.created_at as string).toISOString(),
-    }));
+    return rows.map(this.mapEnv);
   }
   async addEnvironment(env: Environment): Promise<void> {
     await this.sql`
-      insert into environment (id, site_key, label, url, kind, created_at)
-      values (${env.id}, ${env.siteKey}, ${env.label}, ${env.url}, ${env.kind}, ${env.createdAt})
+      insert into environment (id, org_id, site_key, label, url, kind, created_at)
+      values (${env.id}, ${env.orgId}, ${env.siteKey ?? ""}, ${env.label}, ${env.url}, ${env.kind}, ${env.createdAt})
       on conflict (id) do nothing`;
   }
   async updateEnvironment(id: string, patch: Partial<Environment>): Promise<void> {
     if (patch.label !== undefined) await this.sql`update environment set label = ${patch.label} where id = ${id}`;
     if (patch.url !== undefined) await this.sql`update environment set url = ${patch.url} where id = ${id}`;
     if (patch.kind !== undefined) await this.sql`update environment set kind = ${patch.kind} where id = ${id}`;
+    if (patch.orgId !== undefined) await this.sql`update environment set org_id = ${patch.orgId} where id = ${id}`;
   }
   async deleteEnvironment(id: string): Promise<void> {
     await this.sql`delete from environment where id = ${id}`;

@@ -102,6 +102,9 @@ export interface PrototypeRepoRef {
 
 export interface PrototypeRecord {
   key: string;
+  /** Owning customer. Legacy records may lack it — resolve via prototypes/org.ts. */
+  orgId?: string;
+  /** Legacy: pre-refactor site linkage (kept for old records + cascades). */
   siteKey: string;
   name: string;
   /** Code location (brand registry pick). Absent on legacy records → site-binding fallback. */

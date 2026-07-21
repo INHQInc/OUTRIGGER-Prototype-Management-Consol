@@ -1,50 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listEnvironments, addEnvironment, deleteEnvironment, type EnvironmentKind } from "@/lib/environments";
-import { getSite } from "@/lib/sites";
-import { canAccessOrg } from "@/lib/active-org";
+import { listOrgEnvironments, addOrgEnvironment, deleteOrgEnvironment, type EnvironmentKind } from "@/lib/environments";
+import { getActiveOrgId } from "@/lib/active-org";
+import { currentUser } from "@/lib/auth/current";
 
-/** Resolve + tenant-guard a site by key (from ?site= or a body field). */
-async function guardSite(siteKey: string | null): Promise<{ siteKey: string } | { error: string; status: 400 | 403 | 404 }> {
-  if (!siteKey) return { error: "site required", status: 400 };
-  const site = await getSite(siteKey);
-  if (!site) return { error: "Unknown site", status: 404 };
-  if (site.orgId && !(await canAccessOrg(site.orgId))) return { error: "Forbidden", status: 403 };
-  return { siteKey };
+async function guard() {
+  const [user, orgId] = await Promise.all([currentUser(), getActiveOrgId()]);
+  if (!user) return { error: "Unauthorized", status: 401 as const };
+  if (!orgId) return { error: "No active customer.", status: 400 as const };
+  return { orgId };
 }
 
-/** GET ?site=<key> → the site's environments (production seeded on first read). */
-export async function GET(req: NextRequest) {
-  const g = await guardSite(req.nextUrl.searchParams.get("site"));
+/** GET → the active customer's environments. */
+export async function GET() {
+  const g = await guard();
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
-  return NextResponse.json({ environments: await listEnvironments(g.siteKey) });
+  return NextResponse.json({ environments: await listOrgEnvironments(g.orgId) });
 }
 
-/** POST { siteKey, url, label?, kind } → add an environment. */
+/** POST { url, label?, kind } → add an environment. */
 export async function POST(req: NextRequest) {
-  let body: { siteKey?: string; label?: string; url?: string; kind?: EnvironmentKind };
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
-  const g = await guardSite(body.siteKey ?? null);
+  const g = await guard();
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
+  let body: { url?: string; label?: string; kind?: EnvironmentKind };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.url?.trim()) return NextResponse.json({ error: "A URL is required" }, { status: 400 });
-  const kind: EnvironmentKind = body.kind === "development" || body.kind === "staging" ? body.kind : "production";
+  const kind: EnvironmentKind = body.kind === "development" || body.kind === "production" ? body.kind : "staging";
   try {
-    const environment = await addEnvironment(g.siteKey, { label: body.label, url: body.url, kind });
+    const environment = await addOrgEnvironment(g.orgId, { label: body.label, url: body.url, kind });
     return NextResponse.json({ environment }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 }
 
-/** DELETE ?site=<key>&id=<envId> → remove an environment (a site keeps ≥1). */
+/** DELETE ?id=<envId> → remove an environment. */
 export async function DELETE(req: NextRequest) {
-  const g = await guardSite(req.nextUrl.searchParams.get("site"));
+  const g = await guard();
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  try {
-    await deleteEnvironment(g.siteKey, id);
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-  }
+  await deleteOrgEnvironment(g.orgId, id);
+  return NextResponse.json({ ok: true });
 }

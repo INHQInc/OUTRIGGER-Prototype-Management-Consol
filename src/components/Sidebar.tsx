@@ -68,7 +68,7 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
         {renderLink({ href: "/handoff", label: "Handoff", icon: ICON.handoff })}
 
         {sectionHeader("Configuration")}
-        {renderLink({ href: "/sites", label: "Sites", icon: ICON.pages })}
+        {renderLink({ href: "/environments", label: "Environments", icon: ICON.pages })}
 
         {sectionHeader("Settings")}
         {renderLink({ href: "/settings/experimentation", label: "Experimentation", icon: ICON.flask })}

@@ -7,7 +7,7 @@
 import { getContentStore } from "../content/store";
 import { resolveRepoSource } from "./source";
 import { audit } from "../audit";
-import { getSite } from "../sites";
+import { resolvePrototypeOrg } from "./org";
 import type { ArtifactVersion } from "./types";
 
 export async function listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
@@ -67,7 +67,8 @@ export async function cutArtifactVersionFromRepo(
     createdBy: opts.createdBy,
     variationJs: src.variationJs,
   });
-  const site = await getSite(siteKey);
-  await audit(site?.orgId ?? "", opts.createdBy ?? "system", "version.cut", `${prototypeKey} v${version.version}`, `${src.repo}@${src.branch} · ${src.headSha.slice(0, 7)}`);
+  const proto = await (await getContentStore()).getPrototype(prototypeKey);
+  const orgId = proto ? await resolvePrototypeOrg(proto) : "";
+  await audit(orgId, opts.createdBy ?? "system", "version.cut", `${prototypeKey} v${version.version}`, `${src.repo}@${src.branch} · ${src.headSha.slice(0, 7)}`);
   return version;
 }

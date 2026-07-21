@@ -9,45 +9,38 @@ const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text
 const lbl = "block text-[12px] font-medium text-muted mb-1.5";
 
 /**
- * Minimal prototype stub: Site + Name (+ optional target pages). Everything
- * else — repo (auto-attached from the brand default), brief, hypothesis,
- * metrics — is filled in the workspace as the work progresses.
+ * Minimal prototype stub: Name (+ optional target URLs, suggested from the
+ * customer's environments). Repo auto-attaches from the registry default;
+ * everything else is filled in the workspace.
  */
-export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "live" }: { siteKey?: string; sites?: { key: string; label: string }[]; defaultSite?: string; defaultSource?: "clone" | "live" }) {
+export function NewPrototype() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [siteSel, setSiteSel] = useState(siteKey ?? defaultSite ?? sites?.[0]?.key ?? "");
   const [name, setName] = useState("");
-  const [targets, setTargets] = useState<Target[]>([{ url: "", source: defaultSource }]);
-  const [sitePages, setSitePages] = useState<{ slug: string; url: string }[]>([]);
+  const [targets, setTargets] = useState<Target[]>([{ url: "", source: "live" }]);
+  const [envUrls, setEnvUrls] = useState<string[]>([]);
 
-  // Captured pages of the selected site, as target suggestions.
-  const activeSite = siteKey ?? siteSel;
   useEffect(() => {
-    if (!open || !activeSite) { setSitePages([]); return; }
+    if (!open) return;
     let live = true;
-    fetch(`/api/pages?site=${encodeURIComponent(activeSite)}`)
-      .then((r) => (r.ok ? r.json() : { pages: [] }))
-      .then((d) => { if (live) setSitePages(d.pages ?? []); })
-      .catch(() => { if (live) setSitePages([]); });
+    fetch("/api/environments")
+      .then((r) => (r.ok ? r.json() : { environments: [] }))
+      .then((d) => { if (live) setEnvUrls((d.environments ?? []).map((e: { url: string }) => e.url)); })
+      .catch(() => { if (live) setEnvUrls([]); });
     return () => { live = false; };
-  }, [open, activeSite]);
+  }, [open]);
 
   function setTarget(i: number, patch: Partial<Target>) {
     setTargets((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   }
-  function addTarget() { setTargets((ts) => [...ts, { url: "", source: defaultSource }]); }
-  function removeTarget(i: number) { setTargets((ts) => ts.filter((_, j) => j !== i)); }
 
-  function reset() { setName(""); setTargets([{ url: "", source: defaultSource }]); setError(null); setBusy(false); }
+  function reset() { setName(""); setTargets([{ url: "", source: "live" }]); setError(null); setBusy(false); }
   function close() { if (busy) return; reset(); setOpen(false); }
 
   async function create() {
-    const targetSite = siteKey ?? siteSel;
-    if (!targetSite) { setError("Choose a site for this prototype"); return; }
     if (!name.trim()) { setError("Give it a name"); return; }
     setBusy(true); setError(null);
     try {
@@ -55,7 +48,6 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          siteKey: targetSite,
           name,
           targets: targets.filter((t) => t.url.trim()).map((t) => ({ url: t.url.trim(), source: t.source })),
         }),
@@ -87,15 +79,6 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
         </div>
 
         <div className="p-6 space-y-4">
-          {!siteKey && sites && sites.length > 1 && (
-            <div>
-              <label className={lbl}>Site</label>
-              <select className={inp} value={siteSel} onChange={(e) => setSiteSel(e.target.value)}>
-                {sites.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </select>
-            </div>
-          )}
-
           <div>
             <label className={lbl}>Name</label>
             <input className={inp} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !busy && create()} autoFocus placeholder="e.g. Favorites bar on room cards" />
@@ -104,20 +87,20 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className={`${lbl} mb-0`}>Target page(s) <span className="text-muted-2">(optional)</span></label>
-              <button type="button" onClick={addTarget} className="text-[12px] text-accent hover:text-accent-hover font-medium">+ Add page</button>
+              <button type="button" onClick={() => setTargets((ts) => [...ts, { url: "", source: "live" }])} className="text-[12px] text-accent hover:text-accent-hover font-medium">+ Add page</button>
             </div>
             {targets.map((t, i) => (
               <div key={i} className="flex items-center gap-2">
                 <input
-                  list={`np-pages-${i}`}
+                  list={`np-envs-${i}`}
                   className={`${inp} font-mono`}
                   value={t.url}
                   onChange={(e) => setTarget(i, { url: e.target.value })}
                   placeholder="https://…/rooms  or  /rooms/*"
                   spellCheck={false}
                 />
-                <datalist id={`np-pages-${i}`}>
-                  {sitePages.map((p) => <option key={p.slug} value={p.url} />)}
+                <datalist id={`np-envs-${i}`}>
+                  {envUrls.map((u) => <option key={u} value={u} />)}
                 </datalist>
                 <button
                   type="button"
@@ -128,7 +111,7 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
                   {t.source}
                 </button>
                 {targets.length > 1 && (
-                  <button type="button" onClick={() => removeTarget(i)} title="Remove" className="text-[13px] text-danger hover:opacity-80 px-1">✕</button>
+                  <button type="button" onClick={() => setTargets((ts) => ts.filter((_, j) => j !== i))} title="Remove" className="text-[13px] text-danger hover:opacity-80 px-1">✕</button>
                 )}
               </div>
             ))}

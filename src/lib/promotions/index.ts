@@ -5,8 +5,8 @@
  * experiment using the brand's connection. See docs/LIFECYCLE-ARCHITECTURE.md.
  */
 import { getContentStore } from "../content/store";
-import { getSite } from "../sites";
-import { listEnvironments } from "../environments";
+import { listOrgEnvironments } from "../environments";
+import { resolvePrototypeOrg } from "../prototypes/org";
 import { normalizeStage } from "../prototypes/types";
 import { audit } from "../audit";
 import { defaultVehicle, type Promotion, type PromotionVehicle } from "./types";
@@ -40,10 +40,9 @@ export async function promote(input: {
   if (!proto) throw new Error("Unknown prototype");
   const version = (await store.listArtifactVersions(input.prototypeKey)).find((v) => v.id === input.versionId);
   if (!version) throw new Error("Unknown version");
-  const env = (await listEnvironments(proto.siteKey)).find((e) => e.id === input.environmentId);
+  const orgId = await resolvePrototypeOrg(proto);
+  const env = (await listOrgEnvironments(orgId)).find((e) => e.id === input.environmentId);
   if (!env) throw new Error("Unknown environment");
-  const site = await getSite(proto.siteKey);
-  const orgId = site?.orgId ?? "";
 
   const vehicle = input.vehicle ?? defaultVehicle(env.kind);
   const actor = input.actor ?? "system";

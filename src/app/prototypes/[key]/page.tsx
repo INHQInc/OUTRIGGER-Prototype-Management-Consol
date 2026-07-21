@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
-import { listEnvironments } from "@/lib/environments";
+import { listOrgEnvironments } from "@/lib/environments";
+import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { listPromotions } from "@/lib/promotions";
 import { ArtifactVersions } from "@/components/ArtifactVersions";
 import { SourcePanel } from "@/components/SourcePanel";
@@ -29,9 +30,10 @@ export default async function PrototypePipeline({ params }: { params: Promise<{ 
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p) notFound();
+  const orgId = await resolvePrototypeOrg(p);
   const [versions, environments, promotions] = await Promise.all([
     listArtifactVersions(key),
-    listEnvironments(p.siteKey),
+    listOrgEnvironments(orgId),
     listPromotions(key),
   ]);
 

@@ -8,7 +8,7 @@
 import { getContentStore } from "../content/store";
 import { prototypeBranch } from "../git/provider";
 import { getGitClientForOrg } from "../git/connection";
-import { getSite } from "../sites";
+import { resolvePrototypeOrg } from "./org";
 import { GitError } from "../git/github";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
@@ -33,8 +33,8 @@ export async function resolveRepoSource(prototypeKey: string): Promise<RepoSourc
   const store = await getContentStore();
   const proto = await store.getPrototype(prototypeKey);
   if (!proto) throw new Error("Unknown prototype");
-  const site = await getSite(proto.siteKey);
-  const client = await getGitClientForOrg(site?.orgId);
+  const orgId = await resolvePrototypeOrg(proto);
+  const client = await getGitClientForOrg(orgId);
   if (!client) throw new Error("GitHub isn't connected — connect it in Settings → Repositories.");
 
   // The prototype's own repo pick (brand registry) is the source of truth;

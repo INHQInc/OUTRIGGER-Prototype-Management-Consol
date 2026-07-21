@@ -108,6 +108,9 @@ export class FsContentStore implements ContentStore {
     return (await this.readJson<OrgMember[]>(this.membersFile(), [])).filter((m) => m.email === email).map((m) => m.orgId);
   }
 
+  async listEnvironmentsByOrg(orgId: string): Promise<Environment[]> {
+    return (await this.readJson<Environment[]>(this.envsFile(), [])).filter((e) => e.orgId === orgId);
+  }
   async listEnvironments(siteKey: string): Promise<Environment[]> {
     return (await this.readJson<Environment[]>(this.envsFile(), [])).filter((e) => e.siteKey === siteKey);
   }

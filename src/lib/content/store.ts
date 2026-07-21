@@ -56,7 +56,9 @@ export interface ContentStore {
   /** Cascade-delete a site: its record + all pages/versions/assets + prototypes + repo binding + environments. */
   deleteSite(siteKey: string): Promise<void>;
 
-  // --- Environments (per-site deploy targets: dev/staging/production) ---
+  // --- Environments (per-CUSTOMER deploy/review targets: dev/staging/production) ---
+  listEnvironmentsByOrg(orgId: string): Promise<Environment[]>;
+  /** Legacy read: environments still keyed to a pre-refactor site. */
   listEnvironments(siteKey: string): Promise<Environment[]>;
   /** Insert an environment; idempotent on id (on-conflict-do-nothing) so the production seed is race-safe. */
   addEnvironment(env: Environment): Promise<void>;

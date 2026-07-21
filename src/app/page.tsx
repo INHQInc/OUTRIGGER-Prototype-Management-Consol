@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getActiveOrgId } from "@/lib/active-org";
 import { getOrg } from "@/lib/orgs";
-import { getAllSites } from "@/lib/sites";
+import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
+import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { getContentStore } from "@/lib/content/store";
 import { listPromotions, currentByEnvironment } from "@/lib/promotions";
 import { getGitConnectionStatus } from "@/lib/git/connection";
@@ -34,40 +35,36 @@ export default async function Dashboard() {
   }
 
   const store = await getContentStore();
-  const [org, sitesMap, gitStatus, expCfg, orgRepos, events] = await Promise.all([
+  const [org, environments, gitStatus, expCfg, orgRepos, events] = await Promise.all([
     getOrg(orgId),
-    getAllSites(),
+    listOrgEnvironments(orgId),
     getGitConnectionStatus(orgId),
     getExperimentationConfig(orgId),
     listOrgRepos(orgId),
     listAuditEvents(orgId, 8),
   ]);
-  const sites = Object.values(sitesMap);
-  const siteKeys = new Set(Object.keys(sitesMap));
   const loaderMarked = Boolean(await store.getFlag(`setup:loader:${orgId}`));
   // Auto-verified the moment any of the customer's environments beacons in.
-  const loaderSeenAt = (await Promise.all(Object.keys(sitesMap).map((k) => store.getFlag(`loader:seen:${k}`))))
-    .filter(Boolean).sort().pop() ?? null;
-  const loaderDone = loaderMarked || Boolean(loaderSeenAt);
-  const protos = (await store.listPrototypes())
-    .filter((p) => siteKeys.has(p.siteKey))
-    .map((p) => ({ ...p, siteLabel: sitesMap[p.siteKey]?.label ?? p.siteKey }));
+  const loaderSeen = (await Promise.all(environments.map((e) => envLoaderSeenAt(e)))).some(Boolean);
+  const loaderDone = loaderMarked || loaderSeen;
+  const allProtos = await store.listPrototypes();
+  const protoOrgs = await Promise.all(allProtos.map((p) => resolvePrototypeOrg(p)));
+  const protos = allProtos.filter((_, i) => protoOrgs[i] === orgId);
   const promosByProto = await Promise.all(protos.map((p) => listPromotions(p.key)));
 
   // ── Setup checklist (sequenced; owns the top of the page until complete) ──
-  const firstSiteKey = Object.keys(sitesMap)[0];
   const steps: SetupStep[] = [
-    { label: "Add the customer's website", done: sites.length > 0, href: "/sites", action: "Add a site" },
+    { label: "Add the customer's environment(s)", done: environments.length > 0, href: "/environments", action: "Add environment" },
     { label: "Connect GitHub", done: Boolean(gitStatus.connected || gitStatus.envFallback), href: "/settings/repositories", action: "Connect" },
     { label: "Register the prototype repo", done: orgRepos.some((r) => r.roles.includes("prototypes")), href: "/settings/repositories", action: "Register" },
     { label: "Connect Optimizely & pick the default project", done: Boolean(expCfg?.optimizely?.apiToken && expCfg.optimizely.defaultProjectId), href: "/settings/experimentation", action: "Connect" },
     {
       label: "Install the loader tag on the environment",
       done: loaderDone,
-      href: firstSiteKey ? `/sites/${firstSiteKey}/settings` : "/sites",
+      href: "/environments",
       action: "Get the tag",
       manualKey: "loader",
-      disabled: sites.length === 0,
+      disabled: environments.length === 0,
       hint: "One script tag in the CMS — inert without a review token. It self-verifies: open the site once after installing and this checks itself.",
     },
   ];
@@ -106,7 +103,7 @@ export default async function Dashboard() {
       <PageHeader
         title="Dashboard"
         subtitle={org?.name ?? orgId}
-        actions={sites.length > 0 ? <NewPrototype sites={sites.map((s) => ({ key: s.siteKey, label: s.label }))} /> : undefined}
+        actions={<NewPrototype />}
       />
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
         {!setupComplete && <SetupChecklist steps={steps} />}
@@ -145,10 +142,10 @@ export default async function Dashboard() {
               <Link href="/prototypes" className="text-[12px] text-accent hover:text-accent-hover">View all →</Link>
             </div>
             {active.length === 0 ? (
-              <EmptyState title="Nothing in flight." hint={sites.length ? "Create a prototype to get started." : "Add a website first, then create a prototype."} />
+              <EmptyState title="Nothing in flight." hint="Create a prototype to get started." />
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {active.map((p) => <PrototypeCard key={p.key} p={p} siteLabel={sites.length > 1 ? p.siteLabel : undefined} />)}
+                {active.map((p) => <PrototypeCard key={p.key} p={p} />)}
               </div>
             )}
           </section>
