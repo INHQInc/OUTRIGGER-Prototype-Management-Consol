@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
@@ -27,10 +28,6 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
   const [busy, setBusy] = useState(false);
   const [cutErr, setCutErr] = useState<string | null>(null);
   const [cutMsg, setCutMsg] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [orgRepos, setOrgRepos] = useState<{ id: string; fullName: string; roles: string[]; defaultFor: string[] }[]>([]);
-  const [repoSel, setRepoSel] = useState("");
-  const [branchSel, setBranchSel] = useState("");
 
   const load = useCallback(async () => {
     setLoadErr(null);
@@ -46,38 +43,6 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    if (!editing) return;
-    fetch("/api/orgs/repos")
-      .then((r) => (r.ok ? r.json() : { repos: [] }))
-      .then((d) => setOrgRepos((d.repos ?? []).filter((x: { roles?: string[] }) => x.roles?.includes("prototypes"))))
-      .catch(() => setOrgRepos([]));
-  }, [editing]);
-
-  function startEdit() {
-    setRepoSel(status?.repo ?? "");
-    setBranchSel(status?.branch ?? "");
-    setEditing(true);
-  }
-
-  async function saveRepo() {
-    if (busy) return;
-    setBusy(true); setCutErr(null);
-    try {
-      const res = await fetch("/api/prototypes", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, repo: repoSel ? { fullName: repoSel, branch: branchSel.trim() || undefined } : null }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setCutErr(data.error ?? "Couldn't update the repo"); return; }
-      setEditing(false);
-      await load();
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function cutFromRepo() {
     if (busy) return;
@@ -116,33 +81,9 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
                 <span className="text-muted-2">Branch</span><span className="font-mono">{status.branch}</span>
                 <span className="text-muted-2">Artifact</span><span className="font-mono">{status.artifactPath}</span>
               </div>
-              <button onClick={() => (editing ? setEditing(false) : startEdit())} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">{editing ? "Cancel" : "Change"}</button>
+              <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
             </div>
 
-            {editing && (
-              <div className="rounded-lg border border-border bg-surface-2/30 p-3 space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] text-muted-2 mb-1">Repository</label>
-                    {orgRepos.length > 0 ? (
-                      <select value={repoSel} onChange={(e) => setRepoSel(e.target.value)} className="w-full rounded-lg bg-background border border-border px-2 py-2 text-[12px] font-mono focus:border-accent focus:outline-none">
-                        {!orgRepos.some((r) => r.fullName === repoSel) && repoSel && <option value={repoSel}>{repoSel}</option>}
-                        {orgRepos.map((r) => <option key={r.id} value={r.fullName}>{r.fullName}{r.defaultFor.includes("prototypes") ? " (default)" : ""}</option>)}
-                      </select>
-                    ) : (
-                      <input value={repoSel} onChange={(e) => setRepoSel(e.target.value)} spellCheck={false} placeholder="owner/repo" className="w-full rounded-lg bg-background border border-border px-2 py-2 text-[12px] font-mono focus:border-accent focus:outline-none" />
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-muted-2 mb-1">Branch</label>
-                    <input value={branchSel} onChange={(e) => setBranchSel(e.target.value)} spellCheck={false} placeholder={`prototype/${prototypeKey}`} className="w-full rounded-lg bg-background border border-border px-2 py-2 text-[12px] font-mono focus:border-accent focus:outline-none" />
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <button onClick={saveRepo} disabled={busy || !repoSel.trim()} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">Save</button>
-                </div>
-              </div>
-            )}
 
             {status.found ? (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2/30 px-3 py-2">
