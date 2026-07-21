@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionPayload } from "@/lib/auth/types";
-import { SiteSwitcher, type SiteNavNode } from "./SiteSwitcher";
+import { type SiteNavNode } from "./SiteSwitcher";
 import { OrgSwitcher, type OrgOption } from "./OrgSwitcher";
 
 interface NavItem { href: string; label: string; icon: string; exact?: boolean }
@@ -74,8 +74,6 @@ export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: S
       </div>
 
       <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
-
-      <SiteSwitcher sites={sites} currentSiteKey={currentSiteKey} />
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {sectionHeader("Prototype Management")}
