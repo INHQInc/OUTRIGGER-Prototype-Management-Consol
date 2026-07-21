@@ -1,6 +1,6 @@
 # Claude Context Guide — OUTRIGGER Prototype Management Console
 
-*Last updated: 2026-07-21*
+*Last updated: 2026-07-21 (post Sites-elimination)*
 
 > **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work, gotchas — authoritative for "where are we"**).
 
@@ -13,20 +13,28 @@ A **multi-tenant "build-and-ship layer"** for advanced web experiments — the p
 ## Domain model (current)
 
 ```
-Brand (Org = customer)   ← tenant; cookie opmc_org; per-customer CONNECTORS:
+THREE NOUNS ONLY — Customer (who) · Environment (where) · Prototype (what).
+There is NO Site entity anymore (eliminated 07-21; legacy data self-heals).
+
+Customer (Org)   ← tenant; cookie opmc_org; per-customer CONNECTORS:
  ├─ GitHub connection (env GITHUB_TOKEN = console-default fallback)
  ├─ Repo registry (roles prototypes|source; providers github/azure-devops/external; per-role defaults)
  ├─ Optimizely connection (token + default project; paused drafts only)
- ├─ Sites (web properties) ← config only: environments (origin seeds "production"), loader, optional Pages
- └─ Prototypes  ← THE primary object; belongs to ONE site, targets page URL(s)
-      ├─ minimal stub (Site+Name); details (hypothesis/metrics/brief) edited later; stage draft→review→live→shipped→archived
-      ├─ repo ref { fullName, branch, artifactPath } picked from the registry — CODE LIVES IN THE REPO
-      │    (self-contained dist/variation.js at branch HEAD; console PULLS it, never authors/pushes code)
+ ├─ Environments  ← WHERE: {orgId, url, kind dev|staging|production, label}; each carries its
+ │    own loader tag (/loader/<id>) + heartbeat verification (loader:seen:* flags)
+ └─ Prototypes  ← WHAT: {orgId, targets[url, live|clone], repo ref, stage draft→review→live→shipped→archived}
+      ├─ minimal stub = Name (+ optional target URLs; env URLs suggested); repo auto-attaches from registry default
+      ├─ CODE LIVES IN THE REPO: self-contained dist/variation.js at branch HEAD; console PULLS, never authors
       ├─ ArtifactVersions (immutable, SHA-pinned, carry the code snapshot)
       └─ Promotions (version → environment; append-only, governed, audited)
+
+Legacy (kept compiling, no UI, don't expand): lib/sites.ts + site store rows, Pages/capture
+(/pages, /snap*, /api/{pages,capture,discover}), /features + file-based features, repo_binding.
+Lazy migrations: env.orgId adopted from its old site's org on first listOrgEnvironments; prototype
+orgId back-filled via prototypes/org.ts resolver. Old loader tags (/loader/<siteKey>) keep working.
 ```
 
-- **IA:** Dashboard (`/`, default landing: needs-attention/pipeline/live-where/activity) · Prototypes board (`/prototypes`) · workspace `/prototypes/[key]` with tabs Pipeline/Details/Settings · Sites = config · Settings section (Experimentation/Repositories/Users/Activity). See HANDOFF for the full nav.
+- **IA:** Dashboard (`/`, default landing: setup checklist → needs-attention/pipeline/live-where/activity) · Prototypes board (`/prototypes`) · workspace `/prototypes/[key]` tabs Pipeline/Details/Settings · Configuration → **Environments** (`/environments`) · Settings section (Experimentation/Repositories/Users/Activity). See HANDOFF for full nav.
 - **Canvas: live-injection-first.** Review = the real lower env via the token-gated loader (`?opmc=<key>`) — VERIFIED WORKING on prep.outrigger.com (no CSP there). Clones/local = repo dev-harness concern or legacy Pages, never required.
 
 ## The four lifecycle principles (see LIFECYCLE-ARCHITECTURE.md)
@@ -76,7 +84,9 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 - ✅ **Environments** · **brand-level Optimizely** · **immutable ArtifactVersions** (git-auto-pin + code snapshot)
 - ✅ **Repo-sourced variations** (overlay editor removed) → loader (verified on prep) + Optimizely (production)
 - ✅ **Promotion** + governance + audit · per-customer **GitHub connector** + repo registry (roles/providers)
-- ✅ **Dashboard** · prototype-first IA · workspace tabs · minimal stub creation · full CRUD
+- ✅ **Dashboard** (setup checklist + get-started commands) · prototype-first IA · workspace tabs · minimal stub
+- ✅ **Sites ELIMINATED** — Customer→Environments→Prototypes; per-env loader tag + heartbeat self-verification
+- ✅ **Claude Code skill** (prototypes repo `starter` branch) + per-customer console API token (OPMC_URL/OPMC_API_TOKEN)
 - ⏳ Favorites E2E (see HANDOFF "IN FLIGHT") · starter repo scaffold · Ship step (PR/handoff via source-role repo)
 - ⏳ Source read-on-demand (Azure DevOps) · env editing · multi-URL Opti targeting · version-pinned loader
 

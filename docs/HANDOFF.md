@@ -1,6 +1,11 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-07-21 (post-walkthrough). Read AGENTS.md first (model + rules), then this (state + next moves).*
+*Updated: 2026-07-21 late (post Sites-elimination). Read AGENTS.md first (model + rules), then this (state + next moves).*
+
+## ⚠ UNPUSHED + UNVERIFIED (handle first)
+
+- Unpushed commits at handoff: `20a8543` (loader heartbeat self-verification), `e556c3a` (**Sites elimination** — the big refactor), + docs. **User runs `git push`.**
+- A 4-lens adversarial verification workflow over `9e45c4e..HEAD` was IN FLIGHT at handoff (migration/dead-refs/authz/flows). If its confirmed findings were never triaged: re-review that range (or push, then watch Vercel runtime errors and click-test: Dashboard checklist → /environments → stub → workspace → promote). Known prod data that must survive: env `prep-outrigger-production` (site_key=prep-outrigger, empty org_id → lazily adopted), prototype `room-overlays` (no orgId → lazily back-filled), heartbeat flag `loader:seen:prep-outrigger` (matched via env.siteKey).
 
 ## What the product is now
 
@@ -14,11 +19,15 @@ Multi-tenant **build-and-ship layer for web experiments**: author advanced proto
 - Optimizely brand connection works (9 projects listed; default = Outrigger Prep `24138040550`).
 - Git deploys to `INHQInc/outrigger-prototypes` work (Git Data API, one commit per bundle).
 
+## SITES ARE GONE (e556c3a)
+
+Customer → Environments → Prototypes. /environments (Configuration) = env CRUD + per-env loader tag + heartbeat status. Prototype stub = Name (+ optional targets, env URLs suggested). All guards/promotions/git-client resolution run on prototype.orgId (lazy back-fill). Deleted: /sites tree, /api/sites, AddSite*/SiteActions/SiteTabs/DeleteSite/EnvironmentsManager/LoaderSnippet/PagesTable/PageRowActions/AddPages. Pages/capture UI cut (data + /pages,/snap*,/features legacy routes remain). Environment "kind" editing still queued (prep env is kind=production from the old origin-seed; label/kind edit UI not built).
+
 ## WALKTHROUGH STATE (user live-tested the flow 07-21)
 
 - User's pushback shaped the flow, now built: **capture is free, execution is guided, nothing discovered by error.** Dashboard leads with a sequenced **Customer setup checklist** (Add site → Connect GitHub → Register prototype repo → Connect Optimizely+project → Install loader tag — SELF-VERIFYING: the loader beacons /api/loader/heartbeat once per browser session (sendBeacon, public route, flag `loader:seen:<siteKey>`); checklist auto-completes on first beacon (manual "Mark installed" remains as fallback); site settings shows "Loader verified · last seen Xm ago"). Hides at 5/5. Needs-attention = operational alerts only.
 - Source panel: branch-missing state = **"Get started" copy-paste block** (clone → `git checkout -b prototype/<key> origin/starter` → push → `claude`); no-repo error links to the prototype's Settings tab. ALL branch/repo fields everywhere are GitHub-fed dropdowns (registry Base-branch included) — no typed git fields remain.
-- Current live state: GitHub **Connected · INHQInc**; API-access tile live (env exports = OPMC_URL + OPMC_API_TOKEN); **registry still EMPTY** (user was mid-registration of `INHQInc/outrigger-prototypes`); prototype stub **"Room Overlays"** (key `room-overlays`) exists with NO repo attached (stubbed pre-registration — attach via its Settings tab after registering; new stubs auto-attach the default). Loader installed on prep → user should "Mark installed" on the checklist.
+- Current live state: GitHub **Connected · INHQInc**; API-access tile live; **registry still EMPTY** (register `INHQInc/outrigger-prototypes` — checklist step 3); prototype **"Room Overlays"** (`room-overlays`) has NO repo attached (attach via its Settings tab post-registration). Loader installed on prep → heartbeat will auto-verify checklist step 5 on first page view after deploy.
 - Rejected by user (do not rebuild): hard-gating stub creation on setup; console writing READMEs/commands into the repo; skill prompting for a local folder.
 
 ## IN FLIGHT: Favorites — first real end-to-end prototype
