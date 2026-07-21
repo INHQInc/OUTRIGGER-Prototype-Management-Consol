@@ -5,6 +5,7 @@ import { getSite } from "@/lib/sites";
 import { canAccessOrg } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
+import { defaultOrgRepo } from "@/lib/git/org-repos";
 
 function slug(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "prototype";
@@ -26,10 +27,6 @@ export async function POST(req: NextRequest) {
 
   if (!b.siteKey) return NextResponse.json({ error: "siteKey required" }, { status: 400 });
   if (!b.name?.trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
-  if (!b.hypothesis?.change?.trim() || !b.hypothesis?.outcome?.trim()) {
-    return NextResponse.json({ error: "Hypothesis needs at least a change and an expected outcome" }, { status: 400 });
-  }
-  if (!b.metrics?.primary?.trim()) return NextResponse.json({ error: "A primary metric is required" }, { status: 400 });
 
   const store = await getContentStore();
   const now = new Date().toISOString();
@@ -62,14 +59,14 @@ export async function POST(req: NextRequest) {
       doneLooksLike: b.brief?.doneLooksLike?.trim() ?? "",
     },
     hypothesis: {
-      change: b.hypothesis.change.trim(),
-      audience: b.hypothesis.audience?.trim() ?? "",
-      outcome: b.hypothesis.outcome.trim(),
-      rationale: b.hypothesis.rationale?.trim() ?? "",
+      change: b.hypothesis?.change?.trim() ?? "",
+      audience: b.hypothesis?.audience?.trim() ?? "",
+      outcome: b.hypothesis?.outcome?.trim() ?? "",
+      rationale: b.hypothesis?.rationale?.trim() ?? "",
     },
     metrics: {
-      primary: b.metrics.primary.trim(),
-      guardrails: (b.metrics.guardrails ?? []).map((g) => g.trim()).filter(Boolean),
+      primary: b.metrics?.primary?.trim() ?? "",
+      guardrails: (b.metrics?.guardrails ?? []).map((g) => g.trim()).filter(Boolean),
     },
     owner: b.owner?.trim() || undefined,
     ticketUrl: b.ticketUrl?.trim() || undefined,
@@ -78,13 +75,23 @@ export async function POST(req: NextRequest) {
     updatedAt: now,
   };
 
+  // Stub-friendly: no repo given → attach the brand's default prototypes repo
+  // with the conventional branch. Changeable later in the workspace Source panel.
+  if (!record.repo) {
+    const site = await getSite(record.siteKey);
+    if (site?.orgId) {
+      const def = await defaultOrgRepo(site.orgId, "prototypes");
+      if (def) record.repo = { fullName: def.fullName, branch: `prototype/${key}`, artifactPath: def.artifactPath };
+    }
+  }
+
   await store.putPrototype(record);
   return NextResponse.json({ prototype: record }, { status: 201 });
 }
 
 /** PATCH { key, status } → advance/set a prototype's lifecycle stage (skippable). */
 export async function PATCH(req: NextRequest) {
-  let body: { key?: string; status?: string; repo?: { fullName?: string; branch?: string; artifactPath?: string } };
+  let body: Partial<PrototypeRecord> & { key?: string; status?: string; repo?: { fullName?: string; branch?: string; artifactPath?: string } | null };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.key) return NextResponse.json({ error: "key required" }, { status: 400 });
   const store = await getContentStore();
@@ -101,6 +108,25 @@ export async function PATCH(req: NextRequest) {
       : undefined;
     changes.push(updated.repo ? `repo ${updated.repo.fullName}@${updated.repo.branch}` : "repo cleared");
   }
+  if (body.name !== undefined && body.name.trim()) { updated.name = body.name.trim(); changes.push("name"); }
+  if (body.targets !== undefined) {
+    updated.targets = (body.targets ?? []).filter((t) => t.url?.trim()).map((t) => ({ url: t.url.trim(), source: t.source === "live" ? "live" : "clone" }));
+    changes.push("targets");
+  }
+  if (body.brief !== undefined) {
+    updated.brief = { problem: body.brief?.problem?.trim() ?? "", change: body.brief?.change?.trim() ?? "", doneLooksLike: body.brief?.doneLooksLike?.trim() ?? "" };
+    changes.push("brief");
+  }
+  if (body.hypothesis !== undefined) {
+    updated.hypothesis = { change: body.hypothesis?.change?.trim() ?? "", audience: body.hypothesis?.audience?.trim() ?? "", outcome: body.hypothesis?.outcome?.trim() ?? "", rationale: body.hypothesis?.rationale?.trim() ?? "" };
+    changes.push("hypothesis");
+  }
+  if (body.metrics !== undefined) {
+    updated.metrics = { primary: body.metrics?.primary?.trim() ?? "", guardrails: (body.metrics?.guardrails ?? []).map((g) => g.trim()).filter(Boolean) };
+    changes.push("metrics");
+  }
+  if (body.owner !== undefined) { updated.owner = body.owner?.trim() || undefined; changes.push("owner"); }
+  if (body.ticketUrl !== undefined) { updated.ticketUrl = body.ticketUrl?.trim() || undefined; changes.push("ticket"); }
   await store.putPrototype(updated);
   const user = await currentUser();
   await audit(site?.orgId ?? "", user?.name ?? user?.sub ?? "system", "prototype.update", proto.name, changes.join(" · "));

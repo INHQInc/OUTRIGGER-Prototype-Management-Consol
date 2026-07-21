@@ -13,18 +13,10 @@ import { PreviewPanel } from "@/components/PreviewPanel";
 import { PromotePanel } from "@/components/PromotePanel";
 import { PipelineHeader } from "@/components/PipelineHeader";
 import { DeletePrototype } from "@/components/DeletePrototype";
+import { DetailsEditor } from "@/components/DetailsEditor";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="px-4 py-3 border-b border-border last:border-0">
-      <div className="text-[11px] text-muted-2 mb-1">{label}</div>
-      <div className="text-[13px] leading-relaxed">{children || <span className="text-muted-2">—</span>}</div>
-    </div>
-  );
-}
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-2 px-1 pt-1">{children}</div>;
@@ -53,7 +45,6 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
     listPromotions(key),
   ]);
   const stage = normalizeStage(p.status);
-  const h = p.hypothesis;
   const previewPath = toPath(p.targets[0]?.url);
 
   return (
@@ -98,39 +89,7 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
 
           <section className="space-y-2.5">
             <SectionLabel>Details</SectionLabel>
-            <div className="rounded-xl border border-border bg-surface overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-border text-[12px] font-semibold">Target pages</div>
-              <Field label={p.targets.length > 1 ? `${p.targets.length} pages` : "Page"}>
-                {p.targets.length ? (
-                  <div className="space-y-1">
-                    {p.targets.map((t, i) => (
-                      <div key={i} className="font-mono">{t.url} <span className="text-muted-2">· {t.source}</span></div>
-                    ))}
-                  </div>
-                ) : "not set"}
-              </Field>
-            </div>
-
-            <div className="rounded-xl border border-border bg-surface overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-border text-[12px] font-semibold">Hypothesis</div>
-              <div className="px-4 py-3 text-[13px] leading-relaxed">
-                We believe <span className="text-foreground font-medium">{h.change || "[change]"}</span> for{" "}
-                <span className="text-foreground font-medium">{h.audience || "[audience]"}</span> will cause{" "}
-                <span className="text-foreground font-medium">{h.outcome || "[outcome]"}</span>
-                {h.rationale ? <> because <span className="text-foreground font-medium">{h.rationale}</span></> : ""}.
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-surface overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-border text-[12px] font-semibold">Brief & measurement</div>
-              <Field label="Problem / opportunity">{p.brief.problem}</Field>
-              <Field label="What it changes">{p.brief.change}</Field>
-              <Field label="Done looks like">{p.brief.doneLooksLike}</Field>
-              <Field label="Primary metric">{p.metrics.primary}</Field>
-              <Field label="Guardrail metrics">{p.metrics.guardrails.join(", ")}</Field>
-              <Field label="Owner">{p.owner}</Field>
-              <Field label="Ticket">{p.ticketUrl ? <a href={p.ticketUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover font-mono break-all">{p.ticketUrl}</a> : ""}</Field>
-            </div>
+            <DetailsEditor p={p} />
           </section>
 
           <DeletePrototype prototypeKey={key} name={p.name} />
