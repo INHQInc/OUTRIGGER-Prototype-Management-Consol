@@ -31,8 +31,12 @@ export type SourceMode = "same" | "repo" | "external";
 
 /** Per-site binding: where prototypes deploy from, and where winners integrate. */
 export interface SiteRepoBinding {
-  /** Where prototypes live as branches and deploy from (→ Vercel preview per branch). */
-  feature: RepoConfig & { branchPrefix: string };
+  /**
+   * Where prototypes live as branches. Each prototype branch builds a
+   * self-contained variation at `artifactPath` (default dist/variation.js) that
+   * the console pulls as the version's injectable code.
+   */
+  feature: RepoConfig & { branchPrefix: string; artifactPath?: string };
   sourceMode: SourceMode;
   /** Present only when sourceMode === "repo". */
   source?: RepoConfig;

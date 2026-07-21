@@ -2,12 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
-import { getPrototypeOverlay, buildOverlayVariation } from "@/lib/prototypes/overlay";
 import { listEnvironments } from "@/lib/environments";
 import { listPromotions } from "@/lib/promotions";
 import { Badge } from "@/components/ui";
 import { ArtifactVersions } from "@/components/ArtifactVersions";
-import { OverlayEditor } from "@/components/OverlayEditor";
+import { SourcePanel } from "@/components/SourcePanel";
 import { PromotePanel } from "@/components/PromotePanel";
 import { DeletePrototype } from "@/components/DeletePrototype";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
@@ -28,13 +27,11 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p || p.siteKey !== siteKey) notFound();
-  const [versions, environments, promotions, overlay] = await Promise.all([
+  const [versions, environments, promotions] = await Promise.all([
     listArtifactVersions(key),
     listEnvironments(siteKey),
     listPromotions(key),
-    getPrototypeOverlay(key),
   ]);
-  const overlayLint = buildOverlayVariation(key, overlay).lint;
 
   const h = p.hypothesis;
 
@@ -86,9 +83,9 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
         <Field label="Ticket">{p.ticketUrl ? <a href={p.ticketUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover font-mono break-all">{p.ticketUrl}</a> : ""}</Field>
       </div>
 
-      <OverlayEditor prototypeKey={key} initialOverlay={overlay} initialLint={overlayLint} />
+      <SourcePanel prototypeKey={key} />
 
-      <ArtifactVersions prototypeKey={key} initialVersions={versions} />
+      <ArtifactVersions versions={versions} />
 
       <PromotePanel
         prototypeKey={key}

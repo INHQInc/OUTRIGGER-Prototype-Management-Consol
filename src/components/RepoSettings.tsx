@@ -14,6 +14,7 @@ export function RepoSettings({ siteKey }: { siteKey: string }) {
   const [featureRepo, setFeatureRepo] = useState("");
   const [featureBase, setFeatureBase] = useState("main");
   const [branchPrefix, setBranchPrefix] = useState("prototype/");
+  const [artifactPath, setArtifactPath] = useState("dist/variation.js");
   const [sourceMode, setSourceMode] = useState<SourceMode>("same");
   const [sourceRepo, setSourceRepo] = useState("");
   const [sourceBase, setSourceBase] = useState("main");
@@ -31,6 +32,7 @@ export function RepoSettings({ siteKey }: { siteKey: string }) {
           setFeatureRepo(`${bnd.feature.owner}/${bnd.feature.repo}`);
           setFeatureBase(bnd.feature.baseBranch);
           setBranchPrefix(bnd.feature.branchPrefix);
+          if (bnd.feature.artifactPath) setArtifactPath(bnd.feature.artifactPath);
           setSourceMode(bnd.sourceMode);
           if (bnd.source) { setSourceRepo(`${bnd.source.owner}/${bnd.source.repo}`); setSourceBase(bnd.source.baseBranch); }
         }
@@ -46,7 +48,7 @@ export function RepoSettings({ siteKey }: { siteKey: string }) {
       const res = await fetch("/api/git/repo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ siteKey, featureRepo, featureBase, branchPrefix, sourceMode, sourceRepo, sourceBase }),
+        body: JSON.stringify({ siteKey, featureRepo, featureBase, branchPrefix, artifactPath, sourceMode, sourceRepo, sourceBase }),
       });
       const data = await res.json();
       if (!res.ok) setResult({ ok: false, message: data.error ?? "Save failed" });
@@ -81,6 +83,10 @@ export function RepoSettings({ siteKey }: { siteKey: string }) {
               <label className="block text-[11px] text-muted-2 mb-1">Branch prefix</label>
               <input className={input} value={branchPrefix} onChange={(e) => setBranchPrefix(e.target.value)} placeholder="prototype/" spellCheck={false} />
             </div>
+          </div>
+          <div className="mt-2">
+            <label className="block text-[11px] text-muted-2 mb-1">Built variation path <span className="text-muted-2">— the console pulls this from each prototype branch</span></label>
+            <input className={input} value={artifactPath} onChange={(e) => setArtifactPath(e.target.value)} placeholder="dist/variation.js" spellCheck={false} />
           </div>
         </div>
 

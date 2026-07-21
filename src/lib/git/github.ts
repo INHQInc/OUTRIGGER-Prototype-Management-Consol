@@ -84,6 +84,19 @@ export class GitHubClient {
     }
   }
 
+  /** Read a file's decoded text content at a ref (branch/sha). null if absent. */
+  async readFileAtRef(owner: string, repo: string, path: string, ref: string): Promise<string | null> {
+    const encPath = path.split("/").map(encodeURIComponent).join("/");
+    try {
+      const r = await this.gh<{ content?: string; encoding?: string }>(`/repos/${owner}/${repo}/contents/${encPath}?ref=${encodeURIComponent(ref)}`);
+      if (!r.content) return null;
+      return Buffer.from(r.content, "base64").toString("utf8");
+    } catch (e) {
+      if (e instanceof GitError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
   /** Create or update a file on `branch`. Never touches the base branch. */
   async putFile(owner: string, repo: string, opts: { path: string; content: string; message: string; branch: string }): Promise<void> {
     const sha = await this.getFileSha(owner, repo, opts.path, opts.branch);

@@ -16,6 +16,7 @@ interface Body {
   featureRepo?: string;
   featureBase?: string;
   branchPrefix?: string;
+  artifactPath?: string;
   sourceMode?: SourceMode;
   sourceRepo?: string;
   sourceBase?: string;
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
       repo: fref.repo,
       baseBranch: b.featureBase?.trim() || "main",
       branchPrefix: b.branchPrefix?.trim() || "prototype/",
+      artifactPath: b.artifactPath?.trim() || "dist/variation.js",
     },
     sourceMode,
     ...(source ? { source } : {}),

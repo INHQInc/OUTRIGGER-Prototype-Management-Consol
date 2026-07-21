@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
-import { listArtifactVersions, cutArtifactVersion } from "@/lib/prototypes/versions";
+import { listArtifactVersions, cutArtifactVersion, cutArtifactVersionFromRepo } from "@/lib/prototypes/versions";
 import { getSite } from "@/lib/sites";
 import { canAccessOrg } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
@@ -22,20 +22,29 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ versions: await listArtifactVersions(g.prototypeKey) });
 }
 
-/** POST { prototypeKey, gitSha, gitRef?, notes? } → cut an immutable version. */
+/**
+ * POST → cut an immutable version.
+ *   { prototypeKey, fromRepo: true, notes? }        → pull the built variation from the branch (primary)
+ *   { prototypeKey, gitSha, gitRef?, notes? }        → pin a SHA manually (fallback, no code pulled)
+ */
 export async function POST(req: NextRequest) {
-  let body: { prototypeKey?: string; gitSha?: string; gitRef?: string; notes?: string };
+  let body: { prototypeKey?: string; fromRepo?: boolean; gitSha?: string; gitRef?: string; notes?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const g = await guardPrototype(body.prototypeKey ?? null);
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
-  if (!body.gitSha?.trim()) return NextResponse.json({ error: "A git commit SHA is required" }, { status: 400 });
   const user = await currentUser();
+  const createdBy = user?.name ?? user?.sub;
   try {
+    if (body.fromRepo) {
+      const version = await cutArtifactVersionFromRepo(g.prototypeKey, g.siteKey, { notes: body.notes, createdBy });
+      return NextResponse.json({ version }, { status: 201 });
+    }
+    if (!body.gitSha?.trim()) return NextResponse.json({ error: "A git commit SHA is required" }, { status: 400 });
     const version = await cutArtifactVersion(g.prototypeKey, g.siteKey, {
       gitSha: body.gitSha,
       gitRef: body.gitRef,
       notes: body.notes,
-      createdBy: user?.name ?? user?.sub,
+      createdBy,
     });
     return NextResponse.json({ version }, { status: 201 });
   } catch (e) {
