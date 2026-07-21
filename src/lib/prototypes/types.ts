@@ -93,10 +93,19 @@ export interface ArtifactVersion {
   createdBy?: string;
 }
 
+/** Where this prototype's code lives — picked from the brand's repo registry. */
+export interface PrototypeRepoRef {
+  fullName: string;      // owner/repo
+  branch: string;        // defaults to prototype/<key>
+  artifactPath?: string; // defaults to the registry entry's artifactPath
+}
+
 export interface PrototypeRecord {
   key: string;
   siteKey: string;
   name: string;
+  /** Code location (brand registry pick). Absent on legacy records → site-binding fallback. */
+  repo?: PrototypeRepoRef;
   /** Lifecycle stage (see PrototypeStage). Normalize on read with normalizeStage(). */
   status: PrototypeStage;
   targets: PrototypeTarget[];

@@ -5,6 +5,8 @@ import { getExperimentationStatus } from "@/lib/experimentation";
 import { listAuditEvents } from "@/lib/audit";
 import { PageHeader, EmptyState, TimeAgo } from "@/components/ui";
 import { ExperimentationSettings } from "@/components/ExperimentationSettings";
+import { RepoRegistry } from "@/components/RepoRegistry";
+import { listOrgRepos } from "@/lib/git/org-repos";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +22,11 @@ export default async function BrandSettingsPage() {
       </>
     );
   }
-  const [org, status, events] = await Promise.all([
+  const [org, status, events, orgRepos] = await Promise.all([
     getOrg(orgId),
     getExperimentationStatus(orgId),
     listAuditEvents(orgId, 30),
+    listOrgRepos(orgId),
   ]);
   return (
     <>
@@ -31,6 +34,8 @@ export default async function BrandSettingsPage() {
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="max-w-2xl space-y-5">
           <ExperimentationSettings initialStatus={status} canManage={user?.role === "admin"} />
+
+          <RepoRegistry initialRepos={orgRepos} canManage={user?.role === "admin"} />
 
           <div className="rounded-xl border border-border bg-surface overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border">

@@ -25,6 +25,9 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
   const [name, setName] = useState("");
   const [targets, setTargets] = useState<Target[]>([{ url: "", source: defaultSource }]);
   const [sitePages, setSitePages] = useState<{ slug: string; url: string }[]>([]);
+  const [orgRepos, setOrgRepos] = useState<{ id: string; fullName: string; isDefault: boolean }[]>([]);
+  const [repoSel, setRepoSel] = useState("");
+  const [branch, setBranch] = useState("");
   // brief
   const [problem, setProblem] = useState("");
   const [change, setChange] = useState("");
@@ -39,6 +42,22 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
   const [guardrails, setGuardrails] = useState("");
   const [owner, setOwner] = useState("");
   const [ticketUrl, setTicketUrl] = useState("");
+
+  // Load the brand's repo registry (default pre-selected).
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    fetch("/api/orgs/repos")
+      .then((r) => (r.ok ? r.json() : { repos: [] }))
+      .then((d) => {
+        if (!live) return;
+        const repos = d.repos ?? [];
+        setOrgRepos(repos);
+        setRepoSel((cur) => cur || (repos.find((x: { isDefault: boolean }) => x.isDefault) ?? repos[0])?.fullName || "");
+      })
+      .catch(() => { if (live) setOrgRepos([]); });
+    return () => { live = false; };
+  }, [open]);
 
   // Load the selected site's captured pages as target suggestions.
   const activeSite = siteKey ?? siteSel;
@@ -77,6 +96,7 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
           siteKey: targetSite,
           name,
           targets: targets.filter((t) => t.url.trim()).map((t) => ({ url: t.url.trim(), source: t.source })),
+          repo: repoSel ? { fullName: repoSel, branch: branch.trim() || undefined } : undefined,
           brief: { problem, change, doneLooksLike },
           hypothesis: { change: hChange, audience: hAudience, outcome: hOutcome, rationale: hRationale },
           metrics: { primary, guardrails: guardrails.split(",").map((s) => s.trim()).filter(Boolean) },
@@ -124,6 +144,24 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
             <label className={lbl}>Name</label>
             <input className={inp} value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. Favorites bar on room cards" />
           </div>
+
+          {/* Code location (brand repo registry) */}
+          {orgRepos.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={lbl}>Repository</label>
+                <select className={inp} value={repoSel} onChange={(e) => setRepoSel(e.target.value)}>
+                  {orgRepos.map((r) => <option key={r.id} value={r.fullName}>{r.fullName}{r.isDefault ? " (default)" : ""}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Branch <span className="text-muted-2">(optional)</span></label>
+                <input className={`${inp} font-mono`} value={branch} onChange={(e) => setBranch(e.target.value)} spellCheck={false} placeholder="prototype/<key>" />
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-2">No repos registered for this brand yet — add them in Brand settings → Repositories. You can attach one to the prototype later.</p>
+          )}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className={`${lbl} mb-0`}>Target pages</label>

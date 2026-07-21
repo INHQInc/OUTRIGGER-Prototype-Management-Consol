@@ -52,6 +52,9 @@ export async function POST(req: NextRequest) {
     siteKey: b.siteKey,
     name: b.name.trim(),
     status: normalizeStage(b.status),
+    repo: b.repo?.fullName?.trim()
+      ? { fullName: b.repo.fullName.trim(), branch: b.repo.branch?.trim() || `prototype/${key}`, ...(b.repo.artifactPath?.trim() ? { artifactPath: b.repo.artifactPath.trim() } : {}) }
+      : undefined,
     targets: (b.targets ?? []).filter((t) => t.url?.trim()).map((t) => ({ url: t.url.trim(), source: t.source === "live" ? "live" : "clone" })),
     brief: {
       problem: b.brief?.problem?.trim() ?? "",
@@ -81,7 +84,7 @@ export async function POST(req: NextRequest) {
 
 /** PATCH { key, status } → advance/set a prototype's lifecycle stage (skippable). */
 export async function PATCH(req: NextRequest) {
-  let body: { key?: string; status?: string };
+  let body: { key?: string; status?: string; repo?: { fullName?: string; branch?: string; artifactPath?: string } };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.key) return NextResponse.json({ error: "key required" }, { status: 400 });
   const store = await getContentStore();
@@ -89,11 +92,18 @@ export async function PATCH(req: NextRequest) {
   if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
   const site = await getSite(proto.siteKey);
   if (site?.orgId && !(await canAccessOrg(site.orgId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const status = normalizeStage(body.status);
-  const updated = { ...proto, status, updatedAt: new Date().toISOString() };
+  const updated = { ...proto, updatedAt: new Date().toISOString() };
+  const changes: string[] = [];
+  if (body.status !== undefined) { updated.status = normalizeStage(body.status); changes.push(updated.status); }
+  if (body.repo !== undefined) {
+    updated.repo = body.repo?.fullName?.trim()
+      ? { fullName: body.repo.fullName.trim(), branch: body.repo.branch?.trim() || `prototype/${proto.key}`, ...(body.repo.artifactPath?.trim() ? { artifactPath: body.repo.artifactPath.trim() } : {}) }
+      : undefined;
+    changes.push(updated.repo ? `repo ${updated.repo.fullName}@${updated.repo.branch}` : "repo cleared");
+  }
   await store.putPrototype(updated);
   const user = await currentUser();
-  await audit(site?.orgId ?? "", user?.name ?? user?.sub ?? "system", "prototype.stage", proto.name, status);
+  await audit(site?.orgId ?? "", user?.name ?? user?.sub ?? "system", "prototype.update", proto.name, changes.join(" · "));
   return NextResponse.json({ prototype: updated });
 }
 

@@ -2,7 +2,7 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
-import type { SiteRepoBinding } from "../git/types";
+import type { SiteRepoBinding, OrgRepo } from "../git/types";
 import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment, EnvironmentKind } from "../environments";
@@ -108,6 +108,17 @@ export class NeonContentStore implements ContentStore {
         bytes_b64 text not null,
         primary key (site_key, name)
       )`);
+    await this.ddl(() => this.sql`
+      create table if not exists org_repo (
+        id text primary key,
+        org_id text not null,
+        full_name text not null,
+        base_branch text not null default 'main',
+        artifact_path text not null default 'dist/variation.js',
+        is_default boolean not null default false,
+        created_at timestamptz not null default now()
+      )`);
+    await this.ddl(() => this.sql`create index if not exists org_repo_org_idx on org_repo (org_id)`);
     await this.ddl(() => this.sql`
       create table if not exists repo_binding (
         site_key text primary key,
@@ -281,6 +292,27 @@ export class NeonContentStore implements ContentStore {
       on conflict (id) do nothing`;
   }
 
+  async listOrgRepos(orgId: string): Promise<OrgRepo[]> {
+    const rows = await this.sql`select * from org_repo where org_id = ${orgId} order by created_at`;
+    return rows.map((r) => ({
+      id: r.id as string,
+      orgId: r.org_id as string,
+      fullName: r.full_name as string,
+      baseBranch: r.base_branch as string,
+      artifactPath: r.artifact_path as string,
+      isDefault: Boolean(r.is_default),
+    }));
+  }
+  async putOrgRepo(repo: OrgRepo): Promise<void> {
+    await this.sql`
+      insert into org_repo (id, org_id, full_name, base_branch, artifact_path, is_default)
+      values (${repo.id}, ${repo.orgId}, ${repo.fullName}, ${repo.baseBranch}, ${repo.artifactPath}, ${repo.isDefault})
+      on conflict (id) do update set base_branch = excluded.base_branch, artifact_path = excluded.artifact_path, is_default = excluded.is_default`;
+  }
+  async deleteOrgRepo(id: string): Promise<void> {
+    await this.sql`delete from org_repo where id = ${id}`;
+  }
+
   async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {
     const rows = await this.sql`select config from repo_binding where site_key = ${siteKey}`;
     if (!rows[0]) return null;
@@ -333,6 +365,7 @@ export class NeonContentStore implements ContentStore {
   }
   async deleteOrg(id: string): Promise<void> {
     await this.sql`delete from org_member where org_id = ${id}`;
+    await this.sql`delete from org_repo where org_id = ${id}`;
     await this.sql`delete from experimentation_config where org_id = ${id}`;
     await this.sql`delete from audit_event where org_id = ${id}`;
     await this.sql`delete from org where id = ${id}`;

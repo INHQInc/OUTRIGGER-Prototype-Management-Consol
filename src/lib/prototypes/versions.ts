@@ -5,48 +5,10 @@
  * docs/LIFECYCLE-ARCHITECTURE.md).
  */
 import { getContentStore } from "../content/store";
-import { getGitClient, prototypeBranch } from "../git/provider";
-import { GitError } from "../git/github";
 import { resolveRepoSource } from "./source";
 import { audit } from "../audit";
 import { getSite } from "../sites";
 import type { ArtifactVersion } from "./types";
-
-export interface ResolvedHead {
-  gitSha: string;
-  gitRef: string;   // the branch the SHA came from
-  repo: string;     // owner/repo
-  usedBase: boolean; // true if the prototype branch didn't exist and base was used
-}
-
-/**
- * Resolve the current HEAD commit of a prototype's feature branch (or the base
- * branch if that branch doesn't exist yet), so a version can be pinned without
- * pasting a SHA. Needs the site's feature-repo binding + GITHUB_TOKEN.
- */
-export async function resolvePrototypeHead(prototypeKey: string): Promise<ResolvedHead> {
-  const store = await getContentStore();
-  const proto = await store.getPrototype(prototypeKey);
-  if (!proto) throw new Error("Unknown prototype");
-  const binding = await store.getRepoBinding(proto.siteKey);
-  if (!binding) throw new Error("No feature repo bound for this site — set it in Settings → Repositories.");
-  const client = getGitClient();
-  if (!client) throw new Error("GitHub isn't connected (GITHUB_TOKEN not set).");
-
-  const { owner, repo, baseBranch, branchPrefix } = binding.feature;
-  const branch = prototypeBranch(prototypeKey, branchPrefix);
-  try {
-    const sha = await client.getBranchSha(owner, repo, branch);
-    return { gitSha: sha, gitRef: branch, repo: `${owner}/${repo}`, usedBase: false };
-  } catch (e) {
-    if (e instanceof GitError && (e.status === 404 || e.status === 422)) {
-      // The prototype branch doesn't exist yet — pin the base branch head.
-      const sha = await client.getBranchSha(owner, repo, baseBranch);
-      return { gitSha: sha, gitRef: baseBranch, repo: `${owner}/${repo}`, usedBase: true };
-    }
-    throw e;
-  }
-}
 
 export async function listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
   return (await getContentStore()).listArtifactVersions(prototypeKey);

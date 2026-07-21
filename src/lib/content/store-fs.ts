@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
-import type { SiteRepoBinding } from "../git/types";
+import type { SiteRepoBinding, OrgRepo } from "../git/types";
 import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
@@ -34,6 +34,7 @@ export class FsContentStore implements ContentStore {
   private versionsFile(): string { return join(this.root(), "_artifact-versions.json"); }
   private promotionsFile(): string { return join(this.root(), "_promotions.json"); }
   private auditFile(): string { return join(this.root(), "_audit.json"); }
+  private orgReposFile(): string { return join(this.root(), "_org-repos.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -71,6 +72,8 @@ export class FsContentStore implements ContentStore {
     await this.writeJson(this.integrationsFile(), integrations);
     const audit = (await this.readJson<AuditEvent[]>(this.auditFile(), [])).filter((e) => e.orgId !== id);
     await this.writeJson(this.auditFile(), audit);
+    const orgRepos = (await this.readJson<OrgRepo[]>(this.orgReposFile(), [])).filter((r) => r.orgId !== id);
+    await this.writeJson(this.orgReposFile(), orgRepos);
   }
 
   async getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null> {
@@ -189,6 +192,19 @@ export class FsContentStore implements ContentStore {
     await this.writeJson(this.promotionsFile(), promotions);
     // pages + assets (whole site dir)
     await rm(join(this.root(), siteKey), { recursive: true, force: true });
+  }
+
+  async listOrgRepos(orgId: string): Promise<OrgRepo[]> {
+    return (await this.readJson<OrgRepo[]>(this.orgReposFile(), [])).filter((r) => r.orgId === orgId);
+  }
+  async putOrgRepo(repo: OrgRepo): Promise<void> {
+    const all = (await this.readJson<OrgRepo[]>(this.orgReposFile(), [])).filter((r) => r.id !== repo.id);
+    all.push(repo);
+    await this.writeJson(this.orgReposFile(), all);
+  }
+  async deleteOrgRepo(id: string): Promise<void> {
+    const all = (await this.readJson<OrgRepo[]>(this.orgReposFile(), [])).filter((r) => r.id !== id);
+    await this.writeJson(this.orgReposFile(), all);
   }
 
   async getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null> {

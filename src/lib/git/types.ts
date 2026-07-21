@@ -42,6 +42,20 @@ export interface SiteRepoBinding {
   source?: RepoConfig;
 }
 
+/**
+ * A repo registered at the BRAND (org) level. The brand registers as many as it
+ * wants; each prototype picks one (+ branch). One repo is the default offered
+ * at prototype creation.
+ */
+export interface OrgRepo {
+  id: string;          // `${orgId}:${fullName}`
+  orgId: string;
+  fullName: string;    // owner/repo
+  baseBranch: string;
+  artifactPath: string; // built variation path on prototype branches
+  isDefault: boolean;
+}
+
 export interface PullRequestResult {
   number: number;
   url: string;

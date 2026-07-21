@@ -1,6 +1,6 @@
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
-import type { SiteRepoBinding } from "../git/types";
+import type { SiteRepoBinding, OrgRepo } from "../git/types";
 import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
@@ -62,6 +62,11 @@ export interface ContentStore {
   addEnvironment(env: Environment): Promise<void>;
   updateEnvironment(id: string, patch: Partial<Environment>): Promise<void>;
   deleteEnvironment(id: string): Promise<void>;
+
+  // --- Org-level repo registry (brand's repos; prototypes pick from these) ---
+  listOrgRepos(orgId: string): Promise<OrgRepo[]>;
+  putOrgRepo(repo: OrgRepo): Promise<void>;
+  deleteOrgRepo(id: string): Promise<void>;
 
   // --- Repo binding (per-site feature + source repos) ---
   getRepoBinding(siteKey: string): Promise<SiteRepoBinding | null>;

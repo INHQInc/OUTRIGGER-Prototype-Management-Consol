@@ -3,7 +3,6 @@ import { getSite } from "@/lib/sites";
 import { listPages } from "@/lib/registry";
 import { getContentStore } from "@/lib/content/store";
 import { listEnvironments } from "@/lib/environments";
-import { RepoSettings } from "@/components/RepoSettings";
 import { EnvironmentsManager } from "@/components/EnvironmentsManager";
 import { LoaderSnippet } from "@/components/LoaderSnippet";
 import { DeleteSite } from "@/components/DeleteSite";
@@ -48,7 +47,6 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
 
       <LoaderSnippet siteKey={siteKey} />
 
-      <RepoSettings siteKey={siteKey} />
 
       <div className="rounded-xl border border-dashed border-border p-4 text-[12px] text-muted-2 leading-relaxed">
         Coming soon: edit label/asset hosts, and per-site <span className="text-muted">design context</span> (brand tokens)

@@ -31,14 +31,25 @@ export async function resolveRepoSource(prototypeKey: string): Promise<RepoSourc
   const store = await getContentStore();
   const proto = await store.getPrototype(prototypeKey);
   if (!proto) throw new Error("Unknown prototype");
-  const binding = await store.getRepoBinding(proto.siteKey);
-  if (!binding) throw new Error("No feature repo bound for this site — set it in Site settings → Repository.");
   const client = getGitClient();
   if (!client) throw new Error("GitHub isn't connected (GITHUB_TOKEN not set).");
 
-  const { owner, repo, branchPrefix } = binding.feature;
-  const artifactPath = binding.feature.artifactPath?.trim() || DEFAULT_ARTIFACT;
-  const branch = prototypeBranch(prototypeKey, branchPrefix);
+  // The prototype's own repo pick (brand registry) is the source of truth;
+  // legacy prototypes without one fall back to the old per-site binding.
+  let owner: string, repo: string, branch: string, artifactPath: string;
+  if (proto.repo?.fullName) {
+    const [o, r] = proto.repo.fullName.split("/");
+    if (!o || !r) throw new Error(`Invalid repo on prototype: ${proto.repo.fullName}`);
+    owner = o; repo = r;
+    branch = proto.repo.branch || prototypeBranch(prototypeKey);
+    artifactPath = proto.repo.artifactPath?.trim() || DEFAULT_ARTIFACT;
+  } else {
+    const binding = await store.getRepoBinding(proto.siteKey);
+    if (!binding) throw new Error("No repo set on this prototype — pick one in the Source panel (Brand settings → Repositories holds the registry).");
+    owner = binding.feature.owner; repo = binding.feature.repo;
+    branch = prototypeBranch(prototypeKey, binding.feature.branchPrefix);
+    artifactPath = binding.feature.artifactPath?.trim() || DEFAULT_ARTIFACT;
+  }
   const base: RepoSource = { repo: `${owner}/${repo}`, branch, artifactPath, branchExists: false, found: false };
 
   let headSha: string;
