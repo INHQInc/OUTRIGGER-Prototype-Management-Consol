@@ -33,11 +33,7 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
   );
 
   const renderLink = (item: NavItem) => {
-    // Home ("/") is the Prototypes board; prototype workspaces live under
-    // /prototypes/* and belong to the same nav item.
-    const active = item.href === "/"
-      ? pathname === "/" || pathname.startsWith("/prototypes")
-      : item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+    const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
     return (
       <Link
         key={item.href}
@@ -65,7 +61,8 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {sectionHeader("Work")}
-        {renderLink({ href: "/", label: "Prototypes", icon: ICON.prototypes, exact: true })}
+        {renderLink({ href: "/", label: "Dashboard", icon: ICON.overview, exact: true })}
+        {renderLink({ href: "/prototypes", label: "Prototypes", icon: ICON.prototypes })}
         {renderLink({ href: "/handoff", label: "Handoff", icon: ICON.handoff })}
 
         {sectionHeader("Configuration")}

@@ -1,18 +1,30 @@
-import { getAllSites } from "@/lib/sites";
+import Link from "next/link";
 import { getActiveOrgId } from "@/lib/active-org";
+import { getOrg } from "@/lib/orgs";
+import { getAllSites } from "@/lib/sites";
 import { getContentStore } from "@/lib/content/store";
-import { PageHeader, EmptyState } from "@/components/ui";
-import { PrototypeBoard } from "@/components/PrototypeBoard";
+import { listPromotions, currentByEnvironment } from "@/lib/promotions";
+import { getGitConnectionStatus } from "@/lib/git/connection";
+import { getExperimentationConfig } from "@/lib/experimentation";
+import { listOrgRepos } from "@/lib/git/org-repos";
+import { listAuditEvents } from "@/lib/audit";
+import { PageHeader, EmptyState, Badge, TimeAgo } from "@/components/ui";
+import { PrototypeCard } from "@/components/PrototypeCard";
+import { NewPrototype } from "@/components/NewPrototype";
+import { PROTOTYPE_STAGES, STAGE_LABEL, STAGE_TONE, normalizeStage, type PrototypeStage } from "@/lib/prototypes/types";
+import type { Promotion } from "@/lib/promotions/types";
 
 export const dynamic = "force-dynamic";
 
-/** Home = the brand-wide prototype board (the primary workspace). */
-export default async function Home() {
+interface Attention { text: string; href: string; action: string }
+
+/** Dashboard — the default landing: blockers, pipeline, what's live, activity. */
+export default async function Dashboard() {
   const orgId = await getActiveOrgId();
   if (!orgId) {
     return (
       <>
-        <PageHeader title="Prototypes" />
+        <PageHeader title="Dashboard" />
         <div className="flex-1 overflow-y-auto px-8 py-6">
           <EmptyState title="No customer selected." hint="Pick or create a customer at the top of the sidebar." />
         </div>
@@ -20,20 +32,149 @@ export default async function Home() {
     );
   }
 
-  const sitesMap = await getAllSites();
-  const siteList = Object.values(sitesMap).map((s) => ({ key: s.siteKey, label: s.label }));
-  const siteKeys = new Set(Object.keys(sitesMap));
   const store = await getContentStore();
-  const all = await store.listPrototypes();
-  const prototypes = all
+  const [org, sitesMap, gitStatus, expCfg, orgRepos, events] = await Promise.all([
+    getOrg(orgId),
+    getAllSites(),
+    getGitConnectionStatus(orgId),
+    getExperimentationConfig(orgId),
+    listOrgRepos(orgId),
+    listAuditEvents(orgId, 8),
+  ]);
+  const sites = Object.values(sitesMap);
+  const siteKeys = new Set(Object.keys(sitesMap));
+  const protos = (await store.listPrototypes())
     .filter((p) => siteKeys.has(p.siteKey))
     .map((p) => ({ ...p, siteLabel: sitesMap[p.siteKey]?.label ?? p.siteKey }));
+  const promosByProto = await Promise.all(protos.map((p) => listPromotions(p.key)));
+
+  // ── Needs attention (cheap, store/env-only checks) ──
+  const attention: Attention[] = [];
+  if (sites.length === 0) attention.push({ text: "No websites yet for this customer.", href: "/sites", action: "Add a site" });
+  if (!gitStatus.connected && !gitStatus.envFallback) attention.push({ text: "GitHub isn't connected — repo pulls will fail.", href: "/settings/repositories", action: "Connect GitHub" });
+  if (!orgRepos.some((r) => r.roles.includes("prototypes"))) attention.push({ text: "No prototype repo registered.", href: "/settings/repositories", action: "Register a repo" });
+  if (!expCfg?.optimizely?.apiToken) attention.push({ text: "Optimizely isn't connected — production promotion is unavailable.", href: "/settings/experimentation", action: "Connect Optimizely" });
+  else if (!expCfg.optimizely.defaultProjectId) attention.push({ text: "No default Optimizely project selected.", href: "/settings/experimentation", action: "Pick a project" });
+  protos.forEach((p, i) => {
+    const latest = promosByProto[i][0];
+    if (latest?.status === "failed") attention.push({ text: `Promotion failed: ${p.name} → ${latest.environmentLabel}.`, href: `/prototypes/${p.key}`, action: "Open prototype" });
+  });
+
+  // ── Pipeline counts ──
+  const counts = new Map<PrototypeStage, number>();
+  for (const p of protos) counts.set(normalizeStage(p.status), (counts.get(normalizeStage(p.status)) ?? 0) + 1);
+
+  // ── Active prototypes (in flight) ──
+  const active = protos
+    .filter((p) => ["draft", "review", "live"].includes(normalizeStage(p.status)))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 6);
+
+  // ── Live on environments (active promotions across all prototypes) ──
+  const liveByEnv = new Map<string, { label: string; kind: string; items: { name: string; key: string; promo: Promotion }[] }>();
+  protos.forEach((p, i) => {
+    for (const promo of Object.values(currentByEnvironment(promosByProto[i]))) {
+      const entry = liveByEnv.get(promo.environmentId) ?? { label: promo.environmentLabel, kind: promo.environmentKind, items: [] };
+      entry.items.push({ name: p.name, key: p.key, promo });
+      liveByEnv.set(promo.environmentId, entry);
+    }
+  });
+  const liveEnvs = [...liveByEnv.values()].sort((a, b) => (a.kind === "production" ? -1 : 0) - (b.kind === "production" ? -1 : 0));
 
   return (
     <>
-      <PageHeader title="Prototypes" subtitle="Every experiment across this brand — author, review, promote" />
-      <div className="flex-1 overflow-y-auto px-8 py-6">
-        <PrototypeBoard prototypes={prototypes} sites={siteList} />
+      <PageHeader
+        title="Dashboard"
+        subtitle={org?.name ?? orgId}
+        actions={sites.length > 0 ? <NewPrototype sites={sites.map((s) => ({ key: s.siteKey, label: s.label }))} /> : undefined}
+      />
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+        {/* Needs attention */}
+        {attention.length > 0 && (
+          <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-warn/30 text-[12px] font-semibold">⚠ Needs attention</div>
+            {attention.map((a, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-warn/20 last:border-0">
+                <span className="text-[13px]">{a.text}</span>
+                <Link href={a.href} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{a.action} →</Link>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Pipeline counts */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {PROTOTYPE_STAGES.map((stage) => {
+            const n = counts.get(stage) ?? 0;
+            return (
+              <Link key={stage} href="/prototypes" className={`flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 hover:border-border-strong transition-colors ${n === 0 ? "opacity-50" : ""}`}>
+                <Badge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</Badge>
+                <span className="text-[16px] font-semibold tabular-nums">{n}</span>
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-[1fr_340px] gap-6 items-start">
+          {/* Active prototypes */}
+          <section>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[12px] font-semibold">Active prototypes</span>
+              <Link href="/prototypes" className="text-[12px] text-accent hover:text-accent-hover">View all →</Link>
+            </div>
+            {active.length === 0 ? (
+              <EmptyState title="Nothing in flight." hint={sites.length ? "Create a prototype to get started." : "Add a website first, then create a prototype."} />
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {active.map((p) => <PrototypeCard key={p.key} p={p} siteLabel={sites.length > 1 ? p.siteLabel : undefined} />)}
+              </div>
+            )}
+          </section>
+
+          {/* Right rail */}
+          <div className="space-y-5">
+            <section className="rounded-xl border border-border bg-surface overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-border text-[12px] font-semibold">Live on environments</div>
+              {liveEnvs.length === 0 ? (
+                <div className="px-4 py-5 text-[12px] text-muted-2">Nothing promoted yet.</div>
+              ) : (
+                liveEnvs.map((env) => (
+                  <div key={env.label} className="border-b border-border last:border-0">
+                    <div className="px-4 pt-2.5 pb-1 flex items-center gap-2">
+                      <span className="text-[12px] font-medium">{env.label}</span>
+                      <Badge tone={env.kind === "production" ? "accent" : "neutral"}>{env.kind}</Badge>
+                    </div>
+                    {env.items.map(({ name, key, promo }) => (
+                      <div key={promo.id} className="px-4 pb-2 flex items-center justify-between gap-2">
+                        <Link href={`/prototypes/${key}`} className="text-[12px] text-muted hover:text-accent truncate">{name} <span className="text-muted-2">v{promo.versionNumber}</span></Link>
+                        {promo.experimentUrl
+                          ? <a href={promo.experimentUrl} target="_blank" rel="noreferrer" className="text-[11px] text-accent hover:text-accent-hover shrink-0">Opti ↗</a>
+                          : <span className="text-[11px] text-muted-2 shrink-0">{promo.vehicle}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+            </section>
+
+            <section className="rounded-xl border border-border bg-surface overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+                <span className="text-[12px] font-semibold">Recent activity</span>
+                <Link href="/settings/activity" className="text-[11px] text-muted-2 hover:text-foreground">All →</Link>
+              </div>
+              {events.length === 0 ? (
+                <div className="px-4 py-5 text-[12px] text-muted-2">No activity yet.</div>
+              ) : (
+                events.map((e) => (
+                  <div key={e.id} className="px-4 py-2 border-b border-border last:border-0">
+                    <div className="text-[12px] truncate"><span className="font-mono text-muted-2">{e.action}</span> · {e.target}</div>
+                    <div className="text-[10px] text-muted-2"><TimeAgo iso={e.at} /> · {e.actor}</div>
+                  </div>
+                ))
+              )}
+            </section>
+          </div>
+        </div>
       </div>
     </>
   );

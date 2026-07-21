@@ -24,7 +24,7 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
     <div className="flex-1 min-w-0 flex flex-col">
       <div className="px-8 pt-5 pb-0">
         <div className="text-[11px] text-muted-2 mb-1">
-          <Link href="/" className="hover:text-foreground">Prototypes</Link>
+          <Link href="/prototypes" className="hover:text-foreground">Prototypes</Link>
           <span className="mx-1.5">›</span>
           <span className="text-muted">{p.name}</span>
         </div>

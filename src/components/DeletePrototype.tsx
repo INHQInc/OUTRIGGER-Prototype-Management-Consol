@@ -16,7 +16,7 @@ export function DeletePrototype({ prototypeKey, name }: { prototypeKey: string; 
       const res = await fetch(`/api/prototypes?key=${encodeURIComponent(prototypeKey)}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error ?? "Delete failed"); setBusy(false); return; }
-      router.push("/");
+      router.push("/prototypes");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e)); setBusy(false);
