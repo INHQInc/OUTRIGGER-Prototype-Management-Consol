@@ -4,7 +4,7 @@ import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
-import type { PrototypeRecord, ArtifactVersion, PrototypeOverlay } from "../prototypes/types";
+import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
@@ -34,7 +34,6 @@ export class FsContentStore implements ContentStore {
   private versionsFile(): string { return join(this.root(), "_artifact-versions.json"); }
   private promotionsFile(): string { return join(this.root(), "_promotions.json"); }
   private auditFile(): string { return join(this.root(), "_audit.json"); }
-  private overlaysFile(): string { return join(this.root(), "_overlays.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -188,9 +187,6 @@ export class FsContentStore implements ContentStore {
     // promotions
     const promotions = (await this.readJson<Promotion[]>(this.promotionsFile(), [])).filter((p) => p.siteKey !== siteKey);
     await this.writeJson(this.promotionsFile(), promotions);
-    // overlays
-    const overlays = (await this.readJson<PrototypeOverlay[]>(this.overlaysFile(), [])).filter((o) => o.siteKey !== siteKey);
-    await this.writeJson(this.overlaysFile(), overlays);
     // pages + assets (whole site dir)
     await rm(join(this.root(), siteKey), { recursive: true, force: true });
   }
@@ -231,8 +227,6 @@ export class FsContentStore implements ContentStore {
     delete map[key];
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.protoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
-    const overlays = (await this.readJson<PrototypeOverlay[]>(this.overlaysFile(), [])).filter((o) => o.prototypeKey !== key);
-    await this.writeJson(this.overlaysFile(), overlays);
     const versions = (await this.readJson<ArtifactVersion[]>(this.versionsFile(), [])).filter((v) => v.prototypeKey !== key);
     await this.writeJson(this.versionsFile(), versions);
     const promotions = (await this.readJson<Promotion[]>(this.promotionsFile(), [])).filter((p) => p.prototypeKey !== key);
@@ -241,15 +235,6 @@ export class FsContentStore implements ContentStore {
 
   async deletePage(siteKey: string, slug: string): Promise<void> {
     await rm(join(this.pagesDir(siteKey), slug), { recursive: true, force: true });
-  }
-
-  async getPrototypeOverlay(prototypeKey: string): Promise<PrototypeOverlay | null> {
-    return (await this.readJson<PrototypeOverlay[]>(this.overlaysFile(), [])).find((o) => o.prototypeKey === prototypeKey) ?? null;
-  }
-  async putPrototypeOverlay(o: PrototypeOverlay): Promise<void> {
-    const all = (await this.readJson<PrototypeOverlay[]>(this.overlaysFile(), [])).filter((x) => x.prototypeKey !== o.prototypeKey);
-    all.push(o);
-    await this.writeJson(this.overlaysFile(), all);
   }
 
   async listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {

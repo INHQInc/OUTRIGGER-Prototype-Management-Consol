@@ -11,7 +11,6 @@
  */
 import { OptimizelyClient } from "../optimizely/api";
 import { getExperimentationConfig } from "../experimentation";
-import { getPrototypeOverlay, buildOverlayVariation } from "../prototypes/overlay";
 import type { Environment } from "../environments";
 import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 
@@ -53,16 +52,12 @@ export async function promoteToOptimizely(input: {
   const page = await client.createPage(`${proto.name} — ${pathSubstring}`, editUrl, pathSubstring);
 
   // Ship the code SNAPSHOTTED into the promoted version (immutable — build once,
-  // promote unchanged). Fall back to the current overlay for legacy versions
-  // cut before snapshots existed; then to a placeholder if nothing is authored.
+  // promote unchanged). The version's code is pulled from the feature repo when
+  // it's cut; if a version has none, guide the user to cut it from the repo.
   let variationJs = version.variationJs;
-  if (!variationJs) {
-    const built = buildOverlayVariation(proto.key, await getPrototypeOverlay(proto.key));
-    if (!built.isEmpty) variationJs = built.variationJs;
-  }
   const hasCode = Boolean(variationJs);
   if (!variationJs) {
-    variationJs = `/* OPMC ${proto.key} · v${version.version} · ${version.gitSha} */\n/* No overlay authored yet — add it in the console, then re-promote. */`;
+    variationJs = `/* OPMC ${proto.key} · v${version.version} · ${version.gitSha} */\n/* No built variation on this version — cut it from the repo, then re-promote. */`;
   }
 
   const experiment = await client.createDraftExperiment({
@@ -77,7 +72,7 @@ export async function promoteToOptimizely(input: {
     experimentId: String(experiment.id),
     experimentUrl: client.experimentAppUrl(experiment.id),
     detail: hasCode
-      ? "Paused draft experiment created with the authored overlay — review, then start it in Optimizely."
-      : "Paused draft created, but no overlay code was authored — add it and re-promote to ship real variation code.",
+      ? "Paused draft experiment created with the version's built code — review, then start it in Optimizely."
+      : "Paused draft created, but this version has no built code — cut a version from the repo, then re-promote.",
   };
 }
