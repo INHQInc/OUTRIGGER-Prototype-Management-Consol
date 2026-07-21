@@ -51,11 +51,17 @@ export async function renameOrg(id: string, name: string): Promise<void> {
   await (await getContentStore()).updateOrg(id, { name: clean });
 }
 
-/** Delete an org and cascade-delete its sites (which cascade their content). */
+/** Delete an org and cascade-delete everything it owns: legacy sites (which
+ *  cascade their content), org-owned environments, and org-owned prototypes
+ *  (which cascade versions + promotions). */
 export async function deleteOrg(id: string): Promise<void> {
   const store = await getContentStore();
   const sites = (await store.listDynamicSites()).filter((s) => s.orgId === id);
   for (const s of sites) await store.deleteSite(s.siteKey);
+  for (const env of await store.listEnvironmentsByOrg(id)) await store.deleteEnvironment(env.id);
+  for (const p of await store.listPrototypes()) {
+    if (p.orgId === id) await store.deletePrototype(p.key);
+  }
   await store.deleteOrg(id);
 }
 
