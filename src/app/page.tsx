@@ -44,7 +44,11 @@ export default async function Dashboard() {
   ]);
   const sites = Object.values(sitesMap);
   const siteKeys = new Set(Object.keys(sitesMap));
-  const loaderDone = Boolean(await store.getFlag(`setup:loader:${orgId}`));
+  const loaderMarked = Boolean(await store.getFlag(`setup:loader:${orgId}`));
+  // Auto-verified the moment any of the customer's environments beacons in.
+  const loaderSeenAt = (await Promise.all(Object.keys(sitesMap).map((k) => store.getFlag(`loader:seen:${k}`))))
+    .filter(Boolean).sort().pop() ?? null;
+  const loaderDone = loaderMarked || Boolean(loaderSeenAt);
   const protos = (await store.listPrototypes())
     .filter((p) => siteKeys.has(p.siteKey))
     .map((p) => ({ ...p, siteLabel: sitesMap[p.siteKey]?.label ?? p.siteKey }));
@@ -64,7 +68,7 @@ export default async function Dashboard() {
       action: "Get the tag",
       manualKey: "loader",
       disabled: sites.length === 0,
-      hint: "One script tag in the CMS — inert without a review token. Mark installed once it's live.",
+      hint: "One script tag in the CMS — inert without a review token. It self-verifies: open the site once after installing and this checks itself.",
     },
   ];
   const setupComplete = steps.every((st) => st.done);

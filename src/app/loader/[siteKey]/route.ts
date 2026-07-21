@@ -15,6 +15,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ site
 
   const js = `(function () {
   try {
+    // Install heartbeat: once per browser session, prove the tag is live.
+    try {
+      if (!sessionStorage.getItem('__opmcHb')) {
+        sessionStorage.setItem('__opmcHb', '1');
+        var hb = ${JSON.stringify(base)} + '/api/loader/heartbeat?site=' + ${JSON.stringify(encodeURIComponent(siteKey))};
+        if (navigator.sendBeacon) { navigator.sendBeacon(hb); }
+        else { fetch(hb, { method: 'POST', mode: 'no-cors', keepalive: true }).catch(function () {}); }
+      }
+    } catch (e) {}
     var q = new URLSearchParams(location.search);
     var key = q.get('opmc');
     if (!key || !/^[a-zA-Z0-9_-]+$/.test(key)) return;

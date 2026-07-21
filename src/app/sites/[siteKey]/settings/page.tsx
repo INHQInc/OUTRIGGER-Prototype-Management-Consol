@@ -5,6 +5,7 @@ import { getContentStore } from "@/lib/content/store";
 import { listEnvironments } from "@/lib/environments";
 import { EnvironmentsManager } from "@/components/EnvironmentsManager";
 import { LoaderSnippet } from "@/components/LoaderSnippet";
+import { TimeAgo } from "@/components/ui";
 import { DeleteSite } from "@/components/DeleteSite";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
   if (!site) notFound();
 
   const store = await getContentStore();
+  const loaderSeenAt = await store.getFlag(`loader:seen:${siteKey}`);
   const [pages, protos, repo, environments] = await Promise.all([
     listPages(siteKey),
     store.listPrototypes(siteKey),
@@ -45,7 +47,14 @@ export default async function SiteSettings({ params }: { params: Promise<{ siteK
 
       <EnvironmentsManager siteKey={siteKey} initialEnvironments={environments} canManage />
 
-      <LoaderSnippet siteKey={siteKey} />
+      <div className="space-y-1.5">
+        <LoaderSnippet siteKey={siteKey} />
+        {loaderSeenAt ? (
+          <div className="text-[11px] text-ok px-1">✓ Loader verified on this environment — last seen <TimeAgo iso={loaderSeenAt} />.</div>
+        ) : (
+          <div className="text-[11px] text-muted-2 px-1">Loader not detected yet — install the tag, then open the site once; it reports in automatically.</div>
+        )}
+      </div>
 
 
       <div className="rounded-xl border border-dashed border-border p-4 text-[12px] text-muted-2 leading-relaxed">
