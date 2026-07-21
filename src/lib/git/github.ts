@@ -57,6 +57,17 @@ export class GitHubClient {
     return out;
   }
 
+  /** Branch names of a repo (up to 200). */
+  async listBranches(owner: string, repo: string, max = 200): Promise<string[]> {
+    const out: string[] = [];
+    for (let page = 1; out.length < max && page <= Math.ceil(max / 100); page++) {
+      const batch = await this.gh<{ name: string }[]>(`/repos/${owner}/${repo}/branches?per_page=100&page=${page}`);
+      out.push(...batch.map((b) => b.name));
+      if (batch.length < 100) break;
+    }
+    return out;
+  }
+
   /** Confirms token + repo access. Returns default branch + push permission. */
   async getRepo(owner: string, repo: string): Promise<RepoInfo> {
     const r = await this.gh<{

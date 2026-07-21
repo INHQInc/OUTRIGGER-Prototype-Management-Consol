@@ -19,6 +19,9 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
   const [orgRepos, setOrgRepos] = useState<{ id: string; fullName: string; roles: string[]; defaultFor: string[] }[]>([]);
   const [repoSel, setRepoSel] = useState(initialRepo?.fullName ?? "");
   const [branch, setBranch] = useState(initialRepo?.branch ?? "");
+  const [branches, setBranches] = useState<string[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesErr, setBranchesErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -37,6 +40,24 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
     });
     return () => { live = false; };
   }, []);
+
+  // Branches of the selected repo, via the customer's GitHub connection.
+  useEffect(() => {
+    if (!repoSel.trim()) { setBranches([]); return; }
+    let live = true;
+    setBranchesLoading(true); setBranchesErr(null);
+    fetch(`/api/git/branches?repo=${encodeURIComponent(repoSel.trim())}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!live) return;
+        setBranches(d.branches ?? []);
+        if (d.error) setBranchesErr("Couldn't list branches for this repo.");
+        setBranch((cur) => cur || `prototype/${prototypeKey}`);
+      })
+      .catch(() => { if (live) { setBranches([]); setBranchesErr("Couldn't list branches for this repo."); } })
+      .finally(() => { if (live) setBranchesLoading(false); });
+    return () => { live = false; };
+  }, [repoSel, prototypeKey]);
 
   async function save() {
     if (busy || !repoSel.trim()) return;
@@ -90,7 +111,16 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
               </div>
               <div>
                 <label className="block text-[11px] text-muted-2 mb-1">Branch</label>
-                <input value={branch} onChange={(e) => { setBranch(e.target.value); setMsg(null); }} spellCheck={false} placeholder={`prototype/${prototypeKey}`} className={inp} />
+                <select value={branch} onChange={(e) => { setBranch(e.target.value); setMsg(null); }} disabled={branchesLoading} className={inp}>
+                  {!branches.includes(`prototype/${prototypeKey}`) && (
+                    <option value={`prototype/${prototypeKey}`}>{`prototype/${prototypeKey}`} (new — create in the repo)</option>
+                  )}
+                  {branch && branch !== `prototype/${prototypeKey}` && !branches.includes(branch) && (
+                    <option value={branch}>{branch} (not on GitHub)</option>
+                  )}
+                  {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+                <div className="text-[10px] text-muted-2 mt-0.5">{branchesLoading ? "Loading branches…" : branchesErr ? branchesErr : `${branches.length} branch${branches.length === 1 ? "" : "es"} on GitHub.`}</div>
               </div>
             </div>
             <div className="flex items-center justify-between">
