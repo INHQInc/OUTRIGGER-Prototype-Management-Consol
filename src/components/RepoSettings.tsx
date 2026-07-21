@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 type SourceMode = "same" | "repo" | "external";
+interface RepoOption { fullName: string; private: boolean; defaultBranch: string }
 
 const input = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 const labelCls = "block text-[12px] font-medium text-muted mb-1.5";
@@ -20,6 +21,26 @@ export function RepoSettings({ siteKey }: { siteKey: string }) {
   const [sourceBase, setSourceBase] = useState("main");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [repoOptions, setRepoOptions] = useState<RepoOption[]>([]);
+
+  // Auto-fill the base branch when a picked repo is recognized.
+  function onFeatureRepoChange(value: string) {
+    setFeatureRepo(value);
+    const match = repoOptions.find((r) => r.fullName === value.trim());
+    if (match) setFeatureBase(match.defaultBranch);
+  }
+  function onSourceRepoChange(value: string) {
+    setSourceRepo(value);
+    const match = repoOptions.find((r) => r.fullName === value.trim());
+    if (match) setSourceBase(match.defaultBranch);
+  }
+
+  useEffect(() => {
+    fetch("/api/git/repos")
+      .then((r) => (r.ok ? r.json() : { repos: [] }))
+      .then((d) => setRepoOptions(d.repos ?? []))
+      .catch(() => setRepoOptions([]));
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -73,7 +94,11 @@ export function RepoSettings({ siteKey }: { siteKey: string }) {
         {/* Feature repo */}
         <div>
           <label className={labelCls}>Feature repo <span className="text-muted-2">— prototypes branch + deploy from here</span></label>
-          <input className={input} value={featureRepo} onChange={(e) => setFeatureRepo(e.target.value)} placeholder="owner/repo or https://github.com/owner/repo" spellCheck={false} />
+          <input list="repo-options" className={input} value={featureRepo} onChange={(e) => onFeatureRepoChange(e.target.value)} placeholder={repoOptions.length ? "pick a repo or type owner/repo" : "owner/repo or https://github.com/owner/repo"} spellCheck={false} />
+          <datalist id="repo-options">
+            {repoOptions.map((r) => <option key={r.fullName} value={r.fullName}>{r.private ? "private" : "public"}</option>)}
+          </datalist>
+          {repoOptions.length > 0 && <p className="text-[11px] text-muted-2 mt-1">{repoOptions.length} repos from the connected GitHub account.</p>}
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div>
               <label className="block text-[11px] text-muted-2 mb-1">Base branch</label>
@@ -113,7 +138,7 @@ export function RepoSettings({ siteKey }: { siteKey: string }) {
             <div className="mt-2 grid grid-cols-3 gap-2">
               <div className="col-span-2">
                 <label className="block text-[11px] text-muted-2 mb-1">Source repo</label>
-                <input className={input} value={sourceRepo} onChange={(e) => setSourceRepo(e.target.value)} placeholder="owner/repo" spellCheck={false} />
+                <input list="repo-options" className={input} value={sourceRepo} onChange={(e) => onSourceRepoChange(e.target.value)} placeholder="pick a repo or type owner/repo" spellCheck={false} />
               </div>
               <div>
                 <label className="block text-[11px] text-muted-2 mb-1">Base branch</label>

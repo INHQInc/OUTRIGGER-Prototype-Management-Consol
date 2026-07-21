@@ -38,6 +38,19 @@ export class GitHubClient {
     return (res.status === 204 ? (undefined as T) : ((await res.json()) as T));
   }
 
+  /** Repos visible to the token (recent-first) — powers the repo pickers. */
+  async listRepos(max = 200): Promise<{ fullName: string; private: boolean; defaultBranch: string; pushedAt?: string }[]> {
+    const out: { fullName: string; private: boolean; defaultBranch: string; pushedAt?: string }[] = [];
+    for (let page = 1; out.length < max && page <= Math.ceil(max / 100); page++) {
+      const batch = await this.gh<{ full_name: string; private: boolean; default_branch: string; pushed_at?: string }[]>(
+        `/user/repos?per_page=100&page=${page}&sort=pushed`
+      );
+      out.push(...batch.map((r) => ({ fullName: r.full_name, private: r.private, defaultBranch: r.default_branch, pushedAt: r.pushed_at })));
+      if (batch.length < 100) break;
+    }
+    return out;
+  }
+
   /** Confirms token + repo access. Returns default branch + push permission. */
   async getRepo(owner: string, repo: string): Promise<RepoInfo> {
     const r = await this.gh<{
