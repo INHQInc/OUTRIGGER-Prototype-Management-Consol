@@ -1,5 +1,4 @@
 import { listOrgs } from "@/lib/orgs";
-import { listOrgEnvironments } from "@/lib/environments";
 import { accessibleOrgIds, getActiveOrgId } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
 import { getContentStore } from "@/lib/content/store";
@@ -28,8 +27,20 @@ export default async function CustomersPage() {
   }
 
   const visible = orgs.filter((o) => accessible.has(o.id));
+  // Cheap count: org-owned envs + legacy site-keyed envs for this org's sites.
+  // (Avoids listOrgEnvironments' per-org lazy-adoption writes during a GET render.)
+  const orgSiteKeys = new Map<string, string[]>();
+  for (const st of sites) { const a = orgSiteKeys.get(st.orgId) ?? []; a.push(st.siteKey); orgSiteKeys.set(st.orgId, a); }
   const envCounts = new Map<string, number>();
-  for (const o of visible) envCounts.set(o.id, (await listOrgEnvironments(o.id)).length);
+  await Promise.all(visible.map(async (o) => {
+    const own = await store.listEnvironmentsByOrg(o.id);
+    const ids = new Set(own.map((e) => e.id));
+    let legacy = 0;
+    for (const sk of orgSiteKeys.get(o.id) ?? []) {
+      for (const e of await store.listEnvironments(sk)) if (!e.orgId && !ids.has(e.id)) { ids.add(e.id); legacy++; }
+    }
+    envCounts.set(o.id, own.length + legacy);
+  }));
 
   const customers: CustomerRow[] = visible.map((o) => ({
     id: o.id,

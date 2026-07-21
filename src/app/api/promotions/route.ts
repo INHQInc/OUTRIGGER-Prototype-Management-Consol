@@ -6,7 +6,7 @@ import { currentUser } from "@/lib/auth/current";
 
 /** GET ?key=<prototypeKey> → promotion history (newest first). */
 export async function GET(req: NextRequest) {
-  const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"));
+  const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
   return NextResponse.json({ promotions: await listPromotions(g.proto.key) });
 }
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   let body: { prototypeKey?: string; versionId?: string; environmentId?: string; vehicle?: PromotionVehicle };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
-  const g = await guardPrototypeAccess(body.prototypeKey ?? null, req.headers.get("authorization"));
+  const g = await guardPrototypeAccess(body.prototypeKey ?? null, req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
   if (!body.versionId) return NextResponse.json({ error: "versionId required" }, { status: 400 });
   if (!body.environmentId) return NextResponse.json({ error: "environmentId required" }, { status: 400 });

@@ -78,11 +78,13 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prototypeKey, fromRepo: true }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) { setCutErr(data.error ?? "Couldn't cut a version"); return; }
       setCutMsg(`Cut v${data.version.version} from ${data.version.gitRef ?? "repo"} · ${String(data.version.gitSha).slice(0, 7)}`);
       await load();
       router.refresh();
+    } catch (e) {
+      setCutErr(e instanceof Error ? e.message : "Couldn't cut a version");
     } finally {
       setBusy(false);
     }

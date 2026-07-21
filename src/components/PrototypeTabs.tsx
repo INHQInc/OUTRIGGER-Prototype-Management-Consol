@@ -8,8 +8,10 @@ export function PrototypeTabs({ prototypeKey }: { prototypeKey: string }) {
   const pathname = usePathname();
   const base = `/prototypes/${prototypeKey}`;
   const tabs = [
-    { href: base, label: "Pipeline", exact: true },
-    { href: `${base}/details`, label: "Details" },
+    { href: base, label: "Setup", exact: true },
+    { href: `${base}/pages`, label: "Pages" },
+    { href: `${base}/build`, label: "Build" },
+    { href: `${base}/experiment`, label: "Experiment" },
     { href: `${base}/settings`, label: "Settings" },
   ];
   return (

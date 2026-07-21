@@ -32,12 +32,6 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
           <h1 className="text-[18px] font-semibold tracking-tight">{p.name}</h1>
           <StageSelect prototypeKey={key} initialStage={stage} />
         </div>
-        {p.targets[0] && (
-          <div className="text-[12px] text-muted-2 mt-0.5">
-            targets <a href={p.targets[0].url} target="_blank" rel="noreferrer" className="font-mono text-muted hover:text-accent">{p.targets[0].url}</a>
-            {p.targets.length > 1 && <span> +{p.targets.length - 1}</span>}
-          </div>
-        )}
         <div className="mt-4"><PrototypeTabs prototypeKey={key} /></div>
       </div>
 

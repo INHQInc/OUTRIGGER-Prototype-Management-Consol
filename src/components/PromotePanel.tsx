@@ -46,11 +46,14 @@ export function PromotePanel({ prototypeKey, environments, versions, initialProm
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prototypeKey, versionId: vid, environmentId: envId }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Promotion failed"); return; }
+      const data = await res.json().catch(() => ({}));
+      // Refetch history either way — a failed promotion is persisted as a "failed" row.
       const list = await fetch(`/api/promotions?key=${encodeURIComponent(prototypeKey)}`);
       if (list.ok) setPromotions((await list.json()).promotions ?? []);
+      if (!res.ok) { setError(data.error ?? "Promotion failed"); return; }
       router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Promotion failed");
     } finally {
       setBusyEnv(null);
     }
@@ -72,7 +75,7 @@ export function PromotePanel({ prototypeKey, environments, versions, initialProm
             </span>
           ) : (
             <span className="text-muted-2">
-              {!prodEnv ? "No production environment configured." : !latest ? "Cut a version first (Build, above)." : `Ready: v${latest.version} → ${prodEnv.label}.`}
+              {!prodEnv ? "No production environment configured." : !latest ? "Cut a version first (Build tab)." : `Ready: v${latest.version} → ${prodEnv.label}.`}
             </span>
           )}
         </div>

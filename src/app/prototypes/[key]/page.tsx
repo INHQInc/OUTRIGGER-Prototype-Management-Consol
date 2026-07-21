@@ -1,43 +1,38 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { getContentStore } from "@/lib/content/store";
-import { listArtifactVersions } from "@/lib/prototypes/versions";
-import { listOrgEnvironments } from "@/lib/environments";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
-import { listPromotions } from "@/lib/promotions";
-import { SourcePanel } from "@/components/SourcePanel";
-import { PreviewPanel } from "@/components/PreviewPanel";
-import { PromotePanel } from "@/components/PromotePanel";
+import { getPrototypeSetup } from "@/lib/prototypes/setup";
+import { resolveRepoSource } from "@/lib/prototypes/source";
+import { PrototypeSetup } from "@/components/PrototypeSetup";
 
 export const dynamic = "force-dynamic";
 
-/** First target's path, for building the preview URL (patterns collapsed). */
-function toPath(url?: string): string {
-  if (!url) return "/";
-  try { return new URL(url).pathname.replace(/\/\*+$/, "") || "/"; }
-  catch { return url.replace(/\*+$/, "") || "/"; }
-}
-
-/**
- * The loop, three cards: Build (repo status + versions) → Review (token link)
- * → Experiment (send to Optimizely). One next action at a time.
- */
-export default async function PrototypePipeline({ params }: { params: Promise<{ key: string }> }) {
+/** Setup tab (default) — the prototype's own readiness checklist, build brief,
+ *  and the generated local-build commands once it's wired. */
+export default async function PrototypeSetupPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p) notFound();
   const orgId = await resolvePrototypeOrg(p);
-  const [versions, environments, promotions] = await Promise.all([
-    listArtifactVersions(key),
-    listOrgEnvironments(orgId),
-    listPromotions(key),
+
+  const [setup, hdrs, source] = await Promise.all([
+    getPrototypeSetup(p, orgId),
+    headers(),
+    resolveRepoSource(key).catch(() => null),
   ]);
+  const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "outrigger-prototype-management-cons.vercel.app"}`;
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      <SourcePanel prototypeKey={key} versions={versions} />
-      <PreviewPanel prototypeKey={key} environments={environments} previewPath={toPath(p.targets[0]?.url)} />
-      <PromotePanel prototypeKey={key} environments={environments} versions={versions} initialPromotions={promotions} canPromote />
-    </div>
+    <PrototypeSetup
+      prototypeKey={key}
+      steps={setup.steps}
+      ready={setup.ready}
+      repo={setup.repo}
+      brief={p.brief}
+      consoleUrl={consoleUrl}
+      buildStatus={{ found: source ? source.found : null, headSha: source?.headSha, bytes: source?.variationJs?.length, branchExists: source?.branchExists }}
+    />
   );
 }
