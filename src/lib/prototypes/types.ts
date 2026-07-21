@@ -111,6 +111,9 @@ export interface ArtifactVersion {
   version: number;        // monotonic per prototype (1, 2, 3, …)
   gitSha: string;         // the immutable pin
   gitRef?: string;        // branch/tag it was cut from
+  /** Compiled overlay variation JS captured at cut time — the immutable code
+   *  this version ships. Absent on legacy versions / when no overlay authored. */
+  variationJs?: string;
   notes?: string;
   createdAt: string;
   createdBy?: string;

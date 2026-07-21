@@ -143,6 +143,7 @@ export class NeonContentStore implements ContentStore {
         created_at timestamptz not null default now(),
         created_by text
       )`);
+    await this.ddl(() => this.sql`alter table artifact_version add column if not exists variation_js text`);
     await this.ddl(() => this.sql`create index if not exists artifact_version_proto_idx on artifact_version (prototype_key)`);
     await this.ddl(() => this.sql`
       create table if not exists promotion (
@@ -239,6 +240,7 @@ export class NeonContentStore implements ContentStore {
       version: Number(r.version),
       gitSha: r.git_sha as string,
       gitRef: (r.git_ref as string) || undefined,
+      variationJs: (r.variation_js as string) || undefined,
       notes: (r.notes as string) || undefined,
       createdAt: new Date(r.created_at as string).toISOString(),
       createdBy: (r.created_by as string) || undefined,
@@ -246,8 +248,8 @@ export class NeonContentStore implements ContentStore {
   }
   async addArtifactVersion(v: ArtifactVersion): Promise<void> {
     await this.sql`
-      insert into artifact_version (id, prototype_key, site_key, version, git_sha, git_ref, notes, created_at, created_by)
-      values (${v.id}, ${v.prototypeKey}, ${v.siteKey}, ${v.version}, ${v.gitSha}, ${v.gitRef ?? null}, ${v.notes ?? null}, ${v.createdAt}, ${v.createdBy ?? null})
+      insert into artifact_version (id, prototype_key, site_key, version, git_sha, git_ref, variation_js, notes, created_at, created_by)
+      values (${v.id}, ${v.prototypeKey}, ${v.siteKey}, ${v.version}, ${v.gitSha}, ${v.gitRef ?? null}, ${v.variationJs ?? null}, ${v.notes ?? null}, ${v.createdAt}, ${v.createdBy ?? null})
       on conflict (id) do nothing`;
   }
 

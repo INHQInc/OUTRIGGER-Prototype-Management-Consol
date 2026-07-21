@@ -7,6 +7,7 @@
 import { getContentStore } from "../content/store";
 import { getGitClient, prototypeBranch } from "../git/provider";
 import { GitError } from "../git/github";
+import { getPrototypeOverlay, buildOverlayVariation } from "./overlay";
 import type { ArtifactVersion } from "./types";
 
 export interface ResolvedHead {
@@ -61,6 +62,8 @@ export async function cutArtifactVersion(
   const store = await getContentStore();
   const existing = await store.listArtifactVersions(prototypeKey);
   const version = existing.reduce((max, v) => Math.max(max, v.version), 0) + 1;
+  // Snapshot the compiled overlay so the version carries its own immutable code.
+  const built = buildOverlayVariation(prototypeKey, await getPrototypeOverlay(prototypeKey));
   const record: ArtifactVersion = {
     id: `${prototypeKey}-v${version}`,
     prototypeKey,
@@ -68,6 +71,7 @@ export async function cutArtifactVersion(
     version,
     gitSha,
     gitRef: input.gitRef?.trim() || undefined,
+    variationJs: built.isEmpty ? undefined : built.variationJs,
     notes: input.notes?.trim() || undefined,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy?.trim() || undefined,

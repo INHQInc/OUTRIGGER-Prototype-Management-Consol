@@ -52,14 +52,18 @@ export async function promoteToOptimizely(input: {
   const client = new OptimizelyClient(token, projectId);
   const page = await client.createPage(`${proto.name} — ${pathSubstring}`, editUrl, pathSubstring);
 
-  // Ship the authored overlay as the variation code; fall back to a version-
-  // pinned placeholder only if no overlay has been authored yet.
-  const overlay = await getPrototypeOverlay(proto.key);
-  const built = buildOverlayVariation(proto.key, overlay);
-  const hasCode = overlay && !built.isEmpty;
-  const variationJs = hasCode
-    ? built.variationJs
-    : `/* OPMC ${proto.key} · v${version.version} · ${version.gitSha} */\n/* No overlay authored yet — add it in the console, then re-promote. */`;
+  // Ship the code SNAPSHOTTED into the promoted version (immutable — build once,
+  // promote unchanged). Fall back to the current overlay for legacy versions
+  // cut before snapshots existed; then to a placeholder if nothing is authored.
+  let variationJs = version.variationJs;
+  if (!variationJs) {
+    const built = buildOverlayVariation(proto.key, await getPrototypeOverlay(proto.key));
+    if (!built.isEmpty) variationJs = built.variationJs;
+  }
+  const hasCode = Boolean(variationJs);
+  if (!variationJs) {
+    variationJs = `/* OPMC ${proto.key} · v${version.version} · ${version.gitSha} */\n/* No overlay authored yet — add it in the console, then re-promote. */`;
+  }
 
   const experiment = await client.createDraftExperiment({
     name: `${proto.name} (v${version.version})`,
