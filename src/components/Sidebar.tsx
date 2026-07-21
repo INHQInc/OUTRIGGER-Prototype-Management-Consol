@@ -70,11 +70,16 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
 
         {sectionHeader("Configuration")}
         {renderLink({ href: "/sites", label: "Sites", icon: ICON.pages })}
-        {renderLink({ href: "/settings/customer", label: "Customer settings", icon: ICON.settings })}
+
+        {sectionHeader("Settings")}
+        {renderLink({ href: "/settings/experimentation", label: "Experimentation", icon: ICON.settings })}
+        {renderLink({ href: "/settings/repositories", label: "Repositories", icon: ICON.deploys })}
+        {renderLink({ href: "/settings/members", label: "Users", icon: ICON.users })}
+        {renderLink({ href: "/settings/activity", label: "Activity", icon: ICON.handoff })}
 
         {sectionHeader("Operator")}
         {renderLink({ href: "/customers", label: "Customers", icon: ICON.brand })}
-        {user?.role === "admin" && renderLink({ href: "/settings/users", label: "Users", icon: ICON.users })}
+        {user?.role === "admin" && renderLink({ href: "/settings/users", label: "Console users", icon: ICON.users })}
       </nav>
 
       {user ? (

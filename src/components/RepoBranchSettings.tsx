@@ -48,7 +48,7 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border">
         <span className="text-[12px] font-semibold">Code location</span>
-        <span className="text-[11px] text-muted-2 ml-2">Which repo + branch this prototype builds in (repos are registered in Customer settings).</span>
+        <span className="text-[11px] text-muted-2 ml-2">Which repo + branch this prototype builds in (repos are registered in Settings → Repositories).</span>
       </div>
       <div className="p-4 space-y-3">
         <div className="grid grid-cols-2 gap-2">

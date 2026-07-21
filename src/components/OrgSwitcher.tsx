@@ -76,10 +76,10 @@ export function OrgSwitcher({ orgs, activeOrgId, canCreate }: { orgs: OrgOption[
               <>
                 <div className="h-px bg-border" />
                 <button
-                  onClick={() => { setOpen(false); router.push("/settings/customer"); }}
+                  onClick={() => { setOpen(false); router.push("/settings/experimentation"); }}
                   className="w-full text-left px-3 py-2 text-[13px] text-muted hover:text-foreground hover:bg-surface-2/60 flex items-center gap-2"
                 >
-                  <span className="w-5 text-center">⚙</span> Customer settings
+                  <span className="w-5 text-center">⚙</span> Settings
                 </button>
               </>
             )}

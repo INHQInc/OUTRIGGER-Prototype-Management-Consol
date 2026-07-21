@@ -45,7 +45,7 @@ export async function resolveRepoSource(prototypeKey: string): Promise<RepoSourc
     artifactPath = proto.repo.artifactPath?.trim() || DEFAULT_ARTIFACT;
   } else {
     const binding = await store.getRepoBinding(proto.siteKey);
-    if (!binding) throw new Error("No repo set on this prototype — pick one in the Source panel (Customer settings → Repositories holds the registry).");
+    if (!binding) throw new Error("No repo set on this prototype — pick one in the Source panel (Settings → Repositories holds the registry).");
     owner = binding.feature.owner; repo = binding.feature.repo;
     branch = prototypeBranch(prototypeKey, binding.feature.branchPrefix);
     artifactPath = binding.feature.artifactPath?.trim() || DEFAULT_ARTIFACT;
