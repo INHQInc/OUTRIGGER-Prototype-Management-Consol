@@ -14,7 +14,25 @@ export function ArtifactVersions({ prototypeKey, initialVersions }: { prototypeK
   const [gitRef, setGitRef] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pinning, setPinning] = useState(false);
+  const [pinNote, setPinNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function pinFromRepo() {
+    if (pinning) return;
+    setPinning(true); setError(null); setPinNote(null);
+    try {
+      const res = await fetch(`/api/prototypes/versions/head?key=${encodeURIComponent(prototypeKey)}`);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Could not read the repo"); return; }
+      const h = data.head as { gitSha: string; gitRef: string; repo: string; usedBase: boolean };
+      setGitSha(h.gitSha);
+      setGitRef(h.gitRef);
+      setPinNote(`${h.repo}@${h.gitRef}${h.usedBase ? " (base — no prototype branch yet)" : ""}`);
+    } finally {
+      setPinning(false);
+    }
+  }
 
   async function cut() {
     if (!gitSha.trim() || busy) return;
@@ -28,7 +46,7 @@ export function ArtifactVersions({ prototypeKey, initialVersions }: { prototypeK
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not cut version"); return; }
       setVersions((v) => [data.version, ...v]);
-      setGitSha(""); setGitRef(""); setNotes(""); setOpen(false);
+      setGitSha(""); setGitRef(""); setNotes(""); setPinNote(null); setOpen(false);
       router.refresh();
     } finally {
       setBusy(false);
@@ -42,12 +60,18 @@ export function ArtifactVersions({ prototypeKey, initialVersions }: { prototypeK
           <span className="text-[12px] font-semibold">Versions</span>
           <span className="text-[11px] text-muted-2 ml-2">Immutable builds pinned to a commit — promoted across environments unchanged.</span>
         </div>
-        <button onClick={() => setOpen((o) => !o)} className="text-[12px] text-accent hover:text-accent-hover font-medium">{open ? "Cancel" : "Cut version"}</button>
+        <button onClick={() => { setOpen((o) => !o); setError(null); setPinNote(null); }} className="text-[12px] text-accent hover:text-accent-hover font-medium">{open ? "Cancel" : "Cut version"}</button>
       </div>
 
       {open && (
         <div className="px-4 py-3 border-b border-border bg-surface-2/30 space-y-2">
           {error && <div className="text-[12px] text-danger">{error}</div>}
+          <div className="flex items-center gap-2">
+            <button onClick={pinFromRepo} disabled={pinning} className="h-7 px-2.5 rounded-lg border border-border text-[11px] text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40">
+              {pinning ? "Reading repo…" : "⟲ Pin latest from repo"}
+            </button>
+            {pinNote && <span className="text-[11px] text-muted-2 font-mono truncate">{pinNote}</span>}
+          </div>
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="block text-[11px] text-muted-2 mb-1">Commit SHA</label>
