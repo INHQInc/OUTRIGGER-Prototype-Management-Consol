@@ -17,6 +17,14 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
   const [busy, setBusy] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [projSel, setProjSel] = useState(initialStatus.defaultProjectId ?? "");
+  const [projSaved, setProjSaved] = useState(false);
+
+  async function saveProject() {
+    if (busy || !projSel) return;
+    const r = await call("PATCH", { defaultProjectId: projSel });
+    if (r) setProjSaved(true);
+  }
 
   async function call(method: string, body?: unknown) {
     setBusy(true); setError(null);
@@ -28,7 +36,7 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Something went wrong"); return null; }
-      if (data.status) setStatus(data.status);
+      if (data.status) { setStatus(data.status); setProjSel(data.status.defaultProjectId ?? ""); }
       router.refresh();
       return data;
     } finally {
@@ -84,7 +92,10 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
                 <button onClick={() => { setReplacing(false); setToken(""); setError(null); }} disabled={busy} className="h-9 px-3 rounded-lg text-[13px] text-muted hover:text-foreground">Cancel</button>
               )}
             </div>
-            <p className="text-[11px] text-muted-2">Generate a token in Optimizely under Profile → API Access. It&apos;s validated against your projects, then stored securely — we never show it again.</p>
+            <div className="text-[11px] text-muted-2 leading-relaxed space-y-1">
+              <p><span className="text-muted font-medium">Use a dedicated service-account user, not a personal admin token.</span> Tokens are user-scoped (never project-scoped) — they reach every project that user can access. Create a machine user in the customer&apos;s Optimizely, grant it only the intended project(s) (e.g. Prep), then generate its token under Profile → API Access.</p>
+              <p>Validated against its projects on connect, stored server-side, never shown again. The console only ever creates <span className="text-muted">paused drafts</span> — it never starts traffic.</p>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -103,18 +114,35 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
             ) : (
               <div>
                 <label className="block text-[12px] text-muted mb-1.5">Default project</label>
-                <select
-                  value={status.defaultProjectId ?? ""}
-                  onChange={(e) => call("PATCH", { defaultProjectId: e.target.value })}
-                  disabled={busy || !canManage}
-                  className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
-                >
-                  <option value="" disabled>Select a project…</option>
-                  {status.projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-muted-2 mt-1.5">{status.projects.length} project{status.projects.length === 1 ? "" : "s"} available on this token. Sites can override per-property later.</p>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={projSel}
+                    onChange={(e) => { setProjSel(e.target.value); setProjSaved(false); }}
+                    disabled={busy || !canManage}
+                    className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="" disabled>Select a project…</option>
+                    {status.projects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={saveProject}
+                    disabled={busy || !canManage || !projSel || projSel === (status.defaultProjectId ?? "")}
+                    className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  >
+                    {busy ? "Saving…" : "Save"}
+                  </button>
+                </div>
+                <p className="text-[11px] mt-1.5">
+                  {projSaved && projSel === (status.defaultProjectId ?? "") ? (
+                    <span className="text-ok">Default project saved.</span>
+                  ) : projSel !== (status.defaultProjectId ?? "") ? (
+                    <span className="text-warn">Unsaved change — click Save to apply.</span>
+                  ) : (
+                    <span className="text-muted-2">{status.projects.length} project{status.projects.length === 1 ? "" : "s"} available on this token.</span>
+                  )}
+                </p>
               </div>
             )}
           </div>
