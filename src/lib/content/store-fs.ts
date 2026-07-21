@@ -226,6 +226,22 @@ export class FsContentStore implements ContentStore {
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.protoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
   }
+  async deletePrototype(key: string): Promise<void> {
+    const map = await this.readProtos();
+    delete map[key];
+    await mkdir(this.root(), { recursive: true });
+    await writeFile(this.protoFile(), JSON.stringify(map, null, 2) + "\n", "utf8");
+    const overlays = (await this.readJson<PrototypeOverlay[]>(this.overlaysFile(), [])).filter((o) => o.prototypeKey !== key);
+    await this.writeJson(this.overlaysFile(), overlays);
+    const versions = (await this.readJson<ArtifactVersion[]>(this.versionsFile(), [])).filter((v) => v.prototypeKey !== key);
+    await this.writeJson(this.versionsFile(), versions);
+    const promotions = (await this.readJson<Promotion[]>(this.promotionsFile(), [])).filter((p) => p.prototypeKey !== key);
+    await this.writeJson(this.promotionsFile(), promotions);
+  }
+
+  async deletePage(siteKey: string, slug: string): Promise<void> {
+    await rm(join(this.pagesDir(siteKey), slug), { recursive: true, force: true });
+  }
 
   async getPrototypeOverlay(prototypeKey: string): Promise<PrototypeOverlay | null> {
     return (await this.readJson<PrototypeOverlay[]>(this.overlaysFile(), [])).find((o) => o.prototypeKey === prototypeKey) ?? null;

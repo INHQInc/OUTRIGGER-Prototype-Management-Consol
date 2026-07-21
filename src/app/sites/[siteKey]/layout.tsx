@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSite } from "@/lib/sites";
 import { canAccessOrg } from "@/lib/active-org";
+import { getOrg } from "@/lib/orgs";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +13,15 @@ export default async function SiteLayout(props: LayoutProps<"/sites/[siteKey]">)
   if (!site) notFound();
   // Tenant isolation: only members of the site's org (or global admins) may view it.
   if (site.orgId && !(await canAccessOrg(site.orgId))) notFound();
+  const org = site.orgId ? await getOrg(site.orgId) : null;
 
   return (
     <div className="flex-1 min-w-0 flex flex-col">
       <div className="px-8 pt-5 pb-4">
         <div className="text-[11px] text-muted-2 mb-1">
+          {org && <><span className="text-muted">{org.name}</span><span className="mx-1.5">›</span></>}
           <Link href="/" className="hover:text-foreground">Sites</Link>
-          <span className="mx-1.5">/</span>
+          <span className="mx-1.5">›</span>
           <span className="text-muted">{site.label}</span>
         </div>
         <h1 className="text-[18px] font-semibold tracking-tight">{site.label}</h1>

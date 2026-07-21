@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui";
 import { ArtifactVersions } from "@/components/ArtifactVersions";
 import { OverlayEditor } from "@/components/OverlayEditor";
 import { PromotePanel } from "@/components/PromotePanel";
+import { DeletePrototype } from "@/components/DeletePrototype";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,8 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
         initialPromotions={promotions}
         canPromote
       />
+
+      <DeletePrototype prototypeKey={key} siteKey={siteKey} name={p.name} />
     </div>
   );
 }

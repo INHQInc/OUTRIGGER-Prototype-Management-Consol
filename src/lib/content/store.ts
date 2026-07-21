@@ -71,6 +71,12 @@ export interface ContentStore {
   listPrototypes(siteKey?: string): Promise<PrototypeRecord[]>;
   getPrototype(key: string): Promise<PrototypeRecord | null>;
   putPrototype(record: PrototypeRecord): Promise<void>;
+  /** Cascade-delete a prototype: its record + overlay + versions + promotions. */
+  deletePrototype(key: string): Promise<void>;
+
+  // --- Pages ---
+  /** Delete a captured page (all its versions). Assets are left (shared, content-addressed). */
+  deletePage(siteKey: string, slug: string): Promise<void>;
 
   // --- Prototype overlay (inline authored code: css/js/blocks) ---
   getPrototypeOverlay(prototypeKey: string): Promise<PrototypeOverlay | null>;

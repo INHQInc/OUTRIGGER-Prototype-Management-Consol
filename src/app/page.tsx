@@ -3,6 +3,7 @@ import { listSites, listPages } from "@/lib/registry";
 import { PageHeader, Badge } from "@/components/ui";
 import { AddPages } from "@/components/AddPages";
 import { PagesTable } from "@/components/PagesTable";
+import { SiteActions } from "@/components/SiteActions";
 
 export const dynamic = "force-dynamic";
 
@@ -22,25 +23,30 @@ export default async function Home() {
         {/* Site summary cards → workspace */}
         <div className="grid grid-cols-2 gap-4">
           {sites.map((site) => (
-            <Link key={site.key} href={`/sites/${site.key}`} className="rounded-xl border border-border bg-surface p-5 hover:border-border-strong transition-colors">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-[14px] font-semibold">{site.label}</div>
-                  <div className="text-[12px] text-muted-2 mt-0.5 font-mono">{new URL(site.origin).host}</div>
+            <div key={site.key} className="rounded-xl border border-border bg-surface p-5 hover:border-border-strong transition-colors">
+              <Link href={`/sites/${site.key}`} className="block">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="text-[14px] font-semibold">{site.label}</div>
+                    <div className="text-[12px] text-muted-2 mt-0.5 font-mono">{new URL(site.origin).host}</div>
+                  </div>
+                  <Badge tone="accent">{site.key}</Badge>
                 </div>
-                <Badge tone="accent">{site.key}</Badge>
+                <div className="flex gap-6 mt-4">
+                  <div>
+                    <div className="text-[20px] font-semibold tabular-nums">{site.pageCount}</div>
+                    <div className="text-[11px] text-muted-2">pages</div>
+                  </div>
+                  <div>
+                    <div className="text-[20px] font-semibold tabular-nums">{site.versionCount}</div>
+                    <div className="text-[11px] text-muted-2">versions</div>
+                  </div>
+                </div>
+              </Link>
+              <div className="mt-4 pt-3 border-t border-border">
+                <SiteActions siteKey={site.key} />
               </div>
-              <div className="flex gap-6 mt-4">
-                <div>
-                  <div className="text-[20px] font-semibold tabular-nums">{site.pageCount}</div>
-                  <div className="text-[11px] text-muted-2">pages</div>
-                </div>
-                <div>
-                  <div className="text-[20px] font-semibold tabular-nums">{site.versionCount}</div>
-                  <div className="text-[11px] text-muted-2">versions</div>
-                </div>
-              </div>
-            </Link>
+            </div>
           ))}
         </div>
 

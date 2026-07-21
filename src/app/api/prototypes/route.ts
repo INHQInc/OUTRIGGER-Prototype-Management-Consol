@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
+import { getSite } from "@/lib/sites";
+import { canAccessOrg } from "@/lib/active-org";
+import { currentUser } from "@/lib/auth/current";
+import { audit } from "@/lib/audit";
 
 function slug(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "prototype";
@@ -73,4 +77,19 @@ export async function POST(req: NextRequest) {
 
   await store.putPrototype(record);
   return NextResponse.json({ prototype: record }, { status: 201 });
+}
+
+/** DELETE ?key=<key> → cascade-delete a prototype (overlay + versions + promotions). */
+export async function DELETE(req: NextRequest) {
+  const key = req.nextUrl.searchParams.get("key");
+  if (!key) return NextResponse.json({ error: "key required" }, { status: 400 });
+  const store = await getContentStore();
+  const proto = await store.getPrototype(key);
+  if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
+  const site = await getSite(proto.siteKey);
+  if (site?.orgId && !(await canAccessOrg(site.orgId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  await store.deletePrototype(key);
+  const user = await currentUser();
+  await audit(site?.orgId ?? "", user?.name ?? user?.sub ?? "system", "prototype.delete", proto.name, key);
+  return NextResponse.json({ ok: true });
 }

@@ -209,6 +209,16 @@ export class NeonContentStore implements ContentStore {
       values (${record.key}, ${record.siteKey}, ${JSON.stringify(record)}, now())
       on conflict (key) do update set site_key = excluded.site_key, data = excluded.data, updated_at = now()`;
   }
+  async deletePrototype(key: string): Promise<void> {
+    await this.sql`delete from prototype_overlay where prototype_key = ${key}`;
+    await this.sql`delete from artifact_version where prototype_key = ${key}`;
+    await this.sql`delete from promotion where prototype_key = ${key}`;
+    await this.sql`delete from prototype where key = ${key}`;
+  }
+
+  async deletePage(siteKey: string, slug: string): Promise<void> {
+    await this.sql`delete from page_version where site_key = ${siteKey} and slug = ${slug}`;
+  }
 
   async getPrototypeOverlay(prototypeKey: string): Promise<PrototypeOverlay | null> {
     const rows = await this.sql`select * from prototype_overlay where prototype_key = ${prototypeKey}`;

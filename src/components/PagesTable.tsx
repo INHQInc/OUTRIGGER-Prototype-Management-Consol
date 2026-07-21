@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge, EmptyState, TimeAgo } from "@/components/ui";
 import type { PageSummary } from "@/lib/registry";
+import { PageRowActions } from "@/components/PageRowActions";
 
 /** Reusable per-site captured-pages table. */
 export function PagesTable({ siteKey, pages, emptyLabel }: { siteKey: string; pages: PageSummary[]; emptyLabel?: string }) {
@@ -35,7 +36,7 @@ export function PagesTable({ siteKey, pages, emptyLabel }: { siteKey: string; pa
                 <Badge tone="ok">{p.latestRemovedCount} removed</Badge>
               </td>
               <td className="px-4 py-3 text-right">
-                <Link href={`/pages/${siteKey}/${p.slug}`} className="text-accent hover:text-accent-hover font-medium">Open →</Link>
+                <PageRowActions siteKey={siteKey} slug={p.slug} url={p.url} />
               </td>
             </tr>
           ))}
