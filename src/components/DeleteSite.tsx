@@ -29,7 +29,7 @@ export function DeleteSite({
       const res = await fetch(`/api/sites?site=${encodeURIComponent(siteKey)}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error ?? "Delete failed"); setBusy(false); return; }
-      router.push("/");
+      router.push("/sites");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e)); setBusy(false);

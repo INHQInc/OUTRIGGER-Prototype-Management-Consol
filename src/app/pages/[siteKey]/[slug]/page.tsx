@@ -28,7 +28,7 @@ export default async function PageDetail({ params }: { params: Promise<{ siteKey
         subtitle={meta.url}
         actions={
           <div className="flex items-center gap-2">
-            <Link href="/" className="h-9 px-3 flex items-center rounded-lg text-[13px] text-muted hover:text-foreground">← All pages</Link>
+            <Link href={`/sites/${siteKey}/pages`} className="h-9 px-3 flex items-center rounded-lg text-[13px] text-muted hover:text-foreground">← All pages</Link>
             <SyncButton siteKey={siteKey} url={meta.url} />
           </div>
         }

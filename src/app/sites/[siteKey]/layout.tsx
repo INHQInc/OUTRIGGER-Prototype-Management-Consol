@@ -20,7 +20,7 @@ export default async function SiteLayout(props: LayoutProps<"/sites/[siteKey]">)
       <div className="px-8 pt-5 pb-4">
         <div className="text-[11px] text-muted-2 mb-1">
           {org && <><span className="text-muted">{org.name}</span><span className="mx-1.5">›</span></>}
-          <Link href="/" className="hover:text-foreground">Sites</Link>
+          <Link href="/sites" className="hover:text-foreground">Sites</Link>
           <span className="mx-1.5">›</span>
           <span className="text-muted">{site.label}</span>
         </div>
