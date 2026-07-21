@@ -16,7 +16,29 @@ export function ArtifactVersions({ prototypeKey, initialVersions }: { prototypeK
   const [busy, setBusy] = useState(false);
   const [pinning, setPinning] = useState(false);
   const [pinNote, setPinNote] = useState<string | null>(null);
+  const [deploying, setDeploying] = useState(false);
+  const [deployNote, setDeployNote] = useState<{ text: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function deployToRepo() {
+    if (deploying) return;
+    setDeploying(true); setError(null); setDeployNote(null);
+    try {
+      const res = await fetch("/api/prototypes/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prototypeKey }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Deploy failed"); return; }
+      const d = data.deploy as { repo: string; branch: string; commitUrl: string; version: ArtifactVersion };
+      setVersions((v) => [d.version, ...v]);
+      setDeployNote({ text: `v${d.version.version} → ${d.repo}@${d.branch}`, url: d.commitUrl });
+      router.refresh();
+    } finally {
+      setDeploying(false);
+    }
+  }
 
   async function pinFromRepo() {
     if (pinning) return;
@@ -60,8 +82,17 @@ export function ArtifactVersions({ prototypeKey, initialVersions }: { prototypeK
           <span className="text-[12px] font-semibold">Versions</span>
           <span className="text-[11px] text-muted-2 ml-2">Immutable builds pinned to a commit — promoted across environments unchanged.</span>
         </div>
-        <button onClick={() => { setOpen((o) => !o); setError(null); setPinNote(null); }} className="text-[12px] text-accent hover:text-accent-hover font-medium">{open ? "Cancel" : "Cut version"}</button>
+        <div className="flex items-center gap-3">
+          <button onClick={deployToRepo} disabled={deploying} className="text-[12px] text-muted hover:text-foreground font-medium disabled:opacity-40">{deploying ? "Deploying…" : "Deploy → repo"}</button>
+          <button onClick={() => { setOpen((o) => !o); setError(null); setPinNote(null); }} className="text-[12px] text-accent hover:text-accent-hover font-medium">{open ? "Cancel" : "Cut version"}</button>
+        </div>
       </div>
+
+      {deployNote && (
+        <div className="px-4 py-2 border-b border-border bg-surface-2/30 text-[11px] text-muted">
+          Deployed <span className="font-mono text-foreground">{deployNote.text}</span> · <a href={deployNote.url} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover">view commit ↗</a>
+        </div>
+      )}
 
       {open && (
         <div className="px-4 py-3 border-b border-border bg-surface-2/30 space-y-2">
