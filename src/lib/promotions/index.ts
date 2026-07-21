@@ -7,6 +7,7 @@
 import { getContentStore } from "../content/store";
 import { getSite } from "../sites";
 import { listEnvironments } from "../environments";
+import { normalizeStage } from "../prototypes/types";
 import { audit } from "../audit";
 import { defaultVehicle, type Promotion, type PromotionVehicle } from "./types";
 import { promoteToOptimizely } from "./optimizely";
@@ -87,6 +88,17 @@ export async function promote(input: {
   }
 
   await store.addPromotion(promotion);
+
+  // Nudge the lifecycle stage forward (never backward) as a convenience — the
+  // pipeline is a guide; the user can still override the stage manually.
+  if (promotion.status === "active") {
+    const rank = { draft: 0, review: 1, live: 2, shipped: 3, archived: 3 } as const;
+    const target = env.kind === "production" ? "live" : env.kind === "staging" ? "review" : null;
+    if (target && rank[normalizeStage(proto.status)] < rank[target]) {
+      await store.putPrototype({ ...proto, status: target, updatedAt: new Date().toISOString() });
+    }
+  }
+
   await audit(
     orgId,
     actor,

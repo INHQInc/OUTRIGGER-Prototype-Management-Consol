@@ -79,6 +79,24 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ prototype: record }, { status: 201 });
 }
 
+/** PATCH { key, status } → advance/set a prototype's lifecycle stage (skippable). */
+export async function PATCH(req: NextRequest) {
+  let body: { key?: string; status?: string };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+  if (!body.key) return NextResponse.json({ error: "key required" }, { status: 400 });
+  const store = await getContentStore();
+  const proto = await store.getPrototype(body.key);
+  if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
+  const site = await getSite(proto.siteKey);
+  if (site?.orgId && !(await canAccessOrg(site.orgId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const status = normalizeStage(body.status);
+  const updated = { ...proto, status, updatedAt: new Date().toISOString() };
+  await store.putPrototype(updated);
+  const user = await currentUser();
+  await audit(site?.orgId ?? "", user?.name ?? user?.sub ?? "system", "prototype.stage", proto.name, status);
+  return NextResponse.json({ prototype: updated });
+}
+
 /** DELETE ?key=<key> → cascade-delete a prototype (overlay + versions + promotions). */
 export async function DELETE(req: NextRequest) {
   const key = req.nextUrl.searchParams.get("key");
