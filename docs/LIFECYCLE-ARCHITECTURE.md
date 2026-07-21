@@ -66,8 +66,11 @@ hypothesis  git PR    live inject    live inject     experiment     handoff→PR
 
 ## Target data model
 
-- **Brand/Site** — addressable brand presence; owns environments, pages,
-  snapshots (optional), and prototypes. No `mode`.
+- ~~Brand/Site~~ **AMENDED 2026-07-21: the Site entity was eliminated.** The model
+  is three nouns — Customer (brand/tenant) → Environment (where) → Prototype
+  (what). Environments belong directly to the customer; prototypes carry
+  `orgId` + target URL(s). Pages/snapshots are legacy-optional, not part of the
+  model. The lifecycle principles below are unchanged.
 - **Environment** *(per brand)* — `{ id, label, url, kind: dev|staging|production }`.
   The site's origin seeds the default `production` environment.
 - **Prototype** — the hypothesis: identity + structured brief + canonical A/B
@@ -84,7 +87,7 @@ hypothesis  git PR    live inject    live inject     experiment     handoff→PR
 
 - **Phase 1 — Foundations (data model).** Environments (seed origin →
   production) + immutable ArtifactVersion + prototype `stage`/`authoringSource`.
-  Additive/non-breaking. Drop clone/live from Add Site.
+  Additive/non-breaking. (Historical: Add Site later removed entirely with the Site entity.)
 - **Phase 2 — Promotions + governance.** Promote a version across environments
   (immutable), role-gated, append-only audit log.
 - **Phase 3 — Live-injection canvas.** Local live-proxy + overlay inject;

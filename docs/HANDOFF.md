@@ -46,10 +46,10 @@ Customer → Environments → Prototypes. /environments (Configuration) = env CR
 
 ## Current IA (all recent, user-driven)
 
-- **Nav:** WORK (Dashboard `/` · Prototypes `/prototypes` · Handoff) · CONFIGURATION (Sites) · SETTINGS (Experimentation · Repositories · Users=/settings/members · Activity) · OPERATOR (Customers · Console users). Customer switcher top; "Settings" entry in its dropdown.
+- **Nav:** WORK (Dashboard `/` · Prototypes `/prototypes` · Handoff) · CONFIGURATION (Environments `/environments`) · SETTINGS (Experimentation · Repositories · Users=/settings/members · Activity) · OPERATOR (Customers · Console users). Customer switcher top; "Settings" entry in its dropdown.
 - **Dashboard `/`** = default landing: Needs-attention (no sites / GitHub not connected / no repo registered / Opti not connected / no default project / failed promotions — each links to the fix), stage counts, active prototypes, live-on-environments, recent activity.
 - **Prototype workspace** `/prototypes/[key]` with tabs (real routes): **Pipeline** (stepper + Build:Source/Versions + Review:token links + Promote), **Details** (editable: targets/hypothesis/metrics/brief/owner), **Settings** (Code location + delete).
-- **Creation is a minimal stub**: Site + Name (+ optional targets); default prototypes-repo auto-attaches server-side (`prototype/<key>`); everything else edited later.
+- **Creation is a minimal stub**: Name (+ optional target URLs, environment URLs suggested); default prototypes-repo auto-attaches server-side (`prototype/<key>`); everything else edited later.
 - **Connectors (Optimizely pattern everywhere):** per-customer **GitHub connection** (validated via /user, stored server-side, env `GITHUB_TOKEN` = console-default fallback) → **repo registry** (roles: `prototypes`|`source`; providers github/azure-devops/external; per-role defaults; prototypes-role must be GitHub) → **prototype picks repo+branch** (selection-only UI; errors link to Settings → Repositories). Optimizely: brand token + default project (explicit Save), service-account guidance on tile; **paused drafts only, ever**.
 
 ## Gotchas / rules for future sessions
