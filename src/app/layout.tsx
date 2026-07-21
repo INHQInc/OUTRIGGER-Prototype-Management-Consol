@@ -2,27 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppFrame } from "@/components/AppFrame";
-import type { SiteNavNode } from "@/components/SiteSwitcher";
 import { currentUser } from "@/lib/auth/current";
-import { getAllSites } from "@/lib/sites";
-import { listPages } from "@/lib/registry";
 import { listOrgs } from "@/lib/orgs";
 import { accessibleOrgIds, getActiveOrgId } from "@/lib/active-org";
-
-async function buildSiteNav(): Promise<SiteNavNode[]> {
-  const sites = await getAllSites();
-  return Promise.all(
-    Object.values(sites).map(async (s) => {
-      const pages = await listPages(s.siteKey);
-      return {
-        key: s.siteKey,
-        label: s.label,
-        origin: s.origin,
-        pages: pages.map((p) => ({ slug: p.slug, path: p.url.replace(/^https?:\/\/[^/]+/, "") || "/" })),
-      };
-    })
-  );
-}
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -46,7 +28,6 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await currentUser();
-  let sites: SiteNavNode[] = [];
   let orgs: { id: string; name: string }[] = [];
   let activeOrgId: string | null = null;
   const canCreate = user?.role === "admin";
@@ -54,7 +35,6 @@ export default async function RootLayout({
     const accessible = new Set(await accessibleOrgIds());
     orgs = (await listOrgs()).filter((o) => accessible.has(o.id)).map((o) => ({ id: o.id, name: o.name }));
     activeOrgId = await getActiveOrgId();
-    sites = await buildSiteNav(); // scoped to the active org
   }
   return (
     <html
@@ -62,7 +42,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex">
-        <AppFrame user={user} sites={sites} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
+        <AppFrame user={user} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
       </body>
     </html>
   );

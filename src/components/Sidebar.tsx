@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionPayload } from "@/lib/auth/types";
-import { type SiteNavNode } from "./SiteSwitcher";
 import { OrgSwitcher, type OrgOption } from "./OrgSwitcher";
 
 interface NavItem { href: string; label: string; icon: string; exact?: boolean }
@@ -19,30 +18,15 @@ const ICON = {
   brand: "M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 12v.01M9 15v.01M9 18v.01",
 };
 
-export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: SessionPayload | null; sites: SiteNavNode[]; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean }) {
+export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionPayload | null; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-
-  const m = pathname.match(/^\/sites\/([^/]+)/);
-  const currentSiteKey = m ? decodeURIComponent(m[1]) : null;
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }
-
-  const siteNav: NavItem[] = currentSiteKey
-    ? [
-        { href: `/sites/${currentSiteKey}`, label: "Overview", icon: ICON.overview, exact: true },
-        { href: `/sites/${currentSiteKey}/prototypes`, label: "Prototypes", icon: ICON.prototypes },
-        { href: `/sites/${currentSiteKey}/pages`, label: "Pages", icon: ICON.pages },
-        { href: `/sites/${currentSiteKey}/deploys`, label: "Deploys", icon: ICON.deploys },
-        { href: `/sites/${currentSiteKey}/settings`, label: "Site settings", icon: ICON.settings },
-      ]
-    : [];
-
-  const currentSiteLabel = sites.find((s) => s.key === currentSiteKey)?.label ?? currentSiteKey;
 
   const sectionHeader = (label: string) => (
     <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>
@@ -76,20 +60,12 @@ export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: S
       <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
-        {sectionHeader("Prototype Management")}
+        {sectionHeader("Work")}
         {renderLink({ href: "/", label: "Prototypes", icon: ICON.prototypes, exact: true })}
         {renderLink({ href: "/handoff", label: "Handoff", icon: ICON.handoff })}
 
-        {sectionHeader("Site Management")}
-        {renderLink({ href: "/sites", label: "Sites", icon: ICON.overview })}
-        {currentSiteKey && (
-          <div className="ml-3 mt-0.5 pl-2 border-l border-border space-y-0.5">
-            <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold text-foreground truncate">{currentSiteLabel}</div>
-            {siteNav.map(renderLink)}
-          </div>
-        )}
-
-        {sectionHeader("Brand Settings")}
+        {sectionHeader("Configuration")}
+        {renderLink({ href: "/sites", label: "Sites", icon: ICON.pages })}
         {renderLink({ href: "/settings/brand", label: "Experimentation", icon: ICON.settings })}
         {renderLink({ href: "/members", label: "Members", icon: ICON.users })}
 

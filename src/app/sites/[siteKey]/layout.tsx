@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSite } from "@/lib/sites";
 import { canAccessOrg } from "@/lib/active-org";
 import { getOrg } from "@/lib/orgs";
+import { SiteTabs } from "@/components/SiteTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,10 @@ export default async function SiteLayout(props: LayoutProps<"/sites/[siteKey]">)
         <a href={site.origin} target="_blank" rel="noreferrer" className="text-[12px] text-muted-2 font-mono mt-0.5 hover:text-accent">
           {new URL(site.origin).host}
         </a>
+        <div className="mt-4"><SiteTabs siteKey={siteKey} /></div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 pb-6 border-t border-border pt-6">{children}</div>
+      <div className="flex-1 overflow-y-auto px-8 pb-6 pt-6">{children}</div>
     </div>
   );
 }
