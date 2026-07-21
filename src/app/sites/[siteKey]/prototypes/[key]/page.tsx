@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
+import { getPrototypeOverlay, buildOverlayVariation } from "@/lib/prototypes/overlay";
 import { listEnvironments } from "@/lib/environments";
 import { listPromotions } from "@/lib/promotions";
 import { Badge } from "@/components/ui";
 import { ArtifactVersions } from "@/components/ArtifactVersions";
+import { OverlayEditor } from "@/components/OverlayEditor";
 import { PromotePanel } from "@/components/PromotePanel";
 import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
 
@@ -25,11 +27,13 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p || p.siteKey !== siteKey) notFound();
-  const [versions, environments, promotions] = await Promise.all([
+  const [versions, environments, promotions, overlay] = await Promise.all([
     listArtifactVersions(key),
     listEnvironments(siteKey),
     listPromotions(key),
+    getPrototypeOverlay(key),
   ]);
+  const overlayLint = buildOverlayVariation(key, overlay).lint;
 
   const h = p.hypothesis;
 
@@ -72,6 +76,8 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
         <Field label="Owner">{p.owner}</Field>
         <Field label="Ticket">{p.ticketUrl ? <a href={p.ticketUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover font-mono break-all">{p.ticketUrl}</a> : ""}</Field>
       </div>
+
+      <OverlayEditor prototypeKey={key} initialOverlay={overlay} initialLint={overlayLint} />
 
       <ArtifactVersions prototypeKey={key} initialVersions={versions} />
 

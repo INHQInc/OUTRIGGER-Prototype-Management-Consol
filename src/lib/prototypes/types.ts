@@ -45,6 +45,32 @@ export const STAGE_TONE: Record<PrototypeStage, "neutral" | "ok" | "warn" | "dan
 
 export type TargetSource = "clone" | "live";
 
+/** How an overlay HTML block is placed relative to its anchor selector. */
+export type OverlayMode = "before" | "after" | "prepend" | "append" | "replace";
+
+/** One HTML injection: a fragment placed relative to a page selector. */
+export interface OverlayBlock {
+  selector: string;
+  mode: OverlayMode;
+  html: string;
+}
+
+/**
+ * The prototype's OVERLAY CODE — CSS + HTML blocks + behavior JS, stored inline
+ * (hosted-writable, unlike the file-based legacy features). This is what gets
+ * compiled to the self-contained variation injected on staging (loader) and
+ * shipped into the Optimizely experiment (production). Closes the
+ * overlay-authoring gap.
+ */
+export interface PrototypeOverlay {
+  prototypeKey: string;
+  siteKey: string;
+  css: string;
+  js: string;
+  blocks: OverlayBlock[];
+  updatedAt: string;
+}
+
 export interface PrototypeTarget {
   /** Page URL / path on the site the prototype targets. */
   url: string;

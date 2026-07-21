@@ -25,7 +25,7 @@ export interface VariationExport {
  * and known; the live DOM is dynamic, so brittle anchors that work in preview
  * can fail in the experiment. Flag them before promotion.
  */
-function lintSelector(selector: string | undefined): LintFinding[] {
+export function lintSelector(selector: string | undefined): LintFinding[] {
   const out: LintFinding[] = [];
   if (!selector) return out;
   if (/\s>\s|\+|~/.test(selector) || selector.split(/\s+/).length >= 4) {
@@ -48,37 +48,16 @@ function embed(s: string): string {
   return JSON.stringify(s);
 }
 
-export async function buildVariationExport(feature: FeatureManifest): Promise<VariationExport> {
-  const lint: LintFinding[] = [];
-  let css = "";
-  const htmlBlocks: { selector: string; mode: string; html: string }[] = [];
-  let js = "";
+export interface VariationBlock { selector: string; mode: string; html: string }
 
-  for (const inj of feature.injections) {
-    const file = resolveInjectionFile(inj);
-    if (inj.type === "css") {
-      const content = file ? await readFeatureFile(feature.key, file) : null;
-      if (content == null) { lint.push({ level: "error", message: `Missing CSS file: ${file}` }); continue; }
-      css += (css ? "\n" : "") + content;
-    } else if (inj.type === "js") {
-      const content = file ? await readFeatureFile(feature.key, file) : null;
-      if (content == null) { lint.push({ level: "error", message: `Missing JS file: ${file}` }); continue; }
-      js += (js ? "\n" : "") + content;
-    } else if (inj.type === "html") {
-      if (!inj.selector) { lint.push({ level: "error", message: `HTML injection has no anchor selector (fragment ${inj.fragment})` }); continue; }
-      const content = file ? await readFeatureFile(feature.key, file) : null;
-      if (content == null) { lint.push({ level: "error", message: `Missing fragment: ${inj.fragment}` }); continue; }
-      lint.push(...lintSelector(inj.selector));
-      htmlBlocks.push({ selector: inj.selector, mode: inj.mode ?? "after", html: content });
-    }
-  }
-
-  if (!feature.liveUrls?.length) {
-    lint.push({ level: "info", message: "No liveUrls set — the experiment will need URL targeting configured manually in Optimizely." });
-  }
-
-  const key = feature.key;
-  const variationJs = `/* Optimizely Web variation — generated from feature "${key}" by Outrigger Prototype Console.
+/**
+ * Render the self-contained, idempotent, dynamic-DOM-safe variation JS from
+ * resolved pieces (CSS + HTML blocks + behavior JS). Shared by the file-based
+ * feature export and the store-based prototype overlay so both emit identical
+ * injection code.
+ */
+export function renderVariationJs(key: string, css: string, blocks: VariationBlock[], js: string): string {
+  return `/* Optimizely Web variation — generated from "${key}" by Outrigger Prototype Console.
    Idempotent + dynamic-DOM safe (waits for anchors, re-applies via observer). */
 (function () {
   var NS = ${embed(`opmc-${key}`)};
@@ -87,7 +66,7 @@ export async function buildVariationExport(feature: FeatureManifest): Promise<Va
   window.__opmc_variations[NS] = true;
 
   var CSS = ${embed(css)};
-  var BLOCKS = ${JSON.stringify(htmlBlocks)};
+  var BLOCKS = ${JSON.stringify(blocks)};
 
   function injectCss() {
     var id = NS + "-css";
@@ -145,15 +124,47 @@ export async function buildVariationExport(feature: FeatureManifest): Promise<Va
     run();
   }
 
-  /* --- feature overlay.js --- */
+  /* --- overlay behavior js --- */
   try {
 ${js.split("\n").map((l) => "    " + l).join("\n")}
   } catch (e) { if (window.console) console.warn("[" + NS + "] overlay error", e); }
 })();
 `;
+}
+
+export async function buildVariationExport(feature: FeatureManifest): Promise<VariationExport> {
+  const lint: LintFinding[] = [];
+  let css = "";
+  const htmlBlocks: { selector: string; mode: string; html: string }[] = [];
+  let js = "";
+
+  for (const inj of feature.injections) {
+    const file = resolveInjectionFile(inj);
+    if (inj.type === "css") {
+      const content = file ? await readFeatureFile(feature.key, file) : null;
+      if (content == null) { lint.push({ level: "error", message: `Missing CSS file: ${file}` }); continue; }
+      css += (css ? "\n" : "") + content;
+    } else if (inj.type === "js") {
+      const content = file ? await readFeatureFile(feature.key, file) : null;
+      if (content == null) { lint.push({ level: "error", message: `Missing JS file: ${file}` }); continue; }
+      js += (js ? "\n" : "") + content;
+    } else if (inj.type === "html") {
+      if (!inj.selector) { lint.push({ level: "error", message: `HTML injection has no anchor selector (fragment ${inj.fragment})` }); continue; }
+      const content = file ? await readFeatureFile(feature.key, file) : null;
+      if (content == null) { lint.push({ level: "error", message: `Missing fragment: ${inj.fragment}` }); continue; }
+      lint.push(...lintSelector(inj.selector));
+      htmlBlocks.push({ selector: inj.selector, mode: inj.mode ?? "after", html: content });
+    }
+  }
+
+  if (!feature.liveUrls?.length) {
+    lint.push({ level: "info", message: "No liveUrls set — the experiment will need URL targeting configured manually in Optimizely." });
+  }
+
+  const variationJs = renderVariationJs(feature.key, css, htmlBlocks, js);
 
   return {
-    featureKey: key,
+    featureKey: feature.key,
     featureName: feature.name,
     variationJs,
     css,

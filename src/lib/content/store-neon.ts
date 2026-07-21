@@ -3,7 +3,7 @@ import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
 import type { SiteRepoBinding } from "../git/types";
-import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
+import type { PrototypeRecord, ArtifactVersion, PrototypeOverlay, OverlayBlock } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment, EnvironmentKind } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
@@ -123,6 +123,15 @@ export class NeonContentStore implements ContentStore {
       )`);
     await this.ddl(() => this.sql`create index if not exists prototype_site_idx on prototype (site_key)`);
     await this.ddl(() => this.sql`
+      create table if not exists prototype_overlay (
+        prototype_key text primary key,
+        site_key text not null,
+        css text not null default '',
+        js text not null default '',
+        blocks text not null default '[]',
+        updated_at timestamptz not null default now()
+      )`);
+    await this.ddl(() => this.sql`
       create table if not exists artifact_version (
         id text primary key,
         prototype_key text not null,
@@ -198,6 +207,27 @@ export class NeonContentStore implements ContentStore {
       insert into prototype (key, site_key, data, updated_at)
       values (${record.key}, ${record.siteKey}, ${JSON.stringify(record)}, now())
       on conflict (key) do update set site_key = excluded.site_key, data = excluded.data, updated_at = now()`;
+  }
+
+  async getPrototypeOverlay(prototypeKey: string): Promise<PrototypeOverlay | null> {
+    const rows = await this.sql`select * from prototype_overlay where prototype_key = ${prototypeKey}`;
+    if (!rows[0]) return null;
+    let blocks: OverlayBlock[] = [];
+    try { blocks = JSON.parse(rows[0].blocks as string) as OverlayBlock[]; } catch { blocks = []; }
+    return {
+      prototypeKey: rows[0].prototype_key as string,
+      siteKey: rows[0].site_key as string,
+      css: rows[0].css as string,
+      js: rows[0].js as string,
+      blocks,
+      updatedAt: new Date(rows[0].updated_at as string).toISOString(),
+    };
+  }
+  async putPrototypeOverlay(o: PrototypeOverlay): Promise<void> {
+    await this.sql`
+      insert into prototype_overlay (prototype_key, site_key, css, js, blocks, updated_at)
+      values (${o.prototypeKey}, ${o.siteKey}, ${o.css}, ${o.js}, ${JSON.stringify(o.blocks)}, ${o.updatedAt})
+      on conflict (prototype_key) do update set site_key = excluded.site_key, css = excluded.css, js = excluded.js, blocks = excluded.blocks, updated_at = excluded.updated_at`;
   }
 
   async listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
@@ -385,6 +415,7 @@ export class NeonContentStore implements ContentStore {
     await this.sql`delete from asset where site_key = ${siteKey}`;
     await this.sql`delete from artifact_version where site_key = ${siteKey}`;
     await this.sql`delete from promotion where site_key = ${siteKey}`;
+    await this.sql`delete from prototype_overlay where site_key = ${siteKey}`;
     await this.sql`delete from prototype where site_key = ${siteKey}`;
     await this.sql`delete from repo_binding where site_key = ${siteKey}`;
     await this.sql`delete from environment where site_key = ${siteKey}`;
