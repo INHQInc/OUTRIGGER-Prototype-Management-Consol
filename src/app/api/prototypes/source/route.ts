@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getContentStore } from "@/lib/content/store";
 import { resolveRepoSource } from "@/lib/prototypes/source";
-import { getSite } from "@/lib/sites";
-import { canAccessOrg } from "@/lib/active-org";
-import { apiOrgFromAuthHeader } from "@/lib/api-token";
+import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 
 /**
  * GET ?key=<prototypeKey> → the prototype's repo-source status (repo, branch,
@@ -11,16 +8,10 @@ import { apiOrgFromAuthHeader } from "@/lib/api-token";
  * the variation body — just the status the workspace needs.
  */
 export async function GET(req: NextRequest) {
-  const prototypeKey = req.nextUrl.searchParams.get("key");
-  if (!prototypeKey) return NextResponse.json({ error: "prototype key required" }, { status: 400 });
-  const proto = await (await getContentStore()).getPrototype(prototypeKey);
-  if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
-  const site = await getSite(proto.siteKey);
-  const tokenOrg = await apiOrgFromAuthHeader(req.headers.get("authorization"));
-  const tokenOk = tokenOrg !== null && tokenOrg === site?.orgId;
-  if (site?.orgId && !tokenOk && !(await canAccessOrg(site.orgId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"));
+  if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
   try {
-    const src = await resolveRepoSource(prototypeKey);
+    const src = await resolveRepoSource(g.proto.key);
     // Strip the variation body — status only.
     const { variationJs, ...status } = src;
     void variationJs;

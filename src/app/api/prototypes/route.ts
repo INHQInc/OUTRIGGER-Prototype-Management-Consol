@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
-import { canAccessOrg, getActiveOrgId } from "@/lib/active-org";
+import { accessibleOrgIds, canAccessOrg, getActiveOrgId } from "@/lib/active-org";
+import { listOrgEnvironments } from "@/lib/environments";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
@@ -22,11 +23,24 @@ export async function GET(req: NextRequest) {
     const proto = await store.getPrototype(key);
     if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
     if ((await resolvePrototypeOrg(proto)) !== tokenOrg) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const environments = (await listOrgEnvironments(tokenOrg)).map((e) => ({ label: e.label, url: e.url, kind: e.kind }));
+    return NextResponse.json({ prototype: proto, environments });
+  }
+  if (key) {
+    const proto = await store.getPrototype(key);
+    if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
+    const org = await resolvePrototypeOrg(proto);
+    if (!org || !(await canAccessOrg(org))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     return NextResponse.json({ prototype: proto });
   }
-  if (key) return NextResponse.json({ prototype: await store.getPrototype(key) });
   const site = req.nextUrl.searchParams.get("site") ?? undefined;
-  return NextResponse.json({ prototypes: await store.listPrototypes(site) });
+  const accessible = new Set(await accessibleOrgIds());
+  const prototypes: PrototypeRecord[] = [];
+  for (const p of await store.listPrototypes(site)) {
+    const org = await resolvePrototypeOrg(p);
+    if (org && accessible.has(org)) prototypes.push(p);
+  }
+  return NextResponse.json({ prototypes });
 }
 
 /** POST → create (no key) or update (key present) a prototype record. */
@@ -36,17 +50,21 @@ export async function POST(req: NextRequest) {
 
   if (!b.name?.trim()) return NextResponse.json({ error: "Name required" }, { status: 400 });
   const activeOrg = await getActiveOrgId();
-  if (!activeOrg && !b.key) return NextResponse.json({ error: "No active customer." }, { status: 400 });
 
   const store = await getContentStore();
   const now = new Date().toISOString();
 
   let key = b.key;
   let createdAt = now;
-  let existingOrg: string | undefined;
+  let existing: PrototypeRecord | null = null;
+  let existingOrg = "";
   if (key) {
-    const existing = await store.getPrototype(key);
-    if (existing) { createdAt = existing.createdAt; existingOrg = existing.orgId; }
+    existing = await store.getPrototype(key);
+    if (existing) {
+      createdAt = existing.createdAt;
+      existingOrg = await resolvePrototypeOrg(existing);
+      if (!existingOrg || !(await canAccessOrg(existingOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   } else {
     // derive a unique key from the name
     const base = slug(b.name);
@@ -54,11 +72,13 @@ export async function POST(req: NextRequest) {
     let n = 2;
     while (await store.getPrototype(key)) key = `${base}-${n++}`;
   }
+  // Creating (no existing record) always requires an owning customer — no orphans.
+  if (!existing && !activeOrg) return NextResponse.json({ error: "No active customer." }, { status: 400 });
 
   const record: PrototypeRecord = {
     key,
-    orgId: b.key ? existingOrg : activeOrg!,
-    siteKey: b.siteKey ?? "",
+    orgId: existing ? existingOrg : activeOrg!,
+    siteKey: b.siteKey ?? existing?.siteKey ?? "",
     name: b.name.trim(),
     status: normalizeStage(b.status),
     repo: b.repo?.fullName?.trim()
@@ -107,7 +127,7 @@ export async function PATCH(req: NextRequest) {
   const proto = await store.getPrototype(body.key);
   if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
   const protoOrg = await resolvePrototypeOrg(proto);
-  if (protoOrg && !(await canAccessOrg(protoOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!protoOrg || !(await canAccessOrg(protoOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const updated = { ...proto, updatedAt: new Date().toISOString() };
   const changes: string[] = [];
   if (body.status !== undefined) { updated.status = normalizeStage(body.status); changes.push(updated.status); }
@@ -150,7 +170,7 @@ export async function DELETE(req: NextRequest) {
   const proto = await store.getPrototype(key);
   if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
   const delOrg = await resolvePrototypeOrg(proto);
-  if (delOrg && !(await canAccessOrg(delOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!delOrg || !(await canAccessOrg(delOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   await store.deletePrototype(key);
   const user = await currentUser();
   await audit(delOrg, user?.name ?? user?.sub ?? "system", "prototype.delete", proto.name, key);

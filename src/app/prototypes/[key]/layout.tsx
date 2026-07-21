@@ -17,7 +17,7 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
   if (!p) notFound();
   // Tenant isolation via the owning customer.
   const orgId = await resolvePrototypeOrg(p);
-  if (orgId && !(await canAccessOrg(orgId))) notFound();
+  if (!orgId || !(await canAccessOrg(orgId))) notFound();
   const stage = normalizeStage(p.status);
 
   return (

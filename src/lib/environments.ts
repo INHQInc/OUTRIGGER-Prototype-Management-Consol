@@ -52,6 +52,7 @@ function sortEnvs(envs: Environment[]): Environment[] {
  * site-keyed environments belonging to the org's sites (one-time, persisted).
  */
 export async function listOrgEnvironments(orgId: string): Promise<Environment[]> {
+  if (!orgId) return []; // "" would match every not-yet-migrated legacy row across tenants
   const store = await getContentStore();
   const own = await store.listEnvironmentsByOrg(orgId);
   // Legacy adoption: envs still keyed to this org's old sites.
