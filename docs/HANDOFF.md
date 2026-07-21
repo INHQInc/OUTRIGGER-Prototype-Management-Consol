@@ -1,105 +1,55 @@
-# Session Handoff — read this first
+# HANDOFF — Current State & Continuity
 
-*Last updated: 2026-07-17*
+*Updated: 2026-07-21. Read AGENTS.md first (model + rules), then this (state + next moves).*
 
-Continuity doc for the next Claude instance. Read [`AGENTS.md`](../AGENTS.md) for invariants, then this for current state.
+## What the product is now
 
-## ⚠️ Open in the right folder
+Multi-tenant **build-and-ship layer for web experiments**: author advanced prototypes in a repo (with Claude), review them **injected on the customer's real lower environment** via our loader, promote immutable versions, graduate winners into **paused Optimizely experiments**, ship via handoff. Live customer: OUTRIGGER (site key `prep-outrigger`, prep.outrigger.com).
 
-Work happens in **`/Users/bryanhopkins/Projects/OUTRIGGER Prototypes/OUTRIGGER Prototype Managment Console`** (git remote `INHQInc/OUTRIGGER-Prototype-Management-Consol`). Earlier sessions were accidentally rooted in `~/AIChat/resort-ai-chatbot` (a *different* project, BrandGraph). Make sure the session is rooted here so this repo's `CLAUDE.md`/`AGENTS.md` load.
+## Verified live (do not re-litigate)
 
-## What this project is
+- **Loader is deployed on prep.outrigger.com** (tag in CMS, republished). Full chain proven in-browser: script loads (**prep has NO CSP**), reads `?opmc=<key>`, fetches `/api/loader` cross-origin (200/CORS), **injects into the live DOM** (proven with the legacy trip-planner overlay: `script[data-opmc]`, `#opmc-<key>-css`, `[data-opmc-<key>-block-0]` markers). Inert without the token.
+- Loader tag (canonical public domain — the team-scoped `…-bryan-hopkins-projects` URL is Vercel-SSO-blocked, never use it for the tag):
+  `<script src="https://outrigger-prototype-management-cons.vercel.app/loader/prep-outrigger" async></script>`
+- Optimizely brand connection works (9 projects listed; default = Outrigger Prep `24138040550`).
+- Git deploys to `INHQInc/outrigger-prototypes` work (Git Data API, one commit per bundle).
 
-A local-first Next.js console that: **captures** sanitized, versioned clones of outrigger.com / hawaiivacationcondos.outrigger.com pages → lets you build **overlay features** on them → **deploys** demos → optionally **experiments** via Optimizely → **hands off** to devs in their block conventions. Full concept + invariants in `AGENTS.md`.
+## IN FLIGHT: Favorites — first real end-to-end prototype
 
-## Run it
+1. DONE — code extracted from the standalone demo (`INHQInc/outriggerprojects` → `outrigger-demo-2/favorites.{js,css}`) and adapted for live injection (demo nav/logo-rewrite stripped, `inte.outrigger.com` → same-origin, corals webp inlined, view-all → tray, late-injection retry, **global-scope** execution for 50 inline onclick handlers).
+2. DONE — pushed: branch **`prototype/favorites`** on `INHQInc/outrigger-prototypes` with **`dist/variation.js`** (200KB, self-contained) + `src/` + `build.mjs` (rebuild: `node build.mjs`).
+3. TODO (user, in the app) — Settings → Repositories: connect GitHub (env fallback also works) and **register `INHQInc/outrigger-prototypes`** (registry is currently EMPTY — this blocks everything); then on a prototype (e.g. "Rooms Overlay") Settings → Code location → pick the repo, branch `prototype/favorites` (or stub a new prototype named **Favorites** → key `favorites` matches the branch by convention).
+4. TODO — Source panel shows "✓ Built variation present" → **Cut version from repo** → open `https://prep.outrigger.com/hawaii/oahu/outrigger-reef-waikiki-beach-resort/rooms-suites?opmc=favorites` → Claude verifies injection in the browser (hearts on room-card sliders, tray on the native Trip Planner header button).
 
-```bash
-cd "/Users/bryanhopkins/Projects/OUTRIGGER Prototypes/OUTRIGGER Prototype Managment Console"
-npm install
-npm run dev            # http://localhost:3000
-npx tsc --noEmit       # typecheck before committing
-```
-- Capture a page: `npx tsx scripts/capture.ts <outrigger|hvc> <url>`
-- Export a variation: `npx tsx scripts/export-variation.ts <feature-key>`
-- Local auth test creds live in `.env.local` (admin@outrigger.local / changeme-local-dev).
+## Core model (docs/LIFECYCLE-ARCHITECTURE.md is canonical)
 
-## Built & working (verified)
+- **Repo = the code.** Prototype code is built in its repo branch and committed as a self-contained `dist/variation.js` (does its OWN DOM targeting/selectors). **The console pulls it — it never authors or pushes code.** (`resolveRepoSource` → branch HEAD artifact; loader serves repo HEAD (20s cache) → latest cut version's frozen code → legacy feature fallback.)
+- **Console = lifecycle**: stub → version (immutable, SHA-pinned, carries its code snapshot) → promote (append-only, per-env, staging=loader / production=paused Optimizely draft via the brand connection) → ship. Audit trail on everything.
+- **Pipeline is a map, not a track** — every step skippable; promote auto-nudges stage forward, manual stage select always available.
+- **Local dev** = repo dev-harness concern (clone a page locally or proxy the lower env), never a console feature. Clones/capture in the console are legacy/optional (Pages tab).
 
-- **Capture pipeline** (`src/lib/capture/`) — Firecrawl scrape → curl asset mirroring (beats their WAF TLS fingerprinting) → CSS/srcset rewrite → tracking sanitizer (GTM/GA4/OneTrust/Optimizely/pixels) + report + runtime clone-guard. 21 pages captured locally (2 homes + Waikiki property + 18 sub-pages).
-- **Console UI** — Sites & Pages (site cards + page tables from the snapshot filesystem), Page detail (device-framed live preview, version timeline, sanitization report, Sync Content). `/snap` + `/snap-assets` serving routes.
-- **Auth** (`src/lib/auth/`) — session-gate middleware (jose JWT, 365-day), admin sign-in + member one-time access links, `/settings/users` admin. Store seam: JSON local / Neon hosted. Verified: redirect, login, single-use links, role gating.
-- **Feature/overlay model** (`src/lib/features/`) + **Optimizely exporter** (`src/lib/optimizely/export.ts`) — sample `features/trip-planner/`. Verified the exported variation renders integrated on the Waikiki clone.
+## Current IA (all recent, user-driven)
 
-## Storage seam (important pattern)
+- **Nav:** WORK (Dashboard `/` · Prototypes `/prototypes` · Handoff) · CONFIGURATION (Sites) · SETTINGS (Experimentation · Repositories · Users=/settings/members · Activity) · OPERATOR (Customers · Console users). Customer switcher top; "Settings" entry in its dropdown.
+- **Dashboard `/`** = default landing: Needs-attention (no sites / GitHub not connected / no repo registered / Opti not connected / no default project / failed promotions — each links to the fix), stage counts, active prototypes, live-on-environments, recent activity.
+- **Prototype workspace** `/prototypes/[key]` with tabs (real routes): **Pipeline** (stepper + Build:Source/Versions + Review:token links + Promote), **Details** (editable: targets/hypothesis/metrics/brief/owner), **Settings** (Code location + delete).
+- **Creation is a minimal stub**: Site + Name (+ optional targets); default prototypes-repo auto-attaches server-side (`prototype/<key>`); everything else edited later.
+- **Connectors (Optimizely pattern everywhere):** per-customer **GitHub connection** (validated via /user, stored server-side, env `GITHUB_TOKEN` = console-default fallback) → **repo registry** (roles: `prototypes`|`source`; providers github/azure-devops/external; per-role defaults; prototypes-role must be GitHub) → **prototype picks repo+branch** (selection-only UI; errors link to Settings → Repositories). Optimizely: brand token + default project (explicit Save), service-account guidance on tile; **paused drafts only, ever**.
 
-No database for content. Two seams already abstract persistence so hosted = swap one impl:
-- **Pages/versions** → snapshot filesystem (`src/lib/registry.ts`).
-- **Features/overlays** → git files (`src/lib/features/registry.ts`).
-- **Auth users + (future) experiment bindings** → `src/lib/auth/store.ts` (JSON `.data/` local, Neon when `DATABASE_URL` set).
+## Gotchas / rules for future sessions
 
-## Deployment
+- **User runs `git push`** — the agent's push is blocked by the environment classifier. Always hand them the command; verify deploys after via Vercel MCP (`get_runtime_errors`, `list_deployments`) — project `prj_k2NQb2qYTAN2rlgHwW7D4KLOIONx`, team `team_VYlQ8CLTxGgRpafO8hbu5Gmz`.
+- **Schema changes only via the race-safe `ddl()`** in store-neon (catalog-race 23505). Neon auto-migrates on first request.
+- **No redirects-as-patches; real routes only. No free-text where a connector can supply a picker.** UX is prototype-first — never make Sites/config the spine.
+- tsc + `next build` before every commit; one concern per commit; user pushes batches.
+- `gh` CLI is authed (INHQInc) for repos the fine-grained `.env.local` token can't reach.
+- Legacy still present intentionally: `/features` + file-based features (trip-planner), FeatureStatus, site `mode`, per-site repo_binding (fallback), capture/Pages. Don't expand them; migrate away when touched.
 
-- Vercel project `outrigger-prototype-management-consol`, git-connected (`main` auto-deploys). URL: `outrigger-prototype-management-cons.vercel.app`.
-- **Hosted console shows 0 pages** — snapshots are gitignored/local-only, and Vercel FS is read-only. Console is **local-first** for now; hosting real content needs the Neon+Blob work (deferred). This is expected, not a bug.
+## Queued next (rough priority)
 
-## Next milestones (in order)
-
-1. **Optimizely draft-push** — create paused experiment in **Prep** (`24138040550`) via API. Blocked on `OPTIMIZELY_API_TOKEN`. See [`EXPERIMENT-INTEGRATION.md`](EXPERIMENT-INTEGRATION.md).
-2. **Experiment area UI** — binding, lock-while-running, modify+sync, drift indicator.
-3. **Features UI** — list/detail, injection-point picker (click element in preview).
-4. **Deploys UI** — pages @ versions + feature toggles → protected Vercel URL.
-5. **Handoff generator** — block-convention code + injection manifest + source-map notes (via read-only Azure clone) + git patch.
-6. **Personalization mode**; later **hosted console** (Neon + Vercel Blob).
-
-## Hosted deployment — LIVE & auth-gated (configured 2026-07-17)
-
-- Production `outrigger-prototype-management-cons.vercel.app` is auth-gated; admin login + Neon-backed store verified end-to-end (successful admin login writes to Neon before issuing the session).
-- Vercel env set: `AUTH_SECRET`, `ADMIN_EMAILS=inhqinc@gmail.com`, `ADMIN_LOGIN_SECRET`, `DATABASE_URL`. Admin login: `inhqinc@gmail.com`.
-- **Neon:** dedicated project `outrigger-prototype-console` (id `delicate-frog-62798343`, US East), **separate from BrandGraph** (`hospitality-ai-bot`) and `shopgraph-ai`. Tables `console_user` / `access_code` auto-created on first login.
-- Note: hosted console still shows **0 captured pages** (snapshots are local-only; needs Neon+Blob content work — deferred). Local-first for capture/prototyping remains the workflow.
-
-## Pending user actions (don't rebuild these — they're waiting on the user)
-
-- **`OPTIMIZELY_API_TOKEN`** — scoped service-account PAT for the draft-push (Prep project `24138040550`).
-- **Small cleanups:** flip `ADMIN_LOGIN_SECRET` back to *Sensitive* in Vercel (left non-sensitive during debugging); optionally rotate the Neon DB password (its connection string was pasted in chat) via Neon → Reset password, then update the one Vercel value.
-- Decide: keep console local-first, or do the Neon+Blob hosted-content work so the deployed console shows pages.
-- Login-form autofill gotcha: the browser will autofill a stale saved password on `/login`; sign in via an Incognito window (or clear the saved credential).
-
-## Read-only reference (never push)
-
-`~/Projects/Outrigger_Website` = Azure DevOps clone of Outrigger's real site source (ASP.NET + Optimizely CMS, block-per-folder architecture). **Pull only, never push** (push URL already disabled). Used for source-mapping handoffs and matching their conventions.
-
----
-
-## Session 2026-07-18 — locked decisions + handoff milestone
-
-**Lifecycle (locked):** build prototype (console, HTML/CSS/JS) → internal **approval** → *optional* Optimizely **experiment** (test) → devs **integrate into the Optimizely CMS** as the shippable product.
-
-**Directional decisions (locked):**
-1. **Authoring = dev-only** — build prototypes in Claude Code/Desktop on the repo; the console manages/previews/hands-off. No in-app AI builder (removed).
-2. **Live injection = Optimizely** — invite-only preview links via a paused Optimizely experiment; no homegrown loader (security). All-visitors = un-paused Opti campaign, needs Outrigger sign-off + human start.
-3. **Console = local-first** — build/capture locally; **Deploys** publishes a self-contained, protected prototype URL for the agency (no Neon+Blob content migration needed).
-4. **Handoff ships HTML/CSS/JS only — NOT C#.** We prototype front-end, so we hand off front-end mapped to their source. Making a feature an editor-managed CMS block (a C# content type) is the devs' call — the tool does not generate C#.
-
-**Done this session:** Features area (list/detail, live preview, selector lint), injection authoring (click-to-pick, placement presets, persistence), Optimizely variation exporter, and the **Handoff compare viewer** (`src/lib/handoff/*`, `/handoff`): resolver maps a prototype's anchors → owning Razor views in the read-only Azure clone (confidence + candidate picker, choice persisted to `features/<key>/handoff.json`); origin↔integrated side-by-side diff; `git apply` patch download. No tokens needed.
-
-**Pending (token-gated):**
-- `VERCEL_TOKEN` → **Deploys** (protected prototype URL for the agency). Placeholder keys already in `.env.local`.
-- `OPTIMIZELY_API_TOKEN` (+ `OPTIMIZELY_PROJECT_ID=24138040550`) → **Promote to Experiment** (paused draft + preview link in Prep).
-- Small cleanups still open: flip `ADMIN_LOGIN_SECRET` back to Sensitive in Vercel; optionally rotate the Neon DB password.
-
----
-
-## Session 2026-07-18 (cont.) — Optimizely promote + Deploys landed
-
-Both token-gated features are built and verified. Tokens live in `.env.local` (gitignored).
-
-- **Promote to Experiment** (`src/lib/optimizely/{api,promote}.ts`, `scripts/opti-promote.ts`): creates a PAUSED (`not_started`) Optimizely draft in Prep from a prototype's variation. Safety rail holds — never starts traffic. Verified: created draft `4732726941581312` in Prep. Shareable invite-only preview = Optimizely's own preview/force-variation link.
-- **Deploys** (`src/lib/deploy/bundle.ts`, `scripts/deploy.ts`): bakes the target snapshot + overlay (variant) into a self-contained static bundle (transitive assets only), adds Basic-Auth edge middleware (per-deploy password) + noindex, deploys to Vercel via `VERCEL_TOKEN`. Verified live: 401 without password / 200 with; overlay renders; assets serve. Externally shareable for the agency. No Neon+Blob needed.
-
-**CLIs:** `npx tsx scripts/opti-promote.ts <key>` · `npx tsx scripts/deploy.ts <key>`.
-
-**Remaining = UI wiring only** (engines all work via CLI): a "Deploy" button + a "Promote to Experiment" button on the feature detail (Experiment/Deploy panels), and a Deploys index listing past deploys. Plus minor cleanups: one orphan Optimizely Page in Prep from a failed first attempt; rotate the Optimizely + Vercel tokens (pasted in chat) once confirmed.
-
-**Full loop now works:** capture → build → deploy (protected URL) → optional Optimizely experiment → handoff compare viewer + patch.
+1. Finish Favorites E2E (user steps above + browser verification on prep).
+2. **Starter repo scaffold** — prototype branch template: dev harness (local clone-or-proxy + hot reload) + `dist/variation.js` build convention; possibly a console "create branch from template" action.
+3. **Ship step** — use source-role registry entry: PR for GitHub sources; handoff bundle for azure-devops/external. (Read-on-demand source client: GitHub first, Azure DevOps for Outrigger.)
+4. Environment editing (rename/kind — prep is mislabeled `production` from origin-seed); version-pinned loader serving; multi-URL Optimizely page targeting; auto-cut version on branch push (webhook).
+5. GitHub App/OAuth connector + Optimizely OAuth (multi-customer polish). Custom domain for the console (loader tag stability).
+6. Hygiene: user should rotate the GitHub PAT pasted in an early chat; move the Opti token to a service account (guidance now on the tile).

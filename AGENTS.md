@@ -1,8 +1,8 @@
 # Claude Context Guide — OUTRIGGER Prototype Management Console
 
-*Last updated: 2026-07-20*
+*Last updated: 2026-07-21*
 
-> **Architecture of record:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) — the locked prototype lifecycle model. Read it first.
+> **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work, gotchas — authoritative for "where are we"**).
 
 ## What This Is
 
@@ -13,21 +13,21 @@ A **multi-tenant "build-and-ship layer"** for advanced web experiments — the p
 ## Domain model (current)
 
 ```
-Brand (Org = customer)              ← tenant; active via cookie opmc_org; managed in Customers
- ├─ Sites (web properties)          ← setup: environments, repo, pages, integrations
- │    ├─ Environments (dev/staging/production)   ← origin seeds "production"; promotion targets
- │    ├─ Repo binding (feature repo + source mode)
- │    └─ Pages (clone snapshots)     ← OPTIONAL; capture on demand (live-injection-first)
- └─ Prototypes  ← THE primary object; belongs to ONE site, targets page(s)
-      ├─ brief + hypothesis + metrics + lifecycle stage (draft→review→live→shipped→archived)
-      ├─ Overlay code (css/js/HTML blocks, inline) → compiled to injectable variation JS
-      ├─ ArtifactVersions (immutable, git-SHA-pinned; carry a compiled-code snapshot)
+Brand (Org = customer)   ← tenant; cookie opmc_org; per-customer CONNECTORS:
+ ├─ GitHub connection (env GITHUB_TOKEN = console-default fallback)
+ ├─ Repo registry (roles prototypes|source; providers github/azure-devops/external; per-role defaults)
+ ├─ Optimizely connection (token + default project; paused drafts only)
+ ├─ Sites (web properties) ← config only: environments (origin seeds "production"), loader, optional Pages
+ └─ Prototypes  ← THE primary object; belongs to ONE site, targets page URL(s)
+      ├─ minimal stub (Site+Name); details (hypothesis/metrics/brief) edited later; stage draft→review→live→shipped→archived
+      ├─ repo ref { fullName, branch, artifactPath } picked from the registry — CODE LIVES IN THE REPO
+      │    (self-contained dist/variation.js at branch HEAD; console PULLS it, never authors/pushes code)
+      ├─ ArtifactVersions (immutable, SHA-pinned, carry the code snapshot)
       └─ Promotions (version → environment; append-only, governed, audited)
 ```
 
-- **Prototype-driven IA.** Home (`/`) is the **Prototypes board** (grouped by stage, filter by site). **Sites** (`/sites`) is setup. Left rail groups: Prototype Management · Site Management (Sites + current-site tabs nested) · Brand Settings (Experimentation, Members) · Operator (Customers, Users).
-- A prototype **references** one site + page(s); the site is shared infrastructure across many prototypes.
-- **Canvas: live-injection-first.** Prototypes author/preview against the live (lower-env) DOM via the loader; **clones are an opt-in fallback** (client blocks scripts / hard-to-reach state / frozen review URL).
+- **IA:** Dashboard (`/`, default landing: needs-attention/pipeline/live-where/activity) · Prototypes board (`/prototypes`) · workspace `/prototypes/[key]` with tabs Pipeline/Details/Settings · Sites = config · Settings section (Experimentation/Repositories/Users/Activity). See HANDOFF for the full nav.
+- **Canvas: live-injection-first.** Review = the real lower env via the token-gated loader (`?opmc=<key>`) — VERIFIED WORKING on prep.outrigger.com (no CSP there). Clones/local = repo dev-harness concern or legacy Pages, never required.
 
 ## The four lifecycle principles (see LIFECYCLE-ARCHITECTURE.md)
 
@@ -41,7 +41,7 @@ Brand (Org = customer)              ← tenant; active via cookie opmc_org; mana
 ## Persistence — ContentStore seam
 
 `getContentStore()` picks the backend by `DATABASE_URL` (mirrors the auth store):
-- **Neon** (hosted): tables `org, org_member, site, environment, page_version, asset, repo_binding, prototype, prototype_overlay, artifact_version, promotion, audit_event, experimentation_config, content_meta`.
+- **Neon** (hosted): tables `org, org_member, site, environment, git_connection, org_repo, page_version, asset, repo_binding (legacy), prototype, prototype_overlay (orphaned), artifact_version, promotion, audit_event, experimentation_config, content_meta`.
 - **Filesystem** (local, no `DATABASE_URL`): `snapshots/` tree + `_*.json` maps.
 
 Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (create-if-not-exists / alter-add-column-if-not-exists, swallowing duplicate-object races 23505/42P07/42710). Do NOT do bare `create table if not exists` outside `ddl()` — concurrent cold starts collide on `pg_catalog`.
@@ -53,10 +53,10 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 - **Safety rail:** experiments are created paused/draft only — a human starts them. The console NEVER turns on production traffic.
 - Prep project `24138040550` (prep.outrigger.com) · Prod `21089662478` (www.outrigger.com).
 
-## Git (two-repo model)
+## Git (connector → registry → prototype)
 
-- **Feature repo** (deploy): prototypes live as `prototype/<key>` branches → per-branch Vercel preview. `deployOverlayToGit` commits the compiled variation + overlay as one commit and **auto-cuts a version**; "Pin latest from repo" resolves the branch HEAD.
-- **Source repo** (integrate): the brand's production source (Outrigger = Azure DevOps, **READ-ONLY**). Winners go back as a reviewed **PR via handoff** — never an automated push. (Source read-on-demand via provider API is designed but not yet built — see the source-control discussion.)
+- Per-customer **GitHub connection** (`getGitClientForOrg`; env `GITHUB_TOKEN` = console-default fallback) feeds the **repo registry** (roles `prototypes`|`source`, providers github/azure-devops/external, per-role defaults). Each **prototype picks repo + branch** (`prototype/<key>` by convention); `resolveRepoSource` pulls the built `dist/variation.js` at branch HEAD. Console reads code; it never writes it.
+- **Source role** = the brand's production codebase (Outrigger = Azure DevOps, **READ-ONLY**, `external` provider). Winners ship as a reviewed PR (GitHub sources) or a handoff bundle (external) — never an automated push. Ship step + source read-on-demand not built yet.
 
 ## Hard rules (invariants)
 
@@ -74,11 +74,11 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 - ✅ **Multi-tenancy** — Brand (Org) → Sites, members + isolation, Customers management
 - ✅ **ContentStore** — hosted content on Neon (was local-first)
 - ✅ **Environments** · **brand-level Optimizely** · **immutable ArtifactVersions** (git-auto-pin + code snapshot)
-- ✅ **Overlay authoring** → loader (staging) + Optimizely (production)
-- ✅ **Promotion** + governance + audit · **git deploy for prototypes**
-- ✅ **Prototype-driven IA** · full CRUD (sites/pages/prototypes; re-sync pages)
-- ⏳ **Source-control read-on-demand** (Azure DevOps + GitHub source providers) → hosted, always-current handoff
-- ⏳ Multi-URL Optimizely targeting · version-pinned staging injection · prep CSP verification
+- ✅ **Repo-sourced variations** (overlay editor removed) → loader (verified on prep) + Optimizely (production)
+- ✅ **Promotion** + governance + audit · per-customer **GitHub connector** + repo registry (roles/providers)
+- ✅ **Dashboard** · prototype-first IA · workspace tabs · minimal stub creation · full CRUD
+- ⏳ Favorites E2E (see HANDOFF "IN FLIGHT") · starter repo scaffold · Ship step (PR/handoff via source-role repo)
+- ⏳ Source read-on-demand (Azure DevOps) · env editing · multi-URL Opti targeting · version-pinned loader
 
 ## Environment variables
 
@@ -98,6 +98,6 @@ Claude never enters credentials — the user pastes them into Vercel / the app's
 |---|---|
 | [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) | the locked lifecycle model (read first) |
 | [`docs/CONSOLE-UI-SPEC.md`](docs/CONSOLE-UI-SPEC.md) | UI spec |
-| [`docs/HANDOFF.md`](docs/HANDOFF.md) | handoff engine |
+| [`docs/HANDOFF.md`](docs/HANDOFF.md) | CURRENT STATE + in-flight work (read on session start) |
 | [`docs/EXPERIMENT-INTEGRATION.md`](docs/EXPERIMENT-INTEGRATION.md) | experiment binding/drift |
 | [`docs/PRODUCT-ROADMAP.md`](docs/PRODUCT-ROADMAP.md) | product positioning + roadmap |
