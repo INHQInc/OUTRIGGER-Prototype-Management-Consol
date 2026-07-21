@@ -9,11 +9,13 @@ interface NavItem { href: string; label: string; icon: string; exact?: boolean }
 
 const ICON = {
   overview: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
-  prototypes: "M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z",
+  prototypes: "M14 5a2 2 0 1 1-4 0 2 2 0 0 1 4 0M3 21l8-14.3M13 6.7l1.9 3.5M19 12c-3.9 4-7.1 4-11 0M21 21l-2.2-3.8",
   pages: "M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z",
   deploys: "M12 2L2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
   settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
-  handoff: "M4 4h16v12H5.2L4 17.2zM8 9h8M8 12h5",
+  handoff: "M11 17l2 2a1 1 0 1 0 3-3M14 14l2.5 2.5a1 1 0 1 0 3-3l-3.9-3.9a3 3 0 0 0-4.2 0l-.9.9a1 1 0 1 1-3-3l2.8-2.8a5.8 5.8 0 0 1 7.1-.9l.5.3a2 2 0 0 0 1.4.2L21 4M21 3l1 11h-2M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8",
+  flask: "M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4L14.2 10.4a2 2 0 0 1-.2-.9V2M8.5 2h7M7 16h10",
+  activity: "M22 12h-4l-3 9L9 3l-3 9H2",
   users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
   brand: "M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 12v.01M9 15v.01M9 18v.01",
 };
@@ -69,10 +71,10 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
         {renderLink({ href: "/sites", label: "Sites", icon: ICON.pages })}
 
         {sectionHeader("Settings")}
-        {renderLink({ href: "/settings/experimentation", label: "Experimentation", icon: ICON.settings })}
+        {renderLink({ href: "/settings/experimentation", label: "Experimentation", icon: ICON.flask })}
         {renderLink({ href: "/settings/repositories", label: "Repositories", icon: ICON.deploys })}
         {renderLink({ href: "/settings/members", label: "Users", icon: ICON.users })}
-        {renderLink({ href: "/settings/activity", label: "Activity", icon: ICON.handoff })}
+        {renderLink({ href: "/settings/activity", label: "Activity", icon: ICON.activity })}
 
         {sectionHeader("Operator")}
         {renderLink({ href: "/customers", label: "Customers", icon: ICON.brand })}
