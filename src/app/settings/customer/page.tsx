@@ -5,37 +5,50 @@ import { getExperimentationStatus } from "@/lib/experimentation";
 import { listAuditEvents } from "@/lib/audit";
 import { PageHeader, EmptyState, TimeAgo } from "@/components/ui";
 import { ExperimentationSettings } from "@/components/ExperimentationSettings";
+import { MembersManager } from "@/components/MembersManager";
+import { listMembers } from "@/lib/orgs";
 import { RepoRegistry } from "@/components/RepoRegistry";
 import { listOrgRepos } from "@/lib/git/org-repos";
 
 export const dynamic = "force-dynamic";
 
-export default async function BrandSettingsPage() {
+export default async function CustomerSettingsPage() {
   const [orgId, user] = await Promise.all([getActiveOrgId(), currentUser()]);
   if (!orgId) {
     return (
       <>
-        <PageHeader title="Brand settings" />
+        <PageHeader title="Customer settings" />
         <div className="flex-1 overflow-y-auto px-8 py-6">
           <EmptyState title="No active brand." hint="Create or select a customer first (top of the sidebar)." />
         </div>
       </>
     );
   }
-  const [org, status, events, orgRepos] = await Promise.all([
+  const [org, status, events, orgRepos, members] = await Promise.all([
     getOrg(orgId),
     getExperimentationStatus(orgId),
     listAuditEvents(orgId, 30),
     listOrgRepos(orgId),
+    listMembers(orgId),
   ]);
   return (
     <>
-      <PageHeader title="Brand settings" subtitle={org?.name ?? orgId} />
+      <PageHeader title="Customer settings" subtitle={org?.name ?? orgId} />
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="max-w-2xl space-y-5">
           <ExperimentationSettings initialStatus={status} canManage={user?.role === "admin"} />
 
           <RepoRegistry initialRepos={orgRepos} canManage={user?.role === "admin"} />
+
+          <div className="rounded-xl border border-border bg-surface overflow-hidden">
+            <div className="px-4 py-3 border-b border-border">
+              <span className="text-[13px] font-semibold">Members</span>
+              <span className="text-[11px] text-muted-2 ml-2">Who can access this customer.</span>
+            </div>
+            <div className="p-4">
+              <MembersManager initialMembers={members} canManage={user?.role === "admin"} />
+            </div>
+          </div>
 
           <div className="rounded-xl border border-border bg-surface overflow-hidden">
             <div className="px-4 py-2.5 border-b border-border">

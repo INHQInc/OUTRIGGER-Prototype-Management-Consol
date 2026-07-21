@@ -70,8 +70,7 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
 
         {sectionHeader("Configuration")}
         {renderLink({ href: "/sites", label: "Sites", icon: ICON.pages })}
-        {renderLink({ href: "/settings/brand", label: "Experimentation", icon: ICON.settings })}
-        {renderLink({ href: "/members", label: "Members", icon: ICON.users })}
+        {renderLink({ href: "/settings/customer", label: "Customer settings", icon: ICON.settings })}
 
         {sectionHeader("Operator")}
         {renderLink({ href: "/customers", label: "Customers", icon: ICON.brand })}

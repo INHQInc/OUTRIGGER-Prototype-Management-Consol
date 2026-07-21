@@ -30,9 +30,9 @@ export async function promoteToOptimizely(input: {
 
   const cfg = await getExperimentationConfig(orgId);
   const token = cfg?.optimizely?.apiToken;
-  if (!token) throw new Error("Connect Optimizely in Brand settings before promoting to production.");
+  if (!token) throw new Error("Connect Optimizely in Customer settings before promoting to production.");
   const projectId = cfg.optimizely?.defaultProjectId;
-  if (!projectId) throw new Error("Select a default Optimizely project in Brand settings first.");
+  if (!projectId) throw new Error("Select a default Optimizely project in Customer settings first.");
 
   const target = proto.targets[0];
   if (!target?.url) throw new Error("Add a target page to the prototype before promoting to production.");
