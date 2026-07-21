@@ -25,7 +25,7 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
   const [name, setName] = useState("");
   const [targets, setTargets] = useState<Target[]>([{ url: "", source: defaultSource }]);
   const [sitePages, setSitePages] = useState<{ slug: string; url: string }[]>([]);
-  const [orgRepos, setOrgRepos] = useState<{ id: string; fullName: string; isDefault: boolean }[]>([]);
+  const [orgRepos, setOrgRepos] = useState<{ id: string; fullName: string; roles: string[]; defaultFor: string[] }[]>([]);
   const [repoSel, setRepoSel] = useState("");
   const [branch, setBranch] = useState("");
   // brief
@@ -51,9 +51,9 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
       .then((r) => (r.ok ? r.json() : { repos: [] }))
       .then((d) => {
         if (!live) return;
-        const repos = d.repos ?? [];
+        const repos = (d.repos ?? []).filter((x: { roles?: string[] }) => x.roles?.includes("prototypes"));
         setOrgRepos(repos);
-        setRepoSel((cur) => cur || (repos.find((x: { isDefault: boolean }) => x.isDefault) ?? repos[0])?.fullName || "");
+        setRepoSel((cur) => cur || (repos.find((x: { defaultFor?: string[] }) => x.defaultFor?.includes("prototypes")) ?? repos[0])?.fullName || "");
       })
       .catch(() => { if (live) setOrgRepos([]); });
     return () => { live = false; };
@@ -151,7 +151,7 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
               <div>
                 <label className={lbl}>Repository</label>
                 <select className={inp} value={repoSel} onChange={(e) => setRepoSel(e.target.value)}>
-                  {orgRepos.map((r) => <option key={r.id} value={r.fullName}>{r.fullName}{r.isDefault ? " (default)" : ""}</option>)}
+                  {orgRepos.map((r) => <option key={r.id} value={r.fullName}>{r.fullName}{r.defaultFor.includes("prototypes") ? " (default)" : ""}</option>)}
                 </select>
               </div>
               <div>

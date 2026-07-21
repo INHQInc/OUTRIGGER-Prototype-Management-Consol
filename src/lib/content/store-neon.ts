@@ -119,6 +119,9 @@ export class NeonContentStore implements ContentStore {
         created_at timestamptz not null default now()
       )`);
     await this.ddl(() => this.sql`create index if not exists org_repo_org_idx on org_repo (org_id)`);
+    await this.ddl(() => this.sql`alter table org_repo add column if not exists roles text`);
+    await this.ddl(() => this.sql`alter table org_repo add column if not exists provider text`);
+    await this.ddl(() => this.sql`alter table org_repo add column if not exists default_for text`);
     await this.ddl(() => this.sql`
       create table if not exists repo_binding (
         site_key text primary key,
@@ -294,20 +297,24 @@ export class NeonContentStore implements ContentStore {
 
   async listOrgRepos(orgId: string): Promise<OrgRepo[]> {
     const rows = await this.sql`select * from org_repo where org_id = ${orgId} order by created_at`;
+    const parse = <T,>(v: unknown, fb: T): T => { try { return v ? (JSON.parse(v as string) as T) : fb; } catch { return fb; } };
     return rows.map((r) => ({
       id: r.id as string,
       orgId: r.org_id as string,
       fullName: r.full_name as string,
       baseBranch: r.base_branch as string,
       artifactPath: r.artifact_path as string,
-      isDefault: Boolean(r.is_default),
+      roles: parse(r.roles, ["prototypes"] as OrgRepo["roles"]),
+      provider: (r.provider as OrgRepo["provider"]) || "github",
+      // Pre-roles records: map the old is_default flag onto the prototypes role.
+      defaultFor: parse(r.default_for, (r.is_default ? ["prototypes"] : []) as OrgRepo["defaultFor"]),
     }));
   }
   async putOrgRepo(repo: OrgRepo): Promise<void> {
     await this.sql`
-      insert into org_repo (id, org_id, full_name, base_branch, artifact_path, is_default)
-      values (${repo.id}, ${repo.orgId}, ${repo.fullName}, ${repo.baseBranch}, ${repo.artifactPath}, ${repo.isDefault})
-      on conflict (id) do update set base_branch = excluded.base_branch, artifact_path = excluded.artifact_path, is_default = excluded.is_default`;
+      insert into org_repo (id, org_id, full_name, base_branch, artifact_path, is_default, roles, provider, default_for)
+      values (${repo.id}, ${repo.orgId}, ${repo.fullName}, ${repo.baseBranch}, ${repo.artifactPath}, ${repo.defaultFor.includes("prototypes")}, ${JSON.stringify(repo.roles)}, ${repo.provider}, ${JSON.stringify(repo.defaultFor)})
+      on conflict (id) do update set base_branch = excluded.base_branch, artifact_path = excluded.artifact_path, is_default = excluded.is_default, roles = excluded.roles, provider = excluded.provider, default_for = excluded.default_for`;
   }
   async deleteOrgRepo(id: string): Promise<void> {
     await this.sql`delete from org_repo where id = ${id}`;

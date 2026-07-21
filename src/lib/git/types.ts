@@ -43,17 +43,35 @@ export interface SiteRepoBinding {
 }
 
 /**
+ * Roles a registered repo plays for a brand:
+ *   prototypes — experiment code is built/branched here (console pulls artifacts)
+ *   source     — the brand's production codebase (Ship: PR or handoff bundle)
+ * One repo may play both (native flow: prototype branches in the real repo).
+ */
+export type RepoRole = "prototypes" | "source";
+
+/**
+ * Where the repo lives. `github` is fully integrated; `azure-devops` and
+ * `external` are reference entries for the source role (no API yet — Ship
+ * degrades to a handoff bundle instead of a PR).
+ */
+export type RepoProvider = "github" | "azure-devops" | "external";
+
+/**
  * A repo registered at the BRAND (org) level. The brand registers as many as it
- * wants; each prototype picks one (+ branch). One repo is the default offered
- * at prototype creation.
+ * wants; each prototype picks a prototypes-role repo (+ branch). Defaults are
+ * PER ROLE (defaultFor).
  */
 export interface OrgRepo {
   id: string;          // `${orgId}:${fullName}`
   orgId: string;
-  fullName: string;    // owner/repo
+  fullName: string;    // owner/repo (github) or a free-form locator (other providers)
   baseBranch: string;
   artifactPath: string; // built variation path on prototype branches
-  isDefault: boolean;
+  roles: RepoRole[];
+  provider: RepoProvider;
+  /** Which roles this repo is the default pick for. */
+  defaultFor: RepoRole[];
 }
 
 export interface PullRequestResult {

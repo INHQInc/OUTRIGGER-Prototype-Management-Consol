@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listOrgRepos, addOrgRepo, setDefaultOrgRepo, removeOrgRepo } from "@/lib/git/org-repos";
+import { listOrgRepos, addOrgRepo, setDefaultOrgRepo, removeOrgRepo, type RepoRole, type RepoProvider } from "@/lib/git/org-repos";
 import { getActiveOrgId } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
 
@@ -17,19 +17,26 @@ async function adminGuard() {
   return { orgId };
 }
 
-/** POST { repo, baseBranch?, artifactPath?, isDefault? } → register a repo; { setDefault: id } → flag default. */
+/**
+ * POST { repo, baseBranch?, artifactPath?, roles?, provider? } → register a repo;
+ *      { setDefault: { id, role } } → make a repo the default for a role.
+ */
 export async function POST(req: NextRequest) {
   const g = await adminGuard();
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
-  let body: { repo?: string; baseBranch?: string; artifactPath?: string; isDefault?: boolean; setDefault?: string };
+  let body: {
+    repo?: string; baseBranch?: string; artifactPath?: string;
+    roles?: RepoRole[]; provider?: RepoProvider;
+    setDefault?: { id: string; role: RepoRole };
+  };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   try {
     if (body.setDefault) {
-      await setDefaultOrgRepo(g.orgId, body.setDefault);
+      await setDefaultOrgRepo(g.orgId, body.setDefault.id, body.setDefault.role);
       return NextResponse.json({ repos: await listOrgRepos(g.orgId) });
     }
     if (!body.repo?.trim()) return NextResponse.json({ error: "A repo is required" }, { status: 400 });
-    await addOrgRepo(g.orgId, { repo: body.repo, baseBranch: body.baseBranch, artifactPath: body.artifactPath, isDefault: body.isDefault });
+    await addOrgRepo(g.orgId, { repo: body.repo, baseBranch: body.baseBranch, artifactPath: body.artifactPath, roles: body.roles, provider: body.provider });
     return NextResponse.json({ repos: await listOrgRepos(g.orgId) }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });

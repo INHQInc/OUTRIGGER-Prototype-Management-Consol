@@ -28,7 +28,7 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
   const [cutErr, setCutErr] = useState<string | null>(null);
   const [cutMsg, setCutMsg] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [orgRepos, setOrgRepos] = useState<{ id: string; fullName: string; isDefault: boolean }[]>([]);
+  const [orgRepos, setOrgRepos] = useState<{ id: string; fullName: string; roles: string[]; defaultFor: string[] }[]>([]);
   const [repoSel, setRepoSel] = useState("");
   const [branchSel, setBranchSel] = useState("");
 
@@ -50,7 +50,7 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
     if (!editing) return;
     fetch("/api/orgs/repos")
       .then((r) => (r.ok ? r.json() : { repos: [] }))
-      .then((d) => setOrgRepos(d.repos ?? []))
+      .then((d) => setOrgRepos((d.repos ?? []).filter((x: { roles?: string[] }) => x.roles?.includes("prototypes"))))
       .catch(() => setOrgRepos([]));
   }, [editing]);
 
@@ -127,7 +127,7 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
                     {orgRepos.length > 0 ? (
                       <select value={repoSel} onChange={(e) => setRepoSel(e.target.value)} className="w-full rounded-lg bg-background border border-border px-2 py-2 text-[12px] font-mono focus:border-accent focus:outline-none">
                         {!orgRepos.some((r) => r.fullName === repoSel) && repoSel && <option value={repoSel}>{repoSel}</option>}
-                        {orgRepos.map((r) => <option key={r.id} value={r.fullName}>{r.fullName}{r.isDefault ? " (default)" : ""}</option>)}
+                        {orgRepos.map((r) => <option key={r.id} value={r.fullName}>{r.fullName}{r.defaultFor.includes("prototypes") ? " (default)" : ""}</option>)}
                       </select>
                     ) : (
                       <input value={repoSel} onChange={(e) => setRepoSel(e.target.value)} spellCheck={false} placeholder="owner/repo" className="w-full rounded-lg bg-background border border-border px-2 py-2 text-[12px] font-mono focus:border-accent focus:outline-none" />
