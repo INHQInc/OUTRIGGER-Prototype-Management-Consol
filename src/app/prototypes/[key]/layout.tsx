@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
 import { canAccessOrg } from "@/lib/active-org";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
-import { Badge } from "@/components/ui";
 import { PrototypeTabs } from "@/components/PrototypeTabs";
-import { STAGE_TONE, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
+import { StageSelect } from "@/components/StageSelect";
+import { normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,7 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
         </div>
         <div className="flex items-center gap-3">
           <h1 className="text-[18px] font-semibold tracking-tight">{p.name}</h1>
-          <Badge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</Badge>
+          <StageSelect prototypeKey={key} initialStage={stage} />
         </div>
         {p.targets[0] && (
           <div className="text-[12px] text-muted-2 mt-0.5">

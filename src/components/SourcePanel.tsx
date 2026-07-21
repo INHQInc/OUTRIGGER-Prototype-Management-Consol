@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
+import { TimeAgo } from "@/components/ui";
+import type { ArtifactVersion } from "@/lib/prototypes/types";
 import { useRouter } from "next/navigation";
 
 interface SourceStatus {
@@ -44,7 +46,7 @@ function GetStarted({ repo, branch }: { repo: string; branch: string }) {
  * console pulls it — it doesn't author code. "Cut version from repo" pins a
  * version to the branch HEAD with that built code.
  */
-export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
+export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: string; versions?: ArtifactVersion[] }) {
   const router = useRouter();
   const [status, setStatus] = useState<SourceStatus | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -138,6 +140,25 @@ export function SourcePanel({ prototypeKey }: { prototypeKey: string }) {
         {cutErr && <div className="text-[12px] text-danger">{cutErr}</div>}
         {cutMsg && <div className="text-[12px] text-ok">{cutMsg}</div>}
 
+        {versions.length > 0 && (
+          <div className="rounded-lg border border-border bg-surface-2/20 overflow-hidden">
+            <div className="px-3 py-2 flex items-center justify-between text-[12px]">
+              <span className="text-muted">Latest cut: <span className="font-semibold text-foreground">v{versions[0].version}</span> <span className="font-mono text-muted-2">{versions[0].gitSha.slice(0, 7)}</span> · <TimeAgo iso={versions[0].createdAt} /></span>
+              {!versions[0].variationJs && <span className="text-[10px] text-warn">no code</span>}
+            </div>
+            {versions.length > 1 && (
+              <details className="border-t border-border/60">
+                <summary className="px-3 py-1.5 text-[11px] text-muted-2 cursor-pointer hover:text-foreground">Version history ({versions.length})</summary>
+                {versions.map((v) => (
+                  <div key={v.id} className="px-3 py-1.5 border-t border-border/60 flex items-center justify-between text-[11px]">
+                    <span className="text-muted">v{v.version} · <span className="font-mono text-muted-2">{v.gitSha.slice(0, 7)}</span>{v.gitRef ? ` · ${v.gitRef}` : ""}</span>
+                    <span className="text-muted-2"><TimeAgo iso={v.createdAt} />{v.createdBy ? ` · ${v.createdBy}` : ""}</span>
+                  </div>
+                ))}
+              </details>
+            )}
+          </div>
+        )}
         <p className="text-[11px] text-muted-2">Preview on a live env: open the page with <span className="font-mono text-muted">?opmc={prototypeKey}</span> (the loader injects the current build).</p>
       </div>
     </div>
