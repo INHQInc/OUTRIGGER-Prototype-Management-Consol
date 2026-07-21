@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     // Strip the variation body — status only.
     const { variationJs, ...status } = src;
     void variationJs;
-    return NextResponse.json({ source: { ...status, bytes: src.variationJs ? src.variationJs.length : 0 } });
+    return NextResponse.json({ source: { ...status, bytes: src.variationJs ? Buffer.byteLength(src.variationJs, "utf8") : 0 } });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

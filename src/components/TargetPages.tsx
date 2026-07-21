@@ -9,9 +9,11 @@ import type { PrototypeTarget } from "@/lib/prototypes/types";
 interface EnvLite { id: string; label: string; kind: string; url: string; loaderKey: string; heartbeatAt: string | null }
 
 type CheckResult = {
-  result: "present" | "absent" | "unreachable";
+  result: "present" | "wrong-env" | "absent" | "unreachable";
   httpStatus?: number;
+  reason?: string;
   foundLoaderKey?: string;
+  foundEnvLabel?: string | null;
   environment?: { label: string; kind: string; expectedKey: string } | null;
   heartbeatAt?: string | null;
 };
@@ -195,10 +197,17 @@ function InjectionStatus({ check, checking }: { check: CheckResult | null; check
   if (!check) return null;
   if (check.result === "present")
     return <div className="text-[11px] text-ok">● Injection script detected on this page</div>;
-  if (check.result === "absent")
+  if (check.result === "wrong-env")
+    return <div className="text-[11px] text-warn">● Loader present but for {check.foundEnvLabel ?? "another environment"} — expected this page&apos;s environment</div>;
+  if (check.result === "absent") {
+    // Not in the raw HTML — but the loader may be injected client-side (GTM/SPA);
+    // the heartbeat proves it runs in real browsers.
+    if (check.heartbeatAt)
+      return <div className="text-[11px] text-warn">● Not in the page HTML, but the loader is verified live on this environment (likely injected client-side)</div>;
     return <div className="text-[11px] text-danger">● Loader script not found on this page — add the tag above to the site</div>;
+  }
   // unreachable
   if (check.heartbeatAt)
     return <div className="text-[11px] text-warn">● Loader active on this environment (page couldn&apos;t be auto-checked — some sites block bots)</div>;
-  return <div className="text-[11px] text-muted-2">● Couldn&apos;t verify — open the page once to trigger the loader{typeof check.httpStatus === "number" ? ` (HTTP ${check.httpStatus})` : ""}</div>;
+  return <div className="text-[11px] text-muted-2">● Couldn&apos;t verify — open the page once to trigger the loader{typeof check.httpStatus === "number" && check.httpStatus > 0 ? ` (HTTP ${check.httpStatus})` : ""}</div>;
 }

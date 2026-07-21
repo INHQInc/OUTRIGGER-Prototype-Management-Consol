@@ -32,7 +32,7 @@ export default async function PrototypeSetupPage({ params }: { params: Promise<{
       repo={setup.repo}
       brief={p.brief}
       consoleUrl={consoleUrl}
-      buildStatus={{ found: source ? source.found : null, headSha: source?.headSha, bytes: source?.variationJs?.length, branchExists: source?.branchExists }}
+      buildStatus={{ found: source ? source.found : null, headSha: source?.headSha, bytes: source?.variationJs ? Buffer.byteLength(source.variationJs, "utf8") : undefined, branchExists: source?.branchExists }}
     />
   );
 }

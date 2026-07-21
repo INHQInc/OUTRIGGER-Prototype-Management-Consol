@@ -47,13 +47,19 @@ export async function getPrototypeSetup(proto: PrototypeRecord, orgId: string): 
   const gitConnected = Boolean(gitClient);
   const repoRegistered = Boolean(protoRepoDefault);
 
-  const seen = await Promise.all(environments.map((e) => envLoaderSeenAt(e)));
-  const envsWithLoader = seen.filter(Boolean).length;
+  const seenByEnvId = new Map(await Promise.all(environments.map(async (e) => [e.id, await envLoaderSeenAt(e)] as const)));
+  const envsWithLoader = [...seenByEnvId.values()].filter(Boolean).length;
+
+  // Which of the customer's environments do this prototype's target pages live on?
+  const targetOrigins = new Set(proto.targets.map((t) => { try { return new URL(t.url).origin; } catch { return ""; } }).filter(Boolean));
+  const targetEnvs = environments.filter((e) => { try { return targetOrigins.has(new URL(e.url).origin); } catch { return false; } });
 
   const hasRepo = Boolean(proto.repo?.fullName);
   const hasBrief = Boolean(proto.brief.problem?.trim() || proto.brief.change?.trim() || proto.brief.doneLooksLike?.trim());
   const hasPages = proto.targets.length > 0;
-  const hasInjection = envsWithLoader > 0;
+  // Injection is "live" only when a page THIS prototype targets is on an
+  // environment with a verified loader — not just any env in the org.
+  const hasInjection = targetEnvs.some((e) => Boolean(seenByEnvId.get(e.id)));
 
   const steps: SetupStepState[] = [
     {
@@ -90,8 +96,10 @@ export async function getPrototypeSetup(proto: PrototypeRecord, orgId: string): 
       done: hasInjection,
       tab: "pages",
       action: "Install tag",
-      hint: environments.length === 0
-        ? "Add an environment (Configuration → Environments) and install its loader tag."
+      hint: !hasPages
+        ? "Add a test page first — injection is checked on the page's environment."
+        : targetEnvs.length === 0
+        ? "Your test pages aren't on a known environment yet (Configuration → Environments)."
         : "Place the loader tag on the site once — it self-verifies on first page view.",
     },
   ];

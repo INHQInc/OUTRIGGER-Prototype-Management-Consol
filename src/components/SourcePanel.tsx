@@ -102,7 +102,7 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
           <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2.5 flex items-center justify-between gap-3">
             <span className="text-[12px] text-danger">{loadErr}</span>
             {loadErr.includes("No repo set") && (
-              <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">Pick a repo →</Link>
+              <Link href={`/prototypes/${prototypeKey}/build`} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">Pick a repo →</Link>
             )}
           </div>
         )}
@@ -115,7 +115,7 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
                 <span className="text-muted-2">Branch</span><span className="font-mono">{status.branch}</span>
                 <span className="text-muted-2">Artifact</span><span className="font-mono">{status.artifactPath}</span>
               </div>
-              <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
+              <Link href={`/prototypes/${prototypeKey}/build`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
             </div>
 
 
