@@ -14,6 +14,7 @@ export function PrototypeCard({ p, siteLabel }: { p: PrototypeRecord; siteLabel?
             {siteLabel && <span>{siteLabel}</span>}
             {siteLabel && p.targets[0] && <span> · </span>}
             {p.targets[0] && <span className="font-mono">{p.targets[0].url}</span>}
+            {p.targets.length > 1 && <span className="text-muted-2"> +{p.targets.length - 1}</span>}
           </div>
         </div>
         <Badge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</Badge>

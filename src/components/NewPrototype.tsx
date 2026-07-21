@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+type Target = { url: string; source: "clone" | "live" };
 
 const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 const lbl = "block text-[12px] font-medium text-muted mb-1.5";
@@ -21,8 +23,8 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
   // identity + target
   const [siteSel, setSiteSel] = useState(siteKey ?? defaultSite ?? sites?.[0]?.key ?? "");
   const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [source, setSource] = useState<"clone" | "live">(defaultSource);
+  const [targets, setTargets] = useState<Target[]>([{ url: "", source: defaultSource }]);
+  const [sitePages, setSitePages] = useState<{ slug: string; url: string }[]>([]);
   // brief
   const [problem, setProblem] = useState("");
   const [change, setChange] = useState("");
@@ -38,8 +40,26 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
   const [owner, setOwner] = useState("");
   const [ticketUrl, setTicketUrl] = useState("");
 
+  // Load the selected site's captured pages as target suggestions.
+  const activeSite = siteKey ?? siteSel;
+  useEffect(() => {
+    if (!open || !activeSite) { setSitePages([]); return; }
+    let live = true;
+    fetch(`/api/pages?site=${encodeURIComponent(activeSite)}`)
+      .then((r) => (r.ok ? r.json() : { pages: [] }))
+      .then((d) => { if (live) setSitePages(d.pages ?? []); })
+      .catch(() => { if (live) setSitePages([]); });
+    return () => { live = false; };
+  }, [open, activeSite]);
+
+  function setTarget(i: number, patch: Partial<Target>) {
+    setTargets((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+  }
+  function addTarget() { setTargets((ts) => [...ts, { url: "", source: defaultSource }]); }
+  function removeTarget(i: number) { setTargets((ts) => ts.filter((_, j) => j !== i)); }
+
   function reset() {
-    setName(""); setUrl(""); setSource(defaultSource); setProblem(""); setChange(""); setDone("");
+    setName(""); setTargets([{ url: "", source: defaultSource }]); setProblem(""); setChange(""); setDone("");
     setHChange(""); setHAudience(""); setHOutcome(""); setHRationale(""); setPrimary(""); setGuardrails("");
     setOwner(""); setTicketUrl(""); setError(null); setBusy(false);
   }
@@ -56,7 +76,7 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
         body: JSON.stringify({
           siteKey: targetSite,
           name,
-          targets: url.trim() ? [{ url, source }] : [],
+          targets: targets.filter((t) => t.url.trim()).map((t) => ({ url: t.url.trim(), source: t.source })),
           brief: { problem, change, doneLooksLike },
           hypothesis: { change: hChange, audience: hAudience, outcome: hOutcome, rationale: hRationale },
           metrics: { primary, guardrails: guardrails.split(",").map((s) => s.trim()).filter(Boolean) },
@@ -104,16 +124,43 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
             <label className={lbl}>Name</label>
             <input className={inp} value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. Favorites bar on room cards" />
           </div>
-          <div>
-            <label className={lbl}>Target page <span className="text-muted-2">(URL)</span></label>
-            <input className={`${inp} font-mono`} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.example.com/rooms" spellCheck={false} />
-            <div className="flex gap-2 mt-2">
-              {(["clone", "live"] as const).map((s) => (
-                <button key={s} onClick={() => setSource(s)} className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${source === s ? "border-accent text-accent bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]" : "border-border text-muted hover:text-foreground"}`}>
-                  {s === "clone" ? "Clone (snapshot)" : "Live (real page)"}
-                </button>
-              ))}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className={`${lbl} mb-0`}>Target pages</label>
+              <button type="button" onClick={addTarget} className="text-[12px] text-accent hover:text-accent-hover font-medium">+ Add page</button>
             </div>
+            {targets.map((t, i) => (
+              <div key={i} className="rounded-lg border border-border p-2.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    list={`np-pages-${i}`}
+                    className={`${inp} font-mono`}
+                    value={t.url}
+                    onChange={(e) => setTarget(i, { url: e.target.value })}
+                    placeholder="https://…/rooms  or  /rooms/*"
+                    spellCheck={false}
+                  />
+                  <datalist id={`np-pages-${i}`}>
+                    {sitePages.map((p) => <option key={p.slug} value={p.url} />)}
+                  </datalist>
+                  {targets.length > 1 && (
+                    <button type="button" onClick={() => removeTarget(i)} title="Remove" className="text-[13px] text-danger hover:opacity-80 px-1">✕</button>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {(["live", "clone"] as const).map((s) => (
+                    <button type="button" key={s} onClick={() => setTarget(i, { source: s })} className={`px-3 py-1 rounded-lg text-[11px] font-medium border transition-colors ${t.source === s ? "border-accent text-accent bg-[color-mix(in_srgb,var(--accent)_10%,transparent)]" : "border-border text-muted hover:text-foreground"}`}>
+                      {s === "live" ? "Live (real page)" : "Clone (snapshot)"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-muted-2">
+              {sitePages.length > 0
+                ? `${sitePages.length} captured page${sitePages.length === 1 ? "" : "s"} suggested — or type any URL / pattern (e.g. /rooms/*).`
+                : "Type the URL(s) this runs on — a full URL or a pattern like /rooms/*."}
+            </p>
           </div>
 
           {/* Brief */}

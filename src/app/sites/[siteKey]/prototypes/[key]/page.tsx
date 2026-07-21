@@ -49,8 +49,16 @@ export default async function PrototypeDetail({ params }: { params: Promise<{ si
       </div>
 
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-border text-[12px] font-semibold">Target</div>
-        <Field label="Page">{p.targets[0] ? <span className="font-mono">{p.targets[0].url} · {p.targets[0].source}</span> : "not set"}</Field>
+        <div className="px-4 py-2.5 border-b border-border text-[12px] font-semibold">Target pages</div>
+        <Field label={p.targets.length > 1 ? `${p.targets.length} pages` : "Page"}>
+          {p.targets.length ? (
+            <div className="space-y-1">
+              {p.targets.map((t, i) => (
+                <div key={i} className="font-mono">{t.url} <span className="text-muted-2">· {t.source}</span></div>
+              ))}
+            </div>
+          ) : "not set"}
+        </Field>
       </div>
 
       <div className="rounded-xl border border-border bg-surface overflow-hidden">

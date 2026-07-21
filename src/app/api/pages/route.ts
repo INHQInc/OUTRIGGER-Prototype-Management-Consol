@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { capturePage } from "@/lib/capture/capture";
+import { listPages } from "@/lib/registry";
 import { getSite } from "@/lib/sites";
 import { canAccessOrg } from "@/lib/active-org";
 
@@ -12,6 +13,14 @@ async function guard(siteKey: string | null) {
   if (!site) return { error: "Unknown site", status: 404 as const };
   if (site.orgId && !(await canAccessOrg(site.orgId))) return { error: "Forbidden", status: 403 as const };
   return { siteKey };
+}
+
+/** GET ?site=<key> → the site's captured pages (slug + url), for target suggestions. */
+export async function GET(req: NextRequest) {
+  const g = await guard(req.nextUrl.searchParams.get("site"));
+  if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
+  const pages = await listPages(g.siteKey);
+  return NextResponse.json({ pages: pages.map((p) => ({ slug: p.slug, url: p.url })) });
 }
 
 /** POST { siteKey, url } → re-sync (re-capture) a page, creating a new version. */
