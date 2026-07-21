@@ -31,7 +31,7 @@ export function PrototypeBoard({ prototypes, sites }: { prototypes: Row[]; sites
       {filtered.length === 0 ? (
         <EmptyState
           title="No prototypes yet."
-          hint={sites.length ? "Create one — it targets a site + page, and you author its overlay next." : "Add a website first under Site Management → Sites."}
+          hint={sites.length ? "Create one — then build it in the repo with Claude and review it live." : "Add a website first (Configuration → Sites)."}
         />
       ) : (
         <div className="space-y-6">
