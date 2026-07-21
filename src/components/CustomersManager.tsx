@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, TimeAgo } from "@/components/ui";
 
-export interface CustomerRow { id: string; name: string; createdAt: string; siteCount: number }
+export interface CustomerRow { id: string; name: string; createdAt: string; prototypeCount: number; envCount: number }
 
 function setActiveOrgCookie(id: string) {
   document.cookie = "opmc_org=" + encodeURIComponent(id) + "; path=/; max-age=31536000; samesite=lax";
@@ -36,7 +36,7 @@ export function CustomersManager({ initialCustomers, activeOrgId, canManage }: {
       const res = await fetch("/api/orgs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newName }) });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not create customer"); return; }
-      setRows((r) => [...r, { id: data.org.id, name: data.org.name, createdAt: data.org.createdAt, siteCount: 0 }]);
+      setRows((r) => [...r, { id: data.org.id, name: data.org.name, createdAt: data.org.createdAt, prototypeCount: 0, envCount: 0 }]);
       setNewName(""); setCreating(false);
       router.refresh();
     } finally { setBusy(false); }
@@ -111,7 +111,7 @@ export function CustomersManager({ initialCustomers, activeOrgId, canManage }: {
                     </div>
                   )}
                   <div className="text-[11px] text-muted-2 mt-0.5">
-                    <span className="font-mono">{o.id}</span> · {o.siteCount} site{o.siteCount === 1 ? "" : "s"} · created <TimeAgo iso={o.createdAt} />
+                    <span className="font-mono">{o.id}</span> · {o.prototypeCount} prototype{o.prototypeCount === 1 ? "" : "s"} · {o.envCount} environment{o.envCount === 1 ? "" : "s"} · created <TimeAgo iso={o.createdAt} />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -129,7 +129,7 @@ export function CustomersManager({ initialCustomers, activeOrgId, canManage }: {
                 <div className="px-4 pb-3 pt-0">
                   <div className="rounded-lg border border-danger/40 bg-danger/5 p-3 space-y-2">
                     <div className="text-[12px] text-foreground">
-                      This permanently deletes <span className="font-semibold">{o.name}</span> and cascades <span className="font-semibold">all {o.siteCount} site{o.siteCount === 1 ? "" : "s"}</span> — pages, snapshots, prototypes, overlays, versions, promotions, environments, and members. This cannot be undone.
+                      This permanently deletes <span className="font-semibold">{o.name}</span> and cascades <span className="font-semibold">all {o.prototypeCount} prototype{o.prototypeCount === 1 ? "" : "s"} and {o.envCount} environment{o.envCount === 1 ? "" : "s"}</span> — versions, promotions, repositories, integrations, and members included. This cannot be undone.
                     </div>
                     <div className="text-[11px] text-muted-2">It does not remove branches/deploys already on the feature repo or Vercel, or experiments already in Optimizely.</div>
                     <div className="flex items-center gap-2">

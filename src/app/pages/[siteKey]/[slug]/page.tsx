@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPageVersions, readVersionMeta } from "@/lib/registry";
 import { PageHeader, Badge, TimeAgo, bytes } from "@/components/ui";
@@ -27,10 +26,7 @@ export default async function PageDetail({ params }: { params: Promise<{ siteKey
         title={`/${meta.url.replace(/^https?:\/\/[^/]+\/?/, "")}`}
         subtitle={meta.url}
         actions={
-          <div className="flex items-center gap-2">
-            <Link href={`/sites/${siteKey}/pages`} className="h-9 px-3 flex items-center rounded-lg text-[13px] text-muted hover:text-foreground">← All pages</Link>
-            <SyncButton siteKey={siteKey} url={meta.url} />
-          </div>
+          <SyncButton siteKey={siteKey} url={meta.url} />
         }
       />
 
