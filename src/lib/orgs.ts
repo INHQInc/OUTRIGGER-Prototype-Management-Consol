@@ -44,6 +44,13 @@ export async function addOrg(name: string): Promise<Org> {
   return org;
 }
 
+/** Rename a customer/brand. */
+export async function renameOrg(id: string, name: string): Promise<void> {
+  const clean = name.trim();
+  if (!clean) throw new Error("A name is required");
+  await (await getContentStore()).updateOrg(id, { name: clean });
+}
+
 /** Delete an org and cascade-delete its sites (which cascade their content). */
 export async function deleteOrg(id: string): Promise<void> {
   const store = await getContentStore();

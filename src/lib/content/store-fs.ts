@@ -56,6 +56,13 @@ export class FsContentStore implements ContentStore {
     orgs.push(org);
     await this.writeJson(this.orgsFile(), orgs);
   }
+  async updateOrg(id: string, patch: { name?: string }): Promise<void> {
+    const orgs = await this.readJson<Org[]>(this.orgsFile(), []);
+    const i = orgs.findIndex((o) => o.id === id);
+    if (i === -1) return;
+    if (patch.name !== undefined) orgs[i] = { ...orgs[i], name: patch.name };
+    await this.writeJson(this.orgsFile(), orgs);
+  }
   async deleteOrg(id: string): Promise<void> {
     const orgs = (await this.readJson<Org[]>(this.orgsFile(), [])).filter((o) => o.id !== id);
     await this.writeJson(this.orgsFile(), orgs);

@@ -16,6 +16,7 @@ const ICON = {
   settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
   handoff: "M4 4h16v12H5.2L4 17.2zM8 9h8M8 12h5",
   users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+  brand: "M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 12v.01M9 15v.01M9 18v.01",
 };
 
 export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: SessionPayload | null; sites: SiteNavNode[]; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean }) {
@@ -43,6 +44,7 @@ export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: S
 
   const globalNav: NavItem[] = [
     { href: "/", label: "All sites", icon: ICON.overview, exact: true },
+    { href: "/customers", label: "Customers", icon: ICON.brand },
     { href: "/features", label: "Prototypes", icon: ICON.prototypes },
     { href: "/handoff", label: "Handoff", icon: ICON.handoff },
     { href: "/settings/brand", label: "Brand settings", icon: ICON.settings },

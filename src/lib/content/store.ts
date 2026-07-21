@@ -37,6 +37,7 @@ export interface ContentStore {
   listOrgs(): Promise<Org[]>;
   getOrg(id: string): Promise<Org | null>;
   addOrg(org: Org): Promise<void>;
+  updateOrg(id: string, patch: { name?: string }): Promise<void>;
   deleteOrg(id: string): Promise<void>;
   listMembers(orgId: string): Promise<OrgMember[]>;
   putMember(m: OrgMember): Promise<void>;

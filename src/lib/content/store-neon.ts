@@ -347,6 +347,9 @@ export class NeonContentStore implements ContentStore {
   async addOrg(org: Org): Promise<void> {
     await this.sql`insert into org (id, name) values (${org.id}, ${org.name}) on conflict (id) do nothing`;
   }
+  async updateOrg(id: string, patch: { name?: string }): Promise<void> {
+    if (patch.name !== undefined) await this.sql`update org set name = ${patch.name} where id = ${id}`;
+  }
   async deleteOrg(id: string): Promise<void> {
     await this.sql`delete from org_member where org_id = ${id}`;
     await this.sql`delete from experimentation_config where org_id = ${id}`;
