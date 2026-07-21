@@ -49,7 +49,8 @@ Multi-tenant **build-and-ship layer for web experiments**: author advanced proto
 
 1. Finish Favorites E2E (user steps above + browser verification on prep).
 2. **Starter repo scaffold** — prototype branch template: dev harness (local clone-or-proxy + hot reload) + `dist/variation.js` build convention; possibly a console "create branch from template" action.
-3. **Ship step** — use source-role registry entry: PR for GitHub sources; handoff bundle for azure-devops/external. (Read-on-demand source client: GitHub first, Azure DevOps for Outrigger.)
-4. Environment editing (rename/kind — prep is mislabeled `production` from origin-seed); version-pinned loader serving; multi-URL Optimizely page targeting; auto-cut version on branch push (webhook).
-5. GitHub App/OAuth connector + Optimizely OAuth (multi-customer polish). Custom domain for the console (loader tag stability).
-6. Hygiene: user should rotate the GitHub PAT pasted in an early chat; move the Opti token to a service account (guidance now on the tile).
+3. **Azure DevOps connector (READ-ONLY)** — Outrigger's source lives at `rightpoint.visualstudio.com/DefaultCollection/OUT-%20Reimagined%20Digital%20Experience%20project/_git/Outrigger_Website` (org `rightpoint`, project "OUT- Reimagined Digital Experience project", repo `Outrigger_Website`). Build: connection tile (ADO org + PAT with Code:Read only — user mints it from their Rightpoint account) + read-only REST client (repos/branches/file-at-ref; NO write methods exist) → registry azure-devops entries go live (branch listing) → hosted, always-current handoff/source-mapping. Ship for ADO = reviewed patch/bundle, never PR/push. Until built: register it as a source-role reference entry (provider Azure DevOps).
+4. **Ship step** — use source-role registry entry: PR for GitHub sources; handoff bundle for azure-devops/external.
+5. Environment editing (rename/kind — prep is mislabeled `production` from origin-seed); version-pinned loader serving; multi-URL Optimizely page targeting; auto-cut version on branch push (webhook).
+6. GitHub App/OAuth connector + Optimizely OAuth (multi-customer polish). Custom domain for the console (loader tag stability).
+7. Hygiene: user should rotate the GitHub PAT pasted in an early chat; move the Opti token to a service account (guidance now on the tile).
