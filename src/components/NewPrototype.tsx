@@ -7,14 +7,19 @@ const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text
 const lbl = "block text-[12px] font-medium text-muted mb-1.5";
 const section = "text-[11px] font-semibold uppercase tracking-wider text-muted-2 pt-1";
 
-/** "New prototype" button + structured creation form (brief + hypothesis + metrics). */
-export function NewPrototype({ siteKey, defaultSource = "live" }: { siteKey: string; defaultSource?: "clone" | "live" }) {
+/**
+ * "New prototype" button + structured creation form. Works two ways: fixed to a
+ * site (`siteKey`, the site's Prototypes tab) or brand-level with a site picker
+ * (`sites`, the board). Lands in the new prototype's workspace.
+ */
+export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "live" }: { siteKey?: string; sites?: { key: string; label: string }[]; defaultSite?: string; defaultSource?: "clone" | "live" }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // identity + target
+  const [siteSel, setSiteSel] = useState(siteKey ?? defaultSite ?? sites?.[0]?.key ?? "");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [source, setSource] = useState<"clone" | "live">(defaultSource);
@@ -41,13 +46,15 @@ export function NewPrototype({ siteKey, defaultSource = "live" }: { siteKey: str
   function close() { if (busy) return; reset(); setOpen(false); }
 
   async function create() {
+    const targetSite = siteKey ?? siteSel;
+    if (!targetSite) { setError("Choose a site for this prototype"); return; }
     setBusy(true); setError(null);
     try {
       const res = await fetch("/api/prototypes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          siteKey,
+          siteKey: targetSite,
           name,
           targets: url.trim() ? [{ url, source }] : [],
           brief: { problem, change, doneLooksLike },
@@ -59,7 +66,7 @@ export function NewPrototype({ siteKey, defaultSource = "live" }: { siteKey: str
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not create prototype"); setBusy(false); return; }
       reset(); setOpen(false);
-      router.push(`/sites/${siteKey}/prototypes`);
+      router.push(`/sites/${data.prototype.siteKey}/prototypes/${data.prototype.key}`);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e)); setBusy(false);
@@ -83,6 +90,15 @@ export function NewPrototype({ siteKey, defaultSource = "live" }: { siteKey: str
         </div>
 
         <div className="p-6 space-y-5">
+          {/* Site (brand-level creation only) */}
+          {!siteKey && sites && sites.length > 0 && (
+            <div>
+              <label className={lbl}>Site</label>
+              <select className={inp} value={siteSel} onChange={(e) => setSiteSel(e.target.value)}>
+                {sites.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+            </div>
+          )}
           {/* Identity + target */}
           <div>
             <label className={lbl}>Name</label>

@@ -44,32 +44,6 @@ export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: S
 
   const currentSiteLabel = sites.find((s) => s.key === currentSiteKey)?.label ?? currentSiteKey;
 
-  // Task-oriented management groups. Site Management is rendered specially so the
-  // current site's tabs nest under it.
-  const groups: { label: string; items: NavItem[] }[] = [
-    {
-      label: "Prototype Management",
-      items: [
-        { href: "/features", label: "All prototypes", icon: ICON.prototypes },
-        { href: "/handoff", label: "Handoff", icon: ICON.handoff },
-      ],
-    },
-    {
-      label: "Brand Settings",
-      items: [
-        { href: "/settings/brand", label: "Experimentation", icon: ICON.settings },
-        { href: "/members", label: "Members", icon: ICON.users },
-      ],
-    },
-    {
-      label: "Operator",
-      items: [
-        { href: "/customers", label: "Customers", icon: ICON.brand },
-        ...(user?.role === "admin" ? [{ href: "/settings/users", label: "Users", icon: ICON.users }] : []),
-      ],
-    },
-  ];
-
   const sectionHeader = (label: string) => (
     <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>
   );
@@ -104,8 +78,12 @@ export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: S
       <SiteSwitcher sites={sites} currentSiteKey={currentSiteKey} />
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+        {sectionHeader("Prototype Management")}
+        {renderLink({ href: "/", label: "Prototypes", icon: ICON.prototypes, exact: true })}
+        {renderLink({ href: "/handoff", label: "Handoff", icon: ICON.handoff })}
+
         {sectionHeader("Site Management")}
-        {renderLink({ href: "/", label: "All sites", icon: ICON.overview, exact: true })}
+        {renderLink({ href: "/sites", label: "Sites", icon: ICON.overview })}
         {currentSiteKey && (
           <div className="ml-3 mt-0.5 pl-2 border-l border-border space-y-0.5">
             <div className="px-2 pt-1 pb-0.5 text-[11px] font-semibold text-foreground truncate">{currentSiteLabel}</div>
@@ -113,12 +91,13 @@ export function Sidebar({ user, sites, orgs, activeOrgId, canCreate }: { user: S
           </div>
         )}
 
-        {groups.map((g) => (
-          <div key={g.label}>
-            {sectionHeader(g.label)}
-            {g.items.map(renderLink)}
-          </div>
-        ))}
+        {sectionHeader("Brand Settings")}
+        {renderLink({ href: "/settings/brand", label: "Experimentation", icon: ICON.settings })}
+        {renderLink({ href: "/members", label: "Members", icon: ICON.users })}
+
+        {sectionHeader("Operator")}
+        {renderLink({ href: "/customers", label: "Customers", icon: ICON.brand })}
+        {user?.role === "admin" && renderLink({ href: "/settings/users", label: "Users", icon: ICON.users })}
       </nav>
 
       {user ? (
