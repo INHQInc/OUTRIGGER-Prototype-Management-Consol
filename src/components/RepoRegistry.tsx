@@ -18,6 +18,8 @@ export function RepoRegistry({ initialRepos, canManage }: { initialRepos: OrgRep
   const [artifactPath, setArtifactPath] = useState("dist/variation.js");
   const [roles, setRoles] = useState<RepoRole[]>(["prototypes"]);
   const [provider, setProvider] = useState<RepoProvider>("github");
+  const [branches, setBranches] = useState<string[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
 
   function toggleRole(role: RepoRole) {
     setRoles((rs) => {
@@ -40,6 +42,27 @@ export function RepoRegistry({ initialRepos, canManage }: { initialRepos: OrgRep
     const match = account.find((r) => r.fullName === value.trim());
     if (match) setBaseBranch(match.defaultBranch);
   }
+
+  // Branches of the entered repo, from GitHub — base branch is a pick, not typed.
+  useEffect(() => {
+    const clean = repo.trim();
+    if (provider !== "github" || !/^[\w.-]+\/[\w.-]+$/.test(clean)) { setBranches([]); return; }
+    let live = true;
+    setBranchesLoading(true);
+    const t = setTimeout(() => {
+      fetch(`/api/git/branches?repo=${encodeURIComponent(clean)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (!live) return;
+          const list: string[] = d.branches ?? [];
+          setBranches(list);
+          if (list.length) setBaseBranch((cur) => (list.includes(cur) ? cur : (account.find((a) => a.fullName === clean)?.defaultBranch && list.includes(account.find((a) => a.fullName === clean)!.defaultBranch) ? account.find((a) => a.fullName === clean)!.defaultBranch : list.includes("main") ? "main" : list[0])));
+        })
+        .catch(() => { if (live) setBranches([]); })
+        .finally(() => { if (live) setBranchesLoading(false); });
+    }, 350);
+    return () => { live = false; clearTimeout(t); };
+  }, [repo, provider, account]);
 
   async function call(body?: unknown, method = "POST", query = "") {
     setBusy(true); setError(null);
@@ -110,7 +133,14 @@ export function RepoRegistry({ initialRepos, canManage }: { initialRepos: OrgRep
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-[11px] text-muted-2 mb-1">Base branch</label>
-              <input value={baseBranch} onChange={(e) => setBaseBranch(e.target.value)} spellCheck={false} className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono focus:border-accent focus:outline-none" />
+              {branches.length > 0 ? (
+                <select value={baseBranch} onChange={(e) => setBaseBranch(e.target.value)} className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono focus:border-accent focus:outline-none">
+                  {branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              ) : (
+                <input value={baseBranch} onChange={(e) => setBaseBranch(e.target.value)} spellCheck={false} placeholder={branchesLoading ? "loading branches…" : "main"} className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono focus:border-accent focus:outline-none" />
+              )}
+              {provider === "github" && <div className="text-[10px] text-muted-2 mt-0.5">{branchesLoading ? "Loading branches…" : branches.length ? `${branches.length} branches from GitHub.` : "Enter owner/repo to load branches."}</div>}
             </div>
             {isProto && (
               <div>

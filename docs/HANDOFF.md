@@ -1,6 +1,6 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-07-21. Read AGENTS.md first (model + rules), then this (state + next moves).*
+*Updated: 2026-07-21 (post-walkthrough). Read AGENTS.md first (model + rules), then this (state + next moves).*
 
 ## What the product is now
 
@@ -13,6 +13,13 @@ Multi-tenant **build-and-ship layer for web experiments**: author advanced proto
   `<script src="https://outrigger-prototype-management-cons.vercel.app/loader/prep-outrigger" async></script>`
 - Optimizely brand connection works (9 projects listed; default = Outrigger Prep `24138040550`).
 - Git deploys to `INHQInc/outrigger-prototypes` work (Git Data API, one commit per bundle).
+
+## WALKTHROUGH STATE (user live-tested the flow 07-21)
+
+- User's pushback shaped the flow, now built: **capture is free, execution is guided, nothing discovered by error.** Dashboard leads with a sequenced **Customer setup checklist** (Add site → Connect GitHub → Register prototype repo → Connect Optimizely+project → Install loader tag [manual "Mark installed", flag `setup:loader:<orgId>`, POST /api/orgs/setup]); hides at 5/5. Needs-attention = operational alerts only.
+- Source panel: branch-missing state = **"Get started" copy-paste block** (clone → `git checkout -b prototype/<key> origin/starter` → push → `claude`); no-repo error links to the prototype's Settings tab. ALL branch/repo fields everywhere are GitHub-fed dropdowns (registry Base-branch included) — no typed git fields remain.
+- Current live state: GitHub **Connected · INHQInc**; API-access tile live (env exports = OPMC_URL + OPMC_API_TOKEN); **registry still EMPTY** (user was mid-registration of `INHQInc/outrigger-prototypes`); prototype stub **"Room Overlays"** (key `room-overlays`) exists with NO repo attached (stubbed pre-registration — attach via its Settings tab after registering; new stubs auto-attach the default). Loader installed on prep → user should "Mark installed" on the checklist.
+- Rejected by user (do not rebuild): hard-gating stub creation on setup; console writing READMEs/commands into the repo; skill prompting for a local folder.
 
 ## IN FLIGHT: Favorites — first real end-to-end prototype
 
