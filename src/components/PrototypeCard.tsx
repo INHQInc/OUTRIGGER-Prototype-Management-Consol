@@ -6,7 +6,7 @@ import { STAGE_TONE, STAGE_LABEL, normalizeStage, type PrototypeRecord } from "@
 export function PrototypeCard({ p, siteLabel }: { p: PrototypeRecord; siteLabel?: string }) {
   const stage = normalizeStage(p.status);
   return (
-    <Link href={`/sites/${p.siteKey}/prototypes/${p.key}`} className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors block">
+    <Link href={`/prototypes/${p.key}`} className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors block">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[13px] font-semibold truncate">{p.name}</div>

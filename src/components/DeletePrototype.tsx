@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 /** Delete a prototype (cascades overlay + versions + promotions) with confirm. */
-export function DeletePrototype({ prototypeKey, siteKey, name }: { prototypeKey: string; siteKey: string; name: string }) {
+export function DeletePrototype({ prototypeKey, name }: { prototypeKey: string; name: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -16,7 +16,7 @@ export function DeletePrototype({ prototypeKey, siteKey, name }: { prototypeKey:
       const res = await fetch(`/api/prototypes?key=${encodeURIComponent(prototypeKey)}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error ?? "Delete failed"); setBusy(false); return; }
-      router.push(`/sites/${siteKey}/prototypes`);
+      router.push("/");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e)); setBusy(false);

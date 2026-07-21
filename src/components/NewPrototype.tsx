@@ -86,7 +86,7 @@ export function NewPrototype({ siteKey, sites, defaultSite, defaultSource = "liv
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not create prototype"); setBusy(false); return; }
       reset(); setOpen(false);
-      router.push(`/sites/${data.prototype.siteKey}/prototypes/${data.prototype.key}`);
+      router.push(`/prototypes/${data.prototype.key}`);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e)); setBusy(false);

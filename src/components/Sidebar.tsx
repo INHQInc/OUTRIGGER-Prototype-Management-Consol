@@ -33,7 +33,11 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
   );
 
   const renderLink = (item: NavItem) => {
-    const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
+    // Home ("/") is the Prototypes board; prototype workspaces live under
+    // /prototypes/* and belong to the same nav item.
+    const active = item.href === "/"
+      ? pathname === "/" || pathname.startsWith("/prototypes")
+      : item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
     return (
       <Link
         key={item.href}

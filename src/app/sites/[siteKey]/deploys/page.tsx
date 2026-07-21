@@ -53,7 +53,7 @@ export default async function SiteDeploys({ params }: { params: Promise<{ siteKe
               items.map(({ proto, promo }) => (
                 <div key={promo.id} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border last:border-0">
                   <div className="min-w-0">
-                    <Link href={`/sites/${siteKey}/prototypes/${proto.key}`} className="text-[13px] font-medium hover:text-accent">{proto.name}</Link>
+                    <Link href={`/prototypes/${proto.key}`} className="text-[13px] font-medium hover:text-accent">{proto.name}</Link>
                     <div className="text-[11px] text-muted-2">v{promo.versionNumber} · {promo.vehicle}{promo.promotedBy ? ` · ${promo.promotedBy}` : ""}</div>
                   </div>
                   {promo.experimentUrl && (
