@@ -11,6 +11,7 @@
  */
 import { OptimizelyClient } from "../optimizely/api";
 import { getExperimentationConfig } from "../experimentation";
+import { getPrototypeOverlay, buildOverlayVariation } from "../prototypes/overlay";
 import type { Environment } from "../environments";
 import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 
@@ -51,8 +52,15 @@ export async function promoteToOptimizely(input: {
   const client = new OptimizelyClient(token, projectId);
   const page = await client.createPage(`${proto.name} — ${pathSubstring}`, editUrl, pathSubstring);
 
-  // Placeholder variation until overlay authoring lands; pinned to the version.
-  const variationJs = `/* OPMC ${proto.key} · v${version.version} · ${version.gitSha} */\n/* Variation code attaches from the feature-repo build. */`;
+  // Ship the authored overlay as the variation code; fall back to a version-
+  // pinned placeholder only if no overlay has been authored yet.
+  const overlay = await getPrototypeOverlay(proto.key);
+  const built = buildOverlayVariation(proto.key, overlay);
+  const hasCode = overlay && !built.isEmpty;
+  const variationJs = hasCode
+    ? built.variationJs
+    : `/* OPMC ${proto.key} · v${version.version} · ${version.gitSha} */\n/* No overlay authored yet — add it in the console, then re-promote. */`;
+
   const experiment = await client.createDraftExperiment({
     name: `${proto.name} (v${version.version})`,
     description: `OPMC promotion of ${proto.key} v${version.version} (${version.gitSha}). Draft/paused — no traffic.`,
@@ -64,6 +72,8 @@ export async function promoteToOptimizely(input: {
   return {
     experimentId: String(experiment.id),
     experimentUrl: client.experimentAppUrl(experiment.id),
-    detail: "Paused draft experiment created — wire the variation code, then start it in Optimizely.",
+    detail: hasCode
+      ? "Paused draft experiment created with the authored overlay — review, then start it in Optimizely."
+      : "Paused draft created, but no overlay code was authored — add it and re-promote to ship real variation code.",
   };
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readManifest } from "@/lib/features/registry";
 import { buildVariationExport } from "@/lib/optimizely/export";
+import { getPrototypeOverlay, buildOverlayVariation } from "@/lib/prototypes/overlay";
 
 /**
  * Overlay payload for the loader. The loader script (served at
@@ -26,6 +27,14 @@ export async function GET(req: NextRequest) {
   if (!key || !/^[a-zA-Z0-9_-]+$/.test(key)) {
     return NextResponse.json({ error: "key required" }, { status: 400, headers: CORS });
   }
+  // Prefer the store-based prototype overlay (authored in the console).
+  const overlay = await getPrototypeOverlay(key);
+  if (overlay) {
+    const built = buildOverlayVariation(key, overlay);
+    if (!built.isEmpty) return NextResponse.json({ js: built.variationJs, name: key }, { headers: CORS });
+  }
+
+  // Fall back to a legacy file-based feature overlay.
   const manifest = await readManifest(key);
   if (!manifest) {
     // No built overlay for this key yet (e.g. a metadata-only prototype).
