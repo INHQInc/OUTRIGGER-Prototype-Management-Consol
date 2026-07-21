@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
-import type { SiteRepoBinding, OrgRepo } from "../git/types";
+import type { SiteRepoBinding, OrgRepo, GitConnection } from "../git/types";
 import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment } from "../environments";
@@ -35,6 +35,7 @@ export class FsContentStore implements ContentStore {
   private promotionsFile(): string { return join(this.root(), "_promotions.json"); }
   private auditFile(): string { return join(this.root(), "_audit.json"); }
   private orgReposFile(): string { return join(this.root(), "_org-repos.json"); }
+  private gitConnFile(): string { return join(this.root(), "_git-connections.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -74,6 +75,8 @@ export class FsContentStore implements ContentStore {
     await this.writeJson(this.auditFile(), audit);
     const orgRepos = (await this.readJson<OrgRepo[]>(this.orgReposFile(), [])).filter((r) => r.orgId !== id);
     await this.writeJson(this.orgReposFile(), orgRepos);
+    const gitConns = (await this.readJson<GitConnection[]>(this.gitConnFile(), [])).filter((c) => c.orgId !== id);
+    await this.writeJson(this.gitConnFile(), gitConns);
   }
 
   async getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null> {
@@ -192,6 +195,19 @@ export class FsContentStore implements ContentStore {
     await this.writeJson(this.promotionsFile(), promotions);
     // pages + assets (whole site dir)
     await rm(join(this.root(), siteKey), { recursive: true, force: true });
+  }
+
+  async getGitConnection(orgId: string): Promise<GitConnection | null> {
+    return (await this.readJson<GitConnection[]>(this.gitConnFile(), [])).find((c) => c.orgId === orgId) ?? null;
+  }
+  async setGitConnection(conn: GitConnection): Promise<void> {
+    const all = (await this.readJson<GitConnection[]>(this.gitConnFile(), [])).filter((c) => c.orgId !== conn.orgId);
+    all.push(conn);
+    await this.writeJson(this.gitConnFile(), all);
+  }
+  async deleteGitConnection(orgId: string): Promise<void> {
+    const all = (await this.readJson<GitConnection[]>(this.gitConnFile(), [])).filter((c) => c.orgId !== orgId);
+    await this.writeJson(this.gitConnFile(), all);
   }
 
   async listOrgRepos(orgId: string): Promise<OrgRepo[]> {

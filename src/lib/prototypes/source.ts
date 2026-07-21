@@ -6,7 +6,9 @@
  * console only holds the URL target + lifecycle.
  */
 import { getContentStore } from "../content/store";
-import { getGitClient, prototypeBranch } from "../git/provider";
+import { prototypeBranch } from "../git/provider";
+import { getGitClientForOrg } from "../git/connection";
+import { getSite } from "../sites";
 import { GitError } from "../git/github";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
@@ -31,8 +33,9 @@ export async function resolveRepoSource(prototypeKey: string): Promise<RepoSourc
   const store = await getContentStore();
   const proto = await store.getPrototype(prototypeKey);
   if (!proto) throw new Error("Unknown prototype");
-  const client = getGitClient();
-  if (!client) throw new Error("GitHub isn't connected (GITHUB_TOKEN not set).");
+  const site = await getSite(proto.siteKey);
+  const client = await getGitClientForOrg(site?.orgId);
+  if (!client) throw new Error("GitHub isn't connected — connect it in Settings → Repositories.");
 
   // The prototype's own repo pick (brand registry) is the source of truth;
   // legacy prototypes without one fall back to the old per-site binding.

@@ -2,7 +2,7 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type { ContentStore } from "./store";
 import type { PageVersionMeta } from "../capture/types";
 import type { SiteConfig } from "../sites";
-import type { SiteRepoBinding, OrgRepo } from "../git/types";
+import type { SiteRepoBinding, OrgRepo, GitConnection } from "../git/types";
 import type { PrototypeRecord, ArtifactVersion } from "../prototypes/types";
 import type { Org, OrgMember } from "../orgs";
 import type { Environment, EnvironmentKind } from "../environments";
@@ -107,6 +107,12 @@ export class NeonContentStore implements ContentStore {
         content_type text not null,
         bytes_b64 text not null,
         primary key (site_key, name)
+      )`);
+    await this.ddl(() => this.sql`
+      create table if not exists git_connection (
+        org_id text primary key,
+        config text not null,
+        updated_at timestamptz not null default now()
       )`);
     await this.ddl(() => this.sql`
       create table if not exists org_repo (
@@ -295,6 +301,20 @@ export class NeonContentStore implements ContentStore {
       on conflict (id) do nothing`;
   }
 
+  async getGitConnection(orgId: string): Promise<GitConnection | null> {
+    const rows = await this.sql`select config from git_connection where org_id = ${orgId}`;
+    if (!rows[0]) return null;
+    try { return JSON.parse(rows[0].config as string) as GitConnection; } catch { return null; }
+  }
+  async setGitConnection(conn: GitConnection): Promise<void> {
+    await this.sql`
+      insert into git_connection (org_id, config, updated_at) values (${conn.orgId}, ${JSON.stringify(conn)}, now())
+      on conflict (org_id) do update set config = excluded.config, updated_at = now()`;
+  }
+  async deleteGitConnection(orgId: string): Promise<void> {
+    await this.sql`delete from git_connection where org_id = ${orgId}`;
+  }
+
   async listOrgRepos(orgId: string): Promise<OrgRepo[]> {
     const rows = await this.sql`select * from org_repo where org_id = ${orgId} order by created_at`;
     const parse = <T,>(v: unknown, fb: T): T => { try { return v ? (JSON.parse(v as string) as T) : fb; } catch { return fb; } };
@@ -373,6 +393,7 @@ export class NeonContentStore implements ContentStore {
   async deleteOrg(id: string): Promise<void> {
     await this.sql`delete from org_member where org_id = ${id}`;
     await this.sql`delete from org_repo where org_id = ${id}`;
+    await this.sql`delete from git_connection where org_id = ${id}`;
     await this.sql`delete from experimentation_config where org_id = ${id}`;
     await this.sql`delete from audit_event where org_id = ${id}`;
     await this.sql`delete from org where id = ${id}`;

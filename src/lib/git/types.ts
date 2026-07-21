@@ -74,6 +74,14 @@ export interface OrgRepo {
   defaultFor: RepoRole[];
 }
 
+/** Brand-level GitHub connection (stored server-side; token never returned). */
+export interface GitConnection {
+  orgId: string;
+  token: string;
+  login: string;   // the account the token authenticated as
+  updatedAt: string;
+}
+
 export interface PullRequestResult {
   number: number;
   url: string;

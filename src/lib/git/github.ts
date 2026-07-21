@@ -38,6 +38,12 @@ export class GitHubClient {
     return (res.status === 204 ? (undefined as T) : ((await res.json()) as T));
   }
 
+  /** Who the token authenticates as. Validates the token. */
+  async getViewer(): Promise<{ login: string; name?: string }> {
+    const r = await this.gh<{ login: string; name?: string }>(`/user`);
+    return { login: r.login, name: r.name ?? undefined };
+  }
+
   /** Repos visible to the token (recent-first) — powers the repo pickers. */
   async listRepos(max = 200): Promise<{ fullName: string; private: boolean; defaultBranch: string; pushedAt?: string }[]> {
     const out: { fullName: string; private: boolean; defaultBranch: string; pushedAt?: string }[] = [];
