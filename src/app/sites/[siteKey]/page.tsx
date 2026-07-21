@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { listPages } from "@/lib/registry";
-import { listFeatures } from "@/lib/features/registry";
-import { StatusSummary } from "@/components/PrototypeGroups";
+import { getContentStore } from "@/lib/content/store";
+import { Badge } from "@/components/ui";
+import { PROTOTYPE_STAGES, STAGE_LABEL, STAGE_TONE, normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,22 +17,32 @@ function Stat({ n, label, href }: { n: number; label: string; href: string }) {
 
 export default async function SiteOverview({ params }: { params: Promise<{ siteKey: string }> }) {
   const { siteKey } = await params;
-  const [pages, allFeatures] = await Promise.all([listPages(siteKey), listFeatures()]);
-  const features = allFeatures.filter((f) => f.targets[0]?.siteKey === siteKey);
+  const store = await getContentStore();
+  const [pages, prototypes] = await Promise.all([listPages(siteKey), store.listPrototypes(siteKey)]);
   const versions = pages.reduce((s, p) => s + p.versionCount, 0);
+  const byStage = PROTOTYPE_STAGES
+    .map((stage) => ({ stage, n: prototypes.filter((p) => normalizeStage(p.status) === stage).length }))
+    .filter((x) => x.n > 0);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-3 gap-4">
+        <Stat n={prototypes.length} label="prototypes" href={`/sites/${siteKey}/prototypes`} />
         <Stat n={pages.length} label="pages captured" href={`/sites/${siteKey}/pages`} />
-        <Stat n={features.length} label="prototypes" href={`/sites/${siteKey}/prototypes`} />
         <Stat n={versions} label="snapshot versions" href={`/sites/${siteKey}/pages`} />
       </div>
 
       <div className="rounded-xl border border-border bg-surface p-5">
-        <div className="text-[13px] font-semibold mb-3">Prototypes by status</div>
-        {features.length ? (
-          <StatusSummary features={features} />
+        <div className="text-[13px] font-semibold mb-3">Prototypes by stage</div>
+        {byStage.length ? (
+          <div className="flex flex-wrap items-center gap-3">
+            {byStage.map(({ stage, n }) => (
+              <span key={stage} className="flex items-center gap-1.5">
+                <Badge tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</Badge>
+                <span className="text-[12px] text-muted-2 tabular-nums">{n}</span>
+              </span>
+            ))}
+          </div>
         ) : (
           <p className="text-[12px] text-muted-2">No prototypes yet on this site.</p>
         )}

@@ -1,35 +1,12 @@
-import Link from "next/link";
-import { listFeatures } from "@/lib/features/registry";
 import { getContentStore } from "@/lib/content/store";
+import { listFeatures } from "@/lib/features/registry";
 import { PagePrototypeGroups } from "@/components/PrototypeGroups";
 import { NewPrototype } from "@/components/NewPrototype";
-import { Badge, EmptyState } from "@/components/ui";
-import { STAGE_TONE, STAGE_LABEL, normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
+import { PrototypeCard } from "@/components/PrototypeCard";
+import { EmptyState } from "@/components/ui";
+import { PROTOTYPE_STAGES, STAGE_LABEL, normalizeStage } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
-
-function ProtoCard({ siteKey, p }: { siteKey: string; p: PrototypeRecord }) {
-  return (
-    <Link href={`/sites/${siteKey}/prototypes/${p.key}`} className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors block">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold truncate">{p.name}</div>
-          {p.targets[0] && <div className="text-[11px] text-muted-2 mt-0.5 font-mono truncate">{p.targets[0].url} · {p.targets[0].source}</div>}
-        </div>
-        <Badge tone={STAGE_TONE[normalizeStage(p.status)]}>{STAGE_LABEL[normalizeStage(p.status)]}</Badge>
-      </div>
-      {p.hypothesis.outcome && (
-        <p className="text-[12px] text-muted mt-2.5 leading-relaxed line-clamp-2">
-          {p.hypothesis.change ? `${p.hypothesis.change} → ` : ""}{p.hypothesis.outcome}
-        </p>
-      )}
-      <div className="flex items-center gap-3 mt-3 text-[11px] text-muted-2">
-        {p.metrics.primary && <span>metric: {p.metrics.primary}</span>}
-        {p.owner && <span>· {p.owner}</span>}
-      </div>
-    </Link>
-  );
-}
 
 export default async function SitePrototypes({ params }: { params: Promise<{ siteKey: string }> }) {
   const { siteKey } = await params;
@@ -40,25 +17,37 @@ export default async function SitePrototypes({ params }: { params: Promise<{ sit
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="text-[12px] text-muted-2">
-          {protos.length} prototype{protos.length === 1 ? "" : "s"}
-        </div>
+        <div className="text-[12px] text-muted-2">{protos.length} prototype{protos.length === 1 ? "" : "s"} on this site</div>
         <NewPrototype siteKey={siteKey} defaultSource="live" />
       </div>
 
       {protos.length === 0 && siteFeatures.length === 0 ? (
-        <EmptyState title="No prototypes yet." hint="Click “New prototype” to define one — brief, hypothesis, and target." />
+        <EmptyState title="No prototypes yet." hint="Click “New prototype” to define one — target page, hypothesis, and overlay code." />
       ) : (
         <>
           {protos.length > 0 && (
-            <div className="grid grid-cols-2 gap-3">
-              {protos.map((p) => <ProtoCard key={p.key} siteKey={siteKey} p={p} />)}
+            <div className="space-y-6">
+              {PROTOTYPE_STAGES.map((stage) => {
+                const items = protos.filter((p) => normalizeStage(p.status) === stage);
+                if (!items.length) return null;
+                return (
+                  <section key={stage}>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-[12px] font-semibold">{STAGE_LABEL[stage]}</span>
+                      <span className="text-[11px] text-muted-2 tabular-nums">{items.length}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {items.map((p) => <PrototypeCard key={p.key} p={p} />)}
+                    </div>
+                  </section>
+                );
+              })}
             </div>
           )}
 
           {siteFeatures.length > 0 && (
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-2 mb-2">Code overlays</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-2 mb-2">Code overlays (legacy)</div>
               <PagePrototypeGroups siteKey={siteKey} features={siteFeatures} />
             </div>
           )}
