@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui";
 import type { PrototypeTarget, TargetInjection } from "@/lib/prototypes/types";
 
 interface EnvLite { id: string; label: string; kind: string; url: string; loaderKey: string; heartbeatAt: string | null }
@@ -94,15 +93,9 @@ export function TargetPages({ prototypeKey, initialTargets, environments, consol
           </div>
         ) : (
           environments.map((env) => (
-            <div key={env.id} className="px-4 py-3 border-b border-border/60 last:border-0">
-              <div className="flex items-center justify-between gap-3 mb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-medium">{env.label}</span>
-                  <Badge tone={env.kind === "production" ? "accent" : "neutral"}>{env.kind}</Badge>
-                </div>
-                <button onClick={() => copyTag(env)} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{copiedTag === env.id ? "Copied" : "Copy tag"}</button>
-              </div>
-              <pre className="text-[11px] font-mono text-muted-2 overflow-x-auto">{tagFor(env)}</pre>
+            <div key={env.id} className="px-4 py-3 border-b border-border/60 last:border-0 flex items-center justify-between gap-3">
+              <pre className="text-[11px] font-mono text-muted-2 overflow-x-auto flex-1 min-w-0">{tagFor(env)}</pre>
+              <button onClick={() => copyTag(env)} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{copiedTag === env.id ? "Copied" : "Copy"}</button>
             </div>
           ))
         )}
