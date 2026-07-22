@@ -33,6 +33,7 @@ export default async function PrototypeSetupPage({ params }: { params: Promise<{
       repo={setup.repo}
       brief={p.brief}
       consoleUrl={consoleUrl}
+      previewUrl={p.targets[0]?.url}
       buildStatus={{ found: source ? source.found : null, headSha: source?.headSha, bytes: source?.variationJs ? Buffer.byteLength(source.variationJs, "utf8") : undefined, branchExists: source?.branchExists }}
       provisioned={Boolean(provisionFlag)}
     />

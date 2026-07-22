@@ -15,13 +15,14 @@ function tabHref(base: string, tab: SetupStepState["tab"]): string {
 
 /** The prototype's own setup checklist + the local-build command block it
  *  generates once everything's wired. Mirrors the org Customer-setup card. */
-export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consoleUrl, buildStatus, provisioned }: {
+export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consoleUrl, previewUrl, buildStatus, provisioned }: {
   prototypeKey: string;
   steps: SetupStepState[];
   ready: boolean;
   repo?: { fullName: string; branch: string };
   brief: PrototypeBrief;
   consoleUrl: string;
+  previewUrl?: string;
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
   provisioned: boolean;
 }) {
@@ -33,16 +34,16 @@ export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consol
     <div className="space-y-4 max-w-2xl">
       <Checklist base={base} steps={steps} doneCount={doneCount} />
       <BriefCard prototypeKey={prototypeKey} initial={brief} onSaved={() => router.refresh()} />
-      <BuildSection prototypeKey={prototypeKey} base={base} repo={repo} provisioned={provisioned} consoleUrl={consoleUrl} buildStatus={buildStatus} />
+      <BuildSection prototypeKey={prototypeKey} base={base} repo={repo} provisioned={provisioned} consoleUrl={consoleUrl} previewUrl={previewUrl} buildStatus={buildStatus} />
     </div>
   );
 }
 
 /** The one adaptive next-action block: fix the branch → provision → build.
  *  Always visible so the user is never stuck guessing what's next. */
-function BuildSection({ prototypeKey, base, repo, provisioned, consoleUrl, buildStatus }: {
+function BuildSection({ prototypeKey, base, repo, provisioned, consoleUrl, previewUrl, buildStatus }: {
   prototypeKey: string; base: string; repo?: { fullName: string; branch: string };
-  provisioned: boolean; consoleUrl: string;
+  provisioned: boolean; consoleUrl: string; previewUrl?: string;
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
 }) {
   if (!repo) {
@@ -55,7 +56,7 @@ function BuildSection({ prototypeKey, base, repo, provisioned, consoleUrl, build
     <>
       <ProvisionButton prototypeKey={prototypeKey} provisioned={provisioned} />
       {provisioned
-        ? <Commands prototypeKey={prototypeKey} repo={repo} consoleUrl={consoleUrl} buildStatus={buildStatus} />
+        ? <Commands prototypeKey={prototypeKey} repo={repo} consoleUrl={consoleUrl} previewUrl={previewUrl} buildStatus={buildStatus} />
         : <Guidance tone="muted">Click <b>Provision branch</b> above — it commits the brief + page snapshots so <span className="font-mono">clone + claude</span> starts build-ready. The exact commands appear here right after.</Guidance>}
     </>
   );
@@ -151,34 +152,29 @@ function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; i
   );
 }
 
-function Commands({ prototypeKey, repo, consoleUrl, buildStatus }: { prototypeKey: string; repo?: { fullName: string; branch: string }; consoleUrl: string; buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean } }) {
+function Commands({ prototypeKey, repo, consoleUrl, previewUrl, buildStatus }: { prototypeKey: string; repo?: { fullName: string; branch: string }; consoleUrl: string; previewUrl?: string; buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean } }) {
   const [copied, setCopied] = useState(false);
   const fullName = repo?.fullName ?? "owner/repo";
   const branch = repo?.branch || `prototype/${prototypeKey}`;
   const dir = fullName.split("/")[1] ?? prototypeKey;
 
   // (BuildSection guards the starter-branch case before we get here.)
-  // If the branch already exists on GitHub (Claude/someone pushed it), just
-  // check it out. Only a NEW branch is created off the starter template —
-  // basing an existing branch off starter would clobber its built code.
-  const step2 = buildStatus.branchExists
-    ? `git clone git@github.com:${fullName}.git ${dir}   # once
-cd ${dir}
-git checkout ${branch}   # branch already exists`
-    : `git clone git@github.com:${fullName}.git ${dir}   # once
-cd ${dir}
-git checkout -b ${branch} origin/starter && git push -u origin ${branch}   # new branch off the starter template`;
+  // Existing branch → checkout; new branch → fork off starter (never clobber).
+  const checkout = buildStatus.branchExists
+    ? `git checkout ${branch}`
+    : `git checkout -b ${branch} origin/starter && git push -u origin ${branch}`;
+
+  const previewLine = previewUrl
+    ? `\n\n# 3. LOCAL DEV — the real page with your build injected, reloads on save (no token)\nTARGET_URL="${previewUrl}" node dev.mjs      # open http://localhost:4400`
+    : `\n\n# 3. LOCAL DEV — the real page with your build injected (add a target page on the Pages tab)\nTARGET_URL="https://<your target page>" node dev.mjs      # open http://localhost:4400`;
 
   const cmds =
-`# 1. env — once per machine (token: Settings → Repositories → API access)
-export OPMC_URL="${consoleUrl}"
-export OPMC_API_TOKEN="opmc_…"
+`# 1. clone + get on your prototype branch (zero install, zero token)
+git clone git@github.com:${fullName}.git ${dir}
+cd ${dir} && ${checkout}
 
-# 2. clone + get on this prototype's branch
-${step2}
-
-# 3. build with Claude — the opmc-prototype skill loads, reads this brief
-claude`;
+# 2. build with Claude — it reads .opmc/ (your brief + the page snapshot)
+claude${previewLine}`;
 
   async function copy() {
     try { await navigator.clipboard.writeText(cmds); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
@@ -188,19 +184,26 @@ claude`;
     <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
       <div className="px-4 py-2.5 flex items-center justify-between border-b border-accent/30">
         <div>
-          <span className="text-[12px] font-semibold">✓ Wired up — build it</span>
-          <span className="text-[11px] text-muted-2 ml-2">Run this on your machine to start building.</span>
+          <span className="text-[12px] font-semibold">✓ Provisioned — run this to build locally</span>
+          <span className="text-[11px] text-muted-2 ml-2">Claude wakes up with your brief + page snapshot in the tree.</span>
         </div>
         <button onClick={copy} className="text-[12px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
       </div>
       <pre className="px-4 py-3 text-[11px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
-      <div className="px-4 pb-3 text-[11px] text-muted-2 border-t border-border/60 pt-2.5">
-        Build status:{" "}
-        {buildStatus.found === true
-          ? <span className="text-ok">✓ built variation present{buildStatus.headSha ? ` · ${buildStatus.headSha.slice(0, 7)}` : ""}{typeof buildStatus.bytes === "number" ? ` · ${buildStatus.bytes.toLocaleString()} bytes` : ""}</span>
-          : buildStatus.found === false
-          ? <span className="text-warn">not built yet — build in the repo, commit the artifact, then cut a version on the Build tab</span>
-          : <span className="text-muted-2">couldn&apos;t read the repo (check GitHub connection)</span>}
+      <div className="px-4 pb-3 text-[11px] text-muted-2 border-t border-border/60 pt-2.5 space-y-1">
+        <div>
+          <span className="font-medium text-muted">The loop:</span> edit → save (localhost:4400 reloads) → happy? commit + push → review on real prep at{" "}
+          <span className="font-mono">{previewUrl ? `${previewUrl}?opmc=${prototypeKey}` : `<page>?opmc=${prototypeKey}`}</span>.
+          The API token (<Link href="/settings/repositories" className="text-accent hover:text-accent-hover">API access</Link>) is only needed to <em>cut a version</em>.
+        </div>
+        <div>
+          Build status:{" "}
+          {buildStatus.found === true
+            ? <span className="text-ok">✓ built variation present{buildStatus.headSha ? ` · ${buildStatus.headSha.slice(0, 7)}` : ""}{typeof buildStatus.bytes === "number" ? ` · ${buildStatus.bytes.toLocaleString()} bytes` : ""}</span>
+            : buildStatus.found === false
+            ? <span className="text-warn">not built yet — build it locally, then Cut a version on the Build tab</span>
+            : <span className="text-muted-2">couldn&apos;t read the repo (check GitHub connection)</span>}
+        </div>
       </div>
     </div>
   );
