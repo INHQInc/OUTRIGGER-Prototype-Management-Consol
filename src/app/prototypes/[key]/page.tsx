@@ -7,6 +7,7 @@ import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
 import { DescriptionEditor } from "@/components/DescriptionEditor";
 import { TargetPages } from "@/components/TargetPages";
+import { RepoBranchSettings } from "@/components/RepoBranchSettings";
 import { InitScript } from "@/components/InitScript";
 import { SourcePanel } from "@/components/SourcePanel";
 import { OptimizelyBundle } from "@/components/OptimizelyBundle";
@@ -59,15 +60,19 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
     <div className="space-y-6 max-w-2xl">
       <DescriptionEditor prototypeKey={key} brief={p.brief} />
 
-      <Section n={1} title="Build against prep" desc="The prep page(s) this runs on. Verify our injection script is live on each.">
+      <Section n={1} title="Test Site" desc="The page(s) this runs on, and the injection script to add to the site.">
         <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
       </Section>
 
-      <Section n={2} title="Build with Claude" desc="Get the init prompt, run it, build against the prep pages.">
+      <Section n={2} title="Repo & branch" desc="Where this prototype's code lives — change the repo or pick/create a branch.">
+        <RepoBranchSettings prototypeKey={key} initialRepo={p.repo ?? null} />
+      </Section>
+
+      <Section n={3} title="Build with Claude" desc="Get the init prompt, run it, build against the test pages.">
         <InitScript prototypeKey={key} repo={p.repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} />
       </Section>
 
-      <Section n={3} title="Optimizely bundle" desc="Cut a version, then paste the bundle into a Web Experiment.">
+      <Section n={4} title="Optimizely bundle" desc="Cut a version, then paste the bundle into a Web Experiment.">
         <div className="space-y-3">
           <SourcePanel prototypeKey={key} versions={versions} />
           <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />

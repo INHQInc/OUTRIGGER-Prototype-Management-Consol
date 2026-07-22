@@ -86,7 +86,7 @@ export function TargetPages({ prototypeKey, initialTargets, environments, consol
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="px-4 py-2.5 border-b border-border">
           <span className="text-[12px] font-semibold">Injection script</span>
-          <span className="text-[11px] text-muted-2 ml-2">Add this tag once to the site&apos;s global template (e.g. before <span className="font-mono">&lt;/head&gt;</span>). It&apos;s inert until a page is opened with the <span className="font-mono">?opmc</span> token.</span>
+          <span className="text-[11px] text-muted-2 ml-2">The dev adds this tag once to the site&apos;s global template (e.g. before <span className="font-mono">&lt;/head&gt;</span>). Inert until a page is opened with <span className="font-mono">?opmc</span>.</span>
         </div>
         {environments.length === 0 ? (
           <div className="px-4 py-3 text-[12px] text-muted-2">
@@ -99,9 +99,6 @@ export function TargetPages({ prototypeKey, initialTargets, environments, consol
                 <div className="flex items-center gap-2">
                   <span className="text-[13px] font-medium">{env.label}</span>
                   <Badge tone={env.kind === "production" ? "accent" : "neutral"}>{env.kind}</Badge>
-                  {env.heartbeatAt
-                    ? <span className="text-[11px] text-ok">✓ verified live</span>
-                    : <span className="text-[11px] text-muted-2">not detected yet</span>}
                 </div>
                 <button onClick={() => copyTag(env)} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{copiedTag === env.id ? "Copied" : "Copy tag"}</button>
               </div>
