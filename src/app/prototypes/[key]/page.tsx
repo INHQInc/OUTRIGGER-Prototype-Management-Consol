@@ -10,6 +10,14 @@ import { PrototypeSetup } from "@/components/PrototypeSetup";
 
 export const dynamic = "force-dynamic";
 
+function agoShort(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 /** Overview tab — the checklist ladder to local dev + status across the three
  *  modes (Local Dev / Live Page / Experiment). Brief lives on its own tab. */
 export default async function PrototypeOverviewPage({ params }: { params: Promise<{ key: string }> }) {
@@ -19,13 +27,14 @@ export default async function PrototypeOverviewPage({ params }: { params: Promis
   if (!p) notFound();
   const orgId = await resolvePrototypeOrg(p);
 
-  const [setup, hdrs, source, provisionFlag, environments, promotions] = await Promise.all([
+  const [setup, hdrs, source, provisionFlag, environments, promotions, claudeSeen] = await Promise.all([
     getPrototypeSetup(p, orgId),
     headers(),
     resolveRepoSource(key).catch(() => null),
     store.getFlag(`provision:${key}`).catch(() => null),
     listOrgEnvironments(orgId),
     listPromotions(key),
+    store.getFlag(`claude:seen:${key}`).catch(() => null),
   ]);
   const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "outrigger-prototype-management-cons.vercel.app"}`;
 
@@ -51,6 +60,7 @@ export default async function PrototypeOverviewPage({ params }: { params: Promis
       provisioned={Boolean(provisionFlag)}
       liveStatus={{ targetCount: p.targets.length, loaderVerified }}
       expStatus={{ active: Boolean(activePromo), experimentUrl: activePromo?.experimentUrl }}
+      claudeStatus={{ seen: Boolean(claudeSeen), text: claudeSeen ? `Engaged · ${agoShort(claudeSeen)}` : "Not started" }}
     />
   );
 }

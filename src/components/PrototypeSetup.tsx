@@ -14,7 +14,7 @@ interface ExpStatus { active: boolean; experimentUrl?: string }
  * status strip across the three modes (Local Dev / Live Page / Experiment).
  * The build brief lives on its own tab.
  */
-export function PrototypeSetup({ prototypeKey, repo, hasBrief, hasPages, consoleUrl, previewUrl, buildStatus, provisioned, liveStatus, expStatus }: {
+export function PrototypeSetup({ prototypeKey, repo, hasBrief, hasPages, consoleUrl, previewUrl, buildStatus, provisioned, liveStatus, expStatus, claudeStatus }: {
   prototypeKey: string;
   repo?: { fullName: string; branch: string };
   hasBrief: boolean;
@@ -25,6 +25,7 @@ export function PrototypeSetup({ prototypeKey, repo, hasBrief, hasPages, console
   provisioned: boolean;
   liveStatus: LiveStatus;
   expStatus: ExpStatus;
+  claudeStatus: { seen: boolean; text: string };
 }) {
   const router = useRouter();
   const base = `/prototypes/${prototypeKey}`;
@@ -33,7 +34,7 @@ export function PrototypeSetup({ prototypeKey, repo, hasBrief, hasPages, console
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <StatusStrip base={base} provisioned={provisioned} buildStatus={buildStatus} liveStatus={liveStatus} expStatus={expStatus} />
+      <StatusStrip base={base} provisioned={provisioned} buildStatus={buildStatus} liveStatus={liveStatus} expStatus={expStatus} claudeStatus={claudeStatus} />
       <Ladder
         base={base}
         prototypeKey={prototypeKey}
@@ -51,10 +52,11 @@ export function PrototypeSetup({ prototypeKey, repo, hasBrief, hasPages, console
 }
 
 /** Status across the three modes — where this prototype is right now. */
-function StatusStrip({ base, provisioned, buildStatus, liveStatus, expStatus }: {
+function StatusStrip({ base, provisioned, buildStatus, liveStatus, expStatus, claudeStatus }: {
   base: string; provisioned: boolean;
   buildStatus: { found: boolean | null };
   liveStatus: LiveStatus; expStatus: ExpStatus;
+  claudeStatus: { seen: boolean; text: string };
 }) {
   const local = !provisioned
     ? { tone: "muted", text: "Not set up" }
@@ -71,7 +73,8 @@ function StatusStrip({ base, provisioned, buildStatus, liveStatus, expStatus }: 
     : { tone: "muted", text: "Not started" };
 
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 gap-3">
+      <ModeCard title="Claude" tone={claudeStatus.seen ? "ok" : "muted"} text={claudeStatus.text} href={base} />
       <ModeCard title="Local Dev" tone={local.tone} text={local.text} href={base} />
       <ModeCard title="Live Page" tone={live.tone} text={live.text} href={`${base}/pages`} />
       <ModeCard title="Experiment" tone={exp.tone} text={exp.text} href={expStatus.experimentUrl ?? `${base}/ship`} external={Boolean(expStatus.experimentUrl)} />
