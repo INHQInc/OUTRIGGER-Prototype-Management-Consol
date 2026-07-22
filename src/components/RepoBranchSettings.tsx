@@ -22,6 +22,7 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
   const [branches, setBranches] = useState<string[]>([]);
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [branchesErr, setBranchesErr] = useState<string | null>(null);
+  const [hasStarter, setHasStarter] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -50,8 +51,10 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
       .then((r) => r.json())
       .then((d) => {
         if (!live) return;
+        const raw = (d.branches ?? []) as string[];
         // `starter` is the template branch prototypes fork FROM — never a valid target.
-        setBranches((d.branches ?? []).filter((b: string) => b !== "starter"));
+        setHasStarter(raw.includes("starter"));
+        setBranches(raw.filter((b) => b !== "starter"));
         if (d.error) setBranchesErr("Couldn't list branches for this repo.");
         setBranch((cur) => cur || `prototype/${prototypeKey}`);
       })
@@ -124,11 +127,16 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
                 <div className="text-[10px] text-muted-2 mt-0.5">{branchesLoading ? "Loading branches…" : branchesErr ? branchesErr : `${branches.length} branch${branches.length === 1 ? "" : "es"} on GitHub.`}</div>
               </div>
             </div>
+            {!branchesLoading && !branchesErr && repoSel && !hasStarter && (
+              <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2 text-[12px] text-danger">
+                This repo has no <span className="font-mono">starter</span> template branch — new prototype branches fork from <span className="font-mono">starter</span>, so this repo can&apos;t be used for prototypes. Pick your prototypes repo (the one with a <span className="font-mono">starter</span> branch).
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className={`text-[12px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : "text-muted-2"}`}>
                 {msg ? msg.text : initialRepo ? `Currently ${initialRepo.fullName}@${initialRepo.branch}` : "No repo attached yet — pick one and save."}
               </span>
-              <button onClick={save} disabled={busy || !repoSel.trim()} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save"}</button>
+              <button onClick={save} disabled={busy || !repoSel.trim() || !hasStarter} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save"}</button>
             </div>
           </>
         )}

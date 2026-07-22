@@ -40,6 +40,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
   const [branches, setBranches] = useState<string[]>([]);
   const [branch, setBranch] = useState("");
   const [branchesLoading, setBranchesLoading] = useState(false);
+  const [hasStarter, setHasStarter] = useState(true);
 
   const key = slugPreview(name);
   const newBranch = `prototype/${key}`;
@@ -66,7 +67,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
     setBranchesLoading(true);
     fetch(`/api/git/branches?repo=${encodeURIComponent(repo.trim())}`)
       .then((r) => r.json())
-      .then((d) => { if (live) setBranches((d.branches ?? []).filter((b: string) => b !== "starter")); })
+      .then((d) => { if (!live) return; const raw = (d.branches ?? []) as string[]; setHasStarter(raw.includes("starter")); setBranches(raw.filter((b) => b !== "starter")); })
       .catch(() => { if (live) setBranches([]); })
       .finally(() => { if (live) setBranchesLoading(false); });
     return () => { live = false; };
@@ -75,7 +76,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
   const cleanTargets = targets.filter((t) => t.url.trim()).map((t) => ({ url: t.url.trim(), source: t.source }));
   const branchChoice = branch || newBranch;
   const blocked = !loadingRepos && (!gitConnected || repos.length === 0);
-  const valid = name.trim().length > 0 && description.trim().length > 0 && !!repo && cleanTargets.length > 0 && targets.every((t) => !t.url.trim() || isUrl(t.url));
+  const valid = name.trim().length > 0 && description.trim().length > 0 && !!repo && hasStarter && cleanTargets.length > 0 && targets.every((t) => !t.url.trim() || isUrl(t.url));
 
   function setTarget(i: number, patch: Partial<Target>) { setTargets((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t))); }
 
@@ -130,6 +131,9 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
                 {branches.filter((b) => b !== newBranch).map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
+          )}
+          {!loadingRepos && !blocked && repo && !branchesLoading && !hasStarter && (
+            <div className="text-[11px] text-danger mt-1">This repo has no <span className="font-mono">starter</span> template branch — prototypes can&apos;t fork from it. Pick your prototypes repo.</div>
           )}
         </div>
 
