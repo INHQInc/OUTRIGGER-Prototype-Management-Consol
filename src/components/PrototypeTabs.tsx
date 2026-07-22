@@ -9,6 +9,7 @@ export function PrototypeTabs({ prototypeKey }: { prototypeKey: string }) {
   const base = `/prototypes/${prototypeKey}`;
   const tabs = [
     { href: base, label: "Overview", exact: true },
+    { href: `${base}/brief`, label: "Brief" },
     { href: `${base}/pages`, label: "Pages" },
     { href: `${base}/ship`, label: "Ship" },
     { href: `${base}/settings`, label: "Settings" },

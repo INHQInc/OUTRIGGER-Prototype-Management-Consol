@@ -3,34 +3,37 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { PrototypeBrief } from "@/lib/prototypes/types";
 
-const ta = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none resize-none";
 const link = "text-accent hover:text-accent-hover font-medium";
 
+interface LiveStatus { targetCount: number; loaderVerified: boolean }
+interface ExpStatus { active: boolean; experimentUrl?: string }
+
 /**
- * Overview — the ladder to local dev. Each rung lights up as it's done; the
- * final rung (Start local dev) unlocks the run command once the rest are done.
- * Below it: the build brief (you + Claude both edit).
+ * Overview — the prototype's home: the checklist ladder to local dev + a
+ * status strip across the three modes (Local Dev / Live Page / Experiment).
+ * The build brief lives on its own tab.
  */
-export function PrototypeSetup({ prototypeKey, repo, brief, hasPages, consoleUrl, previewUrl, buildStatus, provisioned }: {
+export function PrototypeSetup({ prototypeKey, repo, hasBrief, hasPages, consoleUrl, previewUrl, buildStatus, provisioned, liveStatus, expStatus }: {
   prototypeKey: string;
   repo?: { fullName: string; branch: string };
-  brief: PrototypeBrief;
+  hasBrief: boolean;
   hasPages: boolean;
   consoleUrl: string;
   previewUrl?: string;
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
   provisioned: boolean;
+  liveStatus: LiveStatus;
+  expStatus: ExpStatus;
 }) {
   const router = useRouter();
   const base = `/prototypes/${prototypeKey}`;
   const hasRepo = Boolean(repo);
-  const hasBrief = Boolean(brief.change?.trim());
   const ready = hasRepo && hasBrief && hasPages && provisioned;
 
   return (
     <div className="space-y-4 max-w-2xl">
+      <StatusStrip base={base} provisioned={provisioned} buildStatus={buildStatus} liveStatus={liveStatus} expStatus={expStatus} />
       <Ladder
         base={base}
         prototypeKey={prototypeKey}
@@ -43,9 +46,54 @@ export function PrototypeSetup({ prototypeKey, repo, brief, hasPages, consoleUrl
         onChange={() => router.refresh()}
       />
       {ready && <Commands prototypeKey={prototypeKey} repo={repo} consoleUrl={consoleUrl} previewUrl={previewUrl} buildStatus={buildStatus} />}
-      <BriefCard prototypeKey={prototypeKey} initial={brief} onSaved={() => router.refresh()} />
     </div>
   );
+}
+
+/** Status across the three modes — where this prototype is right now. */
+function StatusStrip({ base, provisioned, buildStatus, liveStatus, expStatus }: {
+  base: string; provisioned: boolean;
+  buildStatus: { found: boolean | null };
+  liveStatus: LiveStatus; expStatus: ExpStatus;
+}) {
+  const local = !provisioned
+    ? { tone: "muted", text: "Not set up" }
+    : buildStatus.found === true
+    ? { tone: "ok", text: "Build present" }
+    : { tone: "accent", text: "Ready — run the command" };
+  const live = liveStatus.targetCount === 0
+    ? { tone: "muted", text: "No pages yet" }
+    : liveStatus.loaderVerified
+    ? { tone: "ok", text: "Loader verified" }
+    : { tone: "warn", text: "Verify injection" };
+  const exp = expStatus.active
+    ? { tone: "ok", text: "In Optimizely" }
+    : { tone: "muted", text: "Not started" };
+
+  return (
+    <div className="grid grid-cols-3 gap-3">
+      <ModeCard title="Local Dev" tone={local.tone} text={local.text} href={base} />
+      <ModeCard title="Live Page" tone={live.tone} text={live.text} href={`${base}/pages`} />
+      <ModeCard title="Experiment" tone={exp.tone} text={exp.text} href={expStatus.experimentUrl ?? `${base}/ship`} external={Boolean(expStatus.experimentUrl)} />
+    </div>
+  );
+}
+
+const TONE: Record<string, string> = {
+  ok: "text-ok", accent: "text-accent", warn: "text-warn", muted: "text-muted-2",
+};
+
+function ModeCard({ title, tone, text, href, external }: { title: string; tone: string; text: string; href: string; external?: boolean }) {
+  const body = (
+    <>
+      <div className="text-[11px] text-muted-2 uppercase tracking-wide">{title}</div>
+      <div className={`text-[13px] font-medium mt-1 ${TONE[tone] ?? "text-foreground"}`}>{text}{external ? " ↗" : ""}</div>
+    </>
+  );
+  const cls = "rounded-xl border border-border bg-surface p-3 hover:border-border-strong transition-colors block";
+  return external
+    ? <a href={href} target="_blank" rel="noreferrer" className={cls}>{body}</a>
+    : <Link href={href} className={cls}>{body}</Link>;
 }
 
 /** The ladder to local dev — steps light up; the final rung reveals the command. */
@@ -80,7 +128,7 @@ function Ladder({ base, prototypeKey, hasRepo, hasBrief, hasPages, provisioned, 
     { label: "Code location", sub: hasRepo ? repo?.fullName : undefined, done: hasRepo,
       action: hasRepo ? null : <Link href="/settings/repositories" className={link}>Connect your code repo →</Link> },
     { label: "Build brief", sub: hasBrief ? undefined : "what to build — a line or two", done: hasBrief,
-      action: hasBrief ? null : <a href="#brief" className={link}>Write it below →</a> },
+      action: hasBrief ? null : <Link href={`${base}/brief`} className={link}>Write the brief →</Link> },
     { label: "Test page(s)", done: hasPages,
       action: hasPages ? null : <Link href={`${base}/pages`} className={link}>Add a page →</Link> },
     { label: "Prepare workspace", sub: provisioned ? "ready" : "snapshots the page so Claude works offline", done: provisioned,
@@ -112,83 +160,6 @@ function Ladder({ base, prototypeKey, hasRepo, hasBrief, hasPages, provisioned, 
         </span>
       </div>
       {err && <div className="px-4 pb-3 text-[12px] text-danger">{err}</div>}
-    </div>
-  );
-}
-
-function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; initial: PrototypeBrief; onSaved: () => void }) {
-  const [problem, setProblem] = useState(initial.problem);
-  const [change, setChange] = useState(initial.change);
-  const [done, setDone] = useState(initial.doneLooksLike);
-  const [where, setWhere] = useState(initial.where ?? "");
-  const [constraints, setConstraints] = useState(initial.constraints ?? "");
-  const [reference, setReference] = useState(initial.reference ?? "");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const dirty = problem !== initial.problem || change !== initial.change || done !== initial.doneLooksLike
-    || where !== (initial.where ?? "") || constraints !== (initial.constraints ?? "") || reference !== (initial.reference ?? "");
-  const clr = () => setMsg(null);
-
-  async function save() {
-    if (busy) return;
-    setBusy(true); setMsg(null);
-    try {
-      const res = await fetch("/api/prototypes", {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, brief: { problem, change, doneLooksLike: done, where, constraints, reference } }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
-      setMsg({ ok: true, text: "Saved." });
-      onSaved();
-    } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : "Save failed" });
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div id="brief" className="rounded-xl border border-border bg-surface overflow-hidden scroll-mt-4">
-      <div className="px-4 py-2.5 border-b border-border">
-        <span className="text-[12px] font-semibold">Build brief</span>
-        <span className="text-[11px] text-muted-2 ml-2">What Claude builds. You and Claude both edit this — it grows as you go.</span>
-      </div>
-      <div className="p-4 space-y-2.5">
-        <div>
-          <label className="block text-[11px] text-muted-2 mb-1">What it changes <span className="text-danger">*</span></label>
-          <textarea rows={2} value={change} onChange={(e) => { setChange(e.target.value); clr(); }} placeholder="The change on the page — the thing to build. This is what Claude builds toward." className={ta} />
-        </div>
-        <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <label className="block text-[11px] text-muted-2 mb-1">Where on the page</label>
-            <textarea rows={2} value={where} onChange={(e) => { setWhere(e.target.value); clr(); }} placeholder="e.g. the room-listing cards / a selector" className={ta} />
-          </div>
-          <div>
-            <label className="block text-[11px] text-muted-2 mb-1">Done looks like</label>
-            <textarea rows={2} value={done} onChange={(e) => { setDone(e.target.value); clr(); }} placeholder="How you'll know it's right, in words." className={ta} />
-          </div>
-        </div>
-        <details className="rounded-lg border border-border/60">
-          <summary className="px-3 py-1.5 text-[11px] text-muted-2 cursor-pointer hover:text-foreground">More — problem, guardrails, reference</summary>
-          <div className="p-3 space-y-2.5 border-t border-border/60">
-            <div>
-              <label className="block text-[11px] text-muted-2 mb-1">Problem / opportunity</label>
-              <textarea rows={2} value={problem} onChange={(e) => { setProblem(e.target.value); clr(); }} placeholder="What's not working, or the opportunity you're testing." className={ta} />
-            </div>
-            <div>
-              <label className="block text-[11px] text-muted-2 mb-1">Guardrails / do-not-touch</label>
-              <textarea rows={2} value={constraints} onChange={(e) => { setConstraints(e.target.value); clr(); }} placeholder="What must not change or regress." className={ta} />
-            </div>
-            <div>
-              <label className="block text-[11px] text-muted-2 mb-1">Reference</label>
-              <textarea rows={1} value={reference} onChange={(e) => { setReference(e.target.value); clr(); }} placeholder="A reference URL or example, if any." className={ta} />
-            </div>
-          </div>
-        </details>
-        <div className="flex items-center justify-between">
-          <span className={`text-[12px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : "text-muted-2"}`}>{msg?.text ?? (dirty ? "Unsaved changes" : "")}</span>
-          <button onClick={save} disabled={busy || !dirty} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save brief"}</button>
-        </div>
-      </div>
     </div>
   );
 }
