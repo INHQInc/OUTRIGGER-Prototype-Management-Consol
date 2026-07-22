@@ -46,6 +46,19 @@ async function firecrawlScrape(url: string): Promise<string> {
  *   <root>/<siteKey>/pages/<slug>/<version>/index.html
  *   <root>/<siteKey>/pages/<slug>/<version>/meta.json
  */
+/**
+ * Light capture for branch provisioning: scrape the rendered HTML via Firecrawl
+ * (the WAF-bypassing path — Node/undici is blocked for the target) and strip
+ * trackers. No asset mirroring, no store write — just the sanitized DOM we
+ * commit as an offline snapshot for selector authoring.
+ */
+export async function captureRawHtml(url: string): Promise<string> {
+  const rawHtml = await firecrawlScrape(url);
+  const $ = load(rawHtml);
+  sanitize($);
+  return $.html();
+}
+
 export async function capturePage(
   url: string,
   siteKey: string,

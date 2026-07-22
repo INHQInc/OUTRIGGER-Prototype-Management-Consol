@@ -17,10 +17,11 @@ export default async function PrototypeSetupPage({ params }: { params: Promise<{
   if (!p) notFound();
   const orgId = await resolvePrototypeOrg(p);
 
-  const [setup, hdrs, source] = await Promise.all([
+  const [setup, hdrs, source, provisionFlag] = await Promise.all([
     getPrototypeSetup(p, orgId),
     headers(),
     resolveRepoSource(key).catch(() => null),
+    store.getFlag(`provision:${key}`).catch(() => null),
   ]);
   const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "outrigger-prototype-management-cons.vercel.app"}`;
 
@@ -33,6 +34,7 @@ export default async function PrototypeSetupPage({ params }: { params: Promise<{
       brief={p.brief}
       consoleUrl={consoleUrl}
       buildStatus={{ found: source ? source.found : null, headSha: source?.headSha, bytes: source?.variationJs ? Buffer.byteLength(source.variationJs, "utf8") : undefined, branchExists: source?.branchExists }}
+      provisioned={Boolean(provisionFlag)}
     />
   );
 }

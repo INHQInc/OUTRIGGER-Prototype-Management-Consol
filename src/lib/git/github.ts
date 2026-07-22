@@ -149,7 +149,7 @@ export class GitHubClient {
   async commitFiles(
     owner: string,
     repo: string,
-    opts: { branch: string; baseSha: string; message: string; files: { path: string; content: Buffer }[] }
+    opts: { branch: string; baseSha: string; message: string; files: { path: string; content: Buffer }[]; force?: boolean }
   ): Promise<{ sha: string; url: string }> {
     const tree: { path: string; mode: "100644"; type: "blob"; sha: string }[] = [];
     for (const f of opts.files) {
@@ -168,9 +168,12 @@ export class GitHubClient {
       method: "POST",
       body: JSON.stringify({ message: opts.message, tree: newTree.sha, parents: [opts.baseSha] }),
     });
+    // Default force:true preserves the loader-deploy behavior (single-writer
+    // branch). Provisioning passes force:false so a re-sync built from a stale
+    // baseSha fails (422 non-fast-forward) instead of rewinding Claude's pushes.
     await this.gh(`/repos/${owner}/${repo}/git/refs/heads/${opts.branch}`, {
       method: "PATCH",
-      body: JSON.stringify({ sha: commit.sha, force: true }),
+      body: JSON.stringify({ sha: commit.sha, force: opts.force ?? true }),
     });
     return { sha: commit.sha, url: commit.html_url };
   }

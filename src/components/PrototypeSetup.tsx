@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeBrief } from "@/lib/prototypes/types";
 import type { SetupStepState } from "@/lib/prototypes/setup";
+import { ProvisionButton } from "@/components/ProvisionButton";
 
 const ta = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none resize-none";
 
@@ -14,7 +15,7 @@ function tabHref(base: string, tab: SetupStepState["tab"]): string {
 
 /** The prototype's own setup checklist + the local-build command block it
  *  generates once everything's wired. Mirrors the org Customer-setup card. */
-export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consoleUrl, buildStatus }: {
+export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consoleUrl, buildStatus, provisioned }: {
   prototypeKey: string;
   steps: SetupStepState[];
   ready: boolean;
@@ -22,6 +23,7 @@ export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consol
   brief: PrototypeBrief;
   consoleUrl: string;
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
+  provisioned: boolean;
 }) {
   const router = useRouter();
   const base = `/prototypes/${prototypeKey}`;
@@ -31,6 +33,7 @@ export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consol
     <div className="space-y-4 max-w-2xl">
       <Checklist base={base} steps={steps} doneCount={doneCount} />
       <BriefCard prototypeKey={prototypeKey} initial={brief} onSaved={() => router.refresh()} />
+      {repo && repo.branch !== "starter" && <ProvisionButton prototypeKey={prototypeKey} provisioned={provisioned} />}
       {ready
         ? <Commands repo={repo} consoleUrl={consoleUrl} buildStatus={buildStatus} />
         : <div className="rounded-xl border border-border bg-surface px-4 py-3 text-[12px] text-muted-2">
