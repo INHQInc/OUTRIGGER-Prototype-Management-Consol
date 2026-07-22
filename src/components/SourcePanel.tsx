@@ -15,6 +15,9 @@ interface SourceStatus {
   found: boolean;
   bytes: number;
   error?: string;
+  namespace?: string | null;
+  expectedNamespace?: string;
+  namespaceMismatch?: boolean;
 }
 
 /** Copy-paste bootstrap for a branch that doesn't exist yet — the console
@@ -117,6 +120,11 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
                   <span className="text-muted-2">Artifact</span><span className="font-mono">{status.artifactPath}</span>
                 </div>
                 <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
+              </div>
+            )}
+            {status.namespaceMismatch && (
+              <div className="rounded-lg border border-warn/50 bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-3 py-2 text-[12px] text-warn leading-relaxed">
+                ⚠ The artifact being served is <span className="font-mono">{status.namespace}</span>, not <span className="font-mono">{status.expectedNamespace}</span> — this branch is still serving an inherited <span className="font-mono">starter</span> build. Build once (<span className="font-mono">node build.mjs</span>) and push; until then the review URL shows the wrong prototype.
               </div>
             )}
             {status.found ? (

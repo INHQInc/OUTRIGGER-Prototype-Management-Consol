@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
+import { detectNamespace } from "@/lib/prototypes/served";
 
 /**
  * GET ?key=<prototypeKey> → the prototype's repo-source status (repo, branch,
@@ -15,7 +16,18 @@ export async function GET(req: NextRequest) {
     // Strip the variation body — status only.
     const { variationJs, ...status } = src;
     void variationJs;
-    return NextResponse.json({ source: { ...status, bytes: src.variationJs ? Buffer.byteLength(src.variationJs, "utf8") : 0 } });
+    // Namespace tells us whether the artifact actually belongs to THIS prototype
+    // — a fresh branch inherits `starter`'s stale build until its first commit.
+    const namespace = detectNamespace(src.variationJs);
+    return NextResponse.json({
+      source: {
+        ...status,
+        bytes: src.variationJs ? Buffer.byteLength(src.variationJs, "utf8") : 0,
+        namespace: namespace ?? null,
+        expectedNamespace: `opmc-${g.proto.key}`,
+        namespaceMismatch: Boolean(namespace && namespace !== `opmc-${g.proto.key}`),
+      },
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

@@ -4,8 +4,10 @@ import { currentUser } from "@/lib/auth/current";
 import { listOrgRepos } from "@/lib/git/org-repos";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { RepoRegistry } from "@/components/RepoRegistry";
+import { ReferenceRepos } from "@/components/ReferenceRepos";
 import { GitHubConnection } from "@/components/GitHubConnection";
 import { getGitConnectionStatus, probeRepoWrite } from "@/lib/git/connection";
+import { listReferenceRepos } from "@/lib/git/reference-repos";
 import { ensureApiToken } from "@/lib/api-token";
 import { ApiAccessTile } from "@/components/ApiAccessTile";
 import { headers } from "next/headers";
@@ -26,6 +28,7 @@ export default async function RepositoriesPage() {
   const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "console"}`;
   // Verify the connected token can actually WRITE to the prototypes repo (branch
   // creation needs it) — a read-only token connects fine but 403s at build time.
+  const refRepos = await listReferenceRepos(orgId).catch(() => []);
   const protoRepo = repos.find((r) => r.defaultFor.includes("prototypes")) ?? repos.find((r) => r.roles.includes("prototypes")) ?? null;
   const writeProbe = protoRepo && (gitStatus.connected || gitStatus.envFallback) ? await probeRepoWrite(orgId, protoRepo.fullName) : null;
   return (
@@ -35,6 +38,7 @@ export default async function RepositoriesPage() {
         <div className="max-w-2xl space-y-5">
           <GitHubConnection initialStatus={gitStatus} writeProbe={writeProbe} canManage={user?.role === "admin"} />
           <RepoRegistry initialRepos={repos} canManage={user?.role === "admin"} />
+          <ReferenceRepos initial={refRepos} canManage={user?.role === "admin"} />
           <ApiAccessTile initialToken={apiToken} consoleUrl={consoleUrl} canManage={user?.role === "admin"} />
         </div>
       </div>
