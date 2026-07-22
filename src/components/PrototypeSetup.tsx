@@ -113,14 +113,17 @@ function Ladder({ base, prototypeKey, hasRepo, hasBrief, hasPages, provisioned, 
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
 
   async function prepare() {
     if (busy) return;
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setWarn(null);
     try {
       const res = await fetch("/api/prototypes/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: prototypeKey }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(data.error ?? "Couldn't prepare the workspace"); return; }
+      const failed = (data.result?.captures ?? []).filter((c: { ok: boolean }) => !c.ok);
+      if (failed.length) setWarn(`Prepared — but ${failed.length} page snapshot${failed.length === 1 ? "" : "s"} couldn't be captured (check FIRECRAWL_API_KEY on the server). Claude still gets the brief; the offline snapshot just won't be there.`);
       onChange();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Couldn't prepare the workspace");
@@ -163,6 +166,7 @@ function Ladder({ base, prototypeKey, hasRepo, hasBrief, hasPages, provisioned, 
         </span>
       </div>
       {err && <div className="px-4 pb-3 text-[12px] text-danger">{err}</div>}
+      {warn && <div className="px-4 pb-3 text-[12px] text-warn">{warn}</div>}
     </div>
   );
 }
