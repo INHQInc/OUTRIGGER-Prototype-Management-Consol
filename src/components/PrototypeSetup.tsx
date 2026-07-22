@@ -4,17 +4,20 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeBrief } from "@/lib/prototypes/types";
-import { ProvisionButton } from "@/components/ProvisionButton";
 
 const ta = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none resize-none";
+const link = "text-accent hover:text-accent-hover font-medium";
 
-
-/** The prototype's own setup checklist + the local-build command block it
- *  generates once everything's wired. Mirrors the org Customer-setup card. */
-export function PrototypeSetup({ prototypeKey, repo, brief, consoleUrl, previewUrl, buildStatus, provisioned }: {
+/**
+ * Overview — the ladder to local dev. Each rung lights up as it's done; the
+ * final rung (Start local dev) unlocks the run command once the rest are done.
+ * Below it: the build brief (you + Claude both edit).
+ */
+export function PrototypeSetup({ prototypeKey, repo, brief, hasPages, consoleUrl, previewUrl, buildStatus, provisioned }: {
   prototypeKey: string;
   repo?: { fullName: string; branch: string };
   brief: PrototypeBrief;
+  hasPages: boolean;
   consoleUrl: string;
   previewUrl?: string;
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
@@ -22,40 +25,95 @@ export function PrototypeSetup({ prototypeKey, repo, brief, consoleUrl, previewU
 }) {
   const router = useRouter();
   const base = `/prototypes/${prototypeKey}`;
+  const hasRepo = Boolean(repo);
+  const hasBrief = Boolean(brief.change?.trim());
+  const ready = hasRepo && hasBrief && hasPages && provisioned;
 
   return (
     <div className="space-y-4 max-w-2xl">
+      <Ladder
+        base={base}
+        prototypeKey={prototypeKey}
+        hasRepo={hasRepo}
+        hasBrief={hasBrief}
+        hasPages={hasPages}
+        provisioned={provisioned}
+        ready={ready}
+        repo={repo}
+        onChange={() => router.refresh()}
+      />
+      {ready && <Commands prototypeKey={prototypeKey} repo={repo} consoleUrl={consoleUrl} previewUrl={previewUrl} buildStatus={buildStatus} />}
       <BriefCard prototypeKey={prototypeKey} initial={brief} onSaved={() => router.refresh()} />
-      <BuildSection prototypeKey={prototypeKey} base={base} repo={repo} provisioned={provisioned} consoleUrl={consoleUrl} previewUrl={previewUrl} buildStatus={buildStatus} />
     </div>
   );
 }
 
-/** The one adaptive next-action block: fix the branch → provision → build.
- *  Always visible so the user is never stuck guessing what's next. */
-function BuildSection({ prototypeKey, base, repo, provisioned, consoleUrl, previewUrl, buildStatus }: {
-  prototypeKey: string; base: string; repo?: { fullName: string; branch: string };
-  provisioned: boolean; consoleUrl: string; previewUrl?: string;
-  buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
+/** The ladder to local dev — steps light up; the final rung reveals the command. */
+function Ladder({ base, prototypeKey, hasRepo, hasBrief, hasPages, provisioned, ready, repo, onChange }: {
+  base: string;
+  prototypeKey: string;
+  hasRepo: boolean;
+  hasBrief: boolean;
+  hasPages: boolean;
+  provisioned: boolean;
+  ready: boolean;
+  repo?: { fullName: string; branch: string };
+  onChange: () => void;
 }) {
-  if (!repo) {
-    return <Guidance tone="warn">Your code repo isn&apos;t connected yet — set it up once and this prototype gets a workspace automatically. <Link href="/settings/repositories" className="text-accent hover:text-accent-hover font-medium">Connect your code repo →</Link></Guidance>;
-  }
-  return (
-    <>
-      <ProvisionButton prototypeKey={prototypeKey} provisioned={provisioned} />
-      {provisioned
-        ? <Commands prototypeKey={prototypeKey} repo={repo} consoleUrl={consoleUrl} previewUrl={previewUrl} buildStatus={buildStatus} />
-        : <Guidance tone="muted">Click <b>Provision branch</b> above — it commits the brief + page snapshots so <span className="font-mono">clone + claude</span> starts build-ready. The exact commands appear here right after.</Guidance>}
-    </>
-  );
-}
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-function Guidance({ tone, children }: { tone: "warn" | "muted"; children: React.ReactNode }) {
-  const cls = tone === "warn"
-    ? "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] text-foreground"
-    : "border-border bg-surface text-muted-2";
-  return <div className={`rounded-xl border ${cls} px-4 py-3 text-[12px] leading-relaxed`}>{children}</div>;
+  async function prepare() {
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch("/api/prototypes/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: prototypeKey }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(data.error ?? "Couldn't prepare the workspace"); return; }
+      onChange();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't prepare the workspace");
+    } finally { setBusy(false); }
+  }
+
+  const steps: { label: string; sub?: string; done: boolean; action: React.ReactNode }[] = [
+    { label: "Code location", sub: hasRepo ? repo?.fullName : undefined, done: hasRepo,
+      action: hasRepo ? null : <Link href="/settings/repositories" className={link}>Connect your code repo →</Link> },
+    { label: "Build brief", sub: hasBrief ? undefined : "what to build — a line or two", done: hasBrief,
+      action: hasBrief ? null : <a href="#brief" className={link}>Write it below →</a> },
+    { label: "Test page(s)", done: hasPages,
+      action: hasPages ? null : <Link href={`${base}/pages`} className={link}>Add a page →</Link> },
+    { label: "Prepare workspace", sub: provisioned ? "ready" : "snapshots the page so Claude works offline", done: provisioned,
+      action: provisioned ? null : <button onClick={prepare} disabled={busy || !hasRepo} className="h-7 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Preparing…" : "Prepare"}</button> },
+  ];
+
+  return (
+    <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
+      <div className="px-4 py-3 border-b border-accent/30">
+        <span className="text-[13px] font-semibold">Get to local dev</span>
+        <span className="text-[11px] text-muted-2 ml-2">Finish these and your run command unlocks below.</span>
+      </div>
+      {steps.map((s, i) => (
+        <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border/60">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold border shrink-0 ${s.done ? "bg-accent/15 text-accent border-accent/40" : "bg-surface-2 text-muted-2 border-border"}`}>{s.done ? "✓" : i + 1}</span>
+            <div className="min-w-0">
+              <span className={`text-[13px] ${s.done ? "text-muted-2" : ""}`}>{s.label}</span>
+              {s.sub && <span className="text-[11px] text-muted-2 ml-2 font-mono">{s.sub}</span>}
+            </div>
+          </div>
+          {s.action && <div className="shrink-0">{s.action}</div>}
+        </div>
+      ))}
+      <div className={`flex items-center gap-2.5 px-4 py-2.5 ${ready ? "" : "opacity-60"}`}>
+        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold border shrink-0 ${ready ? "bg-accent text-accent-fg border-accent" : "bg-surface-2 text-muted-2 border-border"}`}>{ready ? "★" : "5"}</span>
+        <span className={`text-[13px] font-medium ${ready ? "text-foreground" : "text-muted-2"}`}>
+          {ready ? "Start local dev — your run command is below 👇" : "Start local dev — locked until the steps above are done"}
+        </span>
+      </div>
+      {err && <div className="px-4 pb-3 text-[12px] text-danger">{err}</div>}
+    </div>
+  );
 }
 
 function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; initial: PrototypeBrief; onSaved: () => void }) {
