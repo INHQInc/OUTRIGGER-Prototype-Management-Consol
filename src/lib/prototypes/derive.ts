@@ -183,14 +183,19 @@ export async function deriveDesignTokens(html: string, pageUrl: string): Promise
   const origin = (() => { try { return new URL(pageUrl).origin; } catch { return ""; } })();
   const abs = (href: string) => { try { return new URL(href, pageUrl).toString(); } catch { return ""; } };
 
-  const sheets: string[] = [];
+  const sameOrigin: string[] = [];
+  const crossOrigin: string[] = [];
   $('link[rel~="stylesheet"]').each((_, el) => {
     const href = $(el).attr("href");
     if (!href) return;
     const u = abs(href);
-    // Same-origin only: third-party widget CSS isn't the brand system.
-    if (u && origin && u.startsWith(origin) && sheets.length < MAX_CSS_FILES) sheets.push(u);
+    if (!u || !/^https?:/i.test(u)) return;
+    (origin && u.startsWith(origin) ? sameOrigin : crossOrigin).push(u);
   });
+  // Same-origin first — that's usually the brand system — but DON'T stop there:
+  // brand fonts are frequently declared in CDN-hosted CSS, and skipping those
+  // would silently yield zero tokens on any site that puts its styles on a CDN.
+  const sheets = [...sameOrigin, ...crossOrigin].slice(0, MAX_CSS_FILES);
   let css = "";
   const fetched: string[] = [];
   for (const s of sheets) {
