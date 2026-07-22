@@ -26,10 +26,10 @@ export async function probeRepoWrite(orgId: string | null | undefined, fullName:
   const client = await getGitClientForOrg(orgId);
   if (!client) return { repo: fullName, canWrite: null, reason: "GitHub not connected" };
   try {
-    const perms = await client.getRepoPermissions(owner, repo);
-    return { repo: fullName, canWrite: perms.push, reason: perms.push ? undefined : "token is read-only on this repo" };
+    const canWrite = await client.canCreateBranch(owner, repo);
+    return { repo: fullName, canWrite, reason: canWrite ? undefined : "token is read-only on this repo — needs Contents: Read and write, and repo access must not be 'Public repositories' (that tier is read-only)" };
   } catch (e) {
-    return { repo: fullName, canWrite: null, reason: friendlyGitError(e, { action: "read", repo: fullName }) };
+    return { repo: fullName, canWrite: null, reason: friendlyGitError(e, { action: "reach", repo: fullName }) };
   }
 }
 

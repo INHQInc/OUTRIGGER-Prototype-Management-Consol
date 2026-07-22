@@ -105,13 +105,33 @@ export class GitHubClient {
     };
   }
 
-  /** Head commit SHA of a branch. */
-  /** The authenticated token's permission level on a repo — `push` is what
-   *  branch creation / commits require. Used to verify write access up front. */
-  async getRepoPermissions(owner: string, repo: string): Promise<{ push: boolean; admin: boolean }> {
-    const r = await this.gh<{ permissions?: { push?: boolean; admin?: boolean } }>(`/repos/${owner}/${repo}`);
-    return { push: Boolean(r.permissions?.push), admin: Boolean(r.permissions?.admin) };
+  /**
+   * Reliably check whether THIS TOKEN can create branches in the repo. We can't
+   * trust `GET /repos` `permissions.push` — that reflects the account's role,
+   * not a fine-grained PAT's actual grant, so a read-only token on a repo you
+   * own reads back push:true. Instead attempt to create a ref with an all-zero
+   * sha: GitHub checks the token's write permission first, so a token WITHOUT
+   * write gets 403 ("Resource not accessible"), while a token WITH write gets
+   * past the permission gate to 422 ("Object does not exist"). The zero sha
+   * never creates anything — no side effects.
+   */
+  async canCreateBranch(owner: string, repo: string): Promise<boolean> {
+    try {
+      await this.gh(`/repos/${owner}/${repo}/git/refs`, {
+        method: "POST",
+        body: JSON.stringify({ ref: "refs/heads/opmc-writeprobe-donotuse", sha: "0000000000000000000000000000000000000000" }),
+      });
+      return true; // wouldn't create with a zero sha, but if it somehow did, we have write
+    } catch (e) {
+      if (e instanceof GitError) {
+        if (e.status === 403) return false; // permission gate — token can't write
+        if (e.status === 422) return true;  // passed permission gate, failed on the bogus sha — token can write
+      }
+      throw e; // 401/404/network — let the caller surface it
+    }
   }
+
+  /** Head commit SHA of a branch. */
 
   async getBranchSha(owner: string, repo: string, branch: string): Promise<string> {
     const r = await this.gh<{ object: { sha: string } }>(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
