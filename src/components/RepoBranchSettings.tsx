@@ -36,7 +36,10 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
       setGitConnected(Boolean(conn.status?.connected || conn.status?.envFallback));
       const repos = (reg.repos ?? []).filter((x: { roles?: string[] }) => x.roles?.includes("prototypes"));
       setOrgRepos(repos);
-      setRepoSel((cur) => cur || (repos.find((x: { defaultFor?: string[] }) => x.defaultFor?.includes("prototypes")) ?? repos[0])?.fullName || "");
+      const fallback = (repos.find((x: { defaultFor?: string[] }) => x.defaultFor?.includes("prototypes")) ?? repos[0])?.fullName || "";
+      // Auto-correct: if the prototype's saved repo isn't a registered prototypes
+      // repo (stale / deleted), select the registered default instead of keeping it.
+      setRepoSel((cur) => (cur && repos.some((x: { fullName: string }) => x.fullName === cur) ? cur : fallback));
       setLoading(false);
     });
     return () => { live = false; };
