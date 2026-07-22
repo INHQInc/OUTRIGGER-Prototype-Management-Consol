@@ -123,20 +123,40 @@ function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; i
   );
 }
 
-function Commands({ repo, consoleUrl, buildStatus }: { repo?: { fullName: string; branch: string }; consoleUrl: string; buildStatus: { found: boolean | null; headSha?: string; bytes?: number } }) {
+function Commands({ repo, consoleUrl, buildStatus }: { repo?: { fullName: string; branch: string }; consoleUrl: string; buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean } }) {
   const [copied, setCopied] = useState(false);
   const fullName = repo?.fullName ?? "owner/repo";
   const branch = repo?.branch ?? "prototype/key";
   const dir = fullName.split("/")[1] ?? "prototype";
+
+  // A prototype must build on its OWN branch — never on the shared `starter`
+  // template. Refuse to generate commands that would pollute it.
+  if (branch === "starter") {
+    return (
+      <div className="rounded-xl border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_5%,transparent)] px-4 py-3 text-[12px] text-foreground">
+        This prototype points at the <span className="font-mono">starter</span> template branch — that&apos;s where the skill + build tooling live, not a prototype branch. Set a dedicated branch (e.g. <span className="font-mono">prototype/{dir === "prototype" ? "key" : branch}</span>) on the <span className="font-semibold">Build</span> tab first, then these commands appear.
+      </div>
+    );
+  }
+
+  // If the branch already exists on GitHub (Claude/someone pushed it), just
+  // check it out. Only a NEW branch is created off the starter template —
+  // basing an existing branch off starter would clobber its built code.
+  const step2 = buildStatus.branchExists
+    ? `git clone git@github.com:${fullName}.git ${dir}   # once
+cd ${dir}
+git checkout ${branch}   # branch already exists`
+    : `git clone git@github.com:${fullName}.git ${dir}   # once
+cd ${dir}
+git checkout -b ${branch} origin/starter && git push -u origin ${branch}   # new branch off the starter template`;
+
   const cmds =
 `# 1. env — once per machine (token: Settings → Repositories → API access)
 export OPMC_URL="${consoleUrl}"
 export OPMC_API_TOKEN="opmc_…"
 
-# 2. clone + branch off the starter (skill + build tooling live there)
-git clone git@github.com:${fullName}.git ${dir}   # once
-cd ${dir}
-git checkout -b ${branch} origin/starter && git push -u origin ${branch}
+# 2. clone + get on this prototype's branch
+${step2}
 
 # 3. build with Claude — the opmc-prototype skill loads, reads this brief
 claude`;

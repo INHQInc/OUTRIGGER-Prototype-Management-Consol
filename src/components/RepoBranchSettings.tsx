@@ -50,7 +50,8 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
       .then((r) => r.json())
       .then((d) => {
         if (!live) return;
-        setBranches(d.branches ?? []);
+        // `starter` is the template branch prototypes fork FROM — never a valid target.
+        setBranches((d.branches ?? []).filter((b: string) => b !== "starter"));
         if (d.error) setBranchesErr("Couldn't list branches for this repo.");
         setBranch((cur) => cur || `prototype/${prototypeKey}`);
       })
