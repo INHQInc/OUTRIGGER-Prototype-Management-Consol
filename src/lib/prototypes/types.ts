@@ -45,11 +45,27 @@ export const STAGE_TONE: Record<PrototypeStage, "neutral" | "ok" | "warn" | "dan
 
 export type TargetSource = "clone" | "live";
 
+/** Persisted result of a per-page injection verification (Pages tab). */
+export interface TargetInjection {
+  /** present/confirmed = passing; wrong-env/absent/unreachable = not. */
+  state: "present" | "wrong-env" | "absent" | "unreachable" | "confirmed";
+  at: string;            // when it was checked/confirmed (ISO)
+  by?: string;           // who ran it (user, "claude (api)", …)
+  foundEnvLabel?: string; // for wrong-env
+}
+
 export interface PrototypeTarget {
   /** Page URL / path on the site the prototype targets. */
   url: string;
   /** clone = build against our snapshot; live = run on the real page. */
   source: TargetSource;
+  /** Last injection verification for this page (persisted). */
+  injection?: TargetInjection;
+}
+
+/** A page "injects" (passing) when its loader is proven present or human-confirmed. */
+export function injectionPasses(t: PrototypeTarget): boolean {
+  return t.injection?.state === "present" || t.injection?.state === "confirmed";
 }
 
 /** Structured brief — not a free-text blob. What Claude reads to build. */

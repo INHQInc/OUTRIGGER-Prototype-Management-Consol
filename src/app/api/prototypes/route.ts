@@ -149,7 +149,12 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.name !== undefined && body.name.trim()) { updated.name = body.name.trim(); changes.push("name"); }
   if (body.targets !== undefined) {
-    updated.targets = (body.targets ?? []).filter((t) => t.url?.trim()).map((t) => ({ url: t.url.trim(), source: t.source === "live" ? "live" : "clone" }));
+    const prevInj = new Map(proto.targets.map((t) => [t.url, t.injection]));
+    updated.targets = (body.targets ?? []).filter((t) => t.url?.trim()).map((t) => {
+      const url = t.url.trim();
+      const inj = prevInj.get(url);
+      return { url, source: t.source === "live" ? "live" : "clone", ...(inj ? { injection: inj } : {}) };
+    });
     changes.push("targets");
   }
   if (body.brief !== undefined) {

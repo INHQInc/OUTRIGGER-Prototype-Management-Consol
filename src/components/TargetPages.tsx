@@ -1,22 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
-import type { PrototypeTarget } from "@/lib/prototypes/types";
+import type { PrototypeTarget, TargetInjection } from "@/lib/prototypes/types";
 
 interface EnvLite { id: string; label: string; kind: string; url: string; loaderKey: string; heartbeatAt: string | null }
-
-type CheckResult = {
-  result: "present" | "wrong-env" | "absent" | "unreachable";
-  httpStatus?: number;
-  reason?: string;
-  foundLoaderKey?: string;
-  foundEnvLabel?: string | null;
-  environment?: { label: string; kind: string; expectedKey: string } | null;
-  heartbeatAt?: string | null;
-};
 
 const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 
@@ -50,6 +40,7 @@ export function TargetPages({ prototypeKey, initialTargets, environments, consol
   const [err, setErr] = useState<string | null>(null);
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const verifiedCount = targets.filter((t) => t.injection?.state === "present" || t.injection?.state === "confirmed").length;
 
   async function persist(next: PrototypeTarget[]) {
     setBusy(true); setErr(null);
@@ -135,20 +126,27 @@ export function TargetPages({ prototypeKey, initialTargets, environments, consol
           {targets.length === 0 ? (
             <div className="text-[12px] text-muted-2 py-1">No pages yet — add the URL(s) this prototype changes.</div>
           ) : (
-            <div className="space-y-2">
-              {targets.map((t) => (
-                <PageRow
-                  key={t.url}
-                  url={t.url}
-                  prototypeKey={prototypeKey}
-                  reviewLink={withToken(t.url, prototypeKey)}
-                  onCopyLink={() => copyLink(t.url)}
-                  copied={copiedLink === t.url}
-                  onRemove={() => remove(t.url)}
-                  busy={busy}
-                />
-              ))}
-            </div>
+            <>
+              <div className={`text-[11px] ${verifiedCount === targets.length ? "text-ok" : "text-muted-2"}`}>
+                {verifiedCount} of {targets.length} page{targets.length === 1 ? "" : "s"} inject{verifiedCount === targets.length ? " ✓" : " verified"}
+              </div>
+              <div className="space-y-2">
+                {targets.map((t) => (
+                  <PageRow
+                    key={t.url}
+                    url={t.url}
+                    prototypeKey={prototypeKey}
+                    injection={t.injection}
+                    reviewLink={withToken(t.url, prototypeKey)}
+                    onCopyLink={() => copyLink(t.url)}
+                    copied={copiedLink === t.url}
+                    onRemove={() => remove(t.url)}
+                    onVerified={() => router.refresh()}
+                    busy={busy}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -156,33 +154,42 @@ export function TargetPages({ prototypeKey, initialTargets, environments, consol
   );
 }
 
-function PageRow({ url, prototypeKey, reviewLink, onCopyLink, copied, onRemove, busy }: {
-  url: string; prototypeKey: string; reviewLink: string; onCopyLink: () => void; copied: boolean; onRemove: () => void; busy: boolean;
+function PageRow({ url, prototypeKey, injection, reviewLink, onCopyLink, copied, onRemove, onVerified, busy }: {
+  url: string; prototypeKey: string; injection?: TargetInjection; reviewLink: string; onCopyLink: () => void; copied: boolean; onRemove: () => void; onVerified: () => void; busy: boolean;
 }) {
-  const [check, setCheck] = useState<CheckResult | null>(null);
+  const [inj, setInj] = useState<TargetInjection | undefined>(injection);
   const [checking, setChecking] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const run = useCallback(async () => {
-    setChecking(true);
+  async function act(confirm: boolean) {
+    if (checking) return;
+    setChecking(true); setErr(null);
     try {
-      const res = await fetch(`/api/prototypes/check-injection?key=${encodeURIComponent(prototypeKey)}&url=${encodeURIComponent(url)}`);
-      const data = await res.json().catch(() => null);
-      setCheck(res.ok ? data : { result: "unreachable" });
-    } catch { setCheck({ result: "unreachable" }); }
-    finally { setChecking(false); }
-  }, [prototypeKey, url]);
+      const res = await fetch("/api/prototypes/check-injection", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, url, ...(confirm ? { confirm: true } : {}) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(data.error ?? "Verify failed"); return; }
+      setInj(data.injection);
+      onVerified();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Verify failed");
+    } finally { setChecking(false); }
+  }
 
-  useEffect(() => { run(); }, [run]);
-
+  const passing = inj?.state === "present" || inj?.state === "confirmed";
   return (
     <div className="rounded-lg border border-border bg-surface-2/20 px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="font-mono text-[12px] text-foreground truncate">{url}</div>
-          <InjectionStatus check={check} checking={checking} />
+          <InjectionBadge injection={inj} checking={checking} />
+          {err && <div className="text-[11px] text-danger">{err}</div>}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <button onClick={run} disabled={checking} className="text-[12px] px-2 py-0.5 rounded-md border border-border text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40">{checking ? "Verifying…" : "Verify"}</button>
+          <button onClick={() => act(false)} disabled={checking} className="text-[12px] px-2 py-0.5 rounded-md border border-border text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40">{checking ? "Verifying…" : "Verify"}</button>
+          {inj && !passing && <button onClick={() => act(true)} disabled={checking} title="I opened the page and saw the prototype inject" className="text-[12px] px-2 py-0.5 rounded-md border border-warn/50 text-warn hover:border-warn disabled:opacity-40">Confirm</button>}
           <button onClick={onCopyLink} className="text-[12px] text-muted-2 hover:text-foreground">{copied ? "Copied" : "Copy link"}</button>
           <a href={reviewLink} target="_blank" rel="noreferrer" className="text-[12px] text-accent hover:text-accent-hover font-medium">Open ↗</a>
           <button onClick={onRemove} disabled={busy} className="text-[12px] text-danger hover:opacity-80 disabled:opacity-40">Remove</button>
@@ -192,22 +199,15 @@ function PageRow({ url, prototypeKey, reviewLink, onCopyLink, copied, onRemove, 
   );
 }
 
-function InjectionStatus({ check, checking }: { check: CheckResult | null; checking: boolean }) {
-  if (checking && !check) return <div className="text-[11px] text-muted-2">Verifying injection…</div>;
-  if (!check) return null;
-  if (check.result === "present")
-    return <div className="text-[11px] text-ok">● Injection script detected on this page</div>;
-  if (check.result === "wrong-env")
-    return <div className="text-[11px] text-warn">● Loader present but for {check.foundEnvLabel ?? "another environment"} — expected this page&apos;s environment</div>;
-  if (check.result === "absent") {
-    // Not in the raw HTML — but the loader may be injected client-side (GTM/SPA);
-    // the heartbeat proves it runs in real browsers.
-    if (check.heartbeatAt)
-      return <div className="text-[11px] text-warn">● Not in the page HTML, but the loader is verified live on this environment (likely injected client-side)</div>;
-    return <div className="text-[11px] text-danger">● Loader script not found on this page — add the tag above to the site</div>;
+function InjectionBadge({ injection, checking }: { injection?: TargetInjection; checking: boolean }) {
+  if (checking && !injection) return <div className="text-[11px] text-muted-2">Verifying injection…</div>;
+  if (!injection) return <div className="text-[11px] text-muted-2">● Not verified yet — click Verify</div>;
+  const who = injection.by ? ` · ${injection.by}` : "";
+  switch (injection.state) {
+    case "present": return <div className="text-[11px] text-ok">● Loader detected on this page{who}</div>;
+    case "confirmed": return <div className="text-[11px] text-ok">● Confirmed injecting (human-verified){who}</div>;
+    case "wrong-env": return <div className="text-[11px] text-warn">● Loader present but for {injection.foundEnvLabel ?? "another environment"} — Confirm if it still injects{who}</div>;
+    case "absent": return <div className="text-[11px] text-danger">● Loader not found on this page — install the tag, or Confirm if it&apos;s injected client-side{who}</div>;
+    default: return <div className="text-[11px] text-muted-2">● Couldn&apos;t reach the page to auto-check — open it and Confirm{who}</div>;
   }
-  // unreachable
-  if (check.heartbeatAt)
-    return <div className="text-[11px] text-warn">● Loader active on this environment (page couldn&apos;t be auto-checked — some sites block bots)</div>;
-  return <div className="text-[11px] text-muted-2">● Couldn&apos;t verify — open the page once to trigger the loader{typeof check.httpStatus === "number" && check.httpStatus > 0 ? ` (HTTP ${check.httpStatus})` : ""}</div>;
 }

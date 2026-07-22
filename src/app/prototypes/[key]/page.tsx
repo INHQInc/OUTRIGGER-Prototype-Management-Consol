@@ -4,8 +4,8 @@ import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { getPrototypeSetup } from "@/lib/prototypes/setup";
 import { resolveRepoSource } from "@/lib/prototypes/source";
-import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
 import { listPromotions } from "@/lib/promotions";
+import { injectionPasses } from "@/lib/prototypes/types";
 import { PrototypeSetup } from "@/components/PrototypeSetup";
 
 export const dynamic = "force-dynamic";
@@ -27,23 +27,19 @@ export default async function PrototypeOverviewPage({ params }: { params: Promis
   if (!p) notFound();
   const orgId = await resolvePrototypeOrg(p);
 
-  const [setup, hdrs, source, provisionFlag, environments, promotions, claudeSeen] = await Promise.all([
+  const [setup, hdrs, source, provisionFlag, promotions, claudeSeen] = await Promise.all([
     getPrototypeSetup(p, orgId),
     headers(),
     resolveRepoSource(key).catch(() => null),
     store.getFlag(`provision:${key}`).catch(() => null),
-    listOrgEnvironments(orgId),
     listPromotions(key),
     store.getFlag(`claude:seen:${key}`).catch(() => null),
   ]);
   const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "outrigger-prototype-management-cons.vercel.app"}`;
 
-  // Live Page status: do this prototype's target pages sit on an environment with a verified loader?
-  const seen = new Map(await Promise.all(environments.map(async (e) => [e.id, await envLoaderSeenAt(e)] as const)));
-  const targetOrigins = new Set(p.targets.map((t) => { try { return new URL(t.url).origin; } catch { return ""; } }).filter(Boolean));
-  const loaderVerified = environments.some((e) => {
-    try { return targetOrigins.has(new URL(e.url).origin) && Boolean(seen.get(e.id)); } catch { return false; }
-  });
+  // Live Page status: how many target pages have a PASSING injection verification (persisted).
+  const verifiedPages = p.targets.filter(injectionPasses).length;
+  const loaderVerified = p.targets.length > 0 && verifiedPages === p.targets.length;
 
   // Experiment status: any active promotion (paused Optimizely draft).
   const activePromo = promotions.find((pr) => pr.status === "active");
