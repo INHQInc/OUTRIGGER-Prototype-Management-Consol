@@ -6,6 +6,7 @@ import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { listPromotions } from "@/lib/promotions";
 import { SourcePanel } from "@/components/SourcePanel";
 import { PromotePanel } from "@/components/PromotePanel";
+import { injectionPasses } from "@/lib/prototypes/types";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,17 @@ export default async function PrototypeShip({ params }: { params: Promise<{ key:
     listOrgEnvironments(orgId),
     listPromotions(key),
   ]);
+  const unverifiedPages = p.targets.filter((t) => !injectionPasses(t)).map((t) => t.url);
+  const injectionReady = p.targets.length > 0 && unverifiedPages.length === 0;
   return (
     <div className="space-y-4 max-w-2xl">
+      {unverifiedPages.length > 0 && (
+        <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[12px] text-foreground">
+          {unverifiedPages.length} target page{unverifiedPages.length === 1 ? "" : "s"} not yet verified on real prep. You can still cut a version (it just freezes the code), but <b>Send to Optimizely</b> is blocked until every page is verified. <a href={`/prototypes/${key}/pages`} className="text-accent hover:text-accent-hover font-medium">Verify on Pages →</a>
+        </div>
+      )}
       <SourcePanel prototypeKey={key} versions={versions} />
-      <PromotePanel prototypeKey={key} environments={environments} versions={versions} initialPromotions={promotions} canPromote />
+      <PromotePanel prototypeKey={key} environments={environments} versions={versions} initialPromotions={promotions} canPromote injectionReady={injectionReady} unverifiedPages={unverifiedPages} />
       <div className="rounded-xl border border-border bg-surface px-4 py-3 text-[12px] text-muted-2">
         <span className="font-semibold text-muted">Handoff to source</span> — generate a PR that integrates the winning prototype into the site&apos;s production code. Coming soon.
       </div>

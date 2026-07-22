@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listOrgEnvironments, addOrgEnvironment, deleteOrgEnvironment, type EnvironmentKind } from "@/lib/environments";
+import { listOrgEnvironments, addOrgEnvironment, deleteOrgEnvironment, updateEnvironment, type EnvironmentKind } from "@/lib/environments";
 import { getActiveOrgId } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
 
@@ -41,4 +41,24 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   await deleteOrgEnvironment(g.orgId, id);
   return NextResponse.json({ ok: true });
+}
+
+/** PATCH { id, label?, kind? } → edit an environment (fixes mislabeled kind). */
+export async function PATCH(req: NextRequest) {
+  const g = await guard();
+  if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
+  let body: { id?: string; label?: string; kind?: EnvironmentKind };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+  if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const envs = await listOrgEnvironments(g.orgId);
+  if (!envs.some((e) => e.id === body.id)) return NextResponse.json({ error: "Unknown environment" }, { status: 404 });
+  const patch: { label?: string; kind?: EnvironmentKind } = {};
+  if (body.label !== undefined) patch.label = body.label;
+  if (body.kind === "development" || body.kind === "staging" || body.kind === "production") patch.kind = body.kind;
+  try {
+    await updateEnvironment(body.id, patch);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
 }

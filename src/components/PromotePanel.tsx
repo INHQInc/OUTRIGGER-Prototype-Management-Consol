@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Environment } from "@/lib/environments";
 import type { ArtifactVersion } from "@/lib/prototypes/types";
@@ -18,12 +19,14 @@ function currentByEnv(promotions: Promotion[]): Record<string, Promotion> {
  * (a PAUSED Optimizely draft; a human starts traffic). The full per-environment
  * matrix and history live behind a disclosure.
  */
-export function PromotePanel({ prototypeKey, environments, versions, initialPromotions, canPromote }: {
+export function PromotePanel({ prototypeKey, environments, versions, initialPromotions, canPromote, injectionReady, unverifiedPages }: {
   prototypeKey: string;
   environments: Environment[];
   versions: ArtifactVersion[];
   initialPromotions: Promotion[];
   canPromote: boolean;
+  injectionReady: boolean;
+  unverifiedPages: string[];
 }) {
   const router = useRouter();
   const [promotions, setPromotions] = useState(initialPromotions);
@@ -73,16 +76,21 @@ export function PromotePanel({ prototypeKey, environments, versions, initialProm
               Live on <span className="font-medium text-foreground">{prodLive.environmentLabel}</span>: v{prodLive.versionNumber}
               {prodLive.experimentUrl && <> · <a href={prodLive.experimentUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover">Open in Optimizely ↗</a></>}
             </span>
+          ) : !injectionReady ? (
+            <span className="text-warn">
+              Review sign-off: {unverifiedPages.length} page{unverifiedPages.length === 1 ? "" : "s"} not verified on real prep yet — <Link href={`/prototypes/${prototypeKey}/pages`} className="text-accent hover:text-accent-hover">Verify on Pages →</Link>
+            </span>
           ) : (
             <span className="text-muted-2">
-              {!prodEnv ? "No production environment configured." : !latest ? "Cut a version first (Build tab)." : `Ready: v${latest.version} → ${prodEnv.label}.`}
+              {!prodEnv ? "No production environment configured." : !latest ? "Cut a version first." : `Ready: v${latest.version} → ${prodEnv.label}.`}
             </span>
           )}
         </div>
         {canPromote && prodEnv && (
           <button
             onClick={() => promote(prodEnv.id, latest?.id)}
-            disabled={!latest || busyEnv === prodEnv.id}
+            disabled={!latest || busyEnv === prodEnv.id || !injectionReady}
+            title={!injectionReady ? "Verify injection on every target page first (Pages tab)" : undefined}
             className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
           >
             {busyEnv === prodEnv.id ? "Sending…" : prodLive ? `Send v${latest?.version} to Optimizely` : "Send to Optimizely"}

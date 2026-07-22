@@ -24,6 +24,22 @@ export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canMa
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editKind, setEditKind] = useState<EnvironmentKind>("staging");
+
+  function startEdit(env: Environment) { setEditId(env.id); setEditLabel(env.label); setEditKind(env.kind); }
+  async function saveEdit(id: string) {
+    if (busy) return;
+    setBusy(true); setError(null);
+    try {
+      const res = await fetch("/api/environments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, label: editLabel, kind: editKind }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error ?? "Update failed"); return; }
+      setEditId(null);
+      router.refresh();
+    } finally { setBusy(false); }
+  }
 
   function tagFor(env: Environment): string {
     return `<script src="${consoleUrl}/loader/${env.siteKey ?? env.id}" async></script>`;
@@ -98,8 +114,25 @@ export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canMa
                   </div>
                   <a href={env.url} target="_blank" rel="noreferrer" className="text-[11px] font-mono text-muted-2 hover:text-accent break-all">{env.url}</a>
                 </div>
-                {canManage && <button onClick={() => remove(env.id)} disabled={busy} className="text-[12px] text-danger hover:opacity-80 shrink-0">Remove</button>}
+                {canManage && (
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button onClick={() => startEdit(env)} className="text-[12px] text-muted-2 hover:text-foreground">Edit</button>
+                    <button onClick={() => remove(env.id)} disabled={busy} className="text-[12px] text-danger hover:opacity-80">Remove</button>
+                  </div>
+                )}
               </div>
+              {editId === env.id && (
+                <div className="px-4 py-2.5 border-t border-border bg-surface-2/10 flex items-center gap-2">
+                  <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="Label" className={`${inp} flex-1`} />
+                  <select value={editKind} onChange={(e) => setEditKind(e.target.value as EnvironmentKind)} className={inp}>
+                    <option value="development">development</option>
+                    <option value="staging">staging</option>
+                    <option value="production">production</option>
+                  </select>
+                  <button onClick={() => saveEdit(env.id)} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Saving…" : "Save"}</button>
+                  <button onClick={() => setEditId(null)} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Cancel</button>
+                </div>
+              )}
               <div className="px-4 py-2.5 border-t border-border bg-surface-2/20 flex items-center justify-between gap-3">
                 <code className="text-[11px] font-mono text-muted truncate">{tagFor(env)}</code>
                 <button onClick={() => copyTag(env)} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{copied === env.id ? "Copied" : "Copy tag"}</button>
