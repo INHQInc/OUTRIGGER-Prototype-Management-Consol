@@ -100,7 +100,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
           <>
             <div>
               <label className={lbl}>Name</label>
-              <input className={inp} value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. Favorites on room cards" />
+              <input className={inp} value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. a short name for this experiment" />
               <div className={hint}>Becomes the prototype key + branch (prototype/&lt;key&gt;).</div>
             </div>
             <div>
@@ -124,7 +124,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
           <>
             <div>
               <label className={lbl}>What changes on the page?</label>
-              <textarea className={ta} rows={3} value={change} onChange={(e) => setChange(e.target.value)} autoFocus placeholder="Plain words — the thing to build. e.g. Add a heart to each room card that saves the room to a favorites tray." />
+              <textarea className={ta} rows={3} value={change} onChange={(e) => setChange(e.target.value)} autoFocus placeholder="Plain words — the change to build on this page. This is what Claude builds toward." />
               <div className={hint}>This is what Claude builds toward. The design itself you&apos;ll iterate on together.</div>
             </div>
             <div>
@@ -133,7 +133,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
             </div>
             <div>
               <label className={lbl}>Success looks like <span className="text-muted-2 font-normal">(in words, not a mockup)</span></label>
-              <textarea className={ta} rows={2} value={success} onChange={(e) => setSuccess(e.target.value)} placeholder="How you'll know it's right. e.g. Heart toggles + persists across reload; tray opens from the Trip Planner button." />
+              <textarea className={ta} rows={2} value={success} onChange={(e) => setSuccess(e.target.value)} placeholder="How you'll know it's right — the observable behavior/outcome, in words." />
               <div className={hint}>The rubric we verify against — it can start loose and sharpen as we iterate.</div>
             </div>
           </>

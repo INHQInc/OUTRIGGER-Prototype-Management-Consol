@@ -228,7 +228,6 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
       const env = envByOrigin.get(origin);
       return { url: t.url, source: t.source, reviewUrl: `${t.url}?opmc=${proto.key}`, env: env ? { label: env.label, kind: env.kind } : null, snapshot: `.opmc/targets/${slugForUrl(t.url)}/` };
     }),
-    exampleBranch: "prototype/favorites",
     provisionedAt,
     contentHash,
   };
