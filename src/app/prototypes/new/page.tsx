@@ -13,7 +13,7 @@ export default async function NewPrototypePage() {
   const envUrls = (await listActiveOrgEnvironments()).map((e) => e.url);
   return (
     <>
-      <PageHeader title="New prototype" subtitle="Capture what Claude needs to start building" />
+      <PageHeader title="New prototype" subtitle="Name it and pick the page(s) — you'll write the brief next, on the workspace" />
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <PrototypeWizard envUrls={envUrls} />
       </div>

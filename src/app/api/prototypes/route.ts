@@ -9,6 +9,13 @@ import { audit } from "@/lib/audit";
 import { apiOrgFromAuthHeader } from "@/lib/api-token";
 import { defaultOrgRepo } from "@/lib/git/org-repos";
 
+/** A prototype's own branch — never the shared `starter` template. Coerces
+ *  a blank or `starter` choice to the conventional prototype/<key>. */
+function prototypeBranch(input: string | undefined, key: string): string {
+  const b = input?.trim();
+  return b && b !== "starter" ? b : `prototype/${key}`;
+}
+
 function slug(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "prototype";
 }
@@ -82,7 +89,7 @@ export async function POST(req: NextRequest) {
     name: b.name.trim(),
     status: normalizeStage(b.status),
     repo: b.repo?.fullName?.trim()
-      ? { fullName: b.repo.fullName.trim(), branch: b.repo.branch?.trim() || `prototype/${key}`, ...(b.repo.artifactPath?.trim() ? { artifactPath: b.repo.artifactPath.trim() } : {}) }
+      ? { fullName: b.repo.fullName.trim(), branch: prototypeBranch(b.repo.branch, key), ...(b.repo.artifactPath?.trim() ? { artifactPath: b.repo.artifactPath.trim() } : {}) }
       : undefined,
     targets: (b.targets ?? []).filter((t) => t.url?.trim()).map((t) => ({ url: t.url.trim(), source: t.source === "live" ? "live" : "clone" })),
     brief: {
@@ -136,7 +143,7 @@ export async function PATCH(req: NextRequest) {
   if (body.status !== undefined) { updated.status = normalizeStage(body.status); changes.push(updated.status); }
   if (body.repo !== undefined) {
     updated.repo = body.repo?.fullName?.trim()
-      ? { fullName: body.repo.fullName.trim(), branch: body.repo.branch?.trim() || `prototype/${proto.key}`, ...(body.repo.artifactPath?.trim() ? { artifactPath: body.repo.artifactPath.trim() } : {}) }
+      ? { fullName: body.repo.fullName.trim(), branch: prototypeBranch(body.repo.branch, proto.key), ...(body.repo.artifactPath?.trim() ? { artifactPath: body.repo.artifactPath.trim() } : {}) }
       : undefined;
     changes.push(updated.repo ? `repo ${updated.repo.fullName}@${updated.repo.branch}` : "repo cleared");
   }
