@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
+import { resolvePrototypeRepo } from "@/lib/prototypes/repo";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
@@ -37,6 +38,7 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
   const p = await store.getPrototype(key);
   if (!p) notFound();
   const orgId = await resolvePrototypeOrg(p);
+  const repo = await resolvePrototypeRepo(p, orgId); // heal a stale/invalid repo → the registered default
 
   const [hdrs, source, provisionFlag, environments, versions] = await Promise.all([
     headers(),
@@ -65,11 +67,11 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
       </Section>
 
       <Section n={2} title="Repo & branch" desc="Where this prototype's code lives — change the repo or pick/create a branch.">
-        <RepoBranchSettings prototypeKey={key} initialRepo={p.repo ?? null} />
+        <RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} />
       </Section>
 
       <Section n={3} title="Build with Claude" desc="Get the init prompt, run it, build against the test pages.">
-        <InitScript prototypeKey={key} repo={p.repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} />
+        <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} />
       </Section>
 
       <Section n={4} title="Optimizely bundle" desc="Cut a version, then paste the bundle into a Web Experiment.">

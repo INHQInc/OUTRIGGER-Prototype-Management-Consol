@@ -25,6 +25,9 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
   const [hasStarter, setHasStarter] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // What's actually persisted right now — so the button can show "Saved ✓"
+  // vs "Save changes" instead of silently no-op'ing on an already-correct value.
+  const [saved, setSaved] = useState<{ fullName: string; branch: string }>({ fullName: initialRepo?.fullName ?? "", branch: initialRepo?.branch ?? "" });
 
   useEffect(() => {
     let live = true;
@@ -66,18 +69,46 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
     return () => { live = false; };
   }, [repoSel, prototypeKey]);
 
-  async function save() {
-    if (busy || !repoSel.trim()) return;
+  const targetBranch = branch.trim() || `prototype/${prototypeKey}`;
+  const branchExists = branches.includes(targetBranch);
+  const dirty = repoSel.trim() !== saved.fullName || targetBranch !== saved.branch;
+  // The branch is only real once it's forked off `starter`. Until then, offer to
+  // create it — "add a new branch" should actually add it, not leave a pointer.
+  const needsBranch = !branchesLoading && !branchesErr && !!repoSel.trim() && hasStarter && !branchExists;
+  const actionable = dirty || needsBranch;
+
+  async function apply() {
+    if (busy || !repoSel.trim() || !actionable) return;
     setBusy(true); setMsg(null);
     try {
-      const res = await fetch("/api/prototypes", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, repo: { fullName: repoSel, branch: branch.trim() || undefined } }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
-      setMsg({ ok: true, text: "Saved." });
+      if (dirty) {
+        const res = await fetch("/api/prototypes", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: prototypeKey, repo: { fullName: repoSel, branch: targetBranch } }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
+      }
+      let note = dirty ? "saved" : "";
+      if (needsBranch) {
+        const cr = await fetch("/api/git/branches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repo: repoSel, branch: targetBranch }),
+        });
+        const cd = await cr.json().catch(() => ({}));
+        if (!cr.ok) {
+          setSaved({ fullName: repoSel.trim(), branch: targetBranch });
+          setMsg({ ok: false, text: cd.error ?? "Saved the repo, but couldn't create the branch." });
+          router.refresh();
+          return;
+        }
+        setBranches((bs) => (bs.includes(targetBranch) ? bs : [...bs, targetBranch].sort()));
+        note = note ? "saved · branch created" : "branch created";
+      }
+      setSaved({ fullName: repoSel.trim(), branch: targetBranch });
+      setMsg({ ok: true, text: `${repoSel}@${targetBranch} · ${note || "up to date"}` });
       router.refresh();
     } finally {
       setBusy(false);
@@ -120,7 +151,7 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
                 <label className="block text-[11px] text-muted-2 mb-1">Branch</label>
                 <select value={branch} onChange={(e) => { setBranch(e.target.value); setMsg(null); }} disabled={branchesLoading} className={inp}>
                   {!branches.includes(`prototype/${prototypeKey}`) && (
-                    <option value={`prototype/${prototypeKey}`}>{`prototype/${prototypeKey}`} (new — create in the repo)</option>
+                    <option value={`prototype/${prototypeKey}`}>{`prototype/${prototypeKey}`} (new branch)</option>
                   )}
                   {branch && branch !== `prototype/${prototypeKey}` && !branches.includes(branch) && (
                     <option value={branch}>{branch} (not on GitHub)</option>
@@ -135,11 +166,25 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
                 This repo has no <span className="font-mono">starter</span> template branch — new prototype branches fork from <span className="font-mono">starter</span>, so this repo can&apos;t be used for prototypes. Pick your prototypes repo (the one with a <span className="font-mono">starter</span> branch).
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <span className={`text-[12px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : "text-muted-2"}`}>
-                {msg ? msg.text : initialRepo ? `Currently ${initialRepo.fullName}@${initialRepo.branch}` : "No repo attached yet — pick one and save."}
+            <div className="flex items-center justify-between gap-3">
+              <span className={`text-[12px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : actionable ? "text-warn" : "text-ok"}`}>
+                {msg
+                  ? msg.text
+                  : needsBranch
+                    ? `${targetBranch} isn't in the repo yet — create it to start building`
+                    : dirty
+                      ? `Unsaved — will set ${repoSel}@${targetBranch}`
+                      : `✓ ${saved.fullName}@${saved.branch} — you're set. Build with Claude below ↓`}
               </span>
-              <button onClick={save} disabled={busy || !repoSel.trim() || !hasStarter} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save"}</button>
+              {branchesLoading ? (
+                <span className="h-8 px-3 rounded-lg border border-border text-muted-2 text-[12px] flex items-center shrink-0">Checking…</span>
+              ) : actionable ? (
+                <button onClick={apply} disabled={busy || !repoSel.trim() || !hasStarter} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
+                  {busy ? "Working…" : needsBranch ? (dirty ? "Save & create branch" : "Create branch") : "Save changes"}
+                </button>
+              ) : (
+                <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[12px] font-semibold flex items-center shrink-0">Saved ✓</span>
+              )}
             </div>
           </>
         )}

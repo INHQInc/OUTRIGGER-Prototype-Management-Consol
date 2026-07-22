@@ -11,6 +11,7 @@ import { getContentStore } from "../content/store";
 import { getGitClientForOrg } from "../git/connection";
 import { GitError } from "../git/github";
 import { resolvePrototypeOrg } from "./org";
+import { resolvePrototypeRepo } from "./repo";
 import { listOrgEnvironments } from "../environments";
 import { captureRawHtml, slugForUrl } from "../capture/capture";
 import { audit } from "../audit";
@@ -158,10 +159,11 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   if (!proto) throw new Error("Unknown prototype");
   const orgId = await resolvePrototypeOrg(proto);
   if (!orgId) throw new Error("This prototype has no owning customer.");
-  if (!proto.repo?.fullName) throw new Error("Attach a repo on the Build tab first.");
-  const [owner, repo] = proto.repo.fullName.split("/");
-  if (!owner || !repo) throw new Error(`Invalid repo: ${proto.repo.fullName}`);
-  const branch = proto.repo.branch || `prototype/${proto.key}`;
+  const repoRef = await resolvePrototypeRepo(proto, orgId);
+  if (!repoRef?.fullName) throw new Error("No prototypes repo registered — add one in Settings → Repositories.");
+  const [owner, repo] = repoRef.fullName.split("/");
+  if (!owner || !repo) throw new Error(`Invalid repo: ${repoRef.fullName}`);
+  const branch = repoRef.branch || `prototype/${proto.key}`;
   if (branch === "starter") throw new Error("This prototype points at the 'starter' template branch — set a dedicated branch on the Build tab first.");
 
   const client = await getGitClientForOrg(orgId);
@@ -222,7 +224,7 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     consoleUrl,
     consoleRecordUrl: `${consoleUrl}/prototypes/${proto.key}`,
     tokenNote: "The OPMC_API_TOKEN is NEVER committed here — it comes from your shell env, and only WRITE-BACK (cut version) needs it. Building + review need no token.",
-    repo: { fullName: proto.repo.fullName, branch, artifactPath: proto.repo.artifactPath || DEFAULT_ARTIFACT },
+    repo: { fullName: repoRef.fullName, branch, artifactPath: repoRef.artifactPath || DEFAULT_ARTIFACT },
     targets: proto.targets.map((t) => {
       let origin = ""; try { origin = new URL(t.url).origin; } catch { /* */ }
       const env = envByOrigin.get(origin);
