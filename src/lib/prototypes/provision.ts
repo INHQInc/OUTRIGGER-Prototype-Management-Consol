@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 import { load } from "cheerio";
 import { getContentStore } from "../content/store";
 import { getGitClientForOrg } from "../git/connection";
-import { GitError } from "../git/github";
+import { GitError, friendlyGitError } from "../git/github";
 import { resolvePrototypeOrg } from "./org";
 import { resolvePrototypeRepo } from "./repo";
 import { listOrgEnvironments } from "../environments";
@@ -176,9 +176,13 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   } catch (e) {
     if (e instanceof GitError && (e.status === 404 || e.status === 422)) {
       const starterSha = await client.getBranchSha(owner, repo, "starter").catch(() => {
-        throw new Error(`Branch '${branch}' doesn't exist and there's no 'starter' branch to fork from in ${proto.repo!.fullName}.`);
+        throw new Error(`Branch '${branch}' doesn't exist and there's no 'starter' branch to fork from in ${owner}/${repo}.`);
       });
-      await client.createBranch(owner, repo, branch, starterSha);
+      try {
+        await client.createBranch(owner, repo, branch, starterSha);
+      } catch (ce) {
+        throw new Error(friendlyGitError(ce, { action: "create the prototype branch", repo: `${owner}/${repo}` }));
+      }
       branchCreated = true;
     } else { throw e; }
   }

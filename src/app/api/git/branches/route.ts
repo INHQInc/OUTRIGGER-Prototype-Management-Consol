@@ -3,7 +3,7 @@ import { getGitClientForOrg } from "@/lib/git/connection";
 import { parseRepoUrl } from "@/lib/git/provider";
 import { getActiveOrgId } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
-import { GitError } from "@/lib/git/github";
+import { GitError, friendlyGitError } from "@/lib/git/github";
 
 /** GET ?repo=owner/repo → branch names, via the active customer's GitHub connection. */
 export async function GET(req: NextRequest) {
@@ -52,6 +52,6 @@ export async function POST(req: NextRequest) {
     await client.createBranch(ref.owner, ref.repo, branch, fromSha);
     return NextResponse.json({ created: true, branch, from });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ error: friendlyGitError(e, { action: "create the branch", repo: `${ref.owner}/${ref.repo}` }) }, { status: 400 });
   }
 }

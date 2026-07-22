@@ -16,6 +16,23 @@ export class GitError extends Error {
   }
 }
 
+/**
+ * Turn a raw GitHub error into a sentence a human can act on. The API returns
+ * things like `GitHub 403: {"message":"Resource not accessible by personal
+ * access token",...}` — useless in the UI. Map the common statuses to the fix.
+ */
+export function friendlyGitError(e: unknown, ctx?: { action?: string; repo?: string }): string {
+  if (e instanceof GitError) {
+    const action = ctx?.action ?? "do that";
+    const where = ctx?.repo ? ` in ${ctx.repo}` : "";
+    if (e.status === 403) return `The connected GitHub token isn't allowed to ${action}${where}. It needs "Contents: Read and write" on this repo — update the token's permissions on GitHub (or reconnect with write access), then retry.`;
+    if (e.status === 401) return `GitHub rejected the connected token (401) — reconnect it in Settings → Repositories → API access.`;
+    if (e.status === 404) return `Couldn't find ${ctx?.repo ?? "the repo"} (or the branch) — check the name and that the token can see it.`;
+    if (e.status === 422) return `GitHub couldn't ${action}${where} (422) — the branch may already exist or the base ref is missing.`;
+  }
+  return e instanceof Error ? e.message : String(e);
+}
+
 export class GitHubClient {
   constructor(private token: string) {}
 

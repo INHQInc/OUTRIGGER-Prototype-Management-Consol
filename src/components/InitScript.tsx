@@ -39,11 +39,21 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   }
 
   if (!provisioned) {
+    const tokenIssue = err ? /(403|not allowed|not accessible|Contents|reconnect|token)/i.test(err) : false;
     return (
-      <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between gap-3">
-        <span className="text-[12px] text-muted-2">Get your init script — it sets up the workspace so Claude starts loaded with this prototype.</span>
-        <button onClick={prepare} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Setting up…" : "Get init script"}</button>
-        {err && <span className="text-[12px] text-danger">{err}</span>}
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="px-4 py-3 flex items-center justify-between gap-4">
+          <span className="text-[12px] text-muted-2 max-w-md">Get your init script — sets up the branch so Claude wakes up loaded with this prototype and its page(s).</span>
+          <button onClick={prepare} disabled={busy} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Setting up…" : err ? "Try again" : "Get init script"}</button>
+        </div>
+        {err && (
+          <div className="px-4 py-3 border-t border-danger/30 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] space-y-1.5">
+            <div className="text-[12px] text-danger leading-relaxed">{err}</div>
+            {tokenIssue && (
+              <Link href="/settings/repositories" className="inline-block text-[12px] text-accent hover:text-accent-hover font-medium">Manage the GitHub connection in Settings → Repositories →</Link>
+            )}
+          </div>
+        )}
       </div>
     );
   }
