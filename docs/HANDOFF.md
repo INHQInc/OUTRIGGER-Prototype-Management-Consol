@@ -1,6 +1,6 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-07-21 (post Sites-elimination + 2 verification passes + prototype setup-checklist rework). Read AGENTS.md first (model + rules), then this (state + next moves).*
+*Updated: 2026-07-21 (post Sites-elimination + 3 verification passes + setup-checklist rework + WIZARD & BRANCH PROVISIONING). Read AGENTS.md first (model + rules), then this (state + next moves).*
 
 ## ⚠ UNPUSHED (handle first)
 
@@ -14,6 +14,17 @@
 ## What the product is now
 
 Multi-tenant **build-and-ship layer for web experiments**: author advanced prototypes in a repo (with Claude), review them **injected on the customer's real lower environment** via our loader, promote immutable versions, graduate winners into **paused Optimizely experiments**, ship via handoff. Live customer: OUTRIGGER (site key `prep-outrigger`, prep.outrigger.com).
+
+## WIZARD + BRANCH PROVISIONING (built 2026-07-21, user-approved boundary reversal)
+
+The console now **provisions the prototype's git branch** so `clone + claude` is build-ready with **zero token**. Model settled over several turns:
+- **Loop decision (empirically proven):** design iteration happens on a **local asset-rewritten proxy** (dev.mjs curls the page + injects `<base href="prep">` so the REAL css/js/fonts load — near-pixel-perfect, instant reload). Proven: raw Firecrawl HTML renders as a black void (main.css is root-relative → 404s locally); one `<base>` tag → the real page. The Firecrawl snapshot is the *map* (offline selectors), the proxy is the *canvas*, prep `?opmc` is the *truth* (behavior + others' QA). **dev.mjs `<base>` upgrade is still TODO on the starter repo.**
+- **Directory boundary (the load-bearing rule):** the console authors ONLY `.opmc/**`; Claude authors ONLY `src/**` + `dist/variation.js`. Disjoint trees → never clobber; ship-PR filter = "drop `.opmc/`".
+- **Wizard** (`/prototypes/new`, `PrototypeWizard.tsx`): 4 steps — Target (name+pages) → The change (what/where/success-in-words) → Guardrails (constraints/reference, optional) → Review→Create. No mockups (design iterates with Claude); captures INTENT not a visual spec. `PrototypeBrief` gained `where/constraints/reference`. NewPrototype is now a link to it.
+- **Provisioning** (`src/lib/prototypes/provision.ts`, `POST /api/prototypes/provision`, `ProvisionButton` on Setup tab): forks branch off starter if absent → Firecrawl-captures each target (`captureRawHtml` = scrape+sanitize, WAF-bypassing) → derives `skeleton.html` + `selectors.md` (cheerio; flags the page's hashed classes do-not-use) → renders `.opmc/brief.md` + `.opmc/context.json` (carries consoleUrl, NEVER the token) + per-target `page.html`/`meta.json` → commits ONLY `.opmc/**` as ONE **compare-and-swap** commit (`commitFiles` gained `force?` — provisioning passes `force:false`, re-reads HEAD, retries once → can NEVER rewind Claude's pushes). Idempotent (contentHash no-op), capture-failure degrades gracefully (brief still commits), session-only (read-scoped token can't provision), audited (`prototype.provision`/`prototype.resync`).
+- **starter repo changes (live via gh):** added `.gitignore` (was missing — .env safety); SKILL.md step 1 is now **tree-first** (read `.opmc/context.json`+`brief.md`+`targets/**` from the tree, no token; API pull demoted to a token'd freshness/drift check; NEVER write `.opmc/`).
+- **Dependency:** snapshots need `FIRECRAWL_API_KEY` set in Vercel (the pipeline predates this — `src/lib/capture/capture.ts`). Without it, provisioning still commits the brief+context; `meta.json` marks `captureOk:false`.
+- **NEXT in the roadmap (user-sequenced):** discuss the deploy/handoff methods. Two of three already exist — **inject-into-live** (loader ✓) and **Opti experiment** (promote → paused draft ✓). The net-new one is **HANDOFF → integrate into the site's source code** ("local compute, hosted record": Claude generates the production diff locally against the read-only Outrigger_Website clone → console stores/reviews → PR; ADO connector parked).
 
 ## Verified live (do not re-litigate)
 
