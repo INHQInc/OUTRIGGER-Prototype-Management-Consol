@@ -148,6 +148,9 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
               <span className="text-muted">Latest cut: <span className="font-semibold text-foreground">v{versions[0].version}</span> <span className="font-mono text-muted-2">{versions[0].gitSha.slice(0, 7)}</span> · <TimeAgo iso={versions[0].createdAt} /></span>
               {!versions[0].variationJs && <span className="text-[10px] text-warn">no code</span>}
             </div>
+            {versions[0].gitSha && status?.branchExists && status.headSha && versions[0].gitSha !== status.headSha && (
+              <div className="px-3 py-1.5 border-t border-border/60 text-[11px] text-warn">● HEAD has moved past v{versions[0].version} (<span className="font-mono">{versions[0].gitSha.slice(0, 7)}</span> → <span className="font-mono">{status.headSha.slice(0, 7)}</span>) — cut a new version to freeze the latest.</div>
+            )}
             {versions.length > 1 && (
               <details className="border-t border-border/60">
                 <summary className="px-3 py-1.5 text-[11px] text-muted-2 cursor-pointer hover:text-foreground">Version history ({versions.length})</summary>
