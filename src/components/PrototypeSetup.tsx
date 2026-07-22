@@ -138,14 +138,14 @@ function Ladder({ base, prototypeKey, hasRepo, hasBrief, hasPages, provisioned, 
     { label: "Test page(s)", done: hasPages,
       action: hasPages ? null : <Link href={`${base}/pages`} className={link}>Add a page →</Link> },
     { label: "Prepare workspace", sub: provisioned ? "ready" : "snapshots the page so Claude works offline", done: provisioned,
-      action: provisioned ? null : <button onClick={prepare} disabled={busy || !hasRepo} className="h-7 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Preparing…" : "Prepare"}</button> },
+      action: provisioned ? null : <button onClick={prepare} disabled={busy || !hasRepo} className="h-7 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Setting up…" : "Get init script"}</button> },
   ];
 
   return (
     <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
       <div className="px-4 py-3 border-b border-accent/30">
-        <span className="text-[13px] font-semibold">Get to local dev</span>
-        <span className="text-[11px] text-muted-2 ml-2">Finish these and your run command unlocks below.</span>
+        <span className="text-[13px] font-semibold">Start building</span>
+        <span className="text-[11px] text-muted-2 ml-2">Finish these and your Claude init script unlocks below.</span>
       </div>
       {steps.map((s, i) => (
         <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border/60">
@@ -162,7 +162,7 @@ function Ladder({ base, prototypeKey, hasRepo, hasBrief, hasPages, provisioned, 
       <div className={`flex items-center gap-2.5 px-4 py-2.5 ${ready ? "" : "opacity-60"}`}>
         <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold border shrink-0 ${ready ? "bg-accent text-accent-fg border-accent" : "bg-surface-2 text-muted-2 border-border"}`}>{ready ? "★" : "5"}</span>
         <span className={`text-[13px] font-medium ${ready ? "text-foreground" : "text-muted-2"}`}>
-          {ready ? "Start local dev — your run command is below 👇" : "Start local dev — locked until the steps above are done"}
+          {ready ? "Your Claude init script is below 👇" : "Claude init script — locked until the steps above are done"}
         </span>
       </div>
       {err && <div className="px-4 pb-3 text-[12px] text-danger">{err}</div>}
@@ -203,8 +203,8 @@ claude${previewLine}`;
     <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
       <div className="px-4 py-2.5 flex items-center justify-between border-b border-accent/30">
         <div>
-          <span className="text-[12px] font-semibold">✓ Provisioned — run this to build locally</span>
-          <span className="text-[11px] text-muted-2 ml-2">Claude wakes up with your brief + page snapshot in the tree.</span>
+          <span className="text-[12px] font-semibold">✓ Claude init script</span>
+          <span className="text-[11px] text-muted-2 ml-2">Run this to start building — Claude wakes up loaded with the prototype, page(s), and brief.</span>
         </div>
         <button onClick={copy} className="text-[12px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
       </div>
