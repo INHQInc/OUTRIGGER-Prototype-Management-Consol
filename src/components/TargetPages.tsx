@@ -124,7 +124,7 @@ export function TargetPages({ prototypeKey, initialTargets, environments, consol
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="px-4 py-2.5 border-b border-border">
           <span className="text-[12px] font-semibold">Test pages</span>
-          <span className="text-[11px] text-muted-2 ml-2">Where the prototype injects. Each opens with the review token pre-set and self-checks the loader.</span>
+          <span className="text-[11px] text-muted-2 ml-2">Where the prototype injects. Each page: <b>Open ↗</b> to preview with the review token, and <b>Verify</b> that the loader is deployed on it.</span>
         </div>
         <div className="p-4 space-y-2">
           <div className="flex items-center gap-2">
@@ -182,7 +182,7 @@ function PageRow({ url, prototypeKey, reviewLink, onCopyLink, copied, onRemove, 
           <InjectionStatus check={check} checking={checking} />
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <button onClick={run} disabled={checking} className="text-[12px] text-muted-2 hover:text-foreground disabled:opacity-40">{checking ? "Checking…" : "Re-check"}</button>
+          <button onClick={run} disabled={checking} className="text-[12px] px-2 py-0.5 rounded-md border border-border text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40">{checking ? "Verifying…" : "Verify"}</button>
           <button onClick={onCopyLink} className="text-[12px] text-muted-2 hover:text-foreground">{copied ? "Copied" : "Copy link"}</button>
           <a href={reviewLink} target="_blank" rel="noreferrer" className="text-[12px] text-accent hover:text-accent-hover font-medium">Open ↗</a>
           <button onClick={onRemove} disabled={busy} className="text-[12px] text-danger hover:opacity-80 disabled:opacity-40">Remove</button>
@@ -193,7 +193,7 @@ function PageRow({ url, prototypeKey, reviewLink, onCopyLink, copied, onRemove, 
 }
 
 function InjectionStatus({ check, checking }: { check: CheckResult | null; checking: boolean }) {
-  if (checking && !check) return <div className="text-[11px] text-muted-2">Checking injection…</div>;
+  if (checking && !check) return <div className="text-[11px] text-muted-2">Verifying injection…</div>;
   if (!check) return null;
   if (check.result === "present")
     return <div className="text-[11px] text-ok">● Injection script detected on this page</div>;
