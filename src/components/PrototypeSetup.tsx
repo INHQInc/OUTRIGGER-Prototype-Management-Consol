@@ -47,10 +47,7 @@ function BuildSection({ prototypeKey, base, repo, provisioned, consoleUrl, previ
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
 }) {
   if (!repo) {
-    return <Guidance tone="warn">Attach a repo + branch on the <b>Build</b> tab to continue. <Link href={`${base}/build`} className="text-accent hover:text-accent-hover font-medium">Go to Build →</Link></Guidance>;
-  }
-  if (repo.branch === "starter") {
-    return <Guidance tone="warn">This prototype&apos;s branch is <span className="font-mono">starter</span> — the shared template (skill + build tooling), not a prototype branch. Set a dedicated branch like <span className="font-mono">prototype/{prototypeKey}</span> on the <b>Build</b> tab, then provision here. <Link href={`${base}/build`} className="text-accent hover:text-accent-hover font-medium">Go to Build →</Link></Guidance>;
+    return <Guidance tone="warn">Your code repo isn&apos;t connected yet — set it up once and this prototype gets a workspace automatically. <Link href="/settings/repositories" className="text-accent hover:text-accent-hover font-medium">Connect your code repo →</Link></Guidance>;
   }
   return (
     <>
@@ -103,9 +100,14 @@ function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; i
   const [problem, setProblem] = useState(initial.problem);
   const [change, setChange] = useState(initial.change);
   const [done, setDone] = useState(initial.doneLooksLike);
+  const [where, setWhere] = useState(initial.where ?? "");
+  const [constraints, setConstraints] = useState(initial.constraints ?? "");
+  const [reference, setReference] = useState(initial.reference ?? "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const dirty = problem !== initial.problem || change !== initial.change || done !== initial.doneLooksLike;
+  const dirty = problem !== initial.problem || change !== initial.change || done !== initial.doneLooksLike
+    || where !== (initial.where ?? "") || constraints !== (initial.constraints ?? "") || reference !== (initial.reference ?? "");
+  const clr = () => setMsg(null);
 
   async function save() {
     if (busy) return;
@@ -113,7 +115,7 @@ function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; i
     try {
       const res = await fetch("/api/prototypes", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, brief: { problem, change, doneLooksLike: done } }),
+        body: JSON.stringify({ key: prototypeKey, brief: { problem, change, doneLooksLike: done, where, constraints, reference } }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
@@ -128,21 +130,40 @@ function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; i
     <div id="brief" className="rounded-xl border border-border bg-surface overflow-hidden scroll-mt-4">
       <div className="px-4 py-2.5 border-b border-border">
         <span className="text-[12px] font-semibold">Build brief</span>
-        <span className="text-[11px] text-muted-2 ml-2">What Claude builds — the skill reads this from the console.</span>
+        <span className="text-[11px] text-muted-2 ml-2">What Claude builds. You and Claude both edit this — it grows as you go.</span>
       </div>
       <div className="p-4 space-y-2.5">
         <div>
-          <label className="block text-[11px] text-muted-2 mb-1">Problem / opportunity</label>
-          <textarea rows={2} value={problem} onChange={(e) => { setProblem(e.target.value); setMsg(null); }} placeholder="What's not working, or the opportunity you're testing." className={ta} />
+          <label className="block text-[11px] text-muted-2 mb-1">What it changes <span className="text-danger">*</span></label>
+          <textarea rows={2} value={change} onChange={(e) => { setChange(e.target.value); clr(); }} placeholder="The change on the page — the thing to build. This is what Claude builds toward." className={ta} />
         </div>
-        <div>
-          <label className="block text-[11px] text-muted-2 mb-1">What it changes</label>
-          <textarea rows={2} value={change} onChange={(e) => { setChange(e.target.value); setMsg(null); }} placeholder="The change on the page — the thing to build." className={ta} />
+        <div className="grid grid-cols-2 gap-2.5">
+          <div>
+            <label className="block text-[11px] text-muted-2 mb-1">Where on the page</label>
+            <textarea rows={2} value={where} onChange={(e) => { setWhere(e.target.value); clr(); }} placeholder="e.g. the room-listing cards / a selector" className={ta} />
+          </div>
+          <div>
+            <label className="block text-[11px] text-muted-2 mb-1">Done looks like</label>
+            <textarea rows={2} value={done} onChange={(e) => { setDone(e.target.value); clr(); }} placeholder="How you'll know it's right, in words." className={ta} />
+          </div>
         </div>
-        <div>
-          <label className="block text-[11px] text-muted-2 mb-1">Done looks like</label>
-          <textarea rows={2} value={done} onChange={(e) => { setDone(e.target.value); setMsg(null); }} placeholder="How you'll know it's built right." className={ta} />
-        </div>
+        <details className="rounded-lg border border-border/60">
+          <summary className="px-3 py-1.5 text-[11px] text-muted-2 cursor-pointer hover:text-foreground">More — problem, guardrails, reference</summary>
+          <div className="p-3 space-y-2.5 border-t border-border/60">
+            <div>
+              <label className="block text-[11px] text-muted-2 mb-1">Problem / opportunity</label>
+              <textarea rows={2} value={problem} onChange={(e) => { setProblem(e.target.value); clr(); }} placeholder="What's not working, or the opportunity you're testing." className={ta} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-muted-2 mb-1">Guardrails / do-not-touch</label>
+              <textarea rows={2} value={constraints} onChange={(e) => { setConstraints(e.target.value); clr(); }} placeholder="What must not change or regress." className={ta} />
+            </div>
+            <div>
+              <label className="block text-[11px] text-muted-2 mb-1">Reference</label>
+              <textarea rows={1} value={reference} onChange={(e) => { setReference(e.target.value); clr(); }} placeholder="A reference URL or example, if any." className={ta} />
+            </div>
+          </div>
+        </details>
         <div className="flex items-center justify-between">
           <span className={`text-[12px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : "text-muted-2"}`}>{msg?.text ?? (dirty ? "Unsaved changes" : "")}</span>
           <button onClick={save} disabled={busy || !dirty} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save brief"}</button>
