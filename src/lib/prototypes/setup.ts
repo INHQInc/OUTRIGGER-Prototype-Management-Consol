@@ -54,7 +54,10 @@ export async function getPrototypeSetup(proto: PrototypeRecord, orgId: string): 
   const targetOrigins = new Set(proto.targets.map((t) => { try { return new URL(t.url).origin; } catch { return ""; } }).filter(Boolean));
   const targetEnvs = environments.filter((e) => { try { return targetOrigins.has(new URL(e.url).origin); } catch { return false; } });
 
-  const hasRepo = Boolean(proto.repo?.fullName);
+  // A repo whose branch is the shared `starter` template is NOT a valid code
+  // location — the prototype must build on its own branch.
+  const onStarter = proto.repo?.branch === "starter";
+  const hasRepo = Boolean(proto.repo?.fullName) && !onStarter;
   const hasBrief = Boolean(proto.brief.problem?.trim() || proto.brief.change?.trim() || proto.brief.doneLooksLike?.trim());
   const hasPages = proto.targets.length > 0;
   // Injection is "live" only when a page THIS prototype targets is on an
@@ -72,6 +75,8 @@ export async function getPrototypeSetup(proto: PrototypeRecord, orgId: string): 
         ? "Connect GitHub for this customer first (Settings → Repositories)."
         : !repoRegistered
         ? "Register a prototypes repo first (Settings → Repositories)."
+        : onStarter
+        ? "Your branch is 'starter' (the shared template) — set a prototype/<key> branch on the Build tab."
         : "Pick the repo + branch this prototype builds in.",
     },
     {

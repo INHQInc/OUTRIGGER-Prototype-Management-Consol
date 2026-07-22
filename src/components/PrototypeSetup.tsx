@@ -33,14 +33,39 @@ export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consol
     <div className="space-y-4 max-w-2xl">
       <Checklist base={base} steps={steps} doneCount={doneCount} />
       <BriefCard prototypeKey={prototypeKey} initial={brief} onSaved={() => router.refresh()} />
-      {repo && repo.branch !== "starter" && <ProvisionButton prototypeKey={prototypeKey} provisioned={provisioned} />}
-      {ready
-        ? <Commands repo={repo} consoleUrl={consoleUrl} buildStatus={buildStatus} />
-        : <div className="rounded-xl border border-border bg-surface px-4 py-3 text-[12px] text-muted-2">
-            Finish the {steps.length - doneCount} step{steps.length - doneCount === 1 ? "" : "s"} above and the exact local build commands appear here — copy-paste to clone, branch, and start Claude.
-          </div>}
+      <BuildSection prototypeKey={prototypeKey} base={base} repo={repo} provisioned={provisioned} consoleUrl={consoleUrl} buildStatus={buildStatus} />
     </div>
   );
+}
+
+/** The one adaptive next-action block: fix the branch → provision → build.
+ *  Always visible so the user is never stuck guessing what's next. */
+function BuildSection({ prototypeKey, base, repo, provisioned, consoleUrl, buildStatus }: {
+  prototypeKey: string; base: string; repo?: { fullName: string; branch: string };
+  provisioned: boolean; consoleUrl: string;
+  buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
+}) {
+  if (!repo) {
+    return <Guidance tone="warn">Attach a repo + branch on the <b>Build</b> tab to continue. <Link href={`${base}/build`} className="text-accent hover:text-accent-hover font-medium">Go to Build →</Link></Guidance>;
+  }
+  if (repo.branch === "starter") {
+    return <Guidance tone="warn">This prototype&apos;s branch is <span className="font-mono">starter</span> — the shared template (skill + build tooling), not a prototype branch. Set a dedicated branch like <span className="font-mono">prototype/{prototypeKey}</span> on the <b>Build</b> tab, then provision here. <Link href={`${base}/build`} className="text-accent hover:text-accent-hover font-medium">Go to Build →</Link></Guidance>;
+  }
+  return (
+    <>
+      <ProvisionButton prototypeKey={prototypeKey} provisioned={provisioned} />
+      {provisioned
+        ? <Commands prototypeKey={prototypeKey} repo={repo} consoleUrl={consoleUrl} buildStatus={buildStatus} />
+        : <Guidance tone="muted">Click <b>Provision branch</b> above — it commits the brief + page snapshots so <span className="font-mono">clone + claude</span> starts build-ready. The exact commands appear here right after.</Guidance>}
+    </>
+  );
+}
+
+function Guidance({ tone, children }: { tone: "warn" | "muted"; children: React.ReactNode }) {
+  const cls = tone === "warn"
+    ? "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] text-foreground"
+    : "border-border bg-surface text-muted-2";
+  return <div className={`rounded-xl border ${cls} px-4 py-3 text-[12px] leading-relaxed`}>{children}</div>;
 }
 
 function Checklist({ base, steps, doneCount }: { base: string; steps: SetupStepState[]; doneCount: number }) {
@@ -126,22 +151,13 @@ function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; i
   );
 }
 
-function Commands({ repo, consoleUrl, buildStatus }: { repo?: { fullName: string; branch: string }; consoleUrl: string; buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean } }) {
+function Commands({ prototypeKey, repo, consoleUrl, buildStatus }: { prototypeKey: string; repo?: { fullName: string; branch: string }; consoleUrl: string; buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean } }) {
   const [copied, setCopied] = useState(false);
   const fullName = repo?.fullName ?? "owner/repo";
-  const branch = repo?.branch ?? "prototype/key";
-  const dir = fullName.split("/")[1] ?? "prototype";
+  const branch = repo?.branch || `prototype/${prototypeKey}`;
+  const dir = fullName.split("/")[1] ?? prototypeKey;
 
-  // A prototype must build on its OWN branch — never on the shared `starter`
-  // template. Refuse to generate commands that would pollute it.
-  if (branch === "starter") {
-    return (
-      <div className="rounded-xl border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_5%,transparent)] px-4 py-3 text-[12px] text-foreground">
-        This prototype points at the <span className="font-mono">starter</span> template branch — that&apos;s where the skill + build tooling live, not a prototype branch. Set a dedicated branch (e.g. <span className="font-mono">prototype/{dir === "prototype" ? "key" : branch}</span>) on the <span className="font-semibold">Build</span> tab first, then these commands appear.
-      </div>
-    );
-  }
-
+  // (BuildSection guards the starter-branch case before we get here.)
   // If the branch already exists on GitHub (Claude/someone pushed it), just
   // check it out. Only a NEW branch is created off the starter template —
   // basing an existing branch off starter would clobber its built code.
