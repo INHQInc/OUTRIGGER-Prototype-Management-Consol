@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { getContentStore } from "@/lib/content/store";
 import { canAccessOrg } from "@/lib/active-org";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
-import { PrototypeTabs } from "@/components/PrototypeTabs";
 import { StageSelect } from "@/components/StageSelect";
 import { normalizeStage } from "@/lib/prototypes/types";
 
@@ -31,8 +30,9 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
         <div className="flex items-center gap-3">
           <h1 className="text-[18px] font-semibold tracking-tight">{p.name}</h1>
           <StageSelect prototypeKey={key} initialStage={stage} />
+          <Link href={`/prototypes/${key}/settings`} className="text-[12px] text-muted-2 hover:text-foreground ml-auto">Settings</Link>
         </div>
-        <div className="mt-4"><PrototypeTabs prototypeKey={key} /></div>
+
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-6">{children}</div>

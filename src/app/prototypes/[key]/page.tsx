@@ -2,61 +2,77 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
-import { getPrototypeSetup } from "@/lib/prototypes/setup";
 import { resolveRepoSource } from "@/lib/prototypes/source";
-import { listPromotions } from "@/lib/promotions";
-import { injectionPasses } from "@/lib/prototypes/types";
-import { PrototypeSetup } from "@/components/PrototypeSetup";
+import { listArtifactVersions } from "@/lib/prototypes/versions";
+import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
+import { DescriptionEditor } from "@/components/DescriptionEditor";
+import { TargetPages } from "@/components/TargetPages";
+import { InitScript } from "@/components/InitScript";
+import { SourcePanel } from "@/components/SourcePanel";
+import { OptimizelyBundle } from "@/components/OptimizelyBundle";
 
 export const dynamic = "force-dynamic";
 
-function agoShort(iso: string): string {
-  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+function Section({ n, title, desc, children }: { n: number; title: string; desc: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5">
+      <div className="flex items-baseline gap-2.5">
+        <span className="w-5 h-5 rounded-full bg-accent/15 text-accent border border-accent/40 flex items-center justify-center text-[11px] font-bold shrink-0">{n}</span>
+        <div>
+          <h2 className="text-[13px] font-semibold">{title}</h2>
+          <p className="text-[11px] text-muted-2">{desc}</p>
+        </div>
+      </div>
+      <div className="pl-[30px]">{children}</div>
+    </section>
+  );
 }
 
-/** Overview tab — the checklist ladder to local dev + status across the three
- *  modes (Local Dev / Live Page / Experiment). Brief lives on its own tab. */
-export default async function PrototypeOverviewPage({ params }: { params: Promise<{ key: string }> }) {
+/** The prototype workspace — the three jobs that matter: build against prep,
+ *  get the Claude init prompt, create the Optimizely bundle. */
+export default async function PrototypeWorkspace({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
   const store = await getContentStore();
   const p = await store.getPrototype(key);
   if (!p) notFound();
   const orgId = await resolvePrototypeOrg(p);
 
-  const [setup, hdrs, source, provisionFlag, promotions, claudeSeen] = await Promise.all([
-    getPrototypeSetup(p, orgId),
+  const [hdrs, source, provisionFlag, environments, versions] = await Promise.all([
     headers(),
     resolveRepoSource(key).catch(() => null),
     store.getFlag(`provision:${key}`).catch(() => null),
-    listPromotions(key),
-    store.getFlag(`claude:seen:${key}`).catch(() => null),
+    listOrgEnvironments(orgId),
+    listArtifactVersions(key),
   ]);
   const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "outrigger-prototype-management-cons.vercel.app"}`;
-
-  // Live Page status: how many target pages have a PASSING injection verification (persisted).
-  const verifiedPages = p.targets.filter(injectionPasses).length;
-  const loaderVerified = p.targets.length > 0 && verifiedPages === p.targets.length;
-
-  // Experiment status: any active promotion (paused Optimizely draft).
-  const activePromo = promotions.find((pr) => pr.status === "active");
+  const envs = await Promise.all(environments.map(async (e) => ({
+    id: e.id, label: e.label, kind: e.kind, url: e.url, loaderKey: e.siteKey ?? e.id, heartbeatAt: await envLoaderSeenAt(e),
+  })));
+  const buildStatus = {
+    found: source ? source.found : null,
+    headSha: source?.headSha,
+    bytes: source?.variationJs ? Buffer.byteLength(source.variationJs, "utf8") : undefined,
+    branchExists: source?.branchExists,
+  };
 
   return (
-    <PrototypeSetup
-      prototypeKey={key}
-      repo={setup.repo}
-      hasBrief={Boolean(p.brief.change?.trim())}
-      hasPages={p.targets.length > 0}
-      consoleUrl={consoleUrl}
-      previewUrl={p.targets[0]?.url}
-      buildStatus={{ found: source ? source.found : null, headSha: source?.headSha, bytes: source?.variationJs ? Buffer.byteLength(source.variationJs, "utf8") : undefined, branchExists: source?.branchExists }}
-      provisioned={Boolean(provisionFlag)}
-      liveStatus={{ targetCount: p.targets.length, loaderVerified }}
-      expStatus={{ active: Boolean(activePromo), experimentUrl: activePromo?.experimentUrl }}
-      claudeStatus={{ seen: Boolean(claudeSeen), text: claudeSeen ? `Engaged · ${agoShort(claudeSeen)}` : "Not started" }}
-    />
+    <div className="space-y-6 max-w-2xl">
+      <DescriptionEditor prototypeKey={key} brief={p.brief} />
+
+      <Section n={1} title="Build against prep" desc="The prep page(s) this runs on. Verify our injection script is live on each.">
+        <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
+      </Section>
+
+      <Section n={2} title="Build with Claude" desc="Get the init prompt, run it, build against the prep pages.">
+        <InitScript prototypeKey={key} repo={p.repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} />
+      </Section>
+
+      <Section n={3} title="Optimizely bundle" desc="Cut a version, then paste the bundle into a Web Experiment.">
+        <div className="space-y-3">
+          <SourcePanel prototypeKey={key} versions={versions} />
+          <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
+        </div>
+      </Section>
+    </div>
   );
 }
