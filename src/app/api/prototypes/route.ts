@@ -89,6 +89,9 @@ export async function POST(req: NextRequest) {
       problem: b.brief?.problem?.trim() ?? "",
       change: b.brief?.change?.trim() ?? "",
       doneLooksLike: b.brief?.doneLooksLike?.trim() ?? "",
+      ...(b.brief?.where?.trim() ? { where: b.brief.where.trim() } : {}),
+      ...(b.brief?.constraints?.trim() ? { constraints: b.brief.constraints.trim() } : {}),
+      ...(b.brief?.reference?.trim() ? { reference: b.brief.reference.trim() } : {}),
     },
     hypothesis: {
       change: b.hypothesis?.change?.trim() ?? "",
@@ -143,7 +146,14 @@ export async function PATCH(req: NextRequest) {
     changes.push("targets");
   }
   if (body.brief !== undefined) {
-    updated.brief = { problem: body.brief?.problem?.trim() ?? "", change: body.brief?.change?.trim() ?? "", doneLooksLike: body.brief?.doneLooksLike?.trim() ?? "" };
+    updated.brief = {
+      problem: body.brief?.problem?.trim() ?? "",
+      change: body.brief?.change?.trim() ?? "",
+      doneLooksLike: body.brief?.doneLooksLike?.trim() ?? "",
+      ...(body.brief?.where?.trim() ? { where: body.brief.where.trim() } : {}),
+      ...(body.brief?.constraints?.trim() ? { constraints: body.brief.constraints.trim() } : {}),
+      ...(body.brief?.reference?.trim() ? { reference: body.brief.reference.trim() } : {}),
+    };
     changes.push("brief");
   }
   if (body.hypothesis !== undefined) {

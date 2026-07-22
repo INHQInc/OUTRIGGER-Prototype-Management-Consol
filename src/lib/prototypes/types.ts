@@ -52,11 +52,14 @@ export interface PrototypeTarget {
   source: TargetSource;
 }
 
-/** Structured brief — not a free-text blob. */
+/** Structured brief — not a free-text blob. What Claude reads to build. */
 export interface PrototypeBrief {
   problem: string;       // problem / opportunity
   change: string;        // what it changes
-  doneLooksLike: string; // definition of done
+  doneLooksLike: string; // definition of done (acceptance criteria, in words)
+  where?: string;        // where on the page the change goes (anchor / selector hint)
+  constraints?: string;  // guardrails / do-not-touch
+  reference?: string;    // reference URL or notes (optional; often none — design iterates with Claude)
 }
 
 /** Canonical A/B hypothesis: "We believe [change] for [audience] will cause [outcome] because [rationale]." */
