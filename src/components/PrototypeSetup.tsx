@@ -4,21 +4,15 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeBrief } from "@/lib/prototypes/types";
-import type { SetupStepState } from "@/lib/prototypes/setup";
 import { ProvisionButton } from "@/components/ProvisionButton";
 
 const ta = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none resize-none";
 
-function tabHref(base: string, tab: SetupStepState["tab"]): string {
-  return tab === "setup" ? `${base}#brief` : `${base}/${tab}`;
-}
 
 /** The prototype's own setup checklist + the local-build command block it
  *  generates once everything's wired. Mirrors the org Customer-setup card. */
-export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consoleUrl, previewUrl, buildStatus, provisioned }: {
+export function PrototypeSetup({ prototypeKey, repo, brief, consoleUrl, previewUrl, buildStatus, provisioned }: {
   prototypeKey: string;
-  steps: SetupStepState[];
-  ready: boolean;
   repo?: { fullName: string; branch: string };
   brief: PrototypeBrief;
   consoleUrl: string;
@@ -28,11 +22,9 @@ export function PrototypeSetup({ prototypeKey, steps, ready, repo, brief, consol
 }) {
   const router = useRouter();
   const base = `/prototypes/${prototypeKey}`;
-  const doneCount = steps.filter((s) => s.done).length;
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <Checklist base={base} steps={steps} doneCount={doneCount} />
       <BriefCard prototypeKey={prototypeKey} initial={brief} onSaved={() => router.refresh()} />
       <BuildSection prototypeKey={prototypeKey} base={base} repo={repo} provisioned={provisioned} consoleUrl={consoleUrl} previewUrl={previewUrl} buildStatus={buildStatus} />
     </div>
@@ -64,36 +56,6 @@ function Guidance({ tone, children }: { tone: "warn" | "muted"; children: React.
     ? "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] text-foreground"
     : "border-border bg-surface text-muted-2";
   return <div className={`rounded-xl border ${cls} px-4 py-3 text-[12px] leading-relaxed`}>{children}</div>;
-}
-
-function Checklist({ base, steps, doneCount }: { base: string; steps: SetupStepState[]; doneCount: number }) {
-  return (
-    <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
-      <div className="px-4 py-3 border-b border-accent/30 flex items-center justify-between">
-        <div>
-          <span className="text-[13px] font-semibold">Ready to build</span>
-          <span className="text-[11px] text-muted-2 ml-2">What this prototype needs before you start building it.</span>
-        </div>
-        <span className="text-[12px] font-semibold tabular-nums">{doneCount} of {steps.length}</span>
-      </div>
-      {steps.map((s, i) => (
-        <div key={s.key} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border/60 last:border-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold border shrink-0 ${s.done ? "bg-accent/15 text-accent border-accent/40" : "bg-surface-2 text-muted-2 border-border"}`}>
-              {s.done ? "✓" : i + 1}
-            </span>
-            <div className="min-w-0">
-              <span className={`text-[13px] ${s.done ? "text-muted-2 line-through" : ""}`}>{s.label}</span>
-              {s.hint && !s.done && <div className="text-[11px] text-muted-2">{s.hint}</div>}
-            </div>
-          </div>
-          {!s.done && (
-            <Link href={tabHref(base, s.tab)} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{s.action} →</Link>
-          )}
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function BriefCard({ prototypeKey, initial, onSaved }: { prototypeKey: string; initial: PrototypeBrief; onSaved: () => void }) {

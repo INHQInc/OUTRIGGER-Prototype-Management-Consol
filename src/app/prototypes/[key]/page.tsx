@@ -28,8 +28,6 @@ export default async function PrototypeSetupPage({ params }: { params: Promise<{
   return (
     <PrototypeSetup
       prototypeKey={key}
-      steps={setup.steps}
-      ready={setup.ready}
       repo={setup.repo}
       brief={p.brief}
       consoleUrl={consoleUrl}
