@@ -46,7 +46,7 @@ function GetStarted({ repo, branch }: { repo: string; branch: string }) {
  * console pulls it — it doesn't author code. "Cut version from repo" pins a
  * version to the branch HEAD with that built code.
  */
-export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: string; versions?: ArtifactVersion[] }) {
+export function SourcePanel({ prototypeKey, versions = [], compact = false }: { prototypeKey: string; versions?: ArtifactVersion[]; compact?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<SourceStatus | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -93,8 +93,8 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border">
-        <span className="text-[12px] font-semibold">Source</span>
-        <span className="text-[11px] text-muted-2 ml-2">The variation is built in the feature repo — the console pulls it (it never edits code).</span>
+        <span className="text-[12px] font-semibold">{compact ? "Cut a version" : "Source"}</span>
+        <span className="text-[11px] text-muted-2 ml-2">{compact ? "Freeze the current build — that's what the bundle ships." : "The variation is built in the feature repo — the console pulls it (it never edits code)."}</span>
       </div>
 
       <div className="p-4 space-y-3">
@@ -109,16 +109,16 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
 
         {status && (
           <>
-            <div className="flex items-start justify-between gap-3">
-              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
-                <span className="text-muted-2">Repo</span><span className="font-mono">{status.repo}</span>
-                <span className="text-muted-2">Branch</span><span className="font-mono">{status.branch}</span>
-                <span className="text-muted-2">Artifact</span><span className="font-mono">{status.artifactPath}</span>
+            {!compact && (
+              <div className="flex items-start justify-between gap-3">
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+                  <span className="text-muted-2">Repo</span><span className="font-mono">{status.repo}</span>
+                  <span className="text-muted-2">Branch</span><span className="font-mono">{status.branch}</span>
+                  <span className="text-muted-2">Artifact</span><span className="font-mono">{status.artifactPath}</span>
+                </div>
+                <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
               </div>
-              <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
-            </div>
-
-
+            )}
             {status.found ? (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2/30 px-3 py-2">
                 <div className="text-[12px] text-ok">
@@ -128,6 +128,8 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
                   {busy ? "Cutting…" : "Cut version from repo"}
                 </button>
               </div>
+            ) : compact ? (
+              <div className="rounded-lg border border-border bg-surface-2/20 px-3 py-2 text-[12px] text-muted-2">Not built yet — build it in <span className="text-muted">Build with Claude</span> and push, then cut a version here.</div>
             ) : !status.branchExists ? (
               <GetStarted repo={status.repo} branch={status.branch} />
             ) : (
@@ -164,7 +166,7 @@ export function SourcePanel({ prototypeKey, versions = [] }: { prototypeKey: str
             )}
           </div>
         )}
-        <p className="text-[11px] text-muted-2">Preview on a live env: open the page with <span className="font-mono text-muted">?opmc={prototypeKey}</span> (the loader injects the current build).</p>
+        {!compact && <p className="text-[11px] text-muted-2">Preview on a live env: open the page with <span className="font-mono text-muted">?opmc={prototypeKey}</span> (the loader injects the current build).</p>}
       </div>
     </div>
   );

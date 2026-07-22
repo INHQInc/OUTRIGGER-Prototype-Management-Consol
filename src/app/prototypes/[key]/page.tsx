@@ -74,7 +74,7 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
 
       <Section n={4} title="Optimizely bundle" desc="Cut a version, then paste the bundle into a Web Experiment.">
         <div className="space-y-3">
-          <SourcePanel prototypeKey={key} versions={versions} />
+          <SourcePanel prototypeKey={key} versions={versions} compact />
           <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
         </div>
       </Section>
