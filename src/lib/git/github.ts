@@ -106,6 +106,13 @@ export class GitHubClient {
   }
 
   /** Head commit SHA of a branch. */
+  /** The authenticated token's permission level on a repo — `push` is what
+   *  branch creation / commits require. Used to verify write access up front. */
+  async getRepoPermissions(owner: string, repo: string): Promise<{ push: boolean; admin: boolean }> {
+    const r = await this.gh<{ permissions?: { push?: boolean; admin?: boolean } }>(`/repos/${owner}/${repo}`);
+    return { push: Boolean(r.permissions?.push), admin: Boolean(r.permissions?.admin) };
+  }
+
   async getBranchSha(owner: string, repo: string, branch: string): Promise<string> {
     const r = await this.gh<{ object: { sha: string } }>(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
     return r.object.sha;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { GitConnectionStatus } from "@/lib/git/connection";
+import type { GitConnectionStatus, RepoWriteProbe } from "@/lib/git/connection";
 import { Badge } from "@/components/ui";
 
 /**
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui";
  * entered once, validated, stored server-side, never shown again. All git
  * operations for this customer (repo pickers, artifact pulls) use it.
  */
-export function GitHubConnection({ initialStatus, canManage }: { initialStatus: GitConnectionStatus; canManage: boolean }) {
+export function GitHubConnection({ initialStatus, writeProbe, canManage }: { initialStatus: GitConnectionStatus; writeProbe?: RepoWriteProbe | null; canManage: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [token, setToken] = useState("");
@@ -58,6 +58,22 @@ export function GitHubConnection({ initialStatus, canManage }: { initialStatus: 
 
       <div className="px-4 py-3 space-y-3">
         {error && <div className="text-[12px] text-danger">{error}</div>}
+
+        {writeProbe && (
+          writeProbe.canWrite === true ? (
+            <div className="rounded-lg border border-ok/30 bg-[color-mix(in_srgb,var(--ok)_6%,transparent)] px-3 py-2 text-[12px] text-ok">
+              ✓ This token can create branches in <span className="font-mono">{writeProbe.repo}</span> — builds will work.
+            </div>
+          ) : writeProbe.canWrite === false ? (
+            <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_7%,transparent)] px-3 py-2 text-[12px] text-danger leading-relaxed">
+              ✗ This token is <b>read-only</b> on <span className="font-mono">{writeProbe.repo}</span> — “Get init script” will 403 when it tries to create the branch. Reconnect a token with <b>Contents: Read &amp; write</b> below.
+            </div>
+          ) : (
+            <div className="rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3 py-2 text-[12px] text-warn leading-relaxed">
+              Couldn’t verify write access to <span className="font-mono">{writeProbe.repo}</span>{writeProbe.reason ? ` — ${writeProbe.reason}` : ""}.
+            </div>
+          )
+        )}
 
         {!status.connected || replacing ? (
           <div className="space-y-2">

@@ -5,8 +5,33 @@
  * GITHUB_TOKEN env var remains only as a default fallback.
  */
 import { getContentStore } from "../content/store";
-import { GitHubClient } from "./github";
+import { GitHubClient, friendlyGitError } from "./github";
 import { audit } from "../audit";
+
+export interface RepoWriteProbe {
+  repo: string;
+  canWrite: boolean | null; // true = push ok, false = read-only, null = couldn't check
+  reason?: string;
+}
+
+/**
+ * Can the customer's connected token actually WRITE to this repo? Branch
+ * creation and commits need `push`. A valid-but-read-only token (or the console
+ * env fallback) passes the /user validation yet 403s here — this surfaces that
+ * before the user hits it at "Get init script".
+ */
+export async function probeRepoWrite(orgId: string | null | undefined, fullName: string): Promise<RepoWriteProbe> {
+  const [owner, repo] = fullName.split("/");
+  if (!owner || !repo) return { repo: fullName, canWrite: null, reason: "invalid repo" };
+  const client = await getGitClientForOrg(orgId);
+  if (!client) return { repo: fullName, canWrite: null, reason: "GitHub not connected" };
+  try {
+    const perms = await client.getRepoPermissions(owner, repo);
+    return { repo: fullName, canWrite: perms.push, reason: perms.push ? undefined : "token is read-only on this repo" };
+  } catch (e) {
+    return { repo: fullName, canWrite: null, reason: friendlyGitError(e, { action: "read", repo: fullName }) };
+  }
+}
 
 export interface GitConnectionStatus {
   connected: boolean;      // a brand-specific connection exists
