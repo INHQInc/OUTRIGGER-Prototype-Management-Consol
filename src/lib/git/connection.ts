@@ -5,7 +5,7 @@
  * GITHUB_TOKEN env var remains only as a default fallback.
  */
 import { getContentStore } from "../content/store";
-import { GitHubClient, friendlyGitError } from "./github";
+import { GitHubClient, GitError, friendlyGitError } from "./github";
 import { audit } from "../audit";
 
 export interface RepoWriteProbe {
@@ -29,6 +29,11 @@ export async function probeRepoWrite(orgId: string | null | undefined, fullName:
     const canWrite = await client.canCreateBranch(owner, repo);
     return { repo: fullName, canWrite, reason: canWrite ? undefined : "token is read-only on this repo — needs Contents: Read and write, and repo access must not be 'Public repositories' (that tier is read-only)" };
   } catch (e) {
+    // 404 on a repo the customer owns = the token can't even SEE it — it's private
+    // and the token isn't scoped to include it. That's a hard no on write.
+    if (e instanceof GitError && e.status === 404) {
+      return { repo: fullName, canWrite: false, reason: "the connected token can't see this repo — it's private and isn't in the token's repository access. Reconnect a token scoped to this repo (Only select repositories → it, or All repositories) with Contents: Read and write" };
+    }
     return { repo: fullName, canWrite: null, reason: friendlyGitError(e, { action: "reach", repo: fullName }) };
   }
 }
