@@ -6,6 +6,7 @@ import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { listPromotions } from "@/lib/promotions";
 import { SourcePanel } from "@/components/SourcePanel";
 import { PromotePanel } from "@/components/PromotePanel";
+import { OptimizelyBundle } from "@/components/OptimizelyBundle";
 import { HandoffPanel } from "@/components/HandoffPanel";
 import { injectionPasses } from "@/lib/prototypes/types";
 
@@ -36,7 +37,13 @@ export default async function PrototypeShip({ params }: { params: Promise<{ key:
         </div>
       )}
       <SourcePanel prototypeKey={key} versions={versions} />
-      <PromotePanel prototypeKey={key} environments={environments} versions={versions} initialPromotions={promotions} canPromote injectionReady={injectionReady} unverifiedPages={unverifiedPages} />
+      <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
+      <details className="rounded-xl border border-border bg-surface overflow-hidden">
+        <summary className="px-4 py-2.5 text-[12px] text-muted-2 cursor-pointer hover:text-foreground">Or: send to Optimizely automatically via the API (advanced)</summary>
+        <div className="p-4 border-t border-border">
+          <PromotePanel prototypeKey={key} environments={environments} versions={versions} initialPromotions={promotions} canPromote injectionReady={injectionReady} unverifiedPages={unverifiedPages} />
+        </div>
+      </details>
       <HandoffPanel prototypeKey={key} repoFullName={p.repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
     </div>
   );
