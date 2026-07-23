@@ -21,9 +21,9 @@ export const BOARD_COLUMNS: { id: BoardColumn; label: string; hint: string }[] =
   { id: "brief", label: "Brief", hint: "what & why being written" },
   { id: "building", label: "Building", hint: "agent at work in the repo" },
   { id: "review", label: "Review", hint: "verifying on the real site" },
-  { id: "ship", label: "Ship", hint: "cut · certify · push" },
+  { id: "ship", label: "Launch", hint: "cut · certify · push · start" },
   { id: "testing", label: "Testing", hint: "experiment LIVE — locked" },
-  { id: "shipped", label: "Shipped", hint: "winner in production" },
+  { id: "shipped", label: "Shipped", hint: "winner in production code" },
 ];
 
 export interface BoardCard {
@@ -36,6 +36,7 @@ export interface BoardCard {
   metric?: string;
   hypothesis?: string;
   owner?: string;
+  priority?: number;
 }
 
 export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; archivedCount: number }> {
@@ -75,11 +76,14 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       metric: p.metrics.primary || undefined,
       hypothesis: p.hypothesis.change || undefined,
       owner: p.owner,
+      priority: p.priority,
     };
   }));
 
+  const clean = cards.filter((c): c is BoardCard => c !== null)
+    .sort((a, b) => (a.priority ?? 1e9) - (b.priority ?? 1e9) || a.name.localeCompare(b.name));
   return {
-    cards: cards.filter((c): c is BoardCard => c !== null),
+    cards: clean,
     archivedCount: protos.filter((p) => normalizeStage(p.status) === "archived").length,
   };
 }

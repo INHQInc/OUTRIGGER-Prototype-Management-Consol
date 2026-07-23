@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { NewPrototype } from "./NewPrototype";
 import { EmptyState } from "@/components/ui";
-import { BOARD_COLUMNS, type BoardCard } from "@/lib/prototypes/board";
+import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board";
 import type { PipelineStep } from "@/lib/prototypes/pipeline";
 
 const DOT: Record<PipelineStep["state"], string> = {
@@ -9,6 +13,16 @@ const DOT: Record<PipelineStep["state"], string> = {
   current: "bg-accent",
   todo: "bg-border-strong",
   blocked: "bg-danger",
+};
+
+/** Why a cross-column drag bounces: the column is a fact, not an opinion. */
+const BOUNCE: Record<BoardColumn, string> = {
+  brief: "Brief is where cards start — they move on when a build begins, not when they're dragged.",
+  building: "Building means a real build exists on the branch. It moves when Claude pushes one.",
+  review: "Review means the pages verify on the real site. Verify them and the card moves itself.",
+  ship: "Launch means cut + certified + pushed. Do those and the card arrives on its own.",
+  testing: "Only a RUNNING experiment puts a card in Testing — start it in Optimizely.",
+  shipped: "Shipped is a decision — but only from Launch: finish the pipeline first.",
 };
 
 function MiniPipeline({ steps }: { steps: PipelineStep[] }) {
@@ -20,16 +34,73 @@ function MiniPipeline({ steps }: { steps: PipelineStep[] }) {
 }
 
 /**
- * The Program Board — kanban over ground truth. Columns are DERIVED from the
- * pipeline and the experiment's live status; nobody drags a card. Testing is
- * locked by the platform: the experiment is running, so the prototype is
- * immutable until it isn't.
+ * The Program Board — kanban over ground truth, with drag exactly where human
+ * judgment lives and nowhere else:
+ *   · reorder INSIDE a column = priority (yours to decide)
+ *   · Launch → Shipped = "we're calling it" (yours to decide)
+ *   · everything else is derived state — a wrong drag bounces with the reason.
  */
-export function ProgramBoard({ cards, archivedCount }: { cards: BoardCard[]; archivedCount: number }) {
+export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCard[]; archivedCount: number }) {
+  const router = useRouter();
+  const [cards, setCards] = useState(initial);
+  const [toast, setToast] = useState<string | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<BoardColumn | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function say(text: string) {
+    setToast(text);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 4000);
+  }
+
+  const dragging = cards.find((c) => c.key === dragKey) ?? null;
+  const dropAllowed = (col: BoardColumn) =>
+    dragging !== null && !dragging.locked && (col === dragging.column || (col === "shipped" && dragging.column === "ship"));
+
+  async function persistPriorities(colCards: BoardCard[]) {
+    await Promise.all(colCards.map((c, i) =>
+      fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: c.key, priority: (i + 1) * 10 }) }).catch(() => null)
+    ));
+  }
+
+  async function markShipped(card: BoardCard) {
+    setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: "shipped" as BoardColumn } : c)));
+    const res = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, status: "shipped" }) });
+    if (!res.ok) {
+      setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: card.column } : c)));
+      say("Couldn't mark it shipped — try again.");
+      return;
+    }
+    say(`${card.name} marked shipped.`);
+    router.refresh();
+  }
+
+  function onDrop(col: BoardColumn, beforeKey?: string) {
+    setOverCol(null);
+    const card = dragging;
+    setDragKey(null);
+    if (!card) return;
+    if (card.locked) { say("The experiment is running — this card is locked until it isn't."); return; }
+
+    if (col === card.column) {
+      // Reorder within the column — priority is human judgment.
+      const colCards = cards.filter((c) => c.column === col && c.key !== card.key);
+      const idx = beforeKey ? colCards.findIndex((c) => c.key === beforeKey) : colCards.length;
+      const at = idx < 0 ? colCards.length : idx;
+      const next = [...colCards.slice(0, at), card, ...colCards.slice(at)];
+      setCards((cs) => [...cs.filter((c) => c.column !== col), ...next]);
+      void persistPriorities(next);
+      return;
+    }
+    if (col === "shipped" && card.column === "ship") { void markShipped(card); return; }
+    say(BOUNCE[col]);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] text-muted-2">Columns are derived from real state — build, verification, certification, the experiment&apos;s live status. Nothing here is dragged.</p>
+        <p className="text-[11px] text-muted-2">Columns are ground truth — cards move when the work moves. Drag to reorder priority, or Launch → Shipped when you call it.</p>
         <NewPrototype />
       </div>
 
@@ -40,8 +111,20 @@ export function ProgramBoard({ cards, archivedCount }: { cards: BoardCard[]; arc
           {BOARD_COLUMNS.map((col) => {
             const items = cards.filter((c) => c.column === col.id);
             const testing = col.id === "testing";
+            const highlight = overCol === col.id && dropAllowed(col.id);
+            const rejecting = overCol === col.id && dragging !== null && !dropAllowed(col.id);
             return (
-              <div key={col.id} className={`rounded-xl border p-2 min-h-[9rem] ${testing ? "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_3%,transparent)]" : "border-border bg-surface/40"}`}>
+              <div
+                key={col.id}
+                onDragOver={(e) => { e.preventDefault(); setOverCol(col.id); e.dataTransfer.dropEffect = dropAllowed(col.id) ? "move" : "none"; }}
+                onDragLeave={() => setOverCol((o) => (o === col.id ? null : o))}
+                onDrop={(e) => { e.preventDefault(); onDrop(col.id); }}
+                className={`rounded-xl border p-2 min-h-[9rem] transition-colors ${
+                  highlight ? "border-accent bg-[color-mix(in_srgb,var(--accent)_6%,transparent)]"
+                  : rejecting ? "border-danger/40"
+                  : testing ? "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_3%,transparent)]"
+                  : "border-border bg-surface/40"}`}
+              >
                 <div className="px-1.5 pb-2 pt-0.5">
                   <div className="flex items-center gap-1.5">
                     <span className={`text-[11px] font-semibold ${testing ? "text-warn" : col.id === "shipped" ? "text-ok" : ""}`}>{col.label}</span>
@@ -52,16 +135,25 @@ export function ProgramBoard({ cards, archivedCount }: { cards: BoardCard[]; arc
                 </div>
                 <div className="space-y-1.5">
                   {items.map((c) => (
-                    <Link key={c.key} href={`/prototypes/${c.key}`} className={`block rounded-lg border px-2.5 py-2 bg-surface hover:border-border-strong transition-colors ${c.locked ? "border-warn/50" : "border-border"}`}>
-                      <div className="text-[11.5px] font-semibold leading-snug">{c.name}</div>
-                      <div className={`text-[10px] mt-0.5 leading-tight ${c.locked ? "text-warn" : "text-muted-2"}`}>
-                        {c.locked ? "experiment LIVE — locked" : c.pipeline.steps.find((s) => s.state === "current" || s.state === "blocked")?.status ?? c.pipeline.primaryAction.label}
-                      </div>
-                      <div className="flex items-center justify-between mt-1.5">
-                        <MiniPipeline steps={c.pipeline.steps} />
-                        {c.metric && <span className="text-[9px] text-muted-2 truncate max-w-[55%]" title={`Primary metric: ${c.metric}`}>{c.metric}</span>}
-                      </div>
-                    </Link>
+                    <div
+                      key={c.key}
+                      draggable={!c.locked}
+                      onDragStart={(e) => { setDragKey(c.key); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", c.key); }}
+                      onDragEnd={() => { setDragKey(null); setOverCol(null); }}
+                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(col.id, c.key); }}
+                      className={dragKey === c.key ? "opacity-40" : ""}
+                    >
+                      <Link href={`/prototypes/${c.key}`} draggable={false} className={`block rounded-lg border px-2.5 py-2 bg-surface hover:border-border-strong transition-colors ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"}`}>
+                        <div className="text-[11.5px] font-semibold leading-snug">{c.name}</div>
+                        <div className={`text-[10px] mt-0.5 leading-tight ${c.locked ? "text-warn" : "text-muted-2"}`}>
+                          {c.locked ? "experiment LIVE — locked" : c.pipeline.steps.find((s) => s.state === "current" || s.state === "blocked")?.status ?? c.pipeline.primaryAction.label}
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <MiniPipeline steps={c.pipeline.steps} />
+                          {c.metric && <span className="text-[9px] text-muted-2 truncate max-w-[55%]" title={`Primary metric: ${c.metric}`}>{c.metric}</span>}
+                        </div>
+                      </Link>
+                    </div>
                   ))}
                   {items.length === 0 && <div className="px-1.5 py-3 text-[10px] text-muted-2/60">—</div>}
                 </div>
@@ -72,6 +164,12 @@ export function ProgramBoard({ cards, archivedCount }: { cards: BoardCard[]; arc
       )}
 
       {archivedCount > 0 && <p className="text-[10px] text-muted-2">{archivedCount} archived prototype{archivedCount === 1 ? "" : "s"} hidden.</p>}
+
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-border-strong bg-surface px-4 py-2.5 text-[12px] text-foreground shadow-lg max-w-md">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

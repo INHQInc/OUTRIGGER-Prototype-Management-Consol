@@ -177,6 +177,7 @@ export async function PATCH(req: NextRequest) {
     changes.push("metrics");
   }
   if (body.owner !== undefined) { updated.owner = body.owner?.trim() || undefined; changes.push("owner"); }
+  if (body.priority !== undefined) { updated.priority = typeof body.priority === "number" && isFinite(body.priority) ? body.priority : undefined; changes.push("priority"); }
   if (body.ticketUrl !== undefined) { updated.ticketUrl = body.ticketUrl?.trim() || undefined; changes.push("ticket"); }
   await store.putPrototype(updated);
   const user = await currentUser();

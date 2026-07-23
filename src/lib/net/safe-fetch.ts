@@ -58,6 +58,8 @@ export interface SafeFetchResult {
   status: number;
   /** page HTML if 2xx (capped); undefined otherwise. */
   body?: string;
+  /** security-relevant response headers (lowercased), when a response arrived. */
+  headers?: Record<string, string>;
   /** why we didn't/couldn't fetch, for the caller's status reporting. */
   reason?: "blocked" | "unresolved" | "redirected" | "unreachable" | "bad-url";
 }
@@ -102,10 +104,13 @@ export async function safeFetchPage(rawUrl: string, timeoutMs = 8000): Promise<S
       dispatcher: agent,
       headers: { "User-Agent": "Mozilla/5.0 (OPMC injection check)", Accept: "text/html" },
     });
-    if (res.status === 0 || (res.status >= 300 && res.status < 400)) return { ok: false, status: res.status, reason: "redirected" };
-    if (!res.ok) return { ok: false, status: res.status, reason: "unreachable" };
+    const keep = ["content-security-policy", "content-security-policy-report-only", "server", "cf-mitigated", "x-frame-options"];
+    const headers: Record<string, string> = {};
+    for (const h of keep) { const v = res.headers.get(h); if (v) headers[h] = v; }
+    if (res.status === 0 || (res.status >= 300 && res.status < 400)) return { ok: false, status: res.status, reason: "redirected", headers };
+    if (!res.ok) return { ok: false, status: res.status, reason: "unreachable", headers };
     const body = (await res.text()).slice(0, MAX_BODY);
-    return { ok: true, status: res.status, body };
+    return { ok: true, status: res.status, body, headers };
   } catch {
     return { ok: false, status: 0, reason: "unreachable" };
   } finally {
