@@ -108,7 +108,7 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 - **Brand-level config, not env vars** for new integrations (Optimizely token/project live on the org).
 - **Schema changes go through `ddl()`** (race-safe).
 - **Vercel deploys of cloned pages are protected** (password + noindex + robots deny) — brand clones must never be publicly crawlable.
-- **Serverless constraints:** no writable FS (use the store), no `curl` (best-effort asset mirror; WAF TLS-blocks Node fetch for outrigger.com), 300s max on capture.
+- **Serverless constraints:** no writable FS (use the store), no `curl` binary, 300s max on capture. NOTE: plain Node `fetch` with a browser UA DOES reach prep.outrigger.com from Vercel (verified in prod — derive.ts fetches its CSS + SSR HTML this way). Firecrawl is still needed for a RENDERED snapshot (JS executed); raw `fetch` gets the SSR HTML, which is where embedded data islands live.
 
 ## Build order — current state (2026-07)
 

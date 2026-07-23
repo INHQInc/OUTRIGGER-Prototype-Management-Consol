@@ -15,7 +15,7 @@ import { resolvePrototypeRepo } from "./repo";
 import { listOrgEnvironments } from "../environments";
 import { captureRawHtml, slugForUrl } from "../capture/capture";
 import { audit } from "../audit";
-import { deriveDataGlobals, deriveDesignTokens, type FontRef } from "./derive";
+import { deriveDataGlobals, deriveDesignTokens, fetchPageHtml, type FontRef } from "./derive";
 import { listReferenceRepos } from "../git/reference-repos";
 import { enabledSkillsForPrototype } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
@@ -216,7 +216,11 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
       files.push({ path: `${dir}/selectors.md`, content: Buffer.from(deriveSelectors(html, t.url), "utf8") });
       // The two files that otherwise cost a fresh instance hours of spelunking:
       // what data the page already embeds, and the brand system to defer to.
-      files.push({ path: `${dir}/data.md`, content: Buffer.from(deriveDataGlobals(html, t.url), "utf8") });
+      // Data globals live in the SSR HTML (consumed on hydration, so absent from
+      // the Firecrawl-rendered snapshot); the data-* attrs that join to them
+      // live in the rendered DOM. Extract from SSR, join against the snapshot.
+      const ssr = await fetchPageHtml(t.url).catch(() => null);
+      files.push({ path: `${dir}/data.md`, content: Buffer.from(deriveDataGlobals(ssr ?? html, t.url, html), "utf8") });
       const tokens = await deriveDesignTokens(html, t.url).catch(() => null);
       if (tokens) {
         files.push({ path: `${dir}/design-tokens.md`, content: Buffer.from(tokens.md, "utf8") });
