@@ -146,8 +146,11 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                       <Link href={`/prototypes/${c.key}`} draggable={false} className={`block rounded-lg border px-2.5 py-2 bg-surface hover:border-border-strong transition-colors ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"}`}>
                         <div className="text-[11.5px] font-semibold leading-snug">{c.name}</div>
                         <div className={`text-[10px] mt-0.5 leading-tight ${c.locked ? "text-warn" : "text-muted-2"}`}>
-                          {c.locked ? "experiment LIVE — locked" : c.pipeline.steps.find((s) => s.state === "current" || s.state === "blocked")?.status ?? c.pipeline.primaryAction.label}
+                          {c.locked ? "experiment LIVE — locked" : c.pipeline.steps.find((s) => s.state === "current")?.status ?? c.pipeline.primaryAction.label}
                         </div>
+                        {!c.locked && c.pipeline.steps.some((s) => s.state === "blocked") && (
+                          <div className="text-[9.5px] mt-0.5 text-warn leading-tight">⚠ {c.pipeline.steps.filter((s) => s.state === "blocked").map((s) => `${s.title.toLowerCase()}: ${s.status}`).join(" · ")}</div>
+                        )}
                         <div className="flex items-center justify-between mt-1.5">
                           <MiniPipeline steps={c.pipeline.steps} />
                           {c.metric && <span className="text-[9px] text-muted-2 truncate max-w-[55%]" title={`Primary metric: ${c.metric}`}>{c.metric}</span>}

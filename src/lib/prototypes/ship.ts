@@ -49,6 +49,9 @@ export async function pushToOptimizely(prototypeKey: string, opts: { override?: 
   if (!proto.experiment?.experimentId || !proto.experiment?.variationId) {
     throw new Error("No experiment bound — pick the Optimizely experiment and variation in the Ship panel first.");
   }
+  if (!proto.brief.change?.trim()) {
+    throw new Error("No brief on record — write one sentence describing the change before launching. It gates the push and becomes the experiment's description.");
+  }
   const client = await getOptimizelyClientForOrg(orgId);
   if (!client) throw new Error("Optimizely isn't connected for this customer (Settings → Experimentation).");
 

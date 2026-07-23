@@ -106,15 +106,19 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // ── steps ─────────────────────────────────────────────────────
   const steps: PipelineStep[] = [];
 
-  // 1 · Brief
+  // 1 · Brief — a REQUIREMENT, not a position. Work that has started never
+  // teleports back to column one because a field is empty; instead the gap
+  // blocks the launch gate and shows as an alert.
   const briefDone = Boolean(proto.brief.change?.trim());
+  const workStarted = provisioned || built;
   steps.push({
     id: "brief", title: "Brief", anchor: "step-brief",
-    state: briefDone ? "done" : "todo",
+    state: briefDone ? "done" : workStarted ? "blocked" : "todo",
     status: briefDone
       ? proto.metrics.primary ? "described · metric set" : "described · no metric yet"
-      : "what are we building?",
+      : workStarted ? "missing — required before launch" : "what are we building?",
   });
+  if (!briefDone && workStarted) alerts.push({ level: "warn", text: "No brief on record — one sentence unblocks the launch gate (and gives the experiment its description).", anchor: "step-brief" });
 
   // 2 · Build
   const buildDone = provisioned && built && !problem;
@@ -145,7 +149,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     status: !latest ? "no version cut"
       : !cutFresh ? `v${latest.version} · HEAD has moved — cut a new version`
       : cert ? (cert.passed ? `v${latest.version} · certified ✓` : `v${latest.version} · certification FAILED`)
-      : `v${latest.version} · pre-certification — re-cut to run the gate`,
+      : `v${latest.version} · cut before the gate existed — next cut certifies`,
   });
 
   // 5 · Ship
@@ -167,18 +171,20 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     status: liveDone ? (proto.status === "shipped" ? "shipped" : "experiment running") : shipDone ? "start it in Optimizely" : "—",
   });
 
-  // current = first not-done (blocked counts as current so the CTA points at the fix)
-  const firstOpen = steps.find((s) => s.state !== "done");
+  // current = first incomplete step on the WORK axis (build → … → live);
+  // a blocked Brief flags and gates but does not reset position.
+  const firstOpen = steps.find((s) => s.id !== "brief" && s.state !== "done") ?? steps.find((s) => s.state !== "done");
   if (firstOpen && firstOpen.state !== "blocked") firstOpen.state = "current";
 
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
-  if (!briefDone) primaryAction = { label: "Write the brief", anchor: "step-brief" };
+  if (!briefDone && !workStarted) primaryAction = { label: "Write the brief", anchor: "step-brief" };
   else if (!provisioned) primaryAction = { label: "Get the init script", anchor: "step-build" };
   else if (!built || problem) primaryAction = { label: "Build with Claude", anchor: "step-build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "step-review" };
   else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "step-cut" };
   else if (cert && !cert.passed) primaryAction = { label: "Fix certification & re-cut", anchor: "step-cut" };
+  else if (!briefDone) primaryAction = { label: "Write the brief — required before launch", anchor: "step-brief" };
   else if (!bound) primaryAction = { label: "Bind the experiment", anchor: "step-ship" };
   else if (!pushCurrent) primaryAction = { label: `Push v${latest!.version} to Optimizely`, anchor: "step-ship" };
   else if (!liveDone) primaryAction = { label: "Open in Optimizely & start", anchor: "step-ship" };
