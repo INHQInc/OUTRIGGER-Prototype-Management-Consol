@@ -36,6 +36,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [synced, setSynced] = useState<string | null>(null);
 
   // draft (what's in the inputs) vs saved (what's persisted + drives the command)
   const [draftPath, setDraftPath] = useState("");
@@ -79,6 +80,24 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
     } catch {
       setSaveMsg({ ok: false, text: "Couldn't save — this browser blocked local storage (private window?). Paths won't persist." });
     }
+  }
+
+  /** Re-provision an existing branch: rewrite .opmc/** + .claude/skills/**. */
+  async function resync() {
+    if (busy) return;
+    setBusy(true); setErr(null); setSynced(null);
+    try {
+      const res = await fetch("/api/prototypes/provision", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: prototypeKey }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(data.error ?? "Re-sync failed"); return; }
+      const r = data.result ?? data;
+      setSynced(r?.noChange
+        ? "Already up to date — nothing changed."
+        : `Synced${r?.commitSha ? ` · ${String(r.commitSha).slice(0, 7)}` : ""}. Run git pull, then restart Claude to load new skills.`);
+      router.refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Re-sync failed");
+    } finally { setBusy(false); }
   }
 
   async function prepare() {
@@ -171,6 +190,26 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-border bg-surface p-4">{pathFields}</div>
+
+      {/* Re-sync — the console rewrites .opmc/** and .claude/skills/** on the
+          branch. Without this there is no way to push an edited brief, fresh
+          page snapshots, or a changed skill set to an already-provisioned
+          prototype. Safe on a live branch: compare-and-swap, and it never
+          touches src/ or dist/. */}
+      <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[12px] font-semibold">Branch content</div>
+          <div className="text-[11px] text-muted-2 mt-0.5 leading-relaxed">
+            Re-sync writes the current brief, page snapshots (<span className="font-mono">data.md</span>, <span className="font-mono">design-tokens.md</span>) and the selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart Claude so it picks up new skills.
+          </div>
+          {err && <div className="text-[11px] text-danger mt-1">{err}</div>}
+          {synced && <div className="text-[11px] text-ok mt-1">{synced}</div>}
+        </div>
+        <button onClick={resync} disabled={busy} className="h-8 px-3 rounded-lg border border-border text-[12px] font-semibold text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
+          {busy ? "Re-syncing…" : "Re-sync"}
+        </button>
+      </div>
+
       {pathOk ? (
         <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-accent/30">
