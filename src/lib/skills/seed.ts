@@ -6,13 +6,13 @@
  * only POSTs) the library rendered empty forever.
  */
 import { listGlobalSkills, upsertSkill, parseFrontmatter, slugify } from "./skills";
-import { SYSTEM_SKILL, IDEAS_SKILL } from "./builtins";
+import { SYSTEM_SKILL, IDEAS_SKILL, PROTOTYPE_SKILL } from "./builtins";
 import { getGitClientForOrg } from "../git/connection";
 import { defaultOrgRepo } from "../git/org-repos";
 
 async function seedBuiltins(): Promise<void> {
   const have = new Set((await listGlobalSkills()).map((s) => s.id));
-  for (const md of [SYSTEM_SKILL, IDEAS_SKILL]) {
+  for (const md of [PROTOTYPE_SKILL, SYSTEM_SKILL, IDEAS_SKILL]) {
     const fm = parseFrontmatter(md);
     const id = slugify(fm.name ?? "");
     if (!id || have.has(id)) continue;
@@ -20,7 +20,10 @@ async function seedBuiltins(): Promise<void> {
   }
 }
 
-/** Import the canonical build-loop skill from the prototypes repo's starter branch. */
+/**
+ * Legacy fallback: if a customer's starter branch still carries a bundled
+ * skill, adopt it. Outrigger's no longer does — opmc-prototype is a built-in.
+ */
 async function seedFromStarter(orgId: string): Promise<void> {
   if ((await listGlobalSkills()).some((s) => s.id === "opmc-prototype")) return;
   const repo = await defaultOrgRepo(orgId, "prototypes");
