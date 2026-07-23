@@ -31,6 +31,10 @@ export interface Skill {
   body: string;            // the SKILL.md content (frontmatter included)
   updatedAt: string;
   builtIn?: boolean;       // seeded from the starter branch
+  /** Where this skill initializes Claude: "branch" = materialized into the
+   *  prototype repo for Claude Code (default); "console" = system prompt for
+   *  the console's own API-side Claude — never delivered to branches. */
+  delivery?: "branch" | "console";
 }
 
 const GLOBAL_KEY = "skills:global";
@@ -114,7 +118,7 @@ export async function deleteSkill(orgId: string | null | undefined, id: string):
  */
 export async function resolveSkillsForPrototype(orgId: string | null | undefined, prototypeKey: string): Promise<{ skill: Skill; enabled: boolean }[]> {
   const all = await listAllSkills(orgId);
-  const applicable = all.filter((s) => s.scope !== "prototype" || s.prototypeKey === prototypeKey);
+  const applicable = all.filter((s) => (s.delivery ?? "branch") === "branch" && (s.scope !== "prototype" || s.prototypeKey === prototypeKey));
   const raw = await (await getContentStore()).getFlag(selectionKey(prototypeKey));
   let enabledIds: string[] | null = null;
   if (raw) {

@@ -12,7 +12,7 @@ import { lastPush } from "@/lib/prototypes/ship";
 import { getExperimentationConfig, getOptimizelyClientForOrg } from "@/lib/experimentation";
 import { derivePipeline, type PipelineStep } from "@/lib/prototypes/pipeline";
 import { PipelineHeader } from "@/components/PipelineHeader";
-import { DescriptionEditor } from "@/components/DescriptionEditor";
+import { BriefComposer } from "@/components/BriefComposer";
 import { TargetPages } from "@/components/TargetPages";
 import { RepoBranchSettings } from "@/components/RepoBranchSettings";
 import { InitScript } from "@/components/InitScript";
@@ -126,8 +126,8 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
         <div className="px-4 pb-4"><RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} /></div>
       </details>
 
-      <StepCard step={step("brief")} hint="What are we building, and how do we know it worked? A sentence starts it — the agent interviews if it's thin.">
-        <DescriptionEditor prototypeKey={key} brief={p.brief} />
+      <StepCard step={step("brief")} hint="What are we building, and how do we know it worked? Explain it in your own words — Claude drafts the structured brief; you stay the editor.">
+        <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} />
       </StepCard>
 
       <StepCard step={step("build")} hint="Pick what Claude wakes up knowing, then run the init script. Claude builds in the repo; the console pulls the result.">

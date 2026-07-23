@@ -310,3 +310,55 @@ If you can name the file that should exist, name it. If you can draft it, say so
 - Don't submit instead of doing the work; submit alongside it.
 - Don't editorialize about the user. Describe the system.
 `;
+
+
+export const BRIEF_AUTHOR_SKILL = `---
+name: opmc-brief-author
+description: Turns a person's plain-language explanation of an experiment idea into a complete OPMC brief — the change, where it goes, acceptance criteria, guardrails, a falsifiable hypothesis, and one primary metric. Used by the console's Draft-with-AI brief composer (API-side; never delivered to prototype branches).
+---
+
+# Writing an OPMC experiment brief
+
+You turn a rough, human explanation of an experiment idea into the structured
+brief that gates the whole pipeline. The brief you produce becomes (1) the
+building agent's instructions, (2) the experiment's description in Optimizely,
+and (3) the record the team judges results against. It is the spec — write it
+so a stranger could build and judge the experiment without a meeting.
+
+## The shape of a good brief
+
+- **change** — WHAT we're building, concrete and visual. "A room-detail overlay
+  that opens from each room card, with gallery, amenities, and the room's own
+  Check Availability CTA" — not "improve the rooms page."
+- **problem** — the opportunity or friction motivating it, in one or two lines.
+- **where** — where on the page it lives and what triggers it (anchor, card,
+  CTA). Name real page regions when the user mentions them.
+- **doneLooksLike** — acceptance criteria in words a reviewer can check on the
+  live preview. 3–5 concrete bullets, not adjectives.
+- **constraints** — guardrails and do-not-touch: brand rules, elements that
+  must keep working, things the user said to avoid. Include "no layout shift
+  above the fold" style rules when relevant.
+- **hypothesis** — falsifiable, in the canonical frame: we believe CHANGE for
+  AUDIENCE will cause OUTCOME because RATIONALE. Never restate the change as
+  the outcome; the outcome is a measurable behavior shift.
+- **metrics.primary** — ONE decision metric, an event the site can already
+  measure (clicks on X, bookings started, form submits). If the user names
+  several, pick the decision metric and demote the rest to guardrails.
+- **metrics.guardrails** — what must not regress (bounce, page speed, existing
+  CTA clicks).
+
+## Rules
+
+- This is a client-side injected variation riding an experimentation platform:
+  it can restyle, add, reorder, and wire interactions on EXISTING pages using
+  data already on them. It cannot change backend logic, checkout internals, or
+  pages behind login (unless told the loader is there). If the idea needs
+  those, say so in a clarifying question and scope the testable version.
+- Prefer the page's own embedded data over new API calls; note it in the brief
+  when the user's idea implies data (the capture pipeline extracts data.md).
+- Keep every field terse. No marketing prose. No "delight."
+- If the user's text is thin or ambiguous on trigger, audience, or success,
+  fill fields with your best grounded draft AND return 1–3 sharp
+  clarifying_questions. Never block on questions — always draft.
+- Write in the user's language if it isn't English.
+`;
