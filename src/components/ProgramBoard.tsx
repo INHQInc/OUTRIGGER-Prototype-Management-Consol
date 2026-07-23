@@ -143,17 +143,35 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(col.id, c.key); }}
                       className={dragKey === c.key ? "opacity-40" : ""}
                     >
-                      <Link href={`/prototypes/${c.key}`} draggable={false} className={`block rounded-lg border px-2.5 py-2 bg-surface hover:border-border-strong transition-colors ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"}`}>
-                        <div className="text-[11.5px] font-semibold leading-snug">{c.name}</div>
-                        <div className={`text-[10px] mt-0.5 leading-tight ${c.locked ? "text-warn" : "text-muted-2"}`}>
-                          {c.locked ? "experiment LIVE — locked" : c.pipeline.steps.find((s) => s.state === "current")?.status ?? c.pipeline.primaryAction.label}
+                      <Link href={`/prototypes/${c.key}`} draggable={false} className={`block rounded-lg border px-3 py-2.5 bg-surface hover:border-border-strong transition-colors space-y-1.5 ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"}`}>
+                        <div className="text-[12.5px] font-semibold leading-snug">{c.name}</div>
+                        {c.hypothesis && <div className="text-[10.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
+
+                        <MiniPipeline steps={c.pipeline.steps} />
+                        <div className={`text-[10.5px] leading-tight ${c.locked ? "text-warn font-semibold" : "text-foreground"}`}>
+                          {c.locked ? "🔒 experiment LIVE — locked" : <>
+                            <span className="text-muted-2">Next: </span>{c.pipeline.primaryAction.label}
+                          </>}
                         </div>
                         {!c.locked && c.pipeline.steps.some((s) => s.state === "blocked") && (
-                          <div className="text-[9.5px] mt-0.5 text-warn leading-tight">⚠ {c.pipeline.steps.filter((s) => s.state === "blocked").map((s) => `${s.title.toLowerCase()}: ${s.status}`).join(" · ")}</div>
+                          <div className="text-[10px] text-danger leading-tight">⚠ {c.pipeline.steps.filter((s) => s.state === "blocked").map((s) => `${s.title}: ${s.status}`).join(" · ")}</div>
                         )}
-                        <div className="flex items-center justify-between mt-1.5">
-                          <MiniPipeline steps={c.pipeline.steps} />
-                          {c.metric && <span className="text-[9px] text-muted-2 truncate max-w-[55%]" title={`Primary metric: ${c.metric}`}>{c.metric}</span>}
+                        {c.pipeline.alerts.filter((a) => a.level === "warn").slice(0, 1).map((a, i) => (
+                          <div key={i} className="text-[9.5px] text-warn leading-tight line-clamp-2">{a.text}</div>
+                        ))}
+
+                        <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-border/50">
+                          {c.pipeline.truth.latestVersion != null && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-2 text-muted font-mono">v{c.pipeline.truth.latestVersion}{c.pipeline.truth.certified === true ? " ✓" : c.pipeline.truth.certified === false ? " ✗" : ""}</span>
+                          )}
+                          {c.pipeline.truth.pushedVersion != null && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-2 text-muted font-mono">pushed v{c.pipeline.truth.pushedVersion}</span>
+                          )}
+                          {c.experimentStatus && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${c.experimentStatus === "running" ? "bg-[color-mix(in_srgb,var(--warn)_15%,transparent)] text-warn" : "bg-surface-2 text-muted-2"}`}>{c.experimentStatus.replace("_", " ")}</span>
+                          )}
+                          {c.metric && <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 truncate max-w-[9rem]" title={`Primary metric: ${c.metric}`}>📊 {c.metric}</span>}
+                          {c.owner && <span className="text-[9px] text-muted-2 ml-auto">{c.owner}</span>}
                         </div>
                       </Link>
                     </div>
