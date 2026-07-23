@@ -139,7 +139,7 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
   ].filter(Boolean).join("\n");
 }
 
-function contentHashOf(proto: PrototypeRecord): string {
+export function contentHashOf(proto: PrototypeRecord): string {
   const canonical = JSON.stringify({
     name: proto.name,
     brief: proto.brief,

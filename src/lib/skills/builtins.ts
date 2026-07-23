@@ -21,6 +21,37 @@ description: Build an OPMC web-experiment prototype in this repo. Load whenever 
 
 You are building a **live-injection web experiment prototype** managed by the OPMC console. The console owns the lifecycle (brief → versions → review → Optimizely experiment); **this repo owns the code**. The contract between them is one file: \`dist/variation.js\` on this branch.
 
+## 0. Am I up to date? (run this FIRST, every session — no token)
+
+The console is canonical. Everything in \`.opmc/\` and \`.claude/skills/\` is a
+**materialised copy** that goes stale the moment someone edits the brief, changes
+the target pages, or changes which skills this prototype gets — silently, because
+nothing pushes to you. **So ask, before you read anything else:**
+
+\`\`\`bash
+curl -s "<consoleUrl>/api/prototypes/sync-status?key=<key>"
+\`\`\`
+
+Take \`consoleUrl\` + \`key\` from \`.opmc/context.json\`. Then compare:
+
+| Response field | Compare against | If different |
+|---|---|---|
+| \`contentHash\` | \`.opmc/context.json\` → \`contentHash\` | the brief/targets changed |
+| \`skills\` | \`.opmc/skills.json\` → \`managed\` | your skill set changed |
+
+**If either differs, say so before doing anything else:**
+
+> "This branch is out of date — the console has a newer brief and/or a different
+> skill set. Re-sync the prototype in the console, then \`git pull\`, and restart
+> me so I pick up the new skills. Want me to continue with what's here meanwhile?"
+
+Then let the user decide. Do **not** silently build against a stale brief — the
+whole point of the console being canonical is that it wins.
+
+**Note on skills specifically:** new skill files appearing in \`.claude/skills/\`
+do **not** load into a running session. After a re-sync + pull, the user must
+restart you. Say that explicitly; it's easy to miss.
+
 ## 1. Orient yourself (do this first, unprompted — no token needed)
 
 The console has provisioned everything you need into **\`.opmc/\`** on this branch. Read it from the working tree — in order:
