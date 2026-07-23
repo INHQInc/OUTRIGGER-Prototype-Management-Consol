@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     prototypeKey: scope === "prototype" ? body.prototypeKey : undefined,
     description,
     body: md,
-    builtIn: body.builtIn,
+    builtIn: false, // a user-saved skill is user-owned — this "forks" a built-in
   });
   return NextResponse.json({ skill, skills: await listAllSkills(orgId) });
 }

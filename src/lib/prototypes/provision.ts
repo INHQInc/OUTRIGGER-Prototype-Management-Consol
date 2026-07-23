@@ -18,6 +18,7 @@ import { audit } from "../audit";
 import { deriveDataGlobals, deriveDesignTokens, type FontRef } from "./derive";
 import { listReferenceRepos } from "../git/reference-repos";
 import { enabledSkillsForPrototype } from "../skills/skills";
+import { ensureSkillsSeeded } from "../skills/seed";
 import type { PrototypeRecord } from "./types";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
@@ -275,6 +276,7 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   // lingering; anything the console didn't write is left strictly alone.
   const deletions: string[] = [];
   try {
+    await ensureSkillsSeeded(orgId); // re-assert built-ins before delivering
     const skills = await enabledSkillsForPrototype(orgId, proto.key);
     const managed = skills.map((sk) => sk.id).sort();
     for (const sk of skills) {
