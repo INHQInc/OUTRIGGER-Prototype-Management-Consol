@@ -1,8 +1,7 @@
 import { getActiveOrgId } from "@/lib/active-org";
-import { getContentStore } from "@/lib/content/store";
-import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { PageHeader, EmptyState } from "@/components/ui";
-import { PrototypeBoard } from "@/components/PrototypeBoard";
+import { ProgramBoard } from "@/components/ProgramBoard";
+import { buildBoard } from "@/lib/prototypes/board";
 
 export const dynamic = "force-dynamic";
 
@@ -20,16 +19,13 @@ export default async function PrototypesBoard() {
     );
   }
 
-  const store = await getContentStore();
-  const all = await store.listPrototypes();
-  const orgs = await Promise.all(all.map((p) => resolvePrototypeOrg(p)));
-  const prototypes = all.filter((_, i) => orgs[i] === orgId);
+  const { cards, archivedCount } = await buildBoard(orgId);
 
   return (
     <>
-      <PageHeader title="Prototypes" subtitle="Every experiment for this customer — author, review, promote" />
+      <PageHeader title="Prototypes" subtitle="The program board — where every experiment actually is" />
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <PrototypeBoard prototypes={prototypes} />
+        <ProgramBoard cards={cards} archivedCount={archivedCount} />
       </div>
     </>
   );

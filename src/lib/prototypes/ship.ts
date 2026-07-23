@@ -64,6 +64,20 @@ export async function pushToOptimizely(prototypeKey: string, opts: { override?: 
   }
 
   const { experimentId, variationId } = proto.experiment;
+
+  // B2 rail: a running experiment is immutable. Pushing would swap the live
+  // variation mid-test and corrupt the results. No override — pause it in
+  // Optimizely first; that act is the human sign-off this rail exists to force.
+  try {
+    const status = (await client.getExperiment(experimentId)).status;
+    if (status === "running") {
+      throw new Error("This experiment is RUNNING. Pushing would change the live variation mid-test and corrupt results — pause it in Optimizely first, then push.");
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("RUNNING")) throw e;
+    /* status unreadable → proceed; the push itself will surface real API errors */
+  }
+
   const exp = await client.setVariationCustomCode(experimentId, variationId, latest.variationJs);
   const stored = OptimizelyClient.customCodeOf(exp, variationId);
   const verified = stored === latest.variationJs;
