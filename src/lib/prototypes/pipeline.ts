@@ -177,23 +177,26 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     status: stageShipped ? "winner in production code" : "—",
   });
 
-  // current = first incomplete on the WORK axis; Testing "current" is set
-  // explicitly by the running experiment; a blocked Brief never resets position.
+  // THE RULE: the pipeline holds at the FIRST gate that needs you. A blocked
+  // step (missing brief, failed certification) is that gate — no later step
+  // gets "current" while one is red. Work already done stays green; the card
+  // simply can't pass the gate until it clears.
   if (!running && !stageShipped) {
-    const firstOpen = steps.find((s) => s.id !== "brief" && s.id !== "testing" && s.state !== "done")
-      ?? steps.find((s) => s.state !== "done");
-    if (firstOpen && firstOpen.state === "todo") firstOpen.state = "current";
+    const gate = steps.find((s) => s.state === "blocked");
+    if (!gate) {
+      const firstOpen = steps.find((s) => s.id !== "testing" && s.state !== "done");
+      if (firstOpen && firstOpen.state === "todo") firstOpen.state = "current";
+    }
   }
 
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
-  if (!briefDone && !workStarted) primaryAction = { label: "Write the brief", anchor: "step-brief" };
+  if (!briefDone) primaryAction = { label: workStarted ? "Write the brief — it's the gate" : "Write the brief", anchor: "step-brief" };
   else if (!provisioned) primaryAction = { label: "Get the init script", anchor: "step-build" };
   else if (!built || problem) primaryAction = { label: "Build with Claude", anchor: "step-build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "step-review" };
   else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "step-launch" };
   else if (certBlocked) primaryAction = { label: "Fix certification & re-cut", anchor: "step-launch" };
-  else if (!briefDone) primaryAction = { label: "Write the brief — required before launch", anchor: "step-brief" };
   else if (!bound) primaryAction = { label: "Bind the experiment", anchor: "step-launch" };
   else if (!pushCurrent) primaryAction = { label: `Push v${latest!.version} to Optimizely`, anchor: "step-launch" };
   else if (running) primaryAction = { label: "Running — watch results", anchor: "step-launch" };

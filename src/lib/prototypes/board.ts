@@ -68,10 +68,10 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 }
 
 function columnFromPipeline(pipeline: Pipeline): BoardColumn {
-  // Same vocabulary end to end: the current step IS the column.
-  const current = pipeline.steps.find((s) => s.state === "current")?.id
-    ?? pipeline.steps.find((s) => s.state === "blocked" && s.id !== "brief")?.id
-    ?? "launch";
+  // The column is the FIRST gate that needs you — blocked or current, in step
+  // order. A missing brief holds the card at Brief no matter how far the work
+  // has run; the green dots on the card tell the rest of the story.
+  const current = pipeline.steps.find((s) => s.state === "blocked" || s.state === "current")?.id ?? "launch";
   switch (current) {
     case "brief": return "brief";
     case "build": return "build";
