@@ -1,15 +1,39 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-07-21 (post Sites-elimination + 3 verification passes + setup-checklist rework + WIZARD & BRANCH PROVISIONING). Read AGENTS.md first (model + rules), then this (state + next moves).*
+*Updated: 2026-07-23. Read AGENTS.md first (model + rules), then this (state + next moves). Debugging? `docs/RUNBOOK.md`.*
 
-## ⚠ UNPUSHED (handle first)
+## Where we are (2026-07-23)
 
-- `ba6337c` (fail-closed tenant guards) IS pushed + deployed READY (verified, zero runtime errors). Still LOCAL (user runs `git push`): `1e1272b` deleteOrg cascade, `518de0d` heartbeat id length, `de0bc0c` dead-links/counts, `34a15cc` docs, `9477aae` (workspace collapse), `ffdc2bc` (**prototype setup-checklist rework** — Setup/Pages/Build/Experiment/Settings tabs; carries the 2nd-pass fix bundle), `520b9d2` docs. `git log origin/main..HEAD` is authoritative. Verify deploy after via Vercel MCP (project `prj_k2NQb2qYTAN2rlgHwW7D4KLOIONx`, team `team_VYlQ8CLTxGgRpafO8hbu5Gmz`).
-- **Verification pass 1** over `9e45c4e..HEAD` (31 agents): 27 confirmed, ALL fixed. Headline: versions/source/promotions routes resolved org via the deleted Site chain → guards silently skipped for siteKey="" prototypes (two unauth-reachable via middleware `Bearer opmc_` pass-through). Fix: shared `guardPrototypeAccess()` (`src/lib/prototypes/guard.ts`) — **fail-closed** (unresolvable org = 403). Rule: every prototype-scoped route uses it; never re-introduce `getSite(proto.siteKey)` for authz; never skip a guard when org is falsy.
-- **Verification pass 2** over `c3d0f50..HEAD` (14 agents): 9 confirmed (1 major, 8 minor), 2 correctly rejected — all fixed EXCEPT one **accepted-by-design**: `GET /api/loader?key=` serves a prototype's variation JS unauthenticated (CORS *), gated only by the guessable key. This IS the anonymous preview-token model (the loader runs in real visitors' browsers on the customer site) — the key is the bearer secret by design; the payload is front-end code that ships to all users once promoted. Not fixing without a product decision (e.g. gate on stage≠draft would break preview-before-cut). Fixed: StageSelect stale-stage resync (major), API-token can't promote (`tokenAllowed` guard opt), customers N+1, silent mutate-failures.
-- **Verification pass 3** over `34a15cc..HEAD` (the setup rework, 13 agents): 8 confirmed, all fixed — 3 SSRF holes in the NEW check-injection endpoint (string-only host check) → `safeFetchPage`; injection-live step now keys off the target pages' envs (was any org env); loader-key matched to the org's env keys (no third-party false-greens); SourcePanel repo links → /build; true UTF-8 byte length. Runtime-verified the SSRF fix (public ok, metadata/loopback/name→private blocked, redirect not followed).
-- `guardPrototypeAccess(key, auth, { tokenAllowed })` — default true; **promotions passes `false`** (read-scoped token must never promote). Keep that when adding write routes.
-- Known prod data that must survive: env `prep-outrigger-production` (site_key=prep-outrigger, empty org_id → lazily adopted), prototype `room-overlays` (no orgId → lazily back-filled from its site row; fail-closed guards depend on that healing), heartbeat flag `loader:seen:prep-outrigger` (matched via env.siteKey).
+**A prototype went end-to-end for the first time.** `room-detail-overlay` (Outrigger, rooms-suites page) was authored by a Claude instance in the prototypes repo, is built and pushed, and is verified serving live off branch HEAD. Remaining on it: cut a version → Optimizely bundle.
+
+### Shipped today
+
+- **Provisioning derivations** (`lib/prototypes/derive.ts`) — per-target `data.md` (embedded data globals + DOM↔data join keys) and `design-tokens.md` (fonts, custom properties, overlay z-index ladder). `context.json` gained `referenceRepos` + `fonts`.
+- **Loader truth** — `lib/prototypes/served.ts` (the 20s cache, now introspectable) and tokenless `GET /api/loader/status?key=`: served vs head commit, cache lag, `artifactProblem`. Loader payload carries `commit`.
+- **First-provision `dist/` reset** so a fresh branch stops serving the inherited `starter` build.
+- **GitHub token diagnosis** — `friendlyGitError()`, `canCreateBranch()` (bogus-SHA write probe), and a write indicator on Settings → Repositories. `GET /repos` `permissions.push` is NOT trustworthy for fine-grained PATs.
+- **Skill library** (`/skills`, `lib/skills/`) — three tiers, full descriptions, in-app reader, built-ins seeded.
+- **Ideas channel** (`/ideas`, `lib/ideas/`) — prototype instances POST improvements back via the org API token.
+- **Init script** — required local-folder path (explicit Save + confirmation) and optional website-source checkout, symlinked into the clone as `source-site/`.
+- **Repositories UI** simplified — role checkboxes / provider dropdown / advanced fields removed; added a Reference source tile.
+- **`starter` branch** (`INHQInc/outrigger-prototypes`) — generalized font proxy (proxies stylesheets incl. CDN, rewrites font URLs; fixes CORS serif fallback), `?clean=1`, `PORT=`, `.claude/launch.json`, rewritten SKILL.md (empty-brief protocol, data-first, brand-fidelity, definition-of-done), flat hard rules in CLAUDE.md.
+
+### Not wired yet (next moves)
+
+1. **Skill delivery** — the library exists but selection UI + provision writing `.claude/skills/**` into the branch is not built. Until then `starter` still ships only `opmc-prototype`, so "choose which skills" has no effect. Note: skills on `starter` are inherited by every fork, so selection requires either provision removing unselected ones or the library becoming the only source.
+2. **Cut a version** on `room-detail-overlay` → Optimizely bundle (the original goal).
+3. **Reference source** not yet registered for Outrigger (Settings → Repositories → Reference source), so `referenceRepos` is empty in provisioned context.
+4. **Ship/handoff layer is not portable** — `lib/sites.ts` + the patch generator encode Outrigger's CMS layout. Every new customer needs that rewritten; the build/preview layer is generic.
+
+## Known-good state
+
+- `INHQInc/outrigger-prototypes` — private. Branches: `main`, `starter`, `prototype/room-detail-overlay`, `prototype/favorites`, `prototype/trip-planner`.
+- Outrigger GitHub connection: fine-grained PAT, write verified against the prototypes repo.
+- Prototype `room-detail-overlay` serving from repo HEAD, `artifactProblem: null`, no version cut.
+
+---
+
+<!-- Historical detail below this line is retained for context; treat anything above as current. -->
 
 ## What the product is now
 
