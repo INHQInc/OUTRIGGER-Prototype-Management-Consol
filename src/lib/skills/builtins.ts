@@ -39,18 +39,35 @@ Take \`consoleUrl\` + \`key\` from \`.opmc/context.json\`. Then compare:
 | \`contentHash\` | \`.opmc/context.json\` → \`contentHash\` | the brief/targets changed |
 | \`skills\` | \`.opmc/skills.json\` → \`managed\` | your skill set changed |
 
-**If either differs, say so before doing anything else:**
+**If either differs, fix it yourself — don't make the user click anything:**
 
-> "This branch is out of date — the console has a newer brief and/or a different
-> skill set. Re-sync the prototype in the console, then \`git pull\`, and restart
-> me so I pick up the new skills. Want me to continue with what's here meanwhile?"
+\`\`\`bash
+curl -s -X POST "$OPMC_URL/api/prototypes/provision" \\
+  -H "Authorization: Bearer $OPMC_API_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"key":"<key>"}'
+git pull
+\`\`\`
 
-Then let the user decide. Do **not** silently build against a stale brief — the
-whole point of the console being canonical is that it wins.
+Then tell the user what changed in one line — "brief updated, re-synced and
+pulled" — and carry on.
 
-**Note on skills specifically:** new skill files appearing in \`.claude/skills/\`
-do **not** load into a running session. After a re-sync + pull, the user must
-restart you. Say that explicitly; it's easy to miss.
+**Only re-sync when the check shows drift.** Each run re-captures page snapshots,
+so calling it every session is pure commit noise. If the hashes match, say
+nothing and start work.
+
+If the token isn't in your env, fall back to asking the user to hit **Re-sync**
+in the console, then \`git pull\`.
+
+**The one thing you cannot fix yourself:** if \`skills\` changed, the new files in
+\`.claude/skills/\` **do not load into a running session**. Pull them, then tell
+the user plainly:
+
+> "Skills changed — I've pulled them, but they won't take effect until you
+> restart me (quit and re-run \`claude\`)."
+
+Do **not** silently build against a stale brief — the console is canonical, and
+it wins.
 
 ## 1. Orient yourself (do this first, unprompted — no token needed)
 
