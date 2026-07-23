@@ -157,7 +157,13 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
         {versions.length > 0 && (
           <div className="rounded-lg border border-border bg-surface-2/20 overflow-hidden">
             <div className="px-3 py-2 flex items-center justify-between text-[12px]">
-              <span className="text-muted">Latest cut: <span className="font-semibold text-foreground">v{versions[0].version}</span> <span className="font-mono text-muted-2">{versions[0].gitSha.slice(0, 7)}</span> · <TimeAgo iso={versions[0].createdAt} /></span>
+              <span className="text-muted">Latest cut: <span className="font-semibold text-foreground">v{versions[0].version}</span> <span className="font-mono text-muted-2">{versions[0].gitSha.slice(0, 7)}</span> · <TimeAgo iso={versions[0].createdAt} />
+                {versions[0].certification && (
+                  versions[0].certification.passed
+                    ? <span className="text-ok"> · certified ✓</span>
+                    : <span className="text-danger"> · certification failed ({versions[0].certification.checks.filter((c) => c.level === "fail").length})</span>
+                )}
+              </span>
               {!versions[0].variationJs && <span className="text-[10px] text-warn">no code</span>}
             </div>
             {versions[0].gitSha && status?.branchExists && status.headSha && versions[0].gitSha !== status.headSha && (

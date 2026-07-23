@@ -110,6 +110,19 @@ export interface ArtifactVersion {
   notes?: string;
   createdAt: string;
   createdBy?: string;
+  /** QA-gate report from cut time (see lib/certify). Absent on legacy versions. */
+  certification?: import("../certify/certify").CertificationReport;
+}
+
+/** Binding to the Optimizely experiment this prototype ships into.
+ *  Set once from the Ship panel; the API push targets exactly this variation. */
+export interface PrototypeExperimentBinding {
+  experimentId: string;
+  experimentName?: string;
+  variationId: string;
+  variationName?: string;
+  boundAt: string;
+  boundBy?: string;
 }
 
 /** Where this prototype's code lives — picked from the brand's repo registry. */
@@ -128,6 +141,8 @@ export interface PrototypeRecord {
   name: string;
   /** Code location (brand registry pick). Absent on legacy records → site-binding fallback. */
   repo?: PrototypeRepoRef;
+  /** The Optimizely experiment/variation this prototype ships into (API push target). */
+  experiment?: PrototypeExperimentBinding;
   /** Lifecycle stage (see PrototypeStage). Normalize on read with normalizeStage(). */
   status: PrototypeStage;
   targets: PrototypeTarget[];

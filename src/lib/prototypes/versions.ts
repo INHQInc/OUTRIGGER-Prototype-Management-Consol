@@ -7,6 +7,7 @@
 import { getContentStore } from "../content/store";
 import { resolveRepoSource } from "./source";
 import { audit } from "../audit";
+import { certifyVariation } from "../certify/certify";
 import { resolvePrototypeOrg } from "./org";
 import type { ArtifactVersion } from "./types";
 
@@ -60,6 +61,13 @@ export async function cutArtifactVersionFromRepo(
   if (!src.found || !src.headSha || !src.variationJs) {
     throw new Error(src.error ?? "No built variation found on the prototype's branch.");
   }
+  const proto = await (await getContentStore()).getPrototype(prototypeKey);
+  // Certification runs at cut time — the report is frozen with the version,
+  // so "was this build safe to ship?" has one immutable answer forever.
+  const certification = certifyVariation(src.variationJs, {
+    key: prototypeKey,
+    targetOrigins: (proto?.targets ?? []).map((t) => t.url),
+  });
   const version = await cutArtifactVersion(prototypeKey, siteKey, {
     gitSha: src.headSha,
     gitRef: src.branch,
@@ -67,8 +75,10 @@ export async function cutArtifactVersionFromRepo(
     createdBy: opts.createdBy,
     variationJs: src.variationJs,
   });
-  const proto = await (await getContentStore()).getPrototype(prototypeKey);
+  version.certification = certification;
+  // persist the report onto the stored record (append-only store: re-add same id overwrites)
+  try { await (await getContentStore()).addArtifactVersion(version); } catch { /* stores that reject dup ids keep the plain version */ }
   const orgId = proto ? await resolvePrototypeOrg(proto) : "";
-  await audit(orgId, opts.createdBy ?? "system", "version.cut", `${prototypeKey} v${version.version}`, `${src.repo}@${src.branch} · ${src.headSha.slice(0, 7)}`);
+  await audit(orgId, opts.createdBy ?? "system", "version.cut", `${prototypeKey} v${version.version}`, `${src.repo}@${src.branch} · ${src.headSha.slice(0, 7)} · certification ${version.certification?.passed ? "PASSED" : "FAILED"}`);
   return version;
 }
