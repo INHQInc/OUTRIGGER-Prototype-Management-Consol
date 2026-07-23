@@ -9,7 +9,7 @@ import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
 import { lastPush } from "@/lib/prototypes/ship";
-import { getExperimentationConfig } from "@/lib/experimentation";
+import { getExperimentationConfig, getOptimizelyClientForOrg } from "@/lib/experimentation";
 import { derivePipeline, type PipelineStep } from "@/lib/prototypes/pipeline";
 import { PipelineHeader } from "@/components/PipelineHeader";
 import { DescriptionEditor } from "@/components/DescriptionEditor";
@@ -86,6 +86,15 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
     branchExists: source?.branchExists,
   };
 
+  // Live experiment status — the workspace and the board must agree.
+  let experimentStatus: string | null = null;
+  if (p.experiment?.experimentId && orgId) {
+    try {
+      const client = await getOptimizelyClientForOrg(orgId);
+      if (client) experimentStatus = (await client.getExperiment(p.experiment.experimentId)).status;
+    } catch { /* unreachable → no lock, no status */ }
+  }
+
   const pipeline = derivePipeline({
     proto: p,
     provisionFlagRaw: provisionFlag,
@@ -93,6 +102,7 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
     versions,
     lastPush: push,
     claudeSeenAt: claudeSeen,
+    experimentStatus,
   });
   const step = (id: PipelineStep["id"]) => pipeline.steps.find((s) => s.id === id)!;
 
@@ -131,12 +141,9 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
         <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
       </StepCard>
 
-      <StepCard step={step("cut")} hint="Freeze the build as an immutable, SHA-pinned version. Certification runs automatically — the gate in front of the push.">
-        <SourcePanel prototypeKey={key} versions={versions} compact />
-      </StepCard>
-
-      <StepCard step={step("ship")} hint="Bind the experiment once; every push replaces its variation code by API and read-back verifies it.">
+      <StepCard step={step("launch")} hint="Cut an immutable version (certification runs automatically), bind the experiment once, then push — the API replaces the variation code and read-back verifies it.">
         <div className="space-y-3">
+          <SourcePanel prototypeKey={key} versions={versions} compact />
           <ShipPanel
             prototypeKey={key}
             latestVersion={versions[0] ? { version: versions[0].version, gitSha: versions[0].gitSha, hasCode: Boolean(versions[0].variationJs) } : undefined}

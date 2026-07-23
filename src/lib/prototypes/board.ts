@@ -38,14 +38,13 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       store.getFlag(`provision:${p.key}`).catch(() => null),
       store.getFlag(`claude:seen:${p.key}`).catch(() => null),
     ]);
-    const pipeline = derivePipeline({ proto: p, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt });
-
     // Live experiment status — the Testing lock's source of truth.
     let experimentStatus: string | undefined;
     if (client && p.experiment?.experimentId) {
       try { experimentStatus = (await client.getExperiment(p.experiment.experimentId)).status; } catch { /* unreachable → no lock */ }
     }
     const locked = experimentStatus === "running";
+    const pipeline = derivePipeline({ proto: p, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt, experimentStatus });
 
     const column: BoardColumn = stage === "shipped" ? "shipped"
       : locked ? "testing"
@@ -69,12 +68,17 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 }
 
 function columnFromPipeline(pipeline: Pipeline): BoardColumn {
-  const current = pipeline.steps.find((s) => s.state === "current" || s.state === "blocked")?.id ?? "live";
+  // Same vocabulary end to end: the current step IS the column.
+  const current = pipeline.steps.find((s) => s.state === "current")?.id
+    ?? pipeline.steps.find((s) => s.state === "blocked" && s.id !== "brief")?.id
+    ?? "launch";
   switch (current) {
     case "brief": return "brief";
-    case "build": return "building";
+    case "build": return "build";
     case "review": return "review";
-    default: return "ship"; // cut · certify · bind · push · start
+    case "testing": return "testing";
+    case "shipped": return "shipped";
+    default: return "launch";
   }
 }
 

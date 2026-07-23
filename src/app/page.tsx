@@ -87,13 +87,13 @@ export default async function Dashboard() {
     const { versions, push } = shipStates[i];
     const v = versions[0];
     if (v?.certification && !v.certification.passed) {
-      attention.push({ text: `Certification failed on ${p.name} v${v.version} — the push is gated until it's fixed and re-cut.`, href: `/prototypes/${p.key}#step-cut`, action: "Open" });
+      attention.push({ text: `Certification failed on ${p.name} v${v.version} — the push is gated until it's fixed and re-cut.`, href: `/prototypes/${p.key}#step-launch`, action: "Open" });
     }
     if (push && v && push.version < v.version) {
-      attention.push({ text: `${p.name}: Optimizely is running v${push.version}, latest cut is v${v.version}.`, href: `/prototypes/${p.key}#step-ship`, action: "Push update" });
+      attention.push({ text: `${p.name}: Optimizely is running v${push.version}, latest cut is v${v.version}.`, href: `/prototypes/${p.key}#step-launch`, action: "Push update" });
     }
     if (push && push.verified === false) {
-      attention.push({ text: `${p.name}: last push did not read-back verify — inspect the variation before publishing.`, href: `/prototypes/${p.key}#step-ship`, action: "Open" });
+      attention.push({ text: `${p.name}: last push did not read-back verify — inspect the variation before publishing.`, href: `/prototypes/${p.key}#step-launch`, action: "Open" });
     }
   });
 

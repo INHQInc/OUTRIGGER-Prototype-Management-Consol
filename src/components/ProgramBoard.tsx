@@ -18,9 +18,9 @@ const DOT: Record<PipelineStep["state"], string> = {
 /** Why a cross-column drag bounces: the column is a fact, not an opinion. */
 const BOUNCE: Record<BoardColumn, string> = {
   brief: "Brief is where cards start — they move on when a build begins, not when they're dragged.",
-  building: "Building means a real build exists on the branch. It moves when Claude pushes one.",
+  build: "Build means a real build exists on the branch. It moves when Claude pushes one.",
   review: "Review means the pages verify on the real site. Verify them and the card moves itself.",
-  ship: "Launch means cut + certified + pushed. Do those and the card arrives on its own.",
+  launch: "Launch means cut + certified + pushed. Do those and the card arrives on its own.",
   testing: "Only a RUNNING experiment puts a card in Testing — start it in Optimizely.",
   shipped: "Shipped is a decision — but only from Launch: finish the pipeline first.",
 };
@@ -56,7 +56,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
 
   const dragging = cards.find((c) => c.key === dragKey) ?? null;
   const dropAllowed = (col: BoardColumn) =>
-    dragging !== null && !dragging.locked && (col === dragging.column || (col === "shipped" && dragging.column === "ship"));
+    dragging !== null && !dragging.locked && (col === dragging.column || (col === "shipped" && dragging.column === "launch"));
 
   async function persistPriorities(colCards: BoardCard[]) {
     await Promise.all(colCards.map((c, i) =>
@@ -93,7 +93,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       void persistPriorities(next);
       return;
     }
-    if (col === "shipped" && card.column === "ship") { void markShipped(card); return; }
+    if (col === "shipped" && card.column === "launch") { void markShipped(card); return; }
     say(BOUNCE[col]);
   }
 

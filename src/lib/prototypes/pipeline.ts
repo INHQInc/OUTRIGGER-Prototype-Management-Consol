@@ -2,13 +2,13 @@
  * The pipeline — ONE derivation of "where is this prototype and what's next,"
  * computed from ground truth the system already stores. Nothing self-reported.
  *
- * This is the state machine behind the prototype page's stepper, the primary
- * CTA, the ground-truth strip, the dashboard's needs-attention rows — and,
- * later, the Program Board's columns (B1/B2 read the same derivation).
+ * ONE VOCABULARY, everywhere: Brief · Build · Review · Launch · Testing ·
+ * Shipped. The workspace stepper and the program board render THIS — same
+ * words, same states, two zoom levels. (Cut & certify are substeps of Launch:
+ * cut → certify → bind → push → start.)
  *
- * Every session-burning confusion this encodes: "did it save?", "is it
- * synced?", "why isn't it live?", "what do I do next?" — the answer is now a
- * pure function of stored state, rendered once, everywhere the same.
+ * Position derives from the WORK axis; requirements (like a missing brief on
+ * started work) block gates and badge — they never teleport position backwards.
  */
 import type { PrototypeRecord, ArtifactVersion } from "./types";
 import type { RepoSource } from "./source";
@@ -20,10 +20,10 @@ import { artifactProblem } from "./served";
 export type StepState = "done" | "current" | "todo" | "blocked";
 
 export interface PipelineStep {
-  id: "brief" | "build" | "review" | "cut" | "ship" | "live";
+  id: "brief" | "build" | "review" | "launch" | "testing" | "shipped";
   title: string;
   state: StepState;
-  /** One line of honest status, e.g. "3/3 pages inject ✓" or "v4 · certified ✓". */
+  /** One line of honest status, e.g. "3/3 pages inject ✓" or "v4 certified · not pushed". */
   status: string;
   /** Anchor on the prototype page this step's card carries. */
   anchor: string;
@@ -32,25 +32,25 @@ export interface PipelineStep {
 export interface PipelineAlert {
   level: "warn" | "danger";
   text: string;
-  anchor?: string; // on-page anchor to fix it
+  anchor?: string;
 }
 
 export interface GroundTruth {
-  servingSha?: string;   // what the loader serves (branch HEAD when found)
+  servingSha?: string;
   headSha?: string;
   built: boolean;
   artifactProblem: string | null;
-  synced: boolean;       // provision flag's contentHash matches the record now
-  certified: boolean | null; // null = no certified version yet
+  synced: boolean;
+  certified: boolean | null;
   pushedVersion?: number;
   latestVersion?: number;
   pushVerified?: boolean;
   claudeSeenAt?: string | null;
+  experimentStatus?: string | null; // not_started | running | paused | archived
 }
 
 export interface Pipeline {
   steps: PipelineStep[];
-  /** The one thing to do next. */
   primaryAction: { label: string; anchor: string };
   alerts: PipelineAlert[];
   truth: GroundTruth;
@@ -58,11 +58,13 @@ export interface Pipeline {
 
 export interface PipelineInputs {
   proto: PrototypeRecord;
-  provisionFlagRaw: string | null;   // store flag `provision:<key>`
-  source: RepoSource | null;         // resolveRepoSource result (null = unreachable)
-  versions: ArtifactVersion[];       // newest first
+  provisionFlagRaw: string | null;
+  source: RepoSource | null;
+  versions: ArtifactVersion[];
   lastPush: PushResult | null;
-  claudeSeenAt?: string | null;      // flag `claude:seen:<key>`
+  claudeSeenAt?: string | null;
+  /** Live experiment status from the Optimizely API, when bound + reachable. */
+  experimentStatus?: string | null;
 }
 
 export function derivePipeline(inp: PipelineInputs): Pipeline {
@@ -82,6 +84,8 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   const cutFresh = Boolean(latest && source?.headSha && latest.gitSha === source.headSha);
   const bound = Boolean(proto.experiment?.experimentId && proto.experiment?.variationId);
   const pushCurrent = Boolean(lastPush && latest && lastPush.version === latest.version && lastPush.verified);
+  const running = inp.experimentStatus === "running";
+  const stageShipped = proto.status === "shipped";
 
   const truth: GroundTruth = {
     servingSha: built ? source?.headSha : undefined,
@@ -94,21 +98,20 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     latestVersion: latest?.version,
     pushVerified: lastPush?.verified,
     claudeSeenAt: inp.claudeSeenAt ?? null,
+    experimentStatus: inp.experimentStatus ?? null,
   };
 
-  // ── alerts (operational, each with the fix location) ──────────
+  // ── alerts (operational; each links to its fix) ───────────────
   if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so Claude builds against the current brief.", anchor: "step-build" });
   if (problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "step-build" });
-  if (latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "step-cut" });
-  if (lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "step-ship" });
-  if (lastPush && lastPush.verified === false) alerts.push({ level: "danger", text: "The last push did not read-back verify — inspect the variation in Optimizely before publishing.", anchor: "step-ship" });
+  if (latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "step-launch" });
+  if (lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "step-launch" });
+  if (lastPush && lastPush.verified === false) alerts.push({ level: "danger", text: "The last push did not read-back verify — inspect the variation in Optimizely before publishing.", anchor: "step-launch" });
 
   // ── steps ─────────────────────────────────────────────────────
   const steps: PipelineStep[] = [];
 
-  // 1 · Brief — a REQUIREMENT, not a position. Work that has started never
-  // teleports back to column one because a field is empty; instead the gap
-  // blocks the launch gate and shows as an alert.
+  // 1 · Brief — a REQUIREMENT, not a position.
   const briefDone = Boolean(proto.brief.change?.trim());
   const workStarted = provisioned || built;
   steps.push({
@@ -141,40 +144,46 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     status: pages === 0 ? "add the page(s) it runs on" : `${passing}/${pages} page${pages === 1 ? "" : "s"} inject${reviewDone ? " ✓" : ""}`,
   });
 
-  // 4 · Cut & Certify
-  const cutDone = Boolean(latest && cutFresh && certified !== false);
+  // 4 · Launch — cut → certify → bind → push → start, one stage.
+  const certBlocked = Boolean(latest && cert && !cert.passed);
+  const launchDone = Boolean(cutFresh && !certBlocked && bound && pushCurrent && (running || stageShipped));
+  const launchStatus = !latest ? "no version cut"
+    : !cutFresh ? `v${latest.version} · HEAD moved — cut a new version`
+    : certBlocked ? `v${latest.version} · certification FAILED`
+    : !bound ? `v${latest.version}${certified ? " certified ✓" : ""} · no experiment bound`
+    : !pushCurrent ? `v${latest.version}${certified ? " certified ✓" : ""} · not pushed`
+    : running || stageShipped ? `v${lastPush?.version} pushed ✓ · started`
+    : `v${lastPush?.version} pushed ✓ · start it in Optimizely`;
   steps.push({
-    id: "cut", title: "Cut & Certify", anchor: "step-cut",
-    state: latest && cert && !cert.passed ? "blocked" : cutDone ? "done" : "todo",
-    status: !latest ? "no version cut"
-      : !cutFresh ? `v${latest.version} · HEAD has moved — cut a new version`
-      : cert ? (cert.passed ? `v${latest.version} · certified ✓` : `v${latest.version} · certification FAILED`)
-      : `v${latest.version} · cut before the gate existed — next cut certifies`,
+    id: "launch", title: "Launch", anchor: "step-launch",
+    state: certBlocked ? "blocked" : launchDone ? "done" : "todo",
+    status: launchStatus,
   });
 
-  // 5 · Ship
-  const shipDone = bound && pushCurrent;
+  // 5 · Testing — the experiment's live status is the truth.
   steps.push({
-    id: "ship", title: "Ship", anchor: "step-ship",
-    state: shipDone ? "done" : "todo",
-    status: !bound ? "no experiment bound"
-      : !lastPush ? "bound · never pushed"
-      : lastPush.version < (latest?.version ?? 0) ? `v${lastPush.version} live · v${latest?.version} ready`
-      : `v${lastPush.version} pushed · read-back ${lastPush.verified ? "verified ✓" : "MISMATCH"}`,
+    id: "testing", title: "Testing", anchor: "step-launch",
+    state: stageShipped ? "done" : running ? "current" : "todo",
+    status: running ? "experiment LIVE — prototype locked"
+      : stageShipped ? "concluded"
+      : inp.experimentStatus === "paused" ? "paused in Optimizely"
+      : "—",
   });
 
-  // 6 · Live (until results read-back lands, stage carries this)
-  const liveDone = proto.status === "live" || proto.status === "shipped";
+  // 6 · Shipped — the decision (until winner→PR automates it).
   steps.push({
-    id: "live", title: "Live", anchor: "step-ship",
-    state: liveDone ? "done" : "todo",
-    status: liveDone ? (proto.status === "shipped" ? "shipped" : "experiment running") : shipDone ? "start it in Optimizely" : "—",
+    id: "shipped", title: "Shipped", anchor: "step-launch",
+    state: stageShipped ? "done" : "todo",
+    status: stageShipped ? "winner in production code" : "—",
   });
 
-  // current = first incomplete step on the WORK axis (build → … → live);
-  // a blocked Brief flags and gates but does not reset position.
-  const firstOpen = steps.find((s) => s.id !== "brief" && s.state !== "done") ?? steps.find((s) => s.state !== "done");
-  if (firstOpen && firstOpen.state !== "blocked") firstOpen.state = "current";
+  // current = first incomplete on the WORK axis; Testing "current" is set
+  // explicitly by the running experiment; a blocked Brief never resets position.
+  if (!running && !stageShipped) {
+    const firstOpen = steps.find((s) => s.id !== "brief" && s.id !== "testing" && s.state !== "done")
+      ?? steps.find((s) => s.state !== "done");
+    if (firstOpen && firstOpen.state === "todo") firstOpen.state = "current";
+  }
 
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
@@ -182,13 +191,14 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   else if (!provisioned) primaryAction = { label: "Get the init script", anchor: "step-build" };
   else if (!built || problem) primaryAction = { label: "Build with Claude", anchor: "step-build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "step-review" };
-  else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "step-cut" };
-  else if (cert && !cert.passed) primaryAction = { label: "Fix certification & re-cut", anchor: "step-cut" };
+  else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "step-launch" };
+  else if (certBlocked) primaryAction = { label: "Fix certification & re-cut", anchor: "step-launch" };
   else if (!briefDone) primaryAction = { label: "Write the brief — required before launch", anchor: "step-brief" };
-  else if (!bound) primaryAction = { label: "Bind the experiment", anchor: "step-ship" };
-  else if (!pushCurrent) primaryAction = { label: `Push v${latest!.version} to Optimizely`, anchor: "step-ship" };
-  else if (!liveDone) primaryAction = { label: "Open in Optimizely & start", anchor: "step-ship" };
-  else primaryAction = { label: "Running — watch results", anchor: "step-ship" };
+  else if (!bound) primaryAction = { label: "Bind the experiment", anchor: "step-launch" };
+  else if (!pushCurrent) primaryAction = { label: `Push v${latest!.version} to Optimizely`, anchor: "step-launch" };
+  else if (running) primaryAction = { label: "Running — watch results", anchor: "step-launch" };
+  else if (!stageShipped) primaryAction = { label: "Start the experiment in Optimizely", anchor: "step-launch" };
+  else primaryAction = { label: "Shipped ✓", anchor: "step-launch" };
 
   return { steps, primaryAction, alerts, truth };
 }
