@@ -12,7 +12,15 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // Public: auth entry points + the Live loader (runs on customers' external
 // pages for anonymous visitors, gated by the ?opmc preview token, not by the
 // console session).
-const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook"];
+//
+// `/api/prototypes/sync-status` is deliberately here too: a prototype instance
+// must be able to ask "is my branch stale?" while orienting, BEFORE any token
+// exists in its env — the whole tree-first model is that building needs no
+// credential. It returns only what the branch already carries in plain text (a
+// content hash, skill ids, stage, target URLs), so it leaks nothing the
+// key-gated loader doesn't already expose. Keep it above the /api/prototypes
+// token check below, which would otherwise demand a Bearer.
+const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
