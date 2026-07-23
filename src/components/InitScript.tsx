@@ -11,13 +11,19 @@ function expandHome(p: string): string {
   return p.startsWith("~") ? `$HOME${p.slice(1)}` : p;
 }
 
+const isAbsolute = (p: string) => /^[/~]/.test(p);
+
 /**
  * "Build with Claude" — the init prompt. You say WHERE it lives on your machine
  * (required) and optionally where the real website source is checked out; the
  * browser can't read absolute paths from a folder picker, so you paste them.
  * The command then clones straight into your folder and symlinks the site
- * source in (gitignored) so Claude builds against real markup, not a scrape.
- * Both paths are remembered in localStorage (they're machine-specific).
+ * source in (git-ignored) so Claude builds against real markup, not a scrape.
+ *
+ * Paths are machine-specific, so they persist to localStorage rather than the
+ * DB — but behind an EXPLICIT Save with success/failure confirmation. Saving on
+ * every keystroke "worked" but left you guessing whether it had; the generated
+ * command deliberately reflects the SAVED values, so Save is what makes it real.
  */
 export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildStatus }: {
   prototypeKey: string;
@@ -30,35 +36,50 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [localPath, setLocalPath] = useState("");
-  const [sourcePath, setSourcePath] = useState("");
+
+  // draft (what's in the inputs) vs saved (what's persisted + drives the command)
+  const [draftPath, setDraftPath] = useState("");
+  const [draftSource, setDraftSource] = useState("");
+  const [savedPath, setSavedPath] = useState("");
+  const [savedSource, setSavedSource] = useState("");
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const pathKey = `opmc:initpath:${prototypeKey}`;
-  // The site source is per-repo (same checkout for every prototype in it), not per-prototype.
+  // The site source is per-repo (same checkout for every prototype in it).
   const sourceKey = `opmc:sourcepath:${repo?.fullName ?? "default"}`;
 
   useEffect(() => {
     try {
-      const v = localStorage.getItem(pathKey); if (v) setLocalPath(v);
-      const s = localStorage.getItem(sourceKey); if (s) setSourcePath(s);
-    } catch { /* no localStorage */ }
+      const p = localStorage.getItem(pathKey) ?? "";
+      const s = localStorage.getItem(sourceKey) ?? "";
+      setDraftPath(p); setSavedPath(p);
+      setDraftSource(s); setSavedSource(s);
+    } catch { /* no localStorage (private window) — Save will report it */ }
   }, [pathKey, sourceKey]);
 
-  function updatePath(v: string) {
-    setLocalPath(v);
-    try { localStorage.setItem(pathKey, v); } catch { /* no localStorage */ }
-  }
-  function updateSource(v: string) {
-    setSourcePath(v);
-    try { localStorage.setItem(sourceKey, v); } catch { /* no localStorage */ }
-  }
-
-  const path = localPath.trim();
+  const path = savedPath.trim();
+  const src = savedSource.trim();
   const pathOk = path.length > 0;
-  const looksAbsolute = path.startsWith("/") || path.startsWith("~");
-  const src = sourcePath.trim();
   const srcOk = src.length > 0;
-  const srcLooksAbsolute = src.startsWith("/") || src.startsWith("~");
+  const dirty = draftPath.trim() !== savedPath.trim() || draftSource.trim() !== savedSource.trim();
+
+  function savePaths() {
+    const p = draftPath.trim();
+    const s = draftSource.trim();
+    if (!p) { setSaveMsg({ ok: false, text: "Local folder is required — paste the absolute path." }); return; }
+    if (!isAbsolute(p)) { setSaveMsg({ ok: false, text: "Local folder must be an absolute path (start with / or ~)." }); return; }
+    if (s && !isAbsolute(s)) { setSaveMsg({ ok: false, text: "Website source must be an absolute path (start with / or ~)." }); return; }
+    try {
+      localStorage.setItem(pathKey, p);
+      localStorage.setItem(sourceKey, s);
+      // Read back — proves it actually persisted rather than assuming.
+      if (localStorage.getItem(pathKey) !== p) throw new Error("read-back mismatch");
+      setSavedPath(p); setSavedSource(s);
+      setSaveMsg({ ok: true, text: `Saved · clones to ${p}${s ? " · source will be linked as source-site" : ""}` });
+    } catch {
+      setSaveMsg({ ok: false, text: "Couldn't save — this browser blocked local storage (private window?). Paths won't persist." });
+    }
+  }
 
   async function prepare() {
     if (busy || !pathOk) return;
@@ -77,24 +98,38 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
     return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[12px]">This prototype has no repo. <Link href={`/prototypes/${prototypeKey}/settings`} className="text-accent hover:text-accent-hover font-medium">Set one →</Link></div>;
   }
 
-  // The machine-specific paths — shared by both states.
   const pathFields = (
     <div className="space-y-3">
       <div className="space-y-1">
         <label className="block text-[11px] text-muted-2">Local folder — where the prototype clones to <span className="text-danger">*</span></label>
-        <input value={localPath} onChange={(e) => updatePath(e.target.value)} spellCheck={false} placeholder="/Users/you/Projects/room-detail-overlay" className={inp} />
+        <input value={draftPath} onChange={(e) => { setDraftPath(e.target.value); setSaveMsg(null); }} spellCheck={false} placeholder="/Users/you/Projects/room-detail-overlay" className={inp} />
         <div className="text-[10px] text-muted-2 leading-relaxed">
           In Finder: right-click the folder → hold <span className="font-mono">⌥ Option</span> → &ldquo;Copy … as Pathname&rdquo; → paste. The clone lands here; nothing else on your machine is touched.
-          {pathOk && !looksAbsolute && <span className="text-warn"> · use an absolute path (starts with <span className="font-mono">/</span> or <span className="font-mono">~</span>)</span>}
         </div>
       </div>
       <div className="space-y-1">
         <label className="block text-[11px] text-muted-2">Website source checkout <span className="text-muted-2">(optional — lets Claude read the real markup)</span></label>
-        <input value={sourcePath} onChange={(e) => updateSource(e.target.value)} spellCheck={false} placeholder="/Users/you/Projects/Outrigger_Website" className={inp} />
+        <input value={draftSource} onChange={(e) => { setDraftSource(e.target.value); setSaveMsg(null); }} spellCheck={false} placeholder="/Users/you/Projects/Outrigger_Website" className={inp} />
         <div className="text-[10px] text-muted-2 leading-relaxed">
           Your local checkout of the production site repo. It gets symlinked in as <span className="font-mono">source-site</span> (git-ignored, never committed) so Claude builds against real components/CSS instead of only the page snapshot.
-          {srcOk && !srcLooksAbsolute && <span className="text-warn"> · use an absolute path</span>}
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 pt-0.5">
+        <span className={`text-[11px] ${saveMsg ? (saveMsg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : pathOk ? "text-ok" : "text-muted-2"}`}>
+          {saveMsg
+            ? saveMsg.text
+            : dirty
+              ? "Unsaved changes — the command below still uses the saved paths."
+              : pathOk
+                ? "Saved in this browser."
+                : "Paste the folder path, then Save."}
+        </span>
+        {dirty ? (
+          <button onClick={savePaths} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover shrink-0">Save</button>
+        ) : (
+          <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[12px] font-semibold flex items-center shrink-0">Saved ✓</span>
+        )}
       </div>
     </div>
   );
@@ -106,8 +141,8 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
         <div className="px-4 py-3 space-y-3">
           <div className="text-[12px] text-muted-2 max-w-md">Get your init script — sets up the branch so Claude wakes up loaded with this prototype and its page(s).</div>
           {pathFields}
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-[11px] text-muted-2">{pathOk ? "Ready — this is where it clones to." : "Set where it lives locally first."}</span>
+          <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
+            <span className="text-[11px] text-muted-2">{pathOk ? "Ready — this is where it clones to." : "Save the local folder first."}</span>
             <button onClick={prepare} disabled={busy || !pathOk} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Setting up…" : err ? "Try again" : "Get init script"}</button>
           </div>
         </div>
@@ -121,7 +156,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
     );
   }
 
-  // provisioned → build the command from the chosen paths
+  // provisioned → build the command from the SAVED paths
   const fullName = repo.fullName;
   const branch = repo.branch || `prototype/${prototypeKey}`;
   const checkout = buildStatus.branchExists ? `git checkout ${branch}` : `git checkout -b ${branch} origin/starter && git push -u origin ${branch}`;
@@ -152,7 +187,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-4 py-3 text-[12px] text-warn">Set the local folder above to generate your clone command.</div>
+        <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-4 py-3 text-[12px] text-warn">Save the local folder above to generate your clone command.</div>
       )}
     </div>
   );
