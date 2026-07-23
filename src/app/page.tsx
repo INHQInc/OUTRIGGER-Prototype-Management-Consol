@@ -10,6 +10,8 @@ import { getExperimentationConfig } from "@/lib/experimentation";
 import { listOrgRepos } from "@/lib/git/org-repos";
 import { listAuditEvents } from "@/lib/audit";
 import { PageHeader, EmptyState, Badge, TimeAgo } from "@/components/ui";
+import { TokenHealthBanner } from "@/components/TokenHealthBanner";
+import { getTokenHealth } from "@/lib/git/token-health";
 import { PrototypeCard } from "@/components/PrototypeCard";
 import { SetupChecklist, type SetupStep } from "@/components/SetupChecklist";
 import { NewPrototype } from "@/components/NewPrototype";
@@ -106,6 +108,7 @@ export default async function Dashboard() {
         actions={<NewPrototype />}
       />
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+        <TokenHealthBanner health={await getTokenHealth(orgId)} />
         {!setupComplete && <SetupChecklist steps={steps} />}
 
         {/* Needs attention */}

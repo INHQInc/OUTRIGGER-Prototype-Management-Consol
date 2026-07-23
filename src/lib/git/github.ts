@@ -61,6 +61,24 @@ export class GitHubClient {
     return { login: r.login, name: r.name ?? undefined };
   }
 
+  /**
+   * Token identity + expiry. Fine-grained PATs report their expiration in the
+   * `github-authentication-token-expiration` response header — the only place
+   * GitHub exposes it. Classic no-expiry tokens return null.
+   */
+  async getTokenInfo(): Promise<{ login: string; expiresAt: string | null }> {
+    const res = await fetch(`${BASE}/user`, {
+      headers: { Authorization: `Bearer ${this.token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) throw new GitError(res.status, `GitHub ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+    const body = (await res.json()) as { login: string };
+    const raw = res.headers.get("github-authentication-token-expiration"); // e.g. "2026-10-18 21:31:32 UTC"
+    let expiresAt: string | null = null;
+    if (raw) { const d = new Date(raw.replace(" UTC", "Z").replace(" ", "T")); if (!isNaN(d.getTime())) expiresAt = d.toISOString(); }
+    return { login: body.login, expiresAt };
+  }
+
   /** Repos visible to the token (recent-first) — powers the repo pickers. */
   async listRepos(max = 200): Promise<{ fullName: string; private: boolean; defaultBranch: string; pushedAt?: string }[]> {
     const out: { fullName: string; private: boolean; defaultBranch: string; pushedAt?: string }[] = [];

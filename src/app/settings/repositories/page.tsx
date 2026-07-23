@@ -8,6 +8,8 @@ import { ReferenceRepos } from "@/components/ReferenceRepos";
 import { GitHubConnection } from "@/components/GitHubConnection";
 import { getGitConnectionStatus, probeRepoWrite } from "@/lib/git/connection";
 import { listReferenceRepos } from "@/lib/git/reference-repos";
+import { runTokenHealth } from "@/lib/git/token-health";
+import { TokenHealthBanner } from "@/components/TokenHealthBanner";
 import { ensureApiToken } from "@/lib/api-token";
 import { ApiAccessTile } from "@/components/ApiAccessTile";
 import { headers } from "next/headers";
@@ -31,11 +33,14 @@ export default async function RepositoriesPage() {
   const refRepos = await listReferenceRepos(orgId).catch(() => []);
   const protoRepo = repos.find((r) => r.defaultFor.includes("prototypes")) ?? repos.find((r) => r.roles.includes("prototypes")) ?? null;
   const writeProbe = protoRepo && (gitStatus.connected || gitStatus.envFallback) ? await probeRepoWrite(orgId, protoRepo.fullName) : null;
+  // Refresh stored token health whenever this page loads — it's the page where you fix it.
+  const tokenHealth = await runTokenHealth(orgId).catch(() => null);
   return (
     <>
       <PageHeader title="Repositories" subtitle={`${org?.name ?? orgId} — where prototype code and production source live`} />
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="max-w-2xl space-y-5">
+          <TokenHealthBanner health={tokenHealth} />
           <GitHubConnection initialStatus={gitStatus} writeProbe={writeProbe} canManage={user?.role === "admin"} />
           <RepoRegistry initialRepos={repos} canManage={user?.role === "admin"} />
           <ReferenceRepos initial={refRepos} canManage={user?.role === "admin"} />

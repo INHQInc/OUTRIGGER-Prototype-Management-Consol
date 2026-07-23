@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/token-health", "schedule": "0 9 * * *" }
+  ]
+}
