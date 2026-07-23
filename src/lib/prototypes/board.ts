@@ -15,29 +15,9 @@ import { derivePipeline, type Pipeline } from "./pipeline";
 import { getOptimizelyClientForOrg } from "../experimentation";
 import { normalizeStage, type PrototypeRecord } from "./types";
 
-export type BoardColumn = "brief" | "building" | "review" | "ship" | "testing" | "shipped";
-
-export const BOARD_COLUMNS: { id: BoardColumn; label: string; hint: string }[] = [
-  { id: "brief", label: "Brief", hint: "what & why being written" },
-  { id: "building", label: "Building", hint: "agent at work in the repo" },
-  { id: "review", label: "Review", hint: "verifying on the real site" },
-  { id: "ship", label: "Launch", hint: "cut · certify · push · start" },
-  { id: "testing", label: "Testing", hint: "experiment LIVE — locked" },
-  { id: "shipped", label: "Shipped", hint: "winner in production code" },
-];
-
-export interface BoardCard {
-  key: string;
-  name: string;
-  column: BoardColumn;
-  locked: boolean;               // experiment running → immutable
-  experimentStatus?: string;     // not_started | running | paused | archived
-  pipeline: Pipeline;
-  metric?: string;
-  hypothesis?: string;
-  owner?: string;
-  priority?: number;
-}
+export { BOARD_COLUMNS } from "./board-model";
+export type { BoardColumn, BoardCard } from "./board-model";
+import type { BoardColumn, BoardCard } from "./board-model";
 
 export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; archivedCount: number }> {
   const store = await getContentStore();

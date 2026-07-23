@@ -5,7 +5,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { NewPrototype } from "./NewPrototype";
 import { EmptyState } from "@/components/ui";
-import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board";
+import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
 import type { PipelineStep } from "@/lib/prototypes/pipeline";
 
 const DOT: Record<PipelineStep["state"], string> = {
