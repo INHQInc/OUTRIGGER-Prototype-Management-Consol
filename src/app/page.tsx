@@ -12,6 +12,8 @@ import { listAuditEvents } from "@/lib/audit";
 import { PageHeader, EmptyState, Badge, TimeAgo } from "@/components/ui";
 import { TokenHealthBanner } from "@/components/TokenHealthBanner";
 import { getTokenHealth } from "@/lib/git/token-health";
+import { listArtifactVersions } from "@/lib/prototypes/versions";
+import { lastPush } from "@/lib/prototypes/ship";
 import { PrototypeCard } from "@/components/PrototypeCard";
 import { SetupChecklist, type SetupStep } from "@/components/SetupChecklist";
 import { NewPrototype } from "@/components/NewPrototype";
@@ -73,10 +75,26 @@ export default async function Dashboard() {
   const setupComplete = steps.every((st) => st.done);
 
   // ── Needs attention: OPERATIONAL alerts only (setup lives in the checklist) ──
+  // Cheap store reads only (versions + push flags) — no git/API calls on the dashboard.
   const attention: Attention[] = [];
+  const shipStates = await Promise.all(protos.map(async (p) => ({
+    versions: await listArtifactVersions(p.key).catch(() => []),
+    push: await lastPush(p.key).catch(() => null),
+  })));
   protos.forEach((p, i) => {
     const latest = promosByProto[i][0];
     if (latest?.status === "failed") attention.push({ text: `Promotion failed: ${p.name} → ${latest.environmentLabel}.`, href: `/prototypes/${p.key}`, action: "Open prototype" });
+    const { versions, push } = shipStates[i];
+    const v = versions[0];
+    if (v?.certification && !v.certification.passed) {
+      attention.push({ text: `Certification failed on ${p.name} v${v.version} — the push is gated until it's fixed and re-cut.`, href: `/prototypes/${p.key}#step-cut`, action: "Open" });
+    }
+    if (push && v && push.version < v.version) {
+      attention.push({ text: `${p.name}: Optimizely is running v${push.version}, latest cut is v${v.version}.`, href: `/prototypes/${p.key}#step-ship`, action: "Push update" });
+    }
+    if (push && push.verified === false) {
+      attention.push({ text: `${p.name}: last push did not read-back verify — inspect the variation before publishing.`, href: `/prototypes/${p.key}#step-ship`, action: "Open" });
+    }
   });
 
   // ── Pipeline counts ──
