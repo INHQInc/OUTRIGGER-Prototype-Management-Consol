@@ -161,6 +161,12 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   const store = await getContentStore();
   const proto = await store.getPrototype(prototypeKey);
   if (!proto) throw new Error("Unknown prototype");
+  // THE GATE: you can't build until the brief is done. The brief becomes
+  // Claude's instructions and the experiment's description — building without
+  // one is building without a spec.
+  if (!proto.brief.change?.trim()) {
+    throw new Error("No brief yet — write what we're building first. The brief is the gate: it becomes Claude's instructions and, later, the experiment's description.");
+  }
   const orgId = await resolvePrototypeOrg(proto);
   if (!orgId) throw new Error("This prototype has no owning customer.");
   const repoRef = await resolvePrototypeRepo(proto, orgId);

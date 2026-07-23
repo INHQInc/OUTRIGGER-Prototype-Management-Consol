@@ -25,12 +25,13 @@ const isAbsolute = (p: string) => /^[/~]/.test(p);
  * every keystroke "worked" but left you guessing whether it had; the generated
  * command deliberately reflects the SAVED values, so Save is what makes it real.
  */
-export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildStatus }: {
+export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildStatus, briefDone = true }: {
   prototypeKey: string;
   repo?: { fullName: string; branch: string };
   provisioned: boolean;
   previewUrl?: string;
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
+  briefDone?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -161,8 +162,8 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
           <div className="text-[12px] text-muted-2 max-w-md">Get your init script — sets up the branch so Claude wakes up loaded with this prototype and its page(s).</div>
           {pathFields}
           <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
-            <span className="text-[11px] text-muted-2">{pathOk ? "Ready — this is where it clones to." : "Save the local folder first."}</span>
-            <button onClick={prepare} disabled={busy || !pathOk} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Setting up…" : err ? "Try again" : "Get init script"}</button>
+            <span className={`text-[11px] ${briefDone ? "text-muted-2" : "text-warn"}`}>{!briefDone ? "Write the brief first — it's the gate. Building without a spec is how prototypes drift." : pathOk ? "Ready — this is where it clones to." : "Save the local folder first."}</span>
+            <button onClick={prepare} disabled={busy || !pathOk || !briefDone} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">{busy ? "Setting up…" : err ? "Try again" : "Get init script"}</button>
           </div>
         </div>
         {err && (

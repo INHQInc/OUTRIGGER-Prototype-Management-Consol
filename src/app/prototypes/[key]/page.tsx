@@ -133,7 +133,7 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
       <StepCard step={step("build")} hint="Pick what Claude wakes up knowing, then run the init script. Claude builds in the repo; the console pulls the result.">
         <div className="space-y-3">
           <SkillSelector prototypeKey={key} initial={skillRows} />
-          <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} />
+          <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={Boolean(p.brief.change?.trim())} />
         </div>
       </StepCard>
 

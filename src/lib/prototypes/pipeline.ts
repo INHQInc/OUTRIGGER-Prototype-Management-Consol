@@ -128,7 +128,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   steps.push({
     id: "build", title: "Build", anchor: "step-build",
     state: buildDone ? "done" : "todo",
-    status: !provisioned ? "get the init script"
+    status: !provisioned ? (briefDone ? "get the init script" : "waiting on the brief") 
       : problem === "placeholder" || !built ? (inp.claudeSeenAt ? "Claude engaged · no build pushed yet" : "provisioned · waiting on the first build")
       : problem === "starter-build" ? "serving the starter build"
       : `built · ${source?.headSha?.slice(0, 7) ?? ""}`,
