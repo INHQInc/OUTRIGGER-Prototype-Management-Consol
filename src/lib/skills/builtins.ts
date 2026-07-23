@@ -126,6 +126,35 @@ Also check \`artifactProblem\` — \`starter-build\` means the branch is still s
 
 On the live page verify for real: \`window.__opmc_variations\`, the \`#opmc-<key>-css\` style tag, your elements' markers, and screenshot the result. If push is blocked in your environment, hand the user the exact \`git push\` command and wait.
 
+### Two injection timings — your code MUST survive both
+
+The **OPMC loader** injects your variation **late** — after window load, so the page's own libraries (jQuery, Bootstrap, framework, embedded data) are ready. **Optimizely injects it EARLY** — from a snippet in \`<head>\`, *before* the page's JS loads, to avoid flicker. Same code, opposite timing.
+
+The failure this causes is silent and passed live review: an \`init()\` that **gates on a page dependency and bails once** —
+
+\`\`\`js
+function init() {
+  if (!window.bootstrap || !window.pageData) return;  // ← works via loader, DEAD in Optimizely
+  wire();
+}
+init();
+\`\`\`
+
+Via the loader the dep is ready, so it wires. Via Optimizely \`init()\` runs before the dep exists, returns, and **never retries** — the CSS injects but nothing happens. Instead, **retry until the deps are ready, and never bail permanently**:
+
+\`\`\`js
+function init() {
+  if (!window.bootstrap || !window.pageData) return false;
+  wire(); return true;
+}
+if (!init()) {
+  var n = 0, iv = setInterval(function () { if (init() || ++n > 150) clearInterval(iv); }, 100);
+  window.addEventListener("load", function () { if (init()) clearInterval(iv); });
+}
+\`\`\`
+
+Test BOTH paths before calling it done: the loader (\`?opmc=<key>\`, late) **and** an early-injection sim — paste your \`dist/variation.js\` into an early \`<script>\` (before the page's libs) and confirm it still wires once they load.
+
 ## 5. Console operations you may perform (via API)
 
 - Build status: \`GET $OPMC_URL/api/prototypes/source?key=<key>\` · served status: \`GET <consoleUrl>/api/loader/status?key=<key>\` (tokenless).
@@ -138,7 +167,8 @@ On the live page verify for real: \`window.__opmc_variations\`, the \`#opmc-<key
 Don't call it finished until every line is true:
 
 - [ ] Idempotent guard verified (runs twice → one instance)
-- [ ] Late-injection safe (runs after window load; no reliance on \`DOMContentLoaded\`)
+- [ ] Late-injection safe (loader injects after window load; no reliance on \`DOMContentLoaded\`)
+- [ ] **EARLY-injection safe** (Optimizely injects before the page's libs — \`init()\` retries until deps are ready, never bails once). Tested under both timings.
 - [ ] Survives page re-render (MutationObserver re-applies)
 - [ ] Zero analytics/tracking added
 - [ ] Same-origin assets only (or data URIs)
