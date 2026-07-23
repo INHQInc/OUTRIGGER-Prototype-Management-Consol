@@ -28,6 +28,14 @@ export async function getExperimentationConfig(orgId: string): Promise<Experimen
   return (await getContentStore()).getExperimentationConfig(orgId);
 }
 
+/** The raw Optimizely client for a brand (ship/push path), or null if not connected. */
+export async function getOptimizelyClientForOrg(orgId: string): Promise<OptimizelyClient | null> {
+  const cfg = await getExperimentationConfig(orgId);
+  const token = cfg?.optimizely?.apiToken;
+  if (!token) return null;
+  return new OptimizelyClient(token, cfg?.optimizely?.defaultProjectId);
+}
+
 /** Build the provider client for a brand, or null if it isn't connected. */
 export async function getExperimentationProvider(orgId: string): Promise<ExperimentationProvider | null> {
   const cfg = await getExperimentationConfig(orgId);

@@ -32,12 +32,16 @@ export interface OptiPage {
   name: string;
   edit_url: string;
 }
-export interface OptiVariation { variation_id: number; name: string; weight: number }
+export interface OptiChange { id?: string; type: string; value?: string; dependencies?: string[]; async?: boolean }
+export interface OptiAction { page_id: number; changes: OptiChange[] }
+export interface OptiVariation { variation_id: number; name: string; weight: number; actions?: OptiAction[]; archived?: boolean; status?: string }
 export interface OptiExperiment {
   id: number;
   name: string;
   status: string;
   variations: OptiVariation[];
+  page_ids?: number[];
+  project_id?: number;
 }
 
 /**
@@ -136,6 +140,53 @@ export class OptimizelyClient {
         // status intentionally omitted → defaults to not_started (draft, no traffic)
       }),
     });
+  }
+
+  /** Full experiment, including each variation's actions + changes. */
+  getExperiment(experimentId: string | number): Promise<OptiExperiment> {
+    return this.req<OptiExperiment>(`/experiments/${experimentId}`);
+  }
+
+  /**
+   * Replace the custom-code change on ONE variation, preserving everything else.
+   *
+   * The REST v2 PATCH replaces the whole `variations` array, so we read the
+   * experiment first, swap only the target variation's custom_code change
+   * (other change types on that action are kept), and PATCH the full set back.
+   * Returns the fresh experiment for read-back verification.
+   */
+  async setVariationCustomCode(experimentId: string | number, variationId: string | number, code: string): Promise<OptiExperiment> {
+    const exp = await this.getExperiment(experimentId);
+    const vid = Number(variationId);
+    const target = (exp.variations ?? []).find((v) => Number(v.variation_id) === vid);
+    if (!target) throw new OptimizelyError(404, `Variation ${variationId} not found on experiment ${experimentId}`);
+    const pageId = target.actions?.[0]?.page_id ?? exp.page_ids?.[0];
+    if (!pageId) throw new OptimizelyError(400, "Experiment has no page to attach the change to — add a page in Optimizely first.");
+
+    const variations = (exp.variations ?? []).map((v) => {
+      const base: OptiVariation = { variation_id: v.variation_id, name: v.name, weight: v.weight, actions: v.actions ?? [] };
+      if (Number(v.variation_id) !== vid) return base;
+      const actions = (v.actions?.length ? v.actions : [{ page_id: pageId, changes: [] as OptiChange[] }]).map((a) => ({ ...a, changes: [...(a.changes ?? [])] }));
+      const act = actions.find((a) => a.page_id === pageId) ?? actions[0];
+      const idx = act.changes.findIndex((c) => c.type === "custom_code");
+      // Strip server-assigned ids so the API treats it as the replacement payload.
+      const change: OptiChange = { type: "custom_code", value: code, dependencies: [] };
+      if (idx >= 0) act.changes[idx] = change; else act.changes.push(change);
+      return { ...base, actions };
+    });
+
+    await this.req(`/experiments/${experimentId}`, { method: "PATCH", body: JSON.stringify({ variations }) });
+    return this.getExperiment(experimentId);
+  }
+
+  /** The custom-code value currently on a variation (read-back verification). */
+  static customCodeOf(exp: OptiExperiment, variationId: string | number): string | null {
+    const v = (exp.variations ?? []).find((x) => Number(x.variation_id) === Number(variationId));
+    for (const a of v?.actions ?? []) {
+      const c = (a.changes ?? []).find((ch) => ch.type === "custom_code");
+      if (c && typeof c.value === "string") return c.value;
+    }
+    return null;
   }
 
   experimentAppUrl(experimentId: number): string {

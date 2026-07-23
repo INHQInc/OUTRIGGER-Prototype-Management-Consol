@@ -15,6 +15,9 @@ import { InitScript } from "@/components/InitScript";
 import { SkillSelector } from "@/components/SkillSelector";
 import { SourcePanel } from "@/components/SourcePanel";
 import { OptimizelyBundle } from "@/components/OptimizelyBundle";
+import { ShipPanel } from "@/components/ShipPanel";
+import { lastPush } from "@/lib/prototypes/ship";
+import { getExperimentationConfig } from "@/lib/experimentation";
 
 export const dynamic = "force-dynamic";
 
@@ -43,12 +46,14 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
   const orgId = await resolvePrototypeOrg(p);
   const repo = await resolvePrototypeRepo(p, orgId); // heal a stale/invalid repo → the registered default
 
-  const [hdrs, source, provisionFlag, environments, versions] = await Promise.all([
+  const [hdrs, source, provisionFlag, environments, versions, push, expCfg] = await Promise.all([
     headers(),
     resolveRepoSource(key).catch(() => null),
     store.getFlag(`provision:${key}`).catch(() => null),
     listOrgEnvironments(orgId),
     listArtifactVersions(key),
+    lastPush(key).catch(() => null),
+    getExperimentationConfig(orgId ?? "").catch(() => null),
   ]);
   await ensureSkillsSeeded(orgId);
   const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
@@ -82,10 +87,23 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
         </div>
       </Section>
 
-      <Section n={4} title="Optimizely bundle" desc="Cut a version, then paste the bundle into a Web Experiment.">
+      <Section n={4} title="Ship" desc="Cut a version, then push it into the Optimizely experiment by API.">
         <div className="space-y-3">
           <SourcePanel prototypeKey={key} versions={versions} compact />
-          <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
+          <ShipPanel
+            prototypeKey={key}
+            latestVersion={versions[0] ? { version: versions[0].version, gitSha: versions[0].gitSha, hasCode: Boolean(versions[0].variationJs) } : undefined}
+            certification={versions[0]?.certification ?? null}
+            initialBinding={p.experiment ?? null}
+            initialLastPush={push}
+            optiProjectId={expCfg?.optimizely?.defaultProjectId ?? null}
+          />
+          <details className="group">
+            <summary className="text-[11px] text-muted-2 cursor-pointer hover:text-foreground">Manual bundle (fallback — copy/paste instead of the API push)</summary>
+            <div className="mt-2">
+              <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
+            </div>
+          </details>
         </div>
       </Section>
     </div>
