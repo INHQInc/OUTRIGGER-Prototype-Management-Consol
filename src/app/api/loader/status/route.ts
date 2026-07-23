@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
-import { peekServed, detectNamespace, SERVED_TTL_MS } from "@/lib/prototypes/served";
+import { peekServed, detectNamespace, artifactProblem, SERVED_TTL_MS } from "@/lib/prototypes/served";
 
 /**
  * GET /api/loader/status?key=<prototypeKey> → what is actually being served.
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   const cacheValid = cacheAgeMs !== null && cacheAgeMs < SERVED_TTL_MS;
 
   // Branch tip — always read fresh, so "has my push landed?" is answerable.
-  let head: { commit?: string; found: boolean; bytes?: number; namespace?: string; branch?: string; repo?: string; error?: string };
+  let head: { commit?: string; found: boolean; bytes?: number; namespace?: string; branch?: string; repo?: string; error?: string; js?: string | null };
   try {
     const src = await resolveRepoSource(key);
     head = {
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
       found: src.found,
       bytes: src.variationJs ? Buffer.byteLength(src.variationJs, "utf8") : undefined,
       namespace: detectNamespace(src.variationJs),
+      js: src.variationJs ?? null,
     };
   } catch (e) {
     head = { found: false, error: (e as Error).message };
@@ -81,12 +82,9 @@ export async function GET(req: NextRequest) {
     // True while the loader would still hand out a build older than the tip.
     stale: Boolean(servedCommit && head.commit && servedCommit !== head.commit),
     staleForMs: cacheValid && cacheAgeMs !== null ? Math.max(0, SERVED_TTL_MS - cacheAgeMs) : 0,
-    // Set when the served artifact belongs to a different prototype — e.g. the
-    // stale `opmc-starter` build a fresh branch inherits before its first build.
-    namespaceMismatch: (() => {
-      const ns = (cacheValid ? detectNamespace(cached?.js) : head.namespace) ?? null;
-      return ns ? ns !== `opmc-${key}` : false;
-    })(),
-    expectedNamespace: `opmc-${key}`,
+    // Narrow on purpose: only the inherited `starter` build or the console's
+    // placeholder are real problems. A prototype may legitimately use a short
+    // namespace (opmc-rdo for room-detail-overlay) — that is NOT a mismatch.
+    artifactProblem: artifactProblem(cacheValid ? cached?.js : null) ?? artifactProblem(head.js),
   }, { headers: CORS });
 }

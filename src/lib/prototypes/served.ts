@@ -26,6 +26,22 @@ export function detectNamespace(js?: string | null): string | undefined {
   return js.match(/opmc-[a-zA-Z0-9_-]+/)?.[0];
 }
 
+/**
+ * Is the served artifact the WRONG artifact — i.e. the `starter` build a fresh
+ * branch inherits before its first real build?
+ *
+ * Deliberately narrow. Comparing the namespace to `opmc-<key>` false-positives:
+ * a prototype is free to pick a shorter namespace (e.g. `opmc-rdo` for
+ * room-detail-overlay) and still be perfectly correct. The only genuinely
+ * broken states are the template build and the console's own placeholder.
+ */
+export function artifactProblem(js?: string | null): "starter-build" | "placeholder" | null {
+  if (!js) return null;
+  if (detectNamespace(js) === "opmc-starter") return "starter-build";
+  if (/no build yet — edit src\/ and run node build\.mjs/.test(js)) return "placeholder";
+  return null;
+}
+
 /** Cached repo-HEAD artifact — the same value the loader hands the page. */
 export async function servedFromRepo(key: string): Promise<ServedEntry> {
   const hit = cache.get(key);

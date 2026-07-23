@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
-import { detectNamespace } from "@/lib/prototypes/served";
+import { detectNamespace, artifactProblem } from "@/lib/prototypes/served";
 
 /**
  * GET ?key=<prototypeKey> → the prototype's repo-source status (repo, branch,
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         bytes: src.variationJs ? Buffer.byteLength(src.variationJs, "utf8") : 0,
         namespace: namespace ?? null,
         expectedNamespace: `opmc-${g.proto.key}`,
-        namespaceMismatch: Boolean(namespace && namespace !== `opmc-${g.proto.key}`),
+        artifactProblem: artifactProblem(src.variationJs),
       },
     });
   } catch (e) {

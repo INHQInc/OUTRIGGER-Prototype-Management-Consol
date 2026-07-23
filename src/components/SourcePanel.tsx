@@ -17,7 +17,7 @@ interface SourceStatus {
   error?: string;
   namespace?: string | null;
   expectedNamespace?: string;
-  namespaceMismatch?: boolean;
+  artifactProblem?: "starter-build" | "placeholder" | null;
 }
 
 /** Copy-paste bootstrap for a branch that doesn't exist yet — the console
@@ -122,9 +122,11 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
                 <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
               </div>
             )}
-            {status.namespaceMismatch && (
+            {status.artifactProblem && (
               <div className="rounded-lg border border-warn/50 bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-3 py-2 text-[12px] text-warn leading-relaxed">
-                ⚠ The artifact being served is <span className="font-mono">{status.namespace}</span>, not <span className="font-mono">{status.expectedNamespace}</span> — this branch is still serving an inherited <span className="font-mono">starter</span> build. Build once (<span className="font-mono">node build.mjs</span>) and push; until then the review URL shows the wrong prototype.
+                ⚠ {status.artifactProblem === "starter-build"
+                  ? <>This branch is still serving the inherited <span className="font-mono">starter</span> build — the review URL shows the wrong prototype.</>
+                  : <>No real build yet — this is the provisioned placeholder.</>} Run <span className="font-mono">node build.mjs</span>, commit <span className="font-mono">dist/variation.js</span>, and push.
               </div>
             )}
             {status.found ? (
