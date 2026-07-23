@@ -193,9 +193,9 @@ export class GitHubClient {
   async commitFiles(
     owner: string,
     repo: string,
-    opts: { branch: string; baseSha: string; message: string; files: { path: string; content: Buffer }[]; force?: boolean }
+    opts: { branch: string; baseSha: string; message: string; files: { path: string; content: Buffer }[]; deletions?: string[]; force?: boolean }
   ): Promise<{ sha: string; url: string }> {
-    const tree: { path: string; mode: "100644"; type: "blob"; sha: string }[] = [];
+    const tree: { path: string; mode: "100644"; type: "blob"; sha: string | null }[] = [];
     for (const f of opts.files) {
       const blob = await this.gh<{ sha: string }>(`/repos/${owner}/${repo}/git/blobs`, {
         method: "POST",
@@ -203,6 +203,8 @@ export class GitHubClient {
       });
       tree.push({ path: f.path, mode: "100644", type: "blob", sha: blob.sha });
     }
+    // A tree entry with sha:null removes the path (we always build on base_tree).
+    for (const path of opts.deletions ?? []) tree.push({ path, mode: "100644", type: "blob", sha: null });
     const baseCommit = await this.gh<{ tree: { sha: string } }>(`/repos/${owner}/${repo}/git/commits/${opts.baseSha}`);
     const newTree = await this.gh<{ sha: string }>(`/repos/${owner}/${repo}/git/trees`, {
       method: "POST",

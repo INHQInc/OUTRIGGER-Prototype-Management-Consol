@@ -17,6 +17,7 @@ import { captureRawHtml, slugForUrl } from "../capture/capture";
 import { audit } from "../audit";
 import { deriveDataGlobals, deriveDesignTokens, type FontRef } from "./derive";
 import { listReferenceRepos } from "../git/reference-repos";
+import { enabledSkillsForPrototype } from "../skills/skills";
 import type { PrototypeRecord } from "./types";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
@@ -267,6 +268,30 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     files.push({ path: repoRef.artifactPath || DEFAULT_ARTIFACT, content: Buffer.from(stub, "utf8") });
   }
 
+  // ── Skills ────────────────────────────────────────────────────────────────
+  // Materialise the prototype's enabled skill set into .claude/skills/ — the
+  // only path Claude Code auto-loads. `.opmc/skills.json` records what the
+  // console wrote last time so a de-selected skill is REMOVED rather than
+  // lingering; anything the console didn't write is left strictly alone.
+  const deletions: string[] = [];
+  try {
+    const skills = await enabledSkillsForPrototype(orgId, proto.key);
+    const managed = skills.map((sk) => sk.id).sort();
+    for (const sk of skills) {
+      files.push({ path: `.claude/skills/${sk.id}/SKILL.md`, content: Buffer.from(sk.body, "utf8") });
+    }
+    const prevRaw = await client.readFileAtRef(owner, repo, ".opmc/skills.json", branch).catch(() => null);
+    if (prevRaw) {
+      try {
+        const prev = JSON.parse(prevRaw) as { managed?: string[] };
+        for (const id of prev.managed ?? []) {
+          if (!managed.includes(id)) deletions.push(`.claude/skills/${id}/SKILL.md`);
+        }
+      } catch { /* unreadable manifest — write a fresh one, delete nothing */ }
+    }
+    files.push({ path: ".opmc/skills.json", content: Buffer.from(JSON.stringify({ managed, writtenAt: provisionedAt }, null, 2), "utf8") });
+  } catch { /* skills are additive — never block provisioning on them */ }
+
   // Idempotent: skip if nothing changed since the last provision.
   const prevHash = await client.readFileAtRef(owner, repo, ".opmc/context.json", branch).then((c) => { try { return c ? (JSON.parse(c).contentHash as string) : null; } catch { return null; } }).catch(() => null);
   const snapshotsChanged = captures.some((c) => c.ok); // always re-commit if we captured fresh snapshots
@@ -280,7 +305,7 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   for (let attempt = 0; attempt < 2 && !commit; attempt++) {
     const baseSha = await client.getBranchSha(owner, repo, branch);
     try {
-      commit = await client.commitFiles(owner, repo, { branch, baseSha, message: commitMsg, files, force: false });
+      commit = await client.commitFiles(owner, repo, { branch, baseSha, message: commitMsg, files, deletions, force: false });
     } catch (e) {
       if (e instanceof GitError && e.status === 422 && attempt === 0) continue; // non-fast-forward: re-read HEAD and retry once
       throw e;

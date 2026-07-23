@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { resolvePrototypeRepo } from "@/lib/prototypes/repo";
+import { resolveSkillsForPrototype } from "@/lib/skills/skills";
+import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
@@ -10,6 +12,7 @@ import { DescriptionEditor } from "@/components/DescriptionEditor";
 import { TargetPages } from "@/components/TargetPages";
 import { RepoBranchSettings } from "@/components/RepoBranchSettings";
 import { InitScript } from "@/components/InitScript";
+import { SkillSelector } from "@/components/SkillSelector";
 import { SourcePanel } from "@/components/SourcePanel";
 import { OptimizelyBundle } from "@/components/OptimizelyBundle";
 
@@ -47,6 +50,8 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
     listOrgEnvironments(orgId),
     listArtifactVersions(key),
   ]);
+  await ensureSkillsSeeded(orgId);
+  const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
   const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "outrigger-prototype-management-cons.vercel.app"}`;
   const envs = await Promise.all(environments.map(async (e) => ({
     id: e.id, label: e.label, kind: e.kind, url: e.url, loaderKey: e.siteKey ?? e.id, heartbeatAt: await envLoaderSeenAt(e),
@@ -71,7 +76,10 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
       </Section>
 
       <Section n={3} title="Build with Claude" desc="Get the init prompt, run it, build against the test pages.">
-        <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} />
+        <div className="space-y-3">
+          <SkillSelector prototypeKey={key} initial={skillRows} />
+          <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} />
+        </div>
       </Section>
 
       <Section n={4} title="Optimizely bundle" desc="Cut a version, then paste the bundle into a Web Experiment.">

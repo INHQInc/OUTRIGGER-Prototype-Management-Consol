@@ -7,56 +7,13 @@ import {
   listAllSkills, upsertSkill, deleteSkill, listGlobalSkills,
   parseFrontmatter, slugify, type Skill,
 } from "@/lib/skills/skills";
-import { SYSTEM_SKILL, IDEAS_SKILL } from "@/lib/skills/builtins";
-
-/**
- * Seed the library from the `starter` branch the first time it's opened, so it
- * isn't empty on day one — the opmc-prototype skill already exists there and is
- * the canonical generic one.
- */
-async function seedBuiltins(): Promise<void> {
-  const have = new Set((await listGlobalSkills()).map((s) => s.id));
-  for (const md of [SYSTEM_SKILL, IDEAS_SKILL]) {
-    const fm = parseFrontmatter(md);
-    const id = slugify(fm.name ?? "");
-    if (!id || have.has(id)) continue;
-    await upsertSkill({
-      id,
-      name: fm.name ?? id,
-      scope: "global",
-      description: fm.description ?? "",
-      body: md,
-      builtIn: true,
-    });
-  }
-}
-
-async function seedFromStarter(orgId: string): Promise<void> {
-  if ((await listGlobalSkills()).some((s) => s.id === "opmc-prototype")) return;
-  const repo = await defaultOrgRepo(orgId, "prototypes");
-  const client = await getGitClientForOrg(orgId);
-  if (!repo || !client) return;
-  const [owner, name] = repo.fullName.split("/");
-  if (!owner || !name) return;
-  const md = await client.readFileAtRef(owner, name, ".claude/skills/opmc-prototype/SKILL.md", "starter").catch(() => null);
-  if (!md) return;
-  const fm = parseFrontmatter(md);
-  await upsertSkill({
-    id: "opmc-prototype",
-    name: fm.name ?? "opmc-prototype",
-    scope: "global",
-    description: fm.description ?? "The core build loop for an OPMC prototype.",
-    body: md,
-    builtIn: true,
-  });
-}
+import { ensureSkillsSeeded } from "@/lib/skills/seed";
 
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const orgId = await getActiveOrgId();
-  await seedBuiltins().catch(() => { /* seeding is best-effort */ });
-  if (orgId) await seedFromStarter(orgId).catch(() => { /* seeding is best-effort */ });
+  await ensureSkillsSeeded(orgId);
   return NextResponse.json({ skills: await listAllSkills(orgId) });
 }
 
