@@ -79,18 +79,18 @@ export function PrototypeOverview({ proto, pipeline, versions, push, activity }:
 
         {/* The parts, at a glance — each links to its room */}
         <div className="grid grid-cols-2 2xl:grid-cols-4 gap-3">
-          <Link href="?tab=build" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Build</div>
+          <Link href="?tab=source" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
+            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Source Control</div>
             <div className="text-[14px]">{pipeline.steps.find((s) => s.id === "build")?.status}</div>
             {pipeline.truth.claudeSeenAt && <div className="text-[13px] text-muted-2 mt-0.5">Claude engaged <TimeAgo iso={pipeline.truth.claudeSeenAt} /></div>}
           </Link>
-          <Link href="?tab=pages" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Pages</div>
+          <Link href="?tab=review" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
+            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Review</div>
             <div className="text-[14px]">{pipeline.steps.find((s) => s.id === "review")?.status}</div>
             <div className="text-[13px] text-muted-2 mt-0.5">{proto.targets.length} target page{proto.targets.length === 1 ? "" : "s"}</div>
           </Link>
           <Link href="?tab=experiment" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Experiment</div>
+            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Experimentation</div>
             <div className="text-[14px]">{pipeline.steps.find((s) => s.id === "launch")?.status}</div>
             <div className="text-[13px] text-muted-2 mt-0.5 font-mono">
               {latest ? `v${latest.version}${latest.certification ? (latest.certification.passed ? " · certified ✓" : " · cert FAILED") : ""}` : "no version cut"}

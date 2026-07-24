@@ -24,18 +24,22 @@ import { SourcePanel } from "@/components/SourcePanel";
 import { OptimizelyBundle } from "@/components/OptimizelyBundle";
 import { ShipPanel } from "@/components/ShipPanel";
 import { HandoffPanel } from "@/components/HandoffPanel";
+import { HandoffExplorer } from "@/components/HandoffExplorer";
 
 export const dynamic = "force-dynamic";
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "brief", label: "Brief", step: "brief" },
-  { id: "build", label: "Build", step: "build" },
-  { id: "pages", label: "Pages", step: "review" },
-  { id: "experiment", label: "Experiment", step: "launch" },
+  { id: "source", label: "Source Control", step: "build" },
+  { id: "skills", label: "Skills" },
+  { id: "review", label: "Review", step: "review" },
+  { id: "experiment", label: "Experimentation", step: "launch" },
   { id: "handoff", label: "Handoff", step: "shipped" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
+/** Old room ids that may live in links/bookmarks. */
+const TAB_ALIASES: Record<string, TabId> = { build: "source", pages: "review" };
 
 const DOT: Record<PipelineStep["state"], string> = {
   done: "bg-ok",
@@ -46,17 +50,18 @@ const DOT: Record<PipelineStep["state"], string> = {
 
 /**
  * The prototype workspace — a living thing, not a list of steps.
- * Status lives ONCE, in the pipeline header. Below it: rooms. Each room owns
- * one part of the prototype (the brief, the build, the pages, the experiment,
- * the handoff); every status element deep-links into the room that fixes it.
+ * Status lives ONCE, in the header (stage chip = board column). Below it:
+ * rooms — the prototype's PARTS, named the way a team names them: the brief,
+ * source control, skills, review, experimentation, handoff.
  */
 export default async function PrototypeWorkspace({ params, searchParams }: {
   params: Promise<{ key: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { key } = await params;
-  const rawTab = (await searchParams).tab;
-  const tab: TabId = (TABS.some((t) => t.id === rawTab) ? rawTab : "overview") as TabId;
+  const rawTab = (await searchParams).tab ?? "";
+  const aliased = TAB_ALIASES[rawTab] ?? rawTab;
+  const tab: TabId = (TABS.some((t) => t.id === aliased) ? aliased : "overview") as TabId;
 
   const store = await getContentStore();
   const p = await store.getPrototype(key);
@@ -123,7 +128,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     <div className="space-y-4">
       <PipelineHeader pipeline={pipeline} />
 
-      {/* Rooms — nouns, not steps. The dot on each tab is that room's status. */}
+      {/* Rooms — the prototype's parts, not its steps. Dots = that part's state. */}
       <div className="flex items-center gap-1 border-b border-border overflow-x-auto">
         {TABS.map((t) => {
           const st = stepFor("step" in t ? t.step : undefined);
@@ -150,33 +155,39 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         </div>
       )}
 
-      {tab === "build" && (
+      {tab === "source" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">The agent&apos;s room: where the code lives, what Claude wakes up knowing, and the command that starts it. Claude builds in the repo; the console pulls the result.</p>
+          <p className="text-[14px] text-muted-2">Where the code lives and how it reaches your machine: the repo + branch, the local folders, and the command that starts Claude. The console reads the branch; it never writes your code.</p>
           <details className={`group rounded-xl border ${repo?.fullName && source?.branchExists ? "border-border bg-surface/40" : "border-warn/40"}`} open={!(repo?.fullName && source?.branchExists)}>
             <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none">
               <span className="text-[14px]">⚙</span>
-              <span className="text-[14px] font-semibold">Source control</span>
+              <span className="text-[14px] font-semibold">Repo &amp; branch</span>
               <span className="text-[13px] text-muted-2 font-mono truncate">{repo?.fullName ? `${repo.fullName}@${repo.branch}` : "pick the repo + branch"}</span>
               <span className="ml-auto text-[12.5px] text-muted-2 group-open:hidden">open</span>
             </summary>
             <div className="px-4 pb-4"><RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} /></div>
           </details>
-          <SkillSelector prototypeKey={key} initial={skillRows} />
           <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={Boolean(p.brief.change?.trim())} />
         </div>
       )}
 
-      {tab === "pages" && (
+      {tab === "skills" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">The page(s) this prototype runs on. Install the tag once per site, then verify each page actually injects — review happens on the real environment.</p>
+          <p className="text-[14px] text-muted-2">What Claude wakes up knowing for this prototype. Global and brand skills come from the library; prototype skills exist only here. Changes reach the branch on the next re-sync (Source Control).</p>
+          <SkillSelector prototypeKey={key} initial={skillRows} />
+        </div>
+      )}
+
+      {tab === "review" && (
+        <div className="max-w-4xl space-y-3">
+          <p className="text-[14px] text-muted-2">The page(s) this prototype runs on. Install the tag once per site, then verify each page actually injects — review happens on the real environment, not a mockup.</p>
           <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
         </div>
       )}
 
       {tab === "experiment" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">The A/B test, end to end: <b>1</b> cut an immutable version (certification runs automatically) · <b>2</b> bind the experiment once · <b>3</b> push — the API replaces the variation code and verifies the read-back · <b>4</b> start it in Optimizely. A running experiment locks everything.</p>
+          <p className="text-[14px] text-muted-2">The A/B test, end to end: <b>1</b> cut an immutable version — certification runs automatically · <b>2</b> pick the Optimizely experiment, or create it from here · <b>3</b> push — the API replaces the variation code and verifies the read-back · <b>4</b> start it in Optimizely. A running experiment locks everything.</p>
           <SourcePanel prototypeKey={key} versions={versions} compact />
           <ShipPanel
             prototypeKey={key}
@@ -185,6 +196,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
             initialBinding={p.experiment ?? null}
             initialLastPush={push}
             optiProjectId={expCfg?.optimizely?.defaultProjectId ?? null}
+            targetCount={p.targets.length}
+            prototypeName={p.name}
           />
           <details className="group/manual">
             <summary className="text-[13px] text-muted-2 cursor-pointer hover:text-foreground">Manual bundle (fallback — copy/paste instead of the API push)</summary>
@@ -196,9 +209,15 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       )}
 
       {tab === "handoff" && (
-        <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">When the experiment wins, the code graduates: the winning variation is handed to the dev team to become real production code — a reviewed change in the site&apos;s own repo, not client-side JavaScript forever.</p>
-          <HandoffPanel prototypeKey={key} repoFullName={repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
+        <div className="space-y-3">
+          <p className="text-[14px] text-muted-2 max-w-4xl">When the experiment wins, the code graduates: the winning version — frozen at its exact git SHA — is handed to the dev team to become real production code. What you see below is byte-for-byte what ran.</p>
+          <HandoffExplorer
+            prototypeKey={key}
+            versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, createdAt: v.createdAt, certPassed: v.certification ? v.certification.passed : null }))}
+          />
+          <div className="max-w-4xl">
+            <HandoffPanel prototypeKey={key} repoFullName={repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
+          </div>
         </div>
       )}
     </div>
@@ -214,6 +233,7 @@ function labelForAction(action: string): string {
     "version.cut": "Version cut",
     "experiment.push": "Pushed to Optimizely",
     "experiment.bind": "Experiment bound",
+    "experiment.create": "Experiment created in Optimizely",
   };
   return map[action] ?? action;
 }

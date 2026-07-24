@@ -48,7 +48,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 
     const column: BoardColumn = stage === "shipped" ? "shipped"
       : locked ? "testing"
-      : columnFromPipeline(pipeline);
+      : pipeline.stage.id;
 
     return {
       key: p.key, name: p.name, column, locked, experimentStatus, pipeline,
@@ -65,21 +65,6 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     cards: clean,
     archivedCount: protos.filter((p) => normalizeStage(p.status) === "archived").length,
   };
-}
-
-function columnFromPipeline(pipeline: Pipeline): BoardColumn {
-  // The column is the FIRST gate that needs you — blocked or current, in step
-  // order. A missing brief holds the card at Brief no matter how far the work
-  // has run; the green dots on the card tell the rest of the story.
-  const current = pipeline.steps.find((s) => s.state === "blocked" || s.state === "current")?.id ?? "launch";
-  switch (current) {
-    case "brief": return "brief";
-    case "build": return "build";
-    case "review": return "review";
-    case "testing": return "testing";
-    case "shipped": return "shipped";
-    default: return "launch";
-  }
 }
 
 /** Is this prototype's experiment running right now? (The immutability rail.) */

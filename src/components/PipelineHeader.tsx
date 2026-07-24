@@ -1,50 +1,34 @@
-import type { Pipeline, StepState } from "@/lib/prototypes/pipeline";
-
-const DOT: Record<StepState, string> = {
-  done: "bg-ok border-ok",
-  current: "bg-accent border-accent",
-  todo: "bg-transparent border-border-strong",
-  blocked: "bg-danger border-danger",
-};
-const TITLE: Record<StepState, string> = {
-  done: "text-foreground",
-  current: "text-foreground font-semibold",
-  todo: "text-muted-2",
-  blocked: "text-danger font-semibold",
-};
+import type { Pipeline } from "@/lib/prototypes/pipeline";
 
 /**
- * The prototype's spine: where it is, what's true, what's next. Everything on
- * it is derived from stored ground truth (lib/prototypes/pipeline.ts) — the
- * page below is organized around these steps, and the one CTA is always the
- * next action.
+ * The prototype's status, said ONCE: a stage chip (the exact same word as its
+ * board column), that stage's honest one-liner, and the single next action.
+ * Per-part detail lives on the room tabs' dots — not here. Below: ground truth
+ * when everything is healthy, or the specific problems when it isn't.
  */
 export function PipelineHeader({ pipeline }: { pipeline: Pipeline }) {
-  const { steps, primaryAction, alerts, truth } = pipeline;
+  const { stage, primaryAction, alerts, truth } = pipeline;
+
+  const chip = stage.blocked
+    ? "border-danger/50 text-danger bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
+    : stage.live
+      ? "border-ok/50 text-ok bg-[color-mix(in_srgb,var(--ok)_8%,transparent)]"
+      : stage.id === "shipped"
+        ? "border-ok/50 text-ok bg-[color-mix(in_srgb,var(--ok)_8%,transparent)]"
+        : "border-accent/50 text-accent bg-[color-mix(in_srgb,var(--accent)_7%,transparent)]";
+  const dot = stage.blocked ? "bg-danger" : stage.live || stage.id === "shipped" ? "bg-ok" : "bg-accent";
 
   return (
-    <div className="space-y-3">
-      {/* Stepper + CTA */}
-      <div className="rounded-xl border border-border bg-surface px-4 py-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-start gap-0 flex-1 min-w-0 overflow-x-auto py-1">
-            {steps.map((s, i) => (
-              <div key={s.id} className="flex items-start shrink-0">
-                <a href={`?tab=${s.anchor}`} className="group flex flex-col items-start min-w-[7.2rem] pr-2">
-                  <div className="flex items-center w-full">
-                    <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${DOT[s.state]} ${s.state === "done" ? "shadow-[0_0_0_3px_color-mix(in_srgb,var(--ok)_15%,transparent)]" : s.state === "current" ? "shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""}`} />
-                    {i < steps.length - 1 && <span className={`h-px flex-1 ml-1.5 mr-0.5 ${s.state === "done" ? "bg-ok/50" : "bg-border"}`} />}
-                  </div>
-                  <span className={`text-[14px] mt-1.5 group-hover:text-foreground ${TITLE[s.state]}`}>{s.title}</span>
-                  <span className={`text-[12.5px] leading-tight ${s.state === "blocked" ? "text-danger" : "text-muted-2"}`}>{s.status}</span>
-                </a>
-              </div>
-            ))}
-          </div>
-          <a href={`?tab=${primaryAction.anchor}`} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover transition-colors flex items-center shrink-0">
-            {primaryAction.label}
-          </a>
-        </div>
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className={`inline-flex items-center gap-2 h-8 px-3 rounded-full border text-[14px] font-semibold ${chip}`}>
+          <span className={`w-2 h-2 rounded-full ${dot} ${stage.live ? "animate-pulse" : ""}`} />
+          {stage.blocked ? `Blocked at ${stage.label}` : stage.label}
+        </span>
+        <span className="text-[14px] text-muted min-w-0">{stage.status}</span>
+        <a href={`?tab=${primaryAction.anchor}`} className="ml-auto h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover transition-colors flex items-center shrink-0">
+          {primaryAction.label}
+        </a>
       </div>
 
       {/* Ground truth: one green line, or specific problems */}

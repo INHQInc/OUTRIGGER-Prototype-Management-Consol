@@ -59,24 +59,35 @@ export function SkillSelector({ prototypeKey, initial }: { prototypeKey: string;
       {rows.length === 0 ? (
         <div className="px-4 py-4 text-[14px] text-muted-2">No skills in the library yet. <Link href="/skills" className="text-accent hover:text-accent-hover">Add one →</Link></div>
       ) : (
-        rows.map(({ skill, enabled }) => (
-          <div key={skill.id} className="border-b border-border/60 last:border-0">
-            <div className="px-4 py-2.5 flex items-start gap-3">
-              <input type="checkbox" checked={enabled} onChange={() => toggle(skill.id)} className="mt-0.5 accent-[var(--accent)] shrink-0" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[14px] font-mono font-medium">{skill.name}</span>
-                  <span className="text-[12.5px] text-muted-2">{SCOPE_LABEL[skill.scope]}</span>
-                </div>
-                {skill.description && <p className="text-[13px] text-muted-2 mt-0.5 leading-relaxed">{skill.description}</p>}
+        (["inherited", "prototype"] as const).map((section) => {
+          const inSection = rows.filter(({ skill }) => (skill.scope === "prototype") === (section === "prototype"));
+          if (inSection.length === 0) return null;
+          return (
+            <div key={section}>
+              <div className="px-4 pt-3 pb-1.5 text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 bg-surface-2/30">
+                {section === "inherited" ? "Global & brand skills — from the library" : "This prototype only"}
               </div>
-              <button onClick={() => setOpen(open === skill.id ? null : skill.id)} className="text-[13px] text-accent hover:text-accent-hover shrink-0">{open === skill.id ? "Hide" : "Read"}</button>
+              {inSection.map(({ skill, enabled }) => (
+                <div key={skill.id} className="border-b border-border/60 last:border-0">
+                  <div className="px-4 py-2.5 flex items-start gap-3">
+                    <input type="checkbox" checked={enabled} onChange={() => toggle(skill.id)} className="mt-0.5 accent-[var(--accent)] shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[14px] font-mono font-medium">{skill.name}</span>
+                        <span className="text-[12.5px] text-muted-2">{SCOPE_LABEL[skill.scope]}</span>
+                      </div>
+                      {skill.description && <p className="text-[13px] text-muted-2 mt-0.5 leading-relaxed">{skill.description}</p>}
+                    </div>
+                    <button onClick={() => setOpen(open === skill.id ? null : skill.id)} className="text-[13px] text-accent hover:text-accent-hover shrink-0">{open === skill.id ? "Hide" : "Read"}</button>
+                  </div>
+                  {open === skill.id && (
+                    <pre className="px-4 py-2.5 text-[13px] font-mono text-muted leading-relaxed whitespace-pre-wrap bg-background/40 border-t border-border/60 max-h-80 overflow-y-auto">{skill.body}</pre>
+                  )}
+                </div>
+              ))}
             </div>
-            {open === skill.id && (
-              <pre className="px-4 py-2.5 text-[13px] font-mono text-muted leading-relaxed whitespace-pre-wrap bg-background/40 border-t border-border/60 max-h-80 overflow-y-auto">{skill.body}</pre>
-            )}
-          </div>
-        ))
+          );
+        })
       )}
 
       <div className="px-4 py-2.5 border-t border-border flex items-center justify-between gap-3">

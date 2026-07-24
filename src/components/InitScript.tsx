@@ -199,9 +199,9 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
           touches src/ or dist/. */}
       <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-[14px] font-semibold">Branch content</div>
+          <div className="text-[14px] font-semibold">Sync brief &amp; skills to the branch</div>
           <div className="text-[13px] text-muted-2 mt-0.5 leading-relaxed">
-            Re-sync writes the current brief, page snapshots (<span className="font-mono">data.md</span>, <span className="font-mono">design-tokens.md</span>) and the selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart Claude so it picks up new skills.
+            Writes the current brief, page snapshots (<span className="font-mono">data.md</span>, <span className="font-mono">design-tokens.md</span>) and the selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart Claude so it picks up new skills.
           </div>
           {err && <div className="text-[13px] text-danger mt-1">{err}</div>}
           {synced && <div className="text-[13px] text-ok mt-1">{synced}</div>}
@@ -214,7 +214,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
       {pathOk ? (
         <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-accent/30">
-            <span className="text-[14px] font-semibold">Run this to build</span>
+            <span className="text-[14px] font-semibold">Start Claude</span>
             <button onClick={copy} className="text-[14px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
           </div>
           <pre className="px-4 py-3 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
