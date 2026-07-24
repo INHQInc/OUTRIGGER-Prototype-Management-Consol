@@ -74,9 +74,11 @@ export async function draftBrief(opts: {
   const skill = await getSkill(opts.orgId, "opmc-brief-author");
   const system = skill ? parseFrontmatter(skill.body).body : "You write structured, falsifiable A/B experiment briefs for client-side injected variations.";
 
+  const refs = opts.proto.brief.references ?? [];
   const context = [
     `Prototype name: ${opts.proto.name}`,
     opts.proto.targets.length ? `Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ")}` : "Target pages: none set yet",
+    refs.length ? `Supporting references the team attached (design intent — factor them into the brief): ${refs.map((r) => `${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}`).join("; ")}` : "",
     opts.proto.brief.change ? `Existing brief (improve, don't discard what's right): ${JSON.stringify(opts.proto.brief)}` : "",
     opts.proto.metrics.primary ? `Existing primary metric: ${opts.proto.metrics.primary}` : "",
   ].filter(Boolean).join("\n");
@@ -144,10 +146,12 @@ export async function refineBrief(opts: {
   const skill = await getSkill(opts.orgId, "opmc-brief-author");
   const system = skill ? parseFrontmatter(skill.body).body : "You write structured, falsifiable A/B experiment briefs for client-side injected variations.";
 
+  const refs = opts.proto.brief.references ?? [];
   const context = [
     `Prototype name: ${opts.proto.name}`,
     opts.proto.targets.length ? `Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ")}` : "Target pages: none set yet",
-  ].join("\n");
+    refs.length ? `Supporting references: ${refs.map((r) => `${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}`).join("; ")}` : "",
+  ].filter(Boolean).join("\n");
 
   const { clarifying_questions: _q, ...briefNoQ } = opts.current;
   void _q;

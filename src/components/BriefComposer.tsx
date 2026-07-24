@@ -2,8 +2,58 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { PrototypeBrief, PrototypeHypothesis, PrototypeMetrics } from "@/lib/prototypes/types";
+import { referenceKind, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
 import type { BriefDraft, BriefSection } from "@/lib/ai/brief";
+
+const REF_META: Record<BriefReferenceKind, { icon: string; label: string }> = {
+  figma: { icon: "🎨", label: "Figma" },
+  image: { icon: "🖼", label: "Screenshot" },
+  design: { icon: "✎", label: "Design" },
+  doc: { icon: "📄", label: "Doc" },
+  link: { icon: "🔗", label: "Link" },
+};
+
+/**
+ * Supporting links on the brief — Figma, design files, screenshots, reference
+ * pages. Links only (no upload — no blob store yet); a screenshot is added by
+ * its URL. Each is typed from its URL so the building agent knows what it is.
+ */
+function ReferencesEditor({ references, onAdd, onRemove }: {
+  references: BriefReference[];
+  onAdd: (url: string, label?: string) => void;
+  onRemove: (i: number) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [label, setLabel] = useState("");
+  const valid = /^https?:\/\/\S+$/i.test(url.trim());
+  function add() { if (!valid) return; onAdd(url.trim(), label.trim() || undefined); setUrl(""); setLabel(""); }
+  return (
+    <div className="space-y-2">
+      {references.length > 0 && (
+        <div className="space-y-1">
+          {references.map((r, i) => {
+            const m = REF_META[r.kind] ?? REF_META.link;
+            return (
+              <div key={`${r.url}-${i}`} className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/30 px-2.5 py-1.5">
+                <span className="shrink-0" title={m.label}>{m.icon}</span>
+                <span className="text-[12px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 font-medium shrink-0">{m.label}</span>
+                <a href={r.url} target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover truncate min-w-0 flex-1">{r.label || r.url}</a>
+                <button onClick={() => onRemove(i)} className="text-[13px] text-muted-2 hover:text-danger shrink-0">Remove</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
+          placeholder="Paste a Figma / design / screenshot / page URL" className={inp + " text-[13px] flex-1"} />
+        <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
+          placeholder="label (optional)" className={inp + " text-[13px] w-40 shrink-0"} />
+        <button onClick={add} disabled={!valid} className="h-9 px-3 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">Add</button>
+      </div>
+    </div>
+  );
+}
 
 const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 const ta = inp + " resize-y leading-relaxed";
@@ -136,6 +186,9 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
 
   const dirty = JSON.stringify({ brief, hyp, metrics }) !== saved;
   const hasContent = Boolean(brief.change?.trim());
+  const refs = brief.references ?? [];
+  const addRef = (url: string, label?: string) => { setBrief((b) => ({ ...b, references: [...(b.references ?? []), { url, label, kind: referenceKind(url) }] })); setMsg(null); };
+  const removeRef = (i: number) => { setBrief((b) => ({ ...b, references: (b.references ?? []).filter((_, j) => j !== i) })); setMsg(null); };
 
   /** Fold a returned draft into the split state. */
   function applyDraft(d: BriefDraft) {
@@ -146,6 +199,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       where: d.brief.where || undefined,
       constraints: d.brief.constraints || undefined,
       reference: b.reference,
+      references: b.references, // links are the user's, never rewritten by a draft
     }));
     setHyp(d.hypothesis);
     setMetrics({ primary: d.metrics.primary, guardrails: d.metrics.guardrails ?? [] });
@@ -357,6 +411,10 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
               <p className="text-[14px] text-muted-2">No metric set yet — add the one event that decides this experiment.</p>
             )}
           </div>
+          <div>
+            <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">References <span className="normal-case font-normal text-muted-2">· Figma, designs, screenshots, pages</span></div>
+            <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
+          </div>
           {saveBar}
         </div>
       ) : (
@@ -395,6 +453,10 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
           <div>
             <label className={lbl}>Metric guardrails (comma-separated — what must not regress)</label>
             <input value={metrics.guardrails.join(", ")} onChange={(e) => setMetrics({ ...metrics, guardrails: e.target.value.split(",").map((g) => g.trim()).filter(Boolean) })} className={inp} />
+          </div>
+          <div>
+            <label className={lbl}>References — Figma, designs, screenshots, pages</label>
+            <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
           </div>
           {saveBar}
         </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
-import { normalizeStage, type PrototypeRecord } from "@/lib/prototypes/types";
+import { normalizeStage, referenceKind, type PrototypeRecord, type PrototypeBrief, type BriefReference } from "@/lib/prototypes/types";
 import { accessibleOrgIds, canAccessOrg, getActiveOrgId } from "@/lib/active-org";
 import { listOrgEnvironments } from "@/lib/environments";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
@@ -14,6 +14,24 @@ import { defaultOrgRepo } from "@/lib/git/org-repos";
 function prototypeBranch(input: string | undefined, key: string): string {
   const b = input?.trim();
   return b && b !== "starter" ? b : `prototype/${key}`;
+}
+
+/** Sanitize + normalize a brief payload identically on create and update. */
+function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?: string; where?: string; constraints?: string; reference?: string; references?: { url?: string; label?: string }[] } | undefined): PrototypeBrief {
+  const refs: BriefReference[] = (raw?.references ?? [])
+    .map((r) => ({ url: (r?.url ?? "").trim(), label: r?.label?.trim() || undefined }))
+    .filter((r) => /^https?:\/\//i.test(r.url))   // http(s) only — no javascript:/data: URLs in the brief
+    .slice(0, 20)
+    .map((r) => ({ ...r, kind: referenceKind(r.url) }));
+  return {
+    problem: raw?.problem?.trim() ?? "",
+    change: raw?.change?.trim() ?? "",
+    doneLooksLike: raw?.doneLooksLike?.trim() ?? "",
+    ...(raw?.where?.trim() ? { where: raw.where.trim() } : {}),
+    ...(raw?.constraints?.trim() ? { constraints: raw.constraints.trim() } : {}),
+    ...(raw?.reference?.trim() ? { reference: raw.reference.trim() } : {}),
+    ...(refs.length ? { references: refs } : {}),
+  };
 }
 
 function slug(name: string): string {
@@ -92,14 +110,7 @@ export async function POST(req: NextRequest) {
       ? { fullName: b.repo.fullName.trim(), branch: prototypeBranch(b.repo.branch, key), ...(b.repo.artifactPath?.trim() ? { artifactPath: b.repo.artifactPath.trim() } : {}) }
       : undefined,
     targets: (b.targets ?? []).filter((t) => t.url?.trim()).map((t) => ({ url: t.url.trim(), source: t.source === "live" ? "live" : "clone" })),
-    brief: {
-      problem: b.brief?.problem?.trim() ?? "",
-      change: b.brief?.change?.trim() ?? "",
-      doneLooksLike: b.brief?.doneLooksLike?.trim() ?? "",
-      ...(b.brief?.where?.trim() ? { where: b.brief.where.trim() } : {}),
-      ...(b.brief?.constraints?.trim() ? { constraints: b.brief.constraints.trim() } : {}),
-      ...(b.brief?.reference?.trim() ? { reference: b.brief.reference.trim() } : {}),
-    },
+    brief: normalizeBrief(b.brief),
     hypothesis: {
       change: b.hypothesis?.change?.trim() ?? "",
       audience: b.hypothesis?.audience?.trim() ?? "",
@@ -158,14 +169,7 @@ export async function PATCH(req: NextRequest) {
     changes.push("targets");
   }
   if (body.brief !== undefined) {
-    updated.brief = {
-      problem: body.brief?.problem?.trim() ?? "",
-      change: body.brief?.change?.trim() ?? "",
-      doneLooksLike: body.brief?.doneLooksLike?.trim() ?? "",
-      ...(body.brief?.where?.trim() ? { where: body.brief.where.trim() } : {}),
-      ...(body.brief?.constraints?.trim() ? { constraints: body.brief.constraints.trim() } : {}),
-      ...(body.brief?.reference?.trim() ? { reference: body.brief.reference.trim() } : {}),
-    };
+    updated.brief = normalizeBrief(body.brief);
     changes.push("brief");
   }
   if (body.hypothesis !== undefined) {

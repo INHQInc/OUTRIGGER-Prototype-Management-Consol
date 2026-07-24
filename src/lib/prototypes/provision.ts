@@ -126,6 +126,9 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
     b.constraints ? `## Guardrails / do-not-touch\n${b.constraints}\n` : "",
     b.problem ? `## Problem / opportunity\n${b.problem}\n` : "",
     b.reference ? `## Reference\n${b.reference}\n` : "",
+    b.references?.length
+      ? `## References (design intent — consult before building)\n${b.references.map((r) => `- **${r.kind}**${r.label ? ` — ${r.label}` : ""}: ${r.url}`).join("\n")}\n`
+      : "",
     (proto.hypothesis.change || proto.hypothesis.outcome)
       ? `## Hypothesis (frames the experiment)\nWe believe **${proto.hypothesis.change || "[change]"}** for **${proto.hypothesis.audience || "[audience]"}** will cause **${proto.hypothesis.outcome || "[outcome]"}**${proto.hypothesis.rationale ? ` because ${proto.hypothesis.rationale}` : ""}.\n`
       : "",

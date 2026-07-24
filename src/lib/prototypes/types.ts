@@ -69,13 +69,32 @@ export function injectionPasses(t: PrototypeTarget): boolean {
 }
 
 /** Structured brief — not a free-text blob. What Claude reads to build. */
+/** A supporting link on the brief — Figma, a design file, a screenshot, a page. */
+export type BriefReferenceKind = "figma" | "image" | "design" | "doc" | "link";
+export interface BriefReference {
+  url: string;
+  label?: string;
+  kind: BriefReferenceKind;
+}
+
+/** Classify a reference URL so the UI (and the building agent) can treat it right. */
+export function referenceKind(url: string): BriefReferenceKind {
+  const u = url.toLowerCase();
+  if (/figma\.com|figma\.site/.test(u)) return "figma";
+  if (/\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/.test(u) || /(cloudinary|imgur|githubusercontent|screenshot)/.test(u)) return "image";
+  if (/dribbble\.com|behance\.net|\.sketch(\?|#|$)|\.fig(\?|#|$)|\.xd(\?|#|$)|zeplin\.io|invisionapp/.test(u)) return "design";
+  if (/docs\.google\.com|\.pdf(\?|#|$)|notion\.so|\.key(\?|#|$)|dropbox\.com|drive\.google/.test(u)) return "doc";
+  return "link";
+}
+
 export interface PrototypeBrief {
   problem: string;       // problem / opportunity
   change: string;        // what it changes
   doneLooksLike: string; // definition of done (acceptance criteria, in words)
   where?: string;        // where on the page the change goes (anchor / selector hint)
   constraints?: string;  // guardrails / do-not-touch
-  reference?: string;    // reference URL or notes (optional; often none — design iterates with Claude)
+  reference?: string;    // legacy free-text reference (superseded by references[])
+  references?: BriefReference[]; // supporting links: Figma, design files, screenshots, pages
 }
 
 /** Canonical A/B hypothesis: "We believe [change] for [audience] will cause [outcome] because [rationale]." */
