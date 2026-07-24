@@ -158,8 +158,11 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
     const tokenIssue = err ? /(403|not allowed|not accessible|Contents|reconnect|token)/i.test(err) : false;
     return (
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border">
+          <span className="text-[14px] font-semibold">Local folders</span>
+          <span className="text-[13px] text-muted-2 ml-2">Set where it clones, then get the init script — Claude wakes up loaded with this prototype and its page(s).</span>
+        </div>
         <div className="px-4 py-3 space-y-3">
-          <div className="text-[14px] text-muted-2 max-w-md">Get your init script — sets up the branch so Claude wakes up loaded with this prototype and its page(s).</div>
           {pathFields}
           <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
             <span className={`text-[13px] ${briefDone ? "text-muted-2" : "text-warn"}`}>{!briefDone ? "Write the brief first — it's the gate. Building without a spec is how prototypes drift." : pathOk ? "Ready — this is where it clones to." : "Save the local folder first."}</span>
@@ -190,25 +193,12 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-border bg-surface p-4">{pathFields}</div>
-
-      {/* Re-sync — the console rewrites .opmc/** and .claude/skills/** on the
-          branch. Without this there is no way to push an edited brief, fresh
-          page snapshots, or a changed skill set to an already-provisioned
-          prototype. Safe on a live branch: compare-and-swap, and it never
-          touches src/ or dist/. */}
-      <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-[14px] font-semibold">Sync brief &amp; skills to the branch</div>
-          <div className="text-[13px] text-muted-2 mt-0.5 leading-relaxed">
-            Writes the current brief, page snapshots (<span className="font-mono">data.md</span>, <span className="font-mono">design-tokens.md</span>) and the selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart Claude so it picks up new skills.
-          </div>
-          {err && <div className="text-[13px] text-danger mt-1">{err}</div>}
-          {synced && <div className="text-[13px] text-ok mt-1">{synced}</div>}
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border">
+          <span className="text-[14px] font-semibold">Local folders</span>
+          <span className="text-[13px] text-muted-2 ml-2">Where it clones on your machine, and your site-source checkout.</span>
         </div>
-        <button onClick={resync} disabled={busy} className="h-8 px-3 rounded-lg border border-border text-[14px] font-semibold text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
-          {busy ? "Re-syncing…" : "Re-sync"}
-        </button>
+        <div className="p-4">{pathFields}</div>
       </div>
 
       {pathOk ? (
@@ -229,6 +219,27 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
       ) : (
         <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-4 py-3 text-[14px] text-warn">Save the local folder above to generate your clone command.</div>
       )}
+
+      {/* Re-sync — the console rewrites .opmc/** and .claude/skills/** on the
+          branch. Without this there is no way to push an edited brief, fresh
+          page snapshots, or a changed skill set to an already-provisioned
+          prototype. Safe on a live branch: compare-and-swap, and it never
+          touches src/ or dist/. */}
+      <div className="rounded-xl border border-border bg-surface overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-3">
+          <span className="text-[14px] font-semibold">Sync brief &amp; skills to the branch</span>
+          <button onClick={resync} disabled={busy} className="h-8 px-3 rounded-lg border border-border text-[14px] font-semibold text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
+            {busy ? "Re-syncing…" : "Re-sync"}
+          </button>
+        </div>
+        <div className="px-4 py-3">
+          <div className="text-[13px] text-muted-2 leading-relaxed">
+            Writes the current brief, page snapshots (<span className="font-mono">data.md</span>, <span className="font-mono">design-tokens.md</span>) and the selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart Claude so it picks up new skills.
+          </div>
+          {err && <div className="text-[13px] text-danger mt-1">{err}</div>}
+          {synced && <div className="text-[13px] text-ok mt-1">{synced}</div>}
+        </div>
+      </div>
     </div>
   );
 }

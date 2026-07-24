@@ -158,15 +158,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       {tab === "source" && (
         <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">Where the code lives and how it reaches your machine: the repo + branch, the local folders, and the command that starts Claude. The console reads the branch; it never writes your code.</p>
-          <details className={`group rounded-xl border ${repo?.fullName && source?.branchExists ? "border-border bg-surface/40" : "border-warn/40"}`} open={!(repo?.fullName && source?.branchExists)}>
-            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none">
-              <span className="text-[14px]">⚙</span>
-              <span className="text-[14px] font-semibold">Repo &amp; branch</span>
-              <span className="text-[13px] text-muted-2 font-mono truncate">{repo?.fullName ? `${repo.fullName}@${repo.branch}` : "pick the repo + branch"}</span>
-              <span className="ml-auto text-[12.5px] text-muted-2 group-open:hidden">open</span>
-            </summary>
-            <div className="px-4 pb-4"><RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} /></div>
-          </details>
+          <RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} />
           <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={Boolean(p.brief.change?.trim())} />
         </div>
       )}
