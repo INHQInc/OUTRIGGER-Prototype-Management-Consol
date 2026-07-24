@@ -176,6 +176,20 @@ export class GitHubClient {
     }
   }
 
+  /**
+   * The full file tree at a ref (branch/commit SHA) — powers the Handoff
+   * explorer's SHA-pinned browse. Files only (blobs), path-sorted.
+   */
+  async listTreeAtRef(owner: string, repo: string, ref: string): Promise<{ path: string; size: number }[]> {
+    const r = await this.gh<{ tree?: { path: string; type: string; size?: number }[]; truncated?: boolean }>(
+      `/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`
+    );
+    return (r.tree ?? [])
+      .filter((t) => t.type === "blob")
+      .map((t) => ({ path: t.path, size: t.size ?? 0 }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
   /** Read a file's decoded text content at a ref (branch/sha). null if absent. */
   async readFileAtRef(owner: string, repo: string, path: string, ref: string): Promise<string | null> {
     const encPath = path.split("/").map(encodeURIComponent).join("/");
