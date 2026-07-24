@@ -138,7 +138,9 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
       ? proto.metrics.primary ? "described · metric set" : "described · no metric yet"
       : workStarted ? "missing — required before launch" : "what are we building?",
   });
-  if (!briefDone && workStarted) alerts.push({ level: "warn", text: "No brief on record — one sentence unblocks the launch gate (and gives the experiment its description).", anchor: "brief" });
+  // NO alert for a missing brief: the blocked step already says it — the chip
+  // shows "Blocked at Brief" and Overview's Needs Attention lists the gate.
+  // One fact, one place; a banner here made the same sentence appear 5×.
 
   // 2 · Build
   const buildDone = provisioned && built && !problem;
@@ -221,7 +223,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
 
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
-  if (!briefDone) primaryAction = { label: workStarted ? "Write the brief — it's the gate" : "Write the brief", anchor: "brief" };
+  if (!briefDone) primaryAction = { label: "Write the brief", anchor: "brief" };
   else if (!provisioned) primaryAction = { label: "Get the init script", anchor: "source" };
   else if (!built || problem) primaryAction = { label: "Build with Claude", anchor: "source" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "review" };

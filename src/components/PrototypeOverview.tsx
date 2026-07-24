@@ -51,31 +51,35 @@ export function PrototypeOverview({ proto, pipeline, versions, push, activity }:
           </div>
         )}
 
-        {/* The brief, as its document */}
-        <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2">The brief</div>
-            <Link href="?tab=brief" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{hasBrief ? "Edit →" : "Write it →"}</Link>
+        {/* The brief, as its document. When it's missing AND blocked, Needs
+            Attention above already says so — repeating it here was noise. The
+            empty-state card renders only for a fresh prototype (nothing blocked). */}
+        {(hasBrief || blocked.length === 0) && (
+          <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2">The brief</div>
+              <Link href="?tab=brief" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{hasBrief ? "Edit →" : "Write it →"}</Link>
+            </div>
+            {hasBrief ? (
+              <>
+                <p className="text-[15px] leading-relaxed max-w-[70ch]">{b.change}</p>
+                {b.doneLooksLike?.trim() && (
+                  <ul className="space-y-1">
+                    {criteriaLines(b.doneLooksLike).slice(0, 5).map((c, i) => (
+                      <li key={i} className="text-[14px] text-muted leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {proto.metrics.primary && <span className="text-[13px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] font-medium">📊 {proto.metrics.primary}</span>}
+                  {proto.metrics.guardrails.slice(0, 3).map((g, i) => <span key={i} className="text-[13px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
+                </div>
+              </>
+            ) : (
+              <p className="text-[14px] text-muted-2">Explain the experiment in your own words — Claude drafts the rest.</p>
+            )}
           </div>
-          {hasBrief ? (
-            <>
-              <p className="text-[15px] leading-relaxed max-w-[70ch]">{b.change}</p>
-              {b.doneLooksLike?.trim() && (
-                <ul className="space-y-1">
-                  {criteriaLines(b.doneLooksLike).slice(0, 5).map((c, i) => (
-                    <li key={i} className="text-[14px] text-muted leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
-                  ))}
-                </ul>
-              )}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {proto.metrics.primary && <span className="text-[13px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] font-medium">📊 {proto.metrics.primary}</span>}
-                {proto.metrics.guardrails.slice(0, 3).map((g, i) => <span key={i} className="text-[13px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
-              </div>
-            </>
-          ) : (
-            <p className="text-[14px] text-muted-2">No brief yet — it&apos;s the gate. Explain the experiment in your own words and Claude drafts the rest.</p>
-          )}
-        </div>
+        )}
 
         {/* The parts, at a glance — each links to its room */}
         <div className="grid grid-cols-2 2xl:grid-cols-4 gap-3">
