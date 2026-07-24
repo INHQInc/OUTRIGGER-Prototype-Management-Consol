@@ -145,7 +145,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       </div>
 
       {tab === "overview" && (
-        <PrototypeOverview proto={p} pipeline={pipeline} versions={versions} push={push} activity={feed} />
+        <PrototypeOverview proto={p} pipeline={pipeline} activity={feed} />
       )}
 
       {tab === "brief" && (

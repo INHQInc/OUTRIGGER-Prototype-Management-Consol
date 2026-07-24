@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { TimeAgo } from "@/components/ui";
 import type { Pipeline } from "@/lib/prototypes/pipeline";
-import type { PrototypeRecord, ArtifactVersion } from "@/lib/prototypes/types";
-import type { PushResult } from "@/lib/prototypes/ship";
+import type { PrototypeRecord } from "@/lib/prototypes/types";
 
 export interface ActivityItem { at: string; text: string; who?: string }
 
@@ -17,11 +16,9 @@ function criteriaLines(s: string): string[] {
  * rooms), and what's HAPPENING (the activity feed — every heartbeat the system
  * already records, finally visible).
  */
-export function PrototypeOverview({ proto, pipeline, versions, push, activity }: {
+export function PrototypeOverview({ proto, pipeline, activity }: {
   proto: PrototypeRecord;
   pipeline: Pipeline;
-  versions: ArtifactVersion[];
-  push: PushResult | null;
   activity: ActivityItem[];
 }) {
   const b = proto.brief;
@@ -30,7 +27,6 @@ export function PrototypeOverview({ proto, pipeline, versions, push, activity }:
   // A blocked step and its alert say the same thing — say it once.
   const blockedAnchors = new Set(blocked.map((s) => s.anchor));
   const extraAlerts = pipeline.alerts.filter((a) => !a.anchor || !blockedAnchors.has(a.anchor));
-  const latest = versions[0];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem] gap-4 items-start">
@@ -81,32 +77,8 @@ export function PrototypeOverview({ proto, pipeline, versions, push, activity }:
           </div>
         )}
 
-        {/* The parts, at a glance — each links to its room */}
-        <div className="grid grid-cols-2 2xl:grid-cols-4 gap-3">
-          <Link href="?tab=source" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Source Control</div>
-            <div className="text-[14px]">{pipeline.steps.find((s) => s.id === "build")?.status}</div>
-            {pipeline.truth.claudeSeenAt && <div className="text-[13px] text-muted-2 mt-0.5">Claude engaged <TimeAgo iso={pipeline.truth.claudeSeenAt} /></div>}
-          </Link>
-          <Link href="?tab=review" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Review</div>
-            <div className="text-[14px]">{pipeline.steps.find((s) => s.id === "review")?.status}</div>
-            <div className="text-[13px] text-muted-2 mt-0.5">{proto.targets.length} target page{proto.targets.length === 1 ? "" : "s"}</div>
-          </Link>
-          <Link href="?tab=experiment" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Experimentation</div>
-            <div className="text-[14px]">{pipeline.steps.find((s) => s.id === "launch")?.status}</div>
-            <div className="text-[13px] text-muted-2 mt-0.5 font-mono">
-              {latest ? `v${latest.version}${latest.certification ? (latest.certification.passed ? " · certified ✓" : " · cert FAILED") : ""}` : "no version cut"}
-              {push ? ` · pushed v${push.version}` : ""}
-            </div>
-          </Link>
-          <Link href="?tab=handoff" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Handoff</div>
-            <div className="text-[14px]">{proto.status === "shipped" ? "shipped to production" : "when the experiment wins"}</div>
-            <div className="text-[13px] text-muted-2 mt-0.5">winner → production code</div>
-          </Link>
-        </div>
+        {/* No parts grid: the tab row directly above IS the map of the rooms,
+            dots included. Restating it as cards was the tab bar said twice. */}
       </div>
 
       {/* ── The heartbeat ── */}
