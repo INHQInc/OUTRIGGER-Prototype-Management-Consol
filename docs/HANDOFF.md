@@ -1,6 +1,6 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-07-23. Read AGENTS.md first (model + rules), then this (state + next moves). Debugging? `docs/RUNBOOK.md`.*
+*Updated: 2026-07-24. Read AGENTS.md first (model + rules), then this (state + next moves). Debugging? `docs/RUNBOOK.md`.*
 
 ## Where we are (2026-07-24)
 
@@ -9,6 +9,7 @@
 ### The product surface (rebuilt this session)
 
 - **Pipeline everywhere, one vocabulary**: Brief · Build · Review · Launch · Testing · Shipped. `lib/prototypes/pipeline.ts` derives everything from stored truth; the workspace stepper, the program board, and dashboard alerts all render it. **First-gate rule:** position holds at the first blocked gate; requirements never teleport work backwards, they block it.
+- **Workspace = rooms, not steps** (07-24, per user: "a living breathing thing not a list of steps"): status lives ONCE in the pipeline header; below it `?tab=` rooms — **Overview | Brief | Build | Pages | Experiment | Handoff** (`app/prototypes/[key]/page.tsx`). Tab dots reuse step states; step `anchor`s are room ids; every alert/step/dashboard link deep-links `?tab=<room>`. `PrototypeOverview` = needs-attention + brief-as-document + parts grid + activity feed (audit events filtered to the prototype + version cuts + pushes + Claude check-ins). Experiment room = numbered rock-solid flow (cut → certify → bind → push → start; manual bundle demoted to a disclosure). Handoff room = winner → production code (flag `handoff:<key>`). Build room absorbs source control (collapsible), skills, init script.
 - **The brief is the gate**: no brief → no provision → no build (enforced in `provisionBranch` + UI). Push also gates on it.
 - **Draft-with-AI brief composer**: `/api/prototypes/brief-draft` → `lib/ai/brief.ts` (@anthropic-ai/sdk, claude-opus-4-8, forced-tool JSON). System prompt = the `opmc-brief-author` skill (new `delivery: "console"` scope — console skills initialize API-side Claude, never delivered to branches). Requires `ANTHROPIC_API_KEY` (set in Vercel 07-24).
 - **Program board** (`/prototypes`, Board|List tabs, `?view=` URL-backed): columns derived from pipeline + LIVE experiment status; Testing locked by the platform; hybrid drag (reorder = priority; Launch→Shipped = decision; wrong drags bounce with the reason); tall cards (hypothesis, next action, gate warnings, truth chips). List view has status filters.
