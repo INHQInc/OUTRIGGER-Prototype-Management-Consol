@@ -1,6 +1,6 @@
 # Claude Context Guide — OUTRIGGER Prototype Management Console
 
-*Last updated: 2026-07-23 (skills library, ideas channel, provisioning derivations, loader status)*
+*Last updated: 2026-07-24 (pipeline + program board + gates + AI brief composer; 07-23: skills library, ideas channel, provisioning derivations, loader status)*
 
 > **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work — authoritative for "where are we"**).
 >
@@ -99,6 +99,20 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 
 `lib/prototypes/served.ts` holds the loader's 20s cache and makes it introspectable. `GET /api/loader/status?key=` reports `served` vs `head` commit, `cacheAgeMs`, `stale`, `staleForMs`, and `artifactProblem` (`starter-build` | `placeholder`). The loader payload now carries `commit` so what's served self-identifies.
 
+## The pipeline & program board (2026-07-24)
+
+- **One vocabulary, one derivation**: `lib/prototypes/pipeline.ts` → Brief · Build · Review · Launch · Testing · Shipped, computed from stored truth (provision flag, artifactProblem, injection verifications, cut-vs-HEAD, certification, push read-back, live experiment status). The workspace stepper (`PipelineHeader` + StepCards), the program board, the list view, and dashboard alerts ALL render this one function — never invent a second status dialect.
+- **First-gate rule**: position holds at the first blocked gate (missing brief, failed certification). Requirements block; they never teleport position backwards.
+- **The brief is the gate**: `provisionBranch()` and `pushToOptimizely()` both refuse without `brief.change`. No brief → no build → no launch.
+- **Program board** (`/prototypes`, Board|List tabs via `?view=`): columns derived (`lib/prototypes/board.ts`), Testing locked by LIVE Optimizely status, drag only where judgment lives (priority reorder; Launch→Shipped), wrong drags bounce with the reason. `board-model.ts` is the client-safe module — value imports from `board.ts` in client components pull the server graph and break the build.
+- **Ship rails** (`lib/prototypes/ship.ts`): certification gates the push (recorded override only); a RUNNING experiment refuses pushes (pause in Optimizely = the sign-off); read-back verifies every push byte-for-byte.
+
+## The console's API-side Claude (2026-07-24)
+
+- **Draft-with-AI brief composer**: `BriefComposer` → `POST /api/prototypes/brief-draft` → `lib/ai/brief.ts` (`@anthropic-ai/sdk`, `claude-opus-4-8`, forced-tool structured output). Read view renders the brief as a document; acceptance criteria are an array.
+- **Skill `delivery` scopes**: `"branch"` (default — materialized into prototype repos) vs `"console"` (system prompt for API-side Claude, never delivered to branches). `opmc-brief-author` is the first console skill — edit it in /skills and the drafting behavior follows. One library initializes every Claude in the product.
+- Requires `ANTHROPIC_API_KEY` (Vercel env; set 2026-07-24). Env vars only apply to NEW deployments — see RUNBOOK.
+
 ## Hard rules (invariants)
 
 - **Never hardcode a brand or site.** Everything is per-tenant/per-site config from the store. (Known debt: `lib/sites.ts` and the handoff patch generator still encode Outrigger specifics — the *ship* layer is not yet portable.)
@@ -133,6 +147,7 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 | `FIRECRAWL_API_KEY` | capture |
 | `GITHUB_TOKEN` | git deploy / auto-pin / source reads |
 | `OPTIMIZELY_API_TOKEN` / `OPTIMIZELY_PROJECT_ID` | legacy/CLI fallback (brand config preferred) |
+| `ANTHROPIC_API_KEY` | the console's API-side Claude (brief drafting) |
 
 Claude never enters credentials — the user pastes them into Vercel / the app's Brand settings.
 

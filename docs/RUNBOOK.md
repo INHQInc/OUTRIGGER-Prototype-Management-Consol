@@ -151,3 +151,25 @@ And avoid running builds in their tree; `node build.mjs` rewrites `dist/variatio
 - **Compare-and-swap:** commits `.opmc/**` with `force: false`, re-reads HEAD and retries once. It can never rewind a Claude push.
 - **Idempotent:** a matching `contentHash` with no fresh captures is a no-op.
 - **`.opmc/` is console-authored.** Never hand-edit it in a branch; re-sync regenerates it.
+
+---
+
+## Vercel environment variables
+
+### "isn't set on the server" right after adding the var
+
+Env vars are baked in **at deploy time**. Adding one in Vercel does nothing to
+the running deployment — the error persists until a NEW deployment goes out.
+Fix: push anything (an empty commit works: `git commit --allow-empty -m
+"chore: redeploy for env"`) or Deployments → ⋯ → Redeploy. Scope must include
+**Production**.
+
+## Policy gates that look like errors (they aren't)
+
+- **"No brief yet — write what we're building first"** on provision/re-sync,
+  and the disabled Get-init-script button: the brief gates the BUILD by design.
+  One sentence in the Brief step (or Draft-with-AI) clears it.
+- **"This experiment is RUNNING"** on push: a live test is immutable — pausing
+  it in Optimizely IS the human sign-off. No override flag exists on purpose.
+- **"Certification failed … the push is gated"**: fix and re-cut, or use the
+  explicit recorded override in the Launch card if you accept the risk.

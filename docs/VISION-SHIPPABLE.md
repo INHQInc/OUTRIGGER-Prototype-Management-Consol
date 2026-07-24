@@ -1,6 +1,6 @@
 # The Agent-Native Experiment Authoring Layer — Vision & Shippable Feature Map
 
-*Last updated: 2026-07-23 — the day the loop closed end-to-end for the first time.*
+*Last updated: 2026-07-24 — statuses swept after the Phase-1 build sprint (S1, R2 v1, E3, B1/B2, AI brief composer, pipeline UX).*
 
 > Companion to [`PRODUCT-ROADMAP.md`](PRODUCT-ROADMAP.md) (market positioning, pillars P1–P4, acquirer analysis). That doc says **why** and **where**. This doc says **what we build, feature by feature**, to get from today's working prototype to a product **anyone can use**, that is **shippable as a company**, and that is **buyable by Optimizely** (or LaunchDarkly, or Amplitude — never negotiate with one).
 
@@ -51,7 +51,7 @@ Organized by the journey. Status: ✅ built · 🟡 partial · ⬜ to build. Eac
 |---|---|---|---|
 | O1 | **GitHub App OAuth** replacing PATs — repo-scoped install, PR-only permission, one-click revoke | ⬜ | Today's PAT saga (403/404/"Public repositories" tier) took a founder + an AI hours. A normal user churns in minutes. Disqualifying as-is. |
 | O2 | **Auto-provisioned prototypes repo** — console creates the repo from a template on connect (no manual `starter` branch requirement) | ⬜ | "Your repo must contain a starter branch" is insider knowledge. The product should manufacture its own preconditions. |
-| O3 | **Site compatibility check** — on adding an environment: SSR test, CSP parse, bot-protection detect, loader reachability → red/green verdict with the reason | ⬜ | We know the boundary (SSR + CSP-permissive + loader-installable). Today it's tribal knowledge; it must be a 30-second automated verdict before a customer invests an hour. |
+| O3 | **Site compatibility check** — engine + API ✅ (07-24: SSR/CSP/bot/reachability verdict, `/api/environments/compat`); ⬜ UI wire-up in Environments | 🟡 | We know the boundary (SSR + CSP-permissive + loader-installable). Today it's tribal knowledge; it must be a 30-second automated verdict before a customer invests an hour. |
 | O4 | **Loader install paths ×3** — one-line tag · GTM template · **via the Optimizely snippet itself** (project JS/custom snippet — zero site-template access needed) | 🟡 tag only | The Optimizely-snippet path removes the single biggest onboarding blocker (waiting on a site deploy) — and it's the acquisition-integration story in miniature. |
 | O5 | Experimentation platform connect — OAuth to Optimizely, project picker, scoped token vault | 🟡 PAT-based | Same PAT problem, different platform. |
 | O6 | Guided first-run — sample prototype, checklist, "your first experiment in 30 minutes" | ⬜ | Activation. |
@@ -65,7 +65,7 @@ Organized by the journey. Status: ✅ built · 🟡 partial · ⬜ to build. Eac
 | A3 | **Skill library, three tiers** (generic/brand/prototype), in-app authoring + reader, per-prototype selection, delivered into the branch, pruned on deselect | ✅ | Built today. |
 | A4 | Skill **versioning + packs** — per-platform packs (Optimizely Web/FX, VWO), per-CMS packs (Optimizely CMS, AEM, Sitecore, Shopify), import/export | ⬜ | Packs are how knowledge scales past one brand — and how "deepest Optimizely awareness" becomes a demo. |
 | A5 | **Capture intelligence** — SSR+rendered dual capture; `data.md` (embedded data islands + DOM↔data join keys); `design-tokens.md` (fonts, custom properties, z-index ladder); reference-repo registry + `source-site` symlink | ✅ | Built today. The "hours of spelunking → one read" layer. |
-| A6 | **Brief system** — empty-brief interview protocol, agent PATCH-back, console-canonical | ✅ | Built. Add: brief templates per experiment type (⬜, small). |
+| A6 | **Brief system** — interview protocol + PATCH-back ✅; **Draft-with-AI composer** ✅ (07-24): plain-language → structured brief via API-side Claude (skill-initialized, `delivery: console`), document read-view, per-question clarification loop. The brief gates build AND launch. | ✅ |
 | A7 | **Self-orientation + self-healing** — `opmc-system` mental model, §0 sync check, tokenless `/sync-status`, agent re-syncs on drift | ✅ | Built today. Extend to hosted agents automatically (A1 dependency). |
 | A8 | Console ↔ agent chat — talk to the building agent from the prototype page; approve/iterate without a terminal | ⬜ | The review conversation belongs next to the preview, not in a separate app. Rides on A1. |
 
@@ -74,7 +74,7 @@ Organized by the journey. Status: ✅ built · 🟡 partial · ⬜ to build. Eac
 | # | Feature | Status | Why it gates shipping |
 |---|---|---|---|
 | R1 | Live review on the real environment (`?opmc` token-gated loader), per-page verify/confirm, loader heartbeat | ✅ | The canvas. Add: expiring review tokens + per-env review gates (⬜) — today the key is the only secret. |
-| R2 | **The Certification Pipeline** — automated QA gate every variation passes before ship: **dual injection timing** (early `<head>` + late post-load — today's lesson, automated) · idempotency (runs twice → once) · re-render survival (MutationObserver) · zero-analytics scan · same-origin asset check · bundle budget · flicker/CLS estimate · multi-viewport screenshots | ⬜ | **The single most acquisition-desirable feature.** Optimizely's custom-code box is a support-ticket generator; a "Certified Variation" badge is the quality gate their platform has never had. Every check encodes a failure we personally paid for. |
+| R2 | **The Certification Pipeline** — v1 ✅ (07-24): static gate at cut — dual injection timing, idempotency guard, re-render survival, zero-analytics, same-origin assets, bundle budget; report frozen on the version; gates the push. ⬜ remaining: runtime checks, flicker/CLS estimate, multi-viewport screenshot matrix | 🟡 | **The single most acquisition-desirable feature.** Optimizely's custom-code box is a support-ticket generator; a "Certified Variation" badge is the quality gate their platform has never had. Every check encodes a failure we personally paid for. |
 | R3 | Stakeholder review — share links, comments, approve/request-changes on the live preview | ⬜ | The agency/marketing loop; adoption spreads through reviewers. |
 | R4 | `/api/loader/status` ground truth — served vs HEAD commit, cache age, artifact problems | ✅ | Built today. Kills phantom-staleness debugging forever. |
 
@@ -82,7 +82,7 @@ Organized by the journey. Status: ✅ built · 🟡 partial · ⬜ to build. Eac
 
 | # | Feature | Status | Why it gates shipping |
 |---|---|---|---|
-| S1 | **API push to Optimizely** — create/update the experiment's variation custom code by API on every version cut; read-back diff to verify; no paste, ever | 🟡 paused-draft create exists | Today's empty-paste failure and 39KB copy ritual disappear. Cut v3 → it's in Optimizely, verified, in seconds. |
+| S1 | **API push to Optimizely** — bind once; push replaces the variation's custom code, read-back verifies byte-for-byte; certification + brief + running-experiment gates in front | ✅ built 07-24 | Today's empty-paste failure and 39KB copy ritual disappear. Cut v3 → it's in Optimizely, verified, in seconds. |
 | S2 | **Auto anti-flicker split** — detect above-the-fold, visible-on-load styles; hoist only those into the platform's CSS slot automatically, keep the artifact canonical | ⬜ | The one legitimate reason to split CSS/JS, done by analysis instead of convention. |
 | S3 | SHA-pinned immutable versions + drift guard + handoff bundle (manual mode) | ✅ | Built. The traceability spine: review-bytes == ship-bytes == recorded-bytes. |
 | S4 | **Results read-back** — experiment status + results displayed in the console (display only; the platform owns stats) | ⬜ | Closes the narrative loop in one pane; feeds S5. |
@@ -105,10 +105,10 @@ Organized by the journey. Status: ✅ built · 🟡 partial · ⬜ to build. Eac
 
 | # | Feature | Status | Why it gates shipping |
 |---|---|---|---|
-| B1 | **Kanban pipeline** — Backlog → Brief → Sign-off → Building → Review → **Testing (locked)** → Decided → Shipped/Archived | ⬜ | The management surface non-technical teams actually live in. The data model already carries `status`, `hypothesis`, and `metrics` per prototype — this is UI over truth we already store. |
-| B2 | **Ground-truth stage derivation** — cards advance and lock from real system state: provisioned → built (loader status) → certified → **experiment live (Optimizely API)** → PR merged. Manual dragging only where judgment lives. | ⬜ | The differentiator vs. Jira/Trello: the board can't lie. A card in *Testing* means the experiment is actually running — and the prototype is **immutable while it is** (no editing a live variation). |
+| B1 | **Kanban pipeline** — Brief → Build → Review → Launch → Testing 🔒 → Shipped, plus a filterable List lens (`?view=`) | ✅ built 07-24 | The management surface non-technical teams actually live in. The data model already carries `status`, `hypothesis`, and `metrics` per prototype — this is UI over truth we already store. |
+| B2 | **Ground-truth stage derivation** — columns from `derivePipeline()` + live experiment status; first-gate rule; drag only for priority + Launch→Shipped; running lock ENFORCED in the push path | ✅ built 07-24 | The differentiator vs. Jira/Trello: the board can't lie. A card in *Testing* means the experiment is actually running — and the prototype is **immutable while it is** (no editing a live variation). |
 | B3 | **Sign-off gates** — brief approval before build; review approval before ship; who-can-approve per role | ⬜ | Governance where human judgment belongs, and nowhere else. |
-| B4 | **Hypothesis + metric on every card** — surfaced from the existing model; templates per experiment type | 🟡 model exists | The experimentation discipline most teams never had, built into the workflow instead of a wiki nobody reads. |
+| B4 | **Hypothesis + metric on every card** — board cards + list rows carry hypothesis, metric chips, truth chips | ✅ built 07-24 | The experimentation discipline most teams never had, built into the workflow instead of a wiki nobody reads. |
 | B5 | **Ideas → Backlog graduation** — the ideas inbox (agent- and human-submitted) feeds the board; one click turns an idea into a prototype stub with a draft brief | 🟡 ideas inbox built | Closes the loop from "agent noticed something" to "experiment in the pipeline." |
 | B6 | Portfolio view — every prototype across brands, filterable by stage/owner/metric; the "what's live where" answer | ⬜ | The exec surface; also the acquisition demo ("here's a customer's whole program"). |
 
@@ -118,7 +118,7 @@ Organized by the journey. Status: ✅ built · 🟡 partial · ⬜ to build. Eac
 |---|---|---|---|
 | E1 | Real schema for skills/ideas/selections (out of the flag store), migrations | ⬜ | Flag-store JSON was the right prototype move; it is not a product datastore. |
 | E2 | Roles (admin/builder/reviewer/dev), SSO/SAML + SCIM, audit log surfacing (audit exists ✅) | 🟡 | Enterprise table stakes. |
-| E3 | **Secrets vault + token health** — encrypt at rest; the write-probe (✅) runs scheduled; expiry alerts (the current PAT dies Oct 18 and nothing will say why) | 🟡 | Today's #1 support-ticket generator, automated away. |
+| E3 | **Secrets vault + token health** — scheduled write-probe + expiry alerts ✅ (07-24); ⬜ remaining: encrypt-at-rest vault | 🟡 | Today's #1 support-ticket generator, automated away. |
 | E4 | **Loader security hardening** — SRI, key rotation, kill switch, stage gating, per-env allowlists, expiring review tokens | ⬜ | We inject JS into customer production sites. This is the scariest diligence surface; harden it before anyone asks. |
 | E5 | Billing, plans, metering (agent-run minutes, prototypes, seats) | ⬜ | Revenue. |
 | E6 | SOC 2 Type II path + pen test | ⬜ | Start the clock early; it gates every enterprise logo and every acquirer's diligence. |
