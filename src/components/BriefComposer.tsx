@@ -58,6 +58,8 @@ function ReferencesEditor({ references, onAdd, onRemove }: {
 const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 const ta = inp + " resize-y leading-relaxed";
 const lbl = "block text-[13px] text-muted-2 mb-1";
+// Every brief section is this card, so they read as independent parts.
+const card = "rounded-lg bg-surface-2/40 border border-border/60 px-3.5 py-3";
 
 /** Split a stored criteria string back into checkable lines. */
 function criteriaLines(s: string): string[] {
@@ -84,10 +86,10 @@ function SectionHead({ label, section, open, text, busy, err, onToggle, onChange
 }) {
   return (
     <div className="mb-1.5">
-      <div className="flex items-center justify-between gap-2 group/head">
+      <div className="flex items-center justify-between gap-2">
         <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>
         <button onClick={onToggle}
-          className={`text-[12.5px] font-medium shrink-0 transition-opacity ${open ? "text-accent opacity-100" : "text-muted-2 hover:text-accent opacity-0 group-hover/head:opacity-100 focus:opacity-100"}`}>
+          className={`text-[12.5px] font-medium shrink-0 ${open ? "text-accent" : "text-muted-2 hover:text-accent"}`}>
           {open ? "Close" : "Refine ✎"}
         </button>
       </div>
@@ -229,7 +231,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
     try {
       const res = await fetch("/api/prototypes/brief-draft", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, refine: { section, correction: refineText, current: currentDraft() } }),
+        body: JSON.stringify({ key: prototypeKey, refine: { section, correction: refineText, current: currentDraft(), references: refs } }),
       });
       const data = await res.json();
       if (!res.ok) { setRefineErr(data.error ?? "Couldn't refine"); return; }
@@ -265,7 +267,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
     try {
       const res = await fetch("/api/prototypes/brief-draft", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, text: explain, answers: answers || undefined }),
+        body: JSON.stringify({ key: prototypeKey, text: explain, answers: answers || undefined, references: refs }),
       });
       const data = await res.json();
       if (!res.ok) { setAiErr(data.error ?? "Drafting failed"); return; }
@@ -324,6 +326,10 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
         <div className="px-3.5 pb-3.5 space-y-2.5">
           <textarea value={explain} onChange={(e) => setExplain(e.target.value)} rows={3} className={ta}
             placeholder="e.g. When people click a room card I want a rich overlay with the gallery, amenities and a booking button, instead of losing them to the detail page. Success is more availability checks." />
+          <div className="space-y-1.5">
+            <div className="text-[13px] text-muted-2">Supporting files — Figma, designs, screenshots, reference pages. Claude reads these when drafting and may ask about them.</div>
+            <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
+          </div>
           {(readiness != null || drafting) && <ReadinessMeter readiness={readiness} drafting={drafting} />}
           {questions.length > 0 && (
             <div className="rounded-lg border border-warn/30 bg-surface-2/30 px-3 py-2.5 space-y-3">
@@ -345,21 +351,22 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
         </div>
       </details>
 
-      {/* THE BRIEF — a document first, a form only on request */}
+      {/* THE BRIEF — a document first, a form only on request. Each section is
+          its own card so they read as independent parts, not one flowing page. */}
       {!editing && hasContent ? (
-        <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
-          <div className={refinedCls("change")}>
+        <div className="space-y-3">
+          <div className={`${card} ${refinedCls("change")}`}>
             {sectionHead("The change", "change")}
             <p className="text-[15px] text-foreground leading-relaxed">{brief.change}</p>
           </div>
           {brief.where && (
-            <div className={refinedCls("where")}>
+            <div className={`${card} ${refinedCls("where")}`}>
               {sectionHead("Where · trigger", "where")}
               <p className="text-[14px] text-foreground/90 leading-relaxed">{brief.where}</p>
             </div>
           )}
           {brief.doneLooksLike?.trim() && (
-            <div className={refinedCls("doneLooksLike")}>
+            <div className={`${card} ${refinedCls("doneLooksLike")}`}>
               {sectionHead("Done looks like", "doneLooksLike")}
               <ul className="space-y-1">
                 {criteriaLines(brief.doneLooksLike).map((c, i) => (
@@ -369,28 +376,28 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
             </div>
           )}
           {(hyp.change || hyp.outcome) && (
-            <div className={`rounded-lg bg-surface-2/40 border border-border/60 px-3.5 py-3 ${refinedCls("hypothesis")}`}>
+            <div className={`${card} ${refinedCls("hypothesis")}`}>
               {sectionHead("Hypothesis", "hypothesis")}
               <p className="text-[14px] leading-relaxed text-foreground/90">
                 We believe <b className="text-foreground">{hyp.change || "[the change]"}</b> for <b className="text-foreground">{hyp.audience || "[audience]"}</b> will cause <b className="text-foreground">{hyp.outcome || "[outcome]"}</b>{hyp.rationale ? <> because {hyp.rationale}</> : null}.
               </p>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {brief.problem?.trim() && (
-              <div>
-                <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Problem · opportunity</div>
+              <div className={card}>
+                <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">Problem · opportunity</div>
                 <p className="text-[14px] text-muted leading-relaxed">{brief.problem}</p>
               </div>
             )}
             {brief.constraints?.trim() && (
-              <div>
-                <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Guardrails · do-not-touch</div>
+              <div className={card}>
+                <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">Guardrails · do-not-touch</div>
                 <p className="text-[14px] text-muted leading-relaxed">{brief.constraints}</p>
               </div>
             )}
           </div>
-          <div className={refinedCls("metrics")}>
+          <div className={`${card} ${refinedCls("metrics")}`}>
             {sectionHead("Success metrics", "metrics")}
             {metrics.primary || metrics.guardrails.length ? (
               <div className="space-y-1.5">
@@ -411,10 +418,23 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
               <p className="text-[14px] text-muted-2">No metric set yet — add the one event that decides this experiment.</p>
             )}
           </div>
-          <div>
-            <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">References <span className="normal-case font-normal text-muted-2">· Figma, designs, screenshots, pages</span></div>
-            <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
-          </div>
+          {refs.length > 0 && (
+            <div className={card}>
+              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">References</div>
+              <div className="space-y-1">
+                {refs.map((r, i) => {
+                  const m = REF_META[r.kind] ?? REF_META.link;
+                  return (
+                    <a key={`${r.url}-${i}`} href={r.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] hover:opacity-80">
+                      <span>{m.icon}</span>
+                      <span className="text-[12px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 font-medium shrink-0">{m.label}</span>
+                      <span className="text-accent truncate">{r.label || r.url}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {saveBar}
         </div>
       ) : (
@@ -453,10 +473,6 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
           <div>
             <label className={lbl}>Metric guardrails (comma-separated — what must not regress)</label>
             <input value={metrics.guardrails.join(", ")} onChange={(e) => setMetrics({ ...metrics, guardrails: e.target.value.split(",").map((g) => g.trim()).filter(Boolean) })} className={inp} />
-          </div>
-          <div>
-            <label className={lbl}>References — Figma, designs, screenshots, pages</label>
-            <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
           </div>
           {saveBar}
         </div>

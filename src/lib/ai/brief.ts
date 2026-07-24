@@ -11,7 +11,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
-import type { PrototypeRecord } from "../prototypes/types";
+import type { PrototypeRecord, BriefReference } from "../prototypes/types";
 
 export interface BriefDraft {
   brief: { change: string; problem: string; where: string; doneLooksLike: string[]; constraints: string };
@@ -66,6 +66,7 @@ export async function draftBrief(opts: {
   proto: PrototypeRecord;
   userText: string;
   answers?: string; // follow-up answers to clarifying questions, if regenerating
+  references?: BriefReference[]; // current (possibly unsaved) supporting links
 }): Promise<BriefDraft> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables to enable AI brief drafting.");
@@ -74,11 +75,11 @@ export async function draftBrief(opts: {
   const skill = await getSkill(opts.orgId, "opmc-brief-author");
   const system = skill ? parseFrontmatter(skill.body).body : "You write structured, falsifiable A/B experiment briefs for client-side injected variations.";
 
-  const refs = opts.proto.brief.references ?? [];
+  const refs = opts.references ?? opts.proto.brief.references ?? [];
   const context = [
     `Prototype name: ${opts.proto.name}`,
     opts.proto.targets.length ? `Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ")}` : "Target pages: none set yet",
-    refs.length ? `Supporting references the team attached (design intent — factor them into the brief): ${refs.map((r) => `${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}`).join("; ")}` : "",
+    refs.length ? `Supporting references the team attached (design intent — factor them into the brief; if one clearly implies something the text doesn't cover, note the assumption or ask): ${refs.map((r) => `${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}`).join("; ")}` : "",
     opts.proto.brief.change ? `Existing brief (improve, don't discard what's right): ${JSON.stringify(opts.proto.brief)}` : "",
     opts.proto.metrics.primary ? `Existing primary metric: ${opts.proto.metrics.primary}` : "",
   ].filter(Boolean).join("\n");
@@ -138,6 +139,7 @@ export async function refineBrief(opts: {
   current: BriefDraft;
   section: BriefSection;
   correction: string;
+  references?: BriefReference[];
 }): Promise<BriefDraft> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables to enable AI brief drafting.");
@@ -146,7 +148,7 @@ export async function refineBrief(opts: {
   const skill = await getSkill(opts.orgId, "opmc-brief-author");
   const system = skill ? parseFrontmatter(skill.body).body : "You write structured, falsifiable A/B experiment briefs for client-side injected variations.";
 
-  const refs = opts.proto.brief.references ?? [];
+  const refs = opts.references ?? opts.proto.brief.references ?? [];
   const context = [
     `Prototype name: ${opts.proto.name}`,
     opts.proto.targets.length ? `Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ")}` : "Target pages: none set yet",
