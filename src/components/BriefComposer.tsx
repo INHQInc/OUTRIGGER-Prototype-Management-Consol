@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeBrief, PrototypeHypothesis, PrototypeMetrics } from "@/lib/prototypes/types";
 import type { BriefDraft } from "@/lib/ai/brief";
@@ -12,6 +12,41 @@ const lbl = "block text-[13px] text-muted-2 mb-1";
 /** Split a stored criteria string back into checkable lines. */
 function criteriaLines(s: string): string[] {
   return s.split(/\n+/).map((l) => l.replace(/^[-•]\s*/, "").trim()).filter(Boolean);
+}
+
+/** Claude's own readiness → the band shown on the meter. */
+function readinessBand(r: number): { label: string; color: string; track: string } {
+  if (r >= 90) return { label: "Ready to build", color: "var(--ok)", track: "bg-ok" };
+  if (r >= 70) return { label: "Nearly there", color: "var(--accent)", track: "bg-accent" };
+  if (r >= 40) return { label: "Taking shape", color: "var(--warn)", track: "bg-warn" };
+  return { label: "Getting oriented", color: "var(--warn)", track: "bg-warn" };
+}
+
+/**
+ * A meter that fills to Claude's OWN reported confidence that the brief is
+ * buildable — not a fake timer. It animates toward the returned value, so
+ * answering questions and re-drafting visibly climbs (or honestly dips) it.
+ */
+function ReadinessMeter({ readiness, drafting }: { readiness: number | null; drafting: boolean }) {
+  const [fill, setFill] = useState(0);
+  useEffect(() => { if (readiness != null) { const t = setTimeout(() => setFill(readiness), 60); return () => clearTimeout(t); } }, [readiness]);
+  if (readiness == null && !drafting) return null;
+  const band = readinessBand(readiness ?? 0);
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[12.5px]">
+        <span className="text-muted-2">{drafting ? "Reading your idea…" : "Claude's confidence this is buildable"}</span>
+        {readiness != null && !drafting && <span className="font-semibold" style={{ color: band.color }}>{band.label} · {readiness}%</span>}
+      </div>
+      <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
+        {drafting ? (
+          <div className="h-full w-1/3 rounded-full bg-accent/60 animate-pulse" />
+        ) : (
+          <div className={`h-full rounded-full ${band.track} transition-[width] duration-700 ease-out`} style={{ width: `${fill}%` }} />
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -34,6 +69,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const [explain, setExplain] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
   const [qAnswers, setQAnswers] = useState<string[]>([]);
+  const [readiness, setReadiness] = useState<number | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [aiOpen, setAiOpen] = useState(!initialBrief.change?.trim());
@@ -75,6 +111,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       setMetrics({ primary: d.metrics.primary, guardrails: d.metrics.guardrails ?? [] });
       setQuestions(d.clarifying_questions ?? []);
       setQAnswers(new Array((d.clarifying_questions ?? []).length).fill(""));
+      setReadiness(typeof d.readiness === "number" ? d.readiness : null);
       setEditing(false); // land on the DOCUMENT, not the form
       setMsg(null);
     } catch (e) {
@@ -126,6 +163,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
         <div className="px-3.5 pb-3.5 space-y-2.5">
           <textarea value={explain} onChange={(e) => setExplain(e.target.value)} rows={3} className={ta}
             placeholder="e.g. When people click a room card I want a rich overlay with the gallery, amenities and a booking button, instead of losing them to the detail page. Success is more availability checks." />
+          {(readiness != null || drafting) && <ReadinessMeter readiness={readiness} drafting={drafting} />}
           {questions.length > 0 && (
             <div className="rounded-lg border border-warn/30 bg-surface-2/30 px-3 py-2.5 space-y-3">
               <div className="text-[13px] font-semibold text-warn">Claude asked {questions.length} question{questions.length === 1 ? "" : "s"} — answer any of them and draft again:</div>

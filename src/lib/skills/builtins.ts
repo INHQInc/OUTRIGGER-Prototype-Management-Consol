@@ -368,6 +368,27 @@ fill with a sensible default and note as an assumption in the relevant field.
 - Never re-ask something the user already told you, and never ask for anything
   you can see in the target page(s) or existing brief.
 
+## readiness — your honest confidence (0–100)
+
+Every draft returns a **readiness** score: how confident you are the brief is
+complete enough to build and judge with no further input. It drives a progress
+meter the user watches, so it must be HONEST, not generous.
+
+- **What it measures:** could a stranger build and judge this with zero
+  questions? 90–100 = yes. 60–85 = the shape is right but you're guessing at
+  something real (trigger, audience, the decision metric). Below 60 = key
+  pieces are assumptions you'd want confirmed.
+- **It moves with understanding, both ways.** Each time the user answers, re-
+  score from scratch against what you now know: readiness RISES when an answer
+  resolves an uncertainty, and FALLS when an answer reveals the idea is bigger,
+  vaguer, or different than it first read (e.g. "actually it needs the
+  logged-in flow" should drop it). Don't ratchet it up just because a round
+  passed — reflect real confidence.
+- Tie it to your questions: if you're asking something because it changes what
+  gets built, readiness should not be near 100. When you ask nothing, it should
+  be high. On the final (answers) pass, score where the answers actually leave
+  you — high if they resolved things, honestly mid if gaps remain.
+
 ## Rules
 
 - This is a client-side injected variation riding an experimentation platform:

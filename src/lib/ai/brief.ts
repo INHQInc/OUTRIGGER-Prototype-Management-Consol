@@ -18,6 +18,8 @@ export interface BriefDraft {
   hypothesis: { change: string; audience: string; outcome: string; rationale: string };
   metrics: { primary: string; guardrails: string[] };
   clarifying_questions: string[];
+  /** 0–100: the model's own confidence the brief is complete enough to build. */
+  readiness: number;
 }
 
 const DRAFT_TOOL = {
@@ -53,8 +55,9 @@ const DRAFT_TOOL = {
         required: ["primary", "guardrails"],
       },
       clarifying_questions: { type: "array" as const, items: { type: "string" as const }, description: "OPTIONAL and rare — usually empty. At most 2, only on the first draft, and only for a missing answer that would change what gets built. MUST be empty when the user has already answered earlier questions." },
+      readiness: { type: "integer" as const, minimum: 0, maximum: 100, description: "0–100: your HONEST confidence that this brief is complete enough to build and judge with no further input. 100 = a stranger could build it with zero questions. Lower it when you are guessing at the change, its trigger/location, or the decision metric. It should RISE as answers resolve your uncertainty, and may FALL if an answer reveals the idea is bigger or vaguer than it first seemed. Be honest, not generous." },
     },
-    required: ["brief", "hypothesis", "metrics", "clarifying_questions"],
+    required: ["brief", "hypothesis", "metrics", "clarifying_questions", "readiness"],
   },
 };
 
@@ -106,5 +109,6 @@ export async function draftBrief(opts: {
   // Hard backstop: the answers pass never returns questions, and the first pass
   // is capped at 2. The model's doctrine says the same; this makes it true.
   draft.clarifying_questions = finalPass ? [] : (draft.clarifying_questions ?? []).slice(0, 2);
+  draft.readiness = Math.max(0, Math.min(100, Math.round(Number(draft.readiness) || 0)));
   return draft;
 }
