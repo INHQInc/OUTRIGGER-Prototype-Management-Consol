@@ -1,5 +1,21 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { StepSeverity } from "@/lib/prototypes/severity";
+
+/** The one place the four-color severity → dot color lives (tabs + checklist). */
+export const SEVERITY_DOT: Record<StepSeverity, string> = {
+  critical: "bg-danger",
+  attention: "bg-warn",
+  good: "bg-ok",
+  pending: "bg-border-strong",
+};
+/** Matching text/border tone for a checklist row. */
+export const SEVERITY_TEXT: Record<StepSeverity, string> = {
+  critical: "text-danger",
+  attention: "text-warn",
+  good: "text-ok",
+  pending: "text-muted-2",
+};
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (

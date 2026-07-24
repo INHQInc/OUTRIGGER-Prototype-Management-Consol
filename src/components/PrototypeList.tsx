@@ -3,11 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
-import type { PipelineStep } from "@/lib/prototypes/pipeline";
-
-const DOT: Record<PipelineStep["state"], string> = {
-  done: "bg-ok", current: "bg-accent", todo: "bg-border-strong", blocked: "bg-danger",
-};
+import { stepSeverity } from "@/lib/prototypes/severity";
+import { SEVERITY_DOT } from "@/components/ui";
 
 type Filter = "all" | "blocked" | BoardColumn;
 
@@ -57,7 +54,7 @@ export function PrototypeList({ cards }: { cards: BoardCard[] }) {
                 {c.locked ? "🔒 " : ""}{col.label}
               </span>
               <span className="flex items-center gap-1">
-                {c.pipeline.steps.map((s) => <span key={s.id} title={`${s.title}: ${s.status}`} className={`w-1.5 h-1.5 rounded-full ${DOT[s.state]}`} />)}
+                {c.pipeline.steps.map((s) => <span key={s.id} title={`${s.title}: ${s.status}`} className={`w-1.5 h-1.5 rounded-full ${SEVERITY_DOT[stepSeverity(s, c.pipeline.alerts)]}`} />)}
               </span>
               <span className="min-w-0">
                 <span className={`text-[13px] block truncate ${blocked.length ? "text-danger" : "text-muted"}`}>

@@ -3,16 +3,10 @@
 import Link from "next/link";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { EmptyState } from "@/components/ui";
+import { EmptyState, SEVERITY_DOT } from "@/components/ui";
 import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
-import type { PipelineStep } from "@/lib/prototypes/pipeline";
-
-const DOT: Record<PipelineStep["state"], string> = {
-  done: "bg-ok",
-  current: "bg-accent",
-  todo: "bg-border-strong",
-  blocked: "bg-danger",
-};
+import { stepSeverity } from "@/lib/prototypes/severity";
+import type { Pipeline } from "@/lib/prototypes/pipeline";
 
 /** Why a cross-column drag bounces: the column is a fact, not an opinion. */
 const BOUNCE: Record<BoardColumn, string> = {
@@ -24,10 +18,10 @@ const BOUNCE: Record<BoardColumn, string> = {
   shipped: "Shipped is a decision — but only from Launch: finish the pipeline first.",
 };
 
-function MiniPipeline({ steps }: { steps: PipelineStep[] }) {
+function MiniPipeline({ pipeline }: { pipeline: Pipeline }) {
   return (
     <div className="flex items-center gap-1">
-      {steps.map((s) => <span key={s.id} title={`${s.title}: ${s.status}`} className={`w-1.5 h-1.5 rounded-full ${DOT[s.state]}`} />)}
+      {pipeline.steps.map((s) => <span key={s.id} title={`${s.title}: ${s.status}`} className={`w-1.5 h-1.5 rounded-full ${SEVERITY_DOT[stepSeverity(s, pipeline.alerts)]}`} />)}
     </div>
   );
 }
@@ -141,7 +135,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                         <div className="text-[14px] font-semibold leading-snug">{c.name}</div>
                         {c.hypothesis && <div className="text-[12.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
 
-                        <MiniPipeline steps={c.pipeline.steps} />
+                        <MiniPipeline pipeline={c.pipeline} />
                         <div className={`text-[12.5px] leading-tight ${c.locked ? "text-warn font-semibold" : "text-foreground"}`}>
                           {c.locked ? "🔒 experiment LIVE — locked" : <>
                             <span className="text-muted-2">Next: </span>{c.pipeline.primaryAction.label}

@@ -63,9 +63,24 @@ export interface PipelineStage {
   live: boolean;
 }
 
+// The four-color severity model lives in ./severity (client-safe); imported for
+// local use AND re-exported so server consumers can import it from the pipeline.
+import { stepSeverity, type StepSeverity } from "./severity";
+export { stepSeverity };
+export type { StepSeverity };
+
+/** One row of the Overview checklist: a room, how urgent it is, what to do. */
+export interface ChecklistItem {
+  tab: string;         // room to deep-link to (?tab=)
+  label: string;       // room name
+  severity: StepSeverity;
+  description: string; // what needs doing (or the current status)
+}
+
 export interface Pipeline {
   steps: PipelineStep[];
   stage: PipelineStage;
+  checklist: ChecklistItem[];
   primaryAction: { label: string; anchor: string };
   alerts: PipelineAlert[];
   truth: GroundTruth;
@@ -235,5 +250,22 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   else if (!stageShipped) primaryAction = { label: "Start the experiment in Optimizely", anchor: "experiment" };
   else primaryAction = { label: "Shipped ✓", anchor: "experiment" };
 
-  return { steps, stage, primaryAction, alerts, truth };
+  // ── the Overview checklist: one row per pipeline-backed room ──
+  const ROOMS: { step: PipelineStep["id"]; tab: string; label: string; pending: string }[] = [
+    { step: "brief", tab: "brief", label: "Brief", pending: "Describe the change and how success is judged." },
+    { step: "build", tab: "build", label: "Build", pending: "Provision the branch and build the variation with Claude." },
+    { step: "review", tab: "review", label: "Review", pending: "Add the page(s) and verify the variation injects on the real site." },
+    { step: "launch", tab: "experiment", label: "Experimentation", pending: "Cut a version, bind an Optimizely experiment, and push." },
+    { step: "shipped", tab: "handoff", label: "Handoff", pending: "When the experiment wins, hand the winning version to the dev team." },
+  ];
+  const checklist: ChecklistItem[] = ROOMS.map(({ step: sid, tab, label, pending }) => {
+    const st = steps.find((s) => s.id === sid)!;
+    const severity = stepSeverity(st, alerts);
+    const targeting = alerts.filter((a) => a.anchor === st.anchor);
+    const alert = targeting.find((a) => a.level === "danger") ?? targeting.find((a) => a.level === "warn");
+    const description = alert?.text ?? (st.status && st.status !== "—" ? st.status : pending);
+    return { tab, label, severity, description };
+  });
+
+  return { steps, stage, checklist, primaryAction, alerts, truth };
 }

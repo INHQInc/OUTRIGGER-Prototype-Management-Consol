@@ -12,7 +12,8 @@ import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
 import { lastPush } from "@/lib/prototypes/ship";
 import { getExperimentationConfig, getOptimizelyClientForOrg } from "@/lib/experimentation";
 import { listAuditEvents } from "@/lib/audit";
-import { derivePipeline, type PipelineStep } from "@/lib/prototypes/pipeline";
+import { derivePipeline, stepSeverity } from "@/lib/prototypes/pipeline";
+import { SEVERITY_DOT } from "@/components/ui";
 import { PipelineHeader } from "@/components/PipelineHeader";
 import { PrototypeOverview, type ActivityItem } from "@/components/PrototypeOverview";
 import { BriefComposer } from "@/components/BriefComposer";
@@ -42,13 +43,6 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 /** Old room ids that may live in links/bookmarks. */
 const TAB_ALIASES: Record<string, TabId> = { pages: "review" };
-
-const DOT: Record<PipelineStep["state"], string> = {
-  done: "bg-ok",
-  current: "bg-accent",
-  todo: "bg-border-strong",
-  blocked: "bg-danger",
-};
 
 /**
  * The prototype workspace — a living thing, not a list of steps.
@@ -128,7 +122,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 
   return (
     <div className="space-y-4">
-      <PipelineHeader pipeline={pipeline} currentTab={tab} />
+      <PipelineHeader pipeline={pipeline} currentTab={tab} showStatusStrip={tab !== "overview"} />
 
       {/* Rooms — the prototype's parts, not its steps. Dots = that part's state. */}
       <div className="flex items-center gap-1 border-b border-border overflow-x-auto">
@@ -139,7 +133,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
             <Link key={t.id} href={t.id === "overview" ? `/prototypes/${key}` : `/prototypes/${key}?tab=${t.id}`}
               className={`flex items-center gap-2 px-3.5 py-2.5 text-[14px] font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
                 active ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground"}`}>
-              {st && <span className={`w-2 h-2 rounded-full ${DOT[st.state]}`} />}
+              {st && <span className={`w-2 h-2 rounded-full ${SEVERITY_DOT[stepSeverity(st, pipeline.alerts)]}`} />}
               {t.label}
             </Link>
           );

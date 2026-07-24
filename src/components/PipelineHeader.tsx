@@ -6,7 +6,7 @@ import type { Pipeline } from "@/lib/prototypes/pipeline";
  * Per-part detail lives on the room tabs' dots — not here. Below: ground truth
  * when everything is healthy, or the specific problems when it isn't.
  */
-export function PipelineHeader({ pipeline, currentTab }: { pipeline: Pipeline; currentTab?: string }) {
+export function PipelineHeader({ pipeline, currentTab, showStatusStrip = true }: { pipeline: Pipeline; currentTab?: string; showStatusStrip?: boolean }) {
   const { stage, primaryAction, alerts, truth } = pipeline;
   // The CTA is the "go do the next thing" button — dead weight when you're
   // already in the room it points to. Hide it there.
@@ -36,8 +36,9 @@ export function PipelineHeader({ pipeline, currentTab }: { pipeline: Pipeline; c
         )}
       </div>
 
-      {/* Ground truth: one green line, or specific problems */}
-      {alerts.length === 0 ? (
+      {/* Ground truth: one green line, or specific problems. Hidden on Overview,
+          where the checklist below is the status home (say it once). */}
+      {!showStatusStrip ? null : alerts.length === 0 ? (
         <div className="rounded-lg border border-ok/25 bg-[color-mix(in_srgb,var(--ok)_4%,transparent)] px-3 py-1.5 text-[13px] text-muted flex items-center gap-3 flex-wrap">
           <span className="text-ok font-semibold">Ground truth ✓</span>
           {truth.headSha && <span>serving <span className="font-mono">{truth.headSha.slice(0, 7)}</span>{truth.built ? " = HEAD" : ""}</span>}

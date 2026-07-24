@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { TimeAgo } from "@/components/ui";
+import { TimeAgo, SEVERITY_DOT, SEVERITY_TEXT } from "@/components/ui";
 import type { Pipeline } from "@/lib/prototypes/pipeline";
+import type { StepSeverity } from "@/lib/prototypes/severity";
 import type { PrototypeRecord } from "@/lib/prototypes/types";
+
+const SEVERITY_RANK: Record<StepSeverity, number> = { critical: 0, attention: 1, good: 3, pending: 2 };
+const SEVERITY_WORD: Record<StepSeverity, string> = { critical: "Blocked", attention: "Needs attention", good: "Done", pending: "Not started" };
 
 export interface ActivityItem { at: string; text: string; who?: string }
 
@@ -23,57 +27,55 @@ export function PrototypeOverview({ proto, pipeline, activity }: {
 }) {
   const b = proto.brief;
   const hasBrief = Boolean(b.change?.trim());
-  const blocked = pipeline.steps.filter((s) => s.state === "blocked");
-  // A blocked step and its alert say the same thing — say it once.
-  const blockedAnchors = new Set(blocked.map((s) => s.anchor));
-  const extraAlerts = pipeline.alerts.filter((a) => !a.anchor || !blockedAnchors.has(a.anchor));
+  // The checklist, most-urgent first — critical then attention, done last.
+  const checklist = [...pipeline.checklist].sort((a, c) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[c.severity] || 0);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem] gap-4 items-start">
       {/* ── The thing itself ── */}
       <div className="space-y-4 min-w-0">
-        {/* What's missing — only when something is */}
-        {(blocked.length > 0 || extraAlerts.length > 0) && (
-          <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_4%,transparent)] p-4">
-            <div className="text-[13px] font-semibold uppercase tracking-wider text-warn mb-2">Needs attention</div>
-            <div className="space-y-1.5">
-              {blocked.map((s) => (
-                <Link key={s.id} href={`?tab=${s.anchor}`} className="block text-[14px] text-danger hover:opacity-80">⚠ {s.title}: {s.status} →</Link>
-              ))}
-              {extraAlerts.map((a, i) => (
-                <Link key={i} href={a.anchor ? `?tab=${a.anchor}` : "#"} className={`block text-[14px] hover:opacity-80 ${a.level === "danger" ? "text-danger" : "text-warn"}`}>{a.text} →</Link>
-              ))}
-            </div>
+        {/* The progress checklist — every room, colored by urgency, each a link
+            to the tab that resolves it. This is the single "what's my status /
+            what do I do next" home; it absorbs the old Needs-attention block. */}
+        <div className="rounded-xl border border-border bg-surface overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border text-[13px] font-semibold uppercase tracking-wider text-muted-2">Checklist</div>
+          <div>
+            {checklist.map((item) => (
+              <Link key={item.tab} href={`?tab=${item.tab}`} className="flex items-start gap-3 px-4 py-3 border-b border-border/60 last:border-0 hover:bg-surface-2/40 transition-colors group/row">
+                <span className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${SEVERITY_DOT[item.severity]}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-medium">{item.label}</span>
+                    <span className={`text-[12px] font-semibold uppercase tracking-wide ${SEVERITY_TEXT[item.severity]}`}>{SEVERITY_WORD[item.severity]}</span>
+                  </div>
+                  <div className={`text-[13px] leading-snug mt-0.5 ${item.severity === "critical" ? "text-danger" : item.severity === "attention" ? "text-warn" : "text-muted-2"}`}>{item.description}</div>
+                </div>
+                <span className="text-[13px] text-muted-2 opacity-0 group-hover/row:opacity-100 transition-opacity mt-0.5 shrink-0">Open →</span>
+              </Link>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* The brief, as its document. When it's missing AND blocked, Needs
-            Attention above already says so — repeating it here was noise. The
-            empty-state card renders only for a fresh prototype (nothing blocked). */}
-        {(hasBrief || blocked.length === 0) && (
+        {/* The brief, as its document — only when there IS one (the checklist's
+            Brief row guides an empty one). */}
+        {hasBrief && (
           <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2">The brief</div>
-              <Link href="?tab=brief" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{hasBrief ? "Edit →" : "Write it →"}</Link>
+              <Link href="?tab=brief" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">Edit →</Link>
             </div>
-            {hasBrief ? (
-              <>
-                <p className="text-[15px] leading-relaxed max-w-[70ch]">{b.change}</p>
-                {b.doneLooksLike?.trim() && (
-                  <ul className="space-y-1">
-                    {criteriaLines(b.doneLooksLike).slice(0, 5).map((c, i) => (
-                      <li key={i} className="text-[14px] text-muted leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
-                    ))}
-                  </ul>
-                )}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {proto.metrics.primary && <span className="text-[13px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] font-medium">📊 {proto.metrics.primary}</span>}
-                  {proto.metrics.guardrails.slice(0, 3).map((g, i) => <span key={i} className="text-[13px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
-                </div>
-              </>
-            ) : (
-              <p className="text-[14px] text-muted-2">Explain the experiment in your own words — Claude drafts the rest.</p>
+            <p className="text-[15px] leading-relaxed max-w-[70ch]">{b.change}</p>
+            {b.doneLooksLike?.trim() && (
+              <ul className="space-y-1">
+                {criteriaLines(b.doneLooksLike).slice(0, 5).map((c, i) => (
+                  <li key={i} className="text-[14px] text-muted leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
+                ))}
+              </ul>
             )}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {proto.metrics.primary && <span className="text-[13px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] font-medium">📊 {proto.metrics.primary}</span>}
+              {proto.metrics.guardrails.slice(0, 3).map((g, i) => <span key={i} className="text-[13px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
+            </div>
           </div>
         )}
 
