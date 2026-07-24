@@ -397,6 +397,16 @@ meter the user watches, so it must be HONEST, not generous.
   where the answers leave you — high if they resolved things, honestly mid if
   real gaps remain (and note those gaps in the brief fields as assumptions).
 
+## Refining a section
+
+Sometimes the user corrects ONE part of a brief you already wrote ("the
+hypothesis is wrong — the audience is returning guests"). This is a refinement,
+not a redraft: apply the correction, let it ripple ONLY into fields it
+genuinely changes (a fixed audience updates the hypothesis line; a changed
+metric updates guardrails), and leave every other field EXACTLY as written —
+same words. Never turn a targeted correction into a full rewrite. Ask nothing;
+re-score readiness for the corrected brief.
+
 ## Rules
 
 - This is a client-side injected variation riding an experimentation platform:

@@ -112,3 +112,63 @@ export async function draftBrief(opts: {
   draft.readiness = Math.max(0, Math.min(100, Math.round(Number(draft.readiness) || 0)));
   return draft;
 }
+
+/** The brief sections a user can correct in place. */
+export type BriefSection = "change" | "where" | "doneLooksLike" | "hypothesis" | "metrics";
+const SECTION_LABEL: Record<BriefSection, string> = {
+  change: "the change (what we're building)",
+  where: "where it lives / the trigger",
+  doneLooksLike: "the acceptance criteria (done looks like)",
+  hypothesis: "the hypothesis",
+  metrics: "the success metrics",
+};
+
+/**
+ * Refine ONE section of an existing brief from the user's correction — the
+ * "this is wrong because…" loop. Returns the full revised draft (so a fix that
+ * resolves a misunderstanding can ripple into related fields and re-score
+ * readiness), but the model is told to touch only what the correction implies
+ * and leave everything else verbatim.
+ */
+export async function refineBrief(opts: {
+  orgId: string | null;
+  proto: PrototypeRecord;
+  current: BriefDraft;
+  section: BriefSection;
+  correction: string;
+}): Promise<BriefDraft> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables to enable AI brief drafting.");
+  }
+  await ensureSkillsSeeded(opts.orgId);
+  const skill = await getSkill(opts.orgId, "opmc-brief-author");
+  const system = skill ? parseFrontmatter(skill.body).body : "You write structured, falsifiable A/B experiment briefs for client-side injected variations.";
+
+  const context = [
+    `Prototype name: ${opts.proto.name}`,
+    opts.proto.targets.length ? `Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ")}` : "Target pages: none set yet",
+  ].join("\n");
+
+  const { clarifying_questions: _q, ...briefNoQ } = opts.current;
+  void _q;
+
+  const client = new Anthropic();
+  const res = await client.messages.create({
+    model: "claude-opus-4-8",
+    max_tokens: 3000,
+    system,
+    messages: [{
+      role: "user",
+      content: `${context}\n\nHere is the current brief you drafted:\n"""\n${JSON.stringify(briefNoQ, null, 2)}\n"""\n\nThe user is correcting **${SECTION_LABEL[opts.section]}**. In their words:\n"""\n${opts.correction.trim()}\n"""\n\nThis is a REFINEMENT, not a redraft: apply the correction to that section, let it ripple ONLY into fields it genuinely changes (e.g. a fixed audience updates the hypothesis), and leave every other field EXACTLY as it is — same wording. Return the complete brief. Return clarifying_questions as an empty array (this is a correction, not a question round). Re-score readiness honestly for the corrected brief.`,
+    }],
+    tools: [DRAFT_TOOL],
+    tool_choice: { type: "tool", name: "draft_brief" },
+  });
+
+  const tu = res.content.find((c) => c.type === "tool_use");
+  if (!tu || tu.type !== "tool_use") throw new Error("The model returned no revision — try again.");
+  const draft = tu.input as BriefDraft;
+  draft.clarifying_questions = [];
+  draft.readiness = Math.max(0, Math.min(100, Math.round(Number(draft.readiness) || 0)));
+  return draft;
+}

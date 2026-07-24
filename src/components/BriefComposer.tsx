@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeBrief, PrototypeHypothesis, PrototypeMetrics } from "@/lib/prototypes/types";
-import type { BriefDraft } from "@/lib/ai/brief";
+import type { BriefDraft, BriefSection } from "@/lib/ai/brief";
 
 const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 const ta = inp + " resize-y leading-relaxed";
@@ -12,6 +12,51 @@ const lbl = "block text-[13px] text-muted-2 mb-1";
 /** Split a stored criteria string back into checkable lines. */
 function criteriaLines(s: string): string[] {
   return s.split(/\n+/).map((l) => l.replace(/^[-•]\s*/, "").trim()).filter(Boolean);
+}
+
+/**
+ * A section header with an inline Refine affordance + popover. Module-level so
+ * its identity is stable — if it were declared inside BriefComposer, every
+ * keystroke in the textarea would remount it (caret jumps to end, selection
+ * lost, IME broken).
+ */
+function SectionHead({ label, section, open, text, busy, err, onToggle, onChangeText, onCancel, onSubmit }: {
+  label: string;
+  section: BriefSection;
+  open: boolean;
+  text: string;
+  busy: boolean;
+  err: string | null;
+  onToggle: () => void;
+  onChangeText: (v: string) => void;
+  onCancel: () => void;
+  onSubmit: (s: BriefSection) => void;
+}) {
+  return (
+    <div className="mb-1.5">
+      <div className="flex items-center justify-between gap-2 group/head">
+        <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>
+        <button onClick={onToggle}
+          className={`text-[12.5px] font-medium shrink-0 transition-opacity ${open ? "text-accent opacity-100" : "text-muted-2 hover:text-accent opacity-0 group-hover/head:opacity-100 focus:opacity-100"}`}>
+          {open ? "Close" : "Refine ✎"}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2 rounded-lg border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_5%,transparent)] p-2.5 space-y-2">
+          <textarea value={text} onChange={(e) => onChangeText(e.target.value)} rows={2} autoFocus
+            className={ta + " text-[13px]"} placeholder={`What's off about ${label.toLowerCase()}? e.g. "the audience is returning guests, not first-timers"`} />
+          {err && <div className="text-[13px] text-danger">{err}</div>}
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onCancel} className="text-[13px] text-muted hover:text-foreground">Cancel</button>
+            <button onClick={() => onSubmit(section)} disabled={busy || !text.trim()}
+              className="h-7 px-3 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40">
+              {busy ? "Refining…" : "Refine this"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Claude's own readiness → the band shown on the meter. */
@@ -82,8 +127,80 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [editing, setEditing] = useState(false);
 
+  // Per-section "Refine" — correct one output in place.
+  const [refineOpen, setRefineOpen] = useState<BriefSection | null>(null);
+  const [refineText, setRefineText] = useState("");
+  const [refining, setRefining] = useState<BriefSection | null>(null);
+  const [justRefined, setJustRefined] = useState<BriefSection | null>(null);
+  const [refineErr, setRefineErr] = useState<string | null>(null);
+
   const dirty = JSON.stringify({ brief, hyp, metrics }) !== saved;
   const hasContent = Boolean(brief.change?.trim());
+
+  /** Fold a returned draft into the split state. */
+  function applyDraft(d: BriefDraft) {
+    setBrief((b) => ({
+      change: d.brief.change,
+      problem: d.brief.problem,
+      doneLooksLike: (d.brief.doneLooksLike ?? []).join("\n"),
+      where: d.brief.where || undefined,
+      constraints: d.brief.constraints || undefined,
+      reference: b.reference,
+    }));
+    setHyp(d.hypothesis);
+    setMetrics({ primary: d.metrics.primary, guardrails: d.metrics.guardrails ?? [] });
+    setReadiness(typeof d.readiness === "number" ? d.readiness : null);
+  }
+
+  /** Reassemble current state as a BriefDraft to send for refinement. */
+  function currentDraft(): BriefDraft {
+    return {
+      brief: {
+        change: brief.change ?? "",
+        problem: brief.problem ?? "",
+        where: brief.where ?? "",
+        doneLooksLike: criteriaLines(brief.doneLooksLike ?? ""),
+        constraints: brief.constraints ?? "",
+      },
+      hypothesis: hyp,
+      metrics: { primary: metrics.primary, guardrails: metrics.guardrails },
+      clarifying_questions: [],
+      readiness: readiness ?? 0,
+    };
+  }
+
+  async function runRefine(section: BriefSection) {
+    if (refining || !refineText.trim()) return;
+    setRefining(section); setRefineErr(null);
+    try {
+      const res = await fetch("/api/prototypes/brief-draft", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, refine: { section, correction: refineText, current: currentDraft() } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setRefineErr(data.error ?? "Couldn't refine"); return; }
+      applyDraft(data.draft as BriefDraft);
+      setQuestions([]); setQAnswers([]); // the refined brief supersedes any open question round
+      setRefineOpen(null); setRefineText("");
+      setJustRefined(section);
+      setTimeout(() => setJustRefined((s) => (s === section ? null : s)), 1400);
+    } catch (e) {
+      setRefineErr(e instanceof Error ? e.message : "Couldn't refine");
+    } finally { setRefining(null); }
+  }
+
+  const sectionHead = (label: string, section: BriefSection) => (
+    <SectionHead
+      label={label} section={section} open={refineOpen === section}
+      text={refineText} busy={refining === section} err={refineOpen === section ? refineErr : null}
+      onToggle={() => { setRefineOpen(refineOpen === section ? null : section); setRefineText(""); setRefineErr(null); }}
+      onChangeText={setRefineText}
+      onCancel={() => { setRefineOpen(null); setRefineText(""); }}
+      onSubmit={runRefine}
+    />
+  );
+  /** Fade-swap wrapper for a section that was just refined. */
+  const refinedCls = (s: BriefSection) => `transition-opacity duration-500 ${refining === s ? "opacity-40" : justRefined === s ? "opacity-100" : "opacity-100"}`;
 
   async function draft() {
     if (drafting || !explain.trim()) return;
@@ -99,19 +216,9 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       const data = await res.json();
       if (!res.ok) { setAiErr(data.error ?? "Drafting failed"); return; }
       const d = data.draft as BriefDraft;
-      setBrief({
-        change: d.brief.change,
-        problem: d.brief.problem,
-        doneLooksLike: (d.brief.doneLooksLike ?? []).join("\n"),
-        where: d.brief.where || undefined,
-        constraints: d.brief.constraints || undefined,
-        reference: brief.reference,
-      });
-      setHyp(d.hypothesis);
-      setMetrics({ primary: d.metrics.primary, guardrails: d.metrics.guardrails ?? [] });
+      applyDraft(d);
       setQuestions(d.clarifying_questions ?? []);
       setQAnswers(new Array((d.clarifying_questions ?? []).length).fill(""));
-      setReadiness(typeof d.readiness === "number" ? d.readiness : null);
       setEditing(false); // land on the DOCUMENT, not the form
       setMsg(null);
     } catch (e) {
@@ -187,19 +294,19 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       {/* THE BRIEF — a document first, a form only on request */}
       {!editing && hasContent ? (
         <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
-          <div>
-            <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">The change</div>
+          <div className={refinedCls("change")}>
+            {sectionHead("The change", "change")}
             <p className="text-[15px] text-foreground leading-relaxed">{brief.change}</p>
           </div>
           {brief.where && (
-            <div>
-              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Where · trigger</div>
+            <div className={refinedCls("where")}>
+              {sectionHead("Where · trigger", "where")}
               <p className="text-[14px] text-foreground/90 leading-relaxed">{brief.where}</p>
             </div>
           )}
           {brief.doneLooksLike?.trim() && (
-            <div>
-              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">Done looks like</div>
+            <div className={refinedCls("doneLooksLike")}>
+              {sectionHead("Done looks like", "doneLooksLike")}
               <ul className="space-y-1">
                 {criteriaLines(brief.doneLooksLike).map((c, i) => (
                   <li key={i} className="text-[14px] text-foreground/90 leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
@@ -208,8 +315,8 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
             </div>
           )}
           {(hyp.change || hyp.outcome) && (
-            <div className="rounded-lg bg-surface-2/40 border border-border/60 px-3.5 py-3">
-              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Hypothesis</div>
+            <div className={`rounded-lg bg-surface-2/40 border border-border/60 px-3.5 py-3 ${refinedCls("hypothesis")}`}>
+              {sectionHead("Hypothesis", "hypothesis")}
               <p className="text-[14px] leading-relaxed text-foreground/90">
                 We believe <b className="text-foreground">{hyp.change || "[the change]"}</b> for <b className="text-foreground">{hyp.audience || "[audience]"}</b> will cause <b className="text-foreground">{hyp.outcome || "[outcome]"}</b>{hyp.rationale ? <> because {hyp.rationale}</> : null}.
               </p>
@@ -229,8 +336,8 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
               </div>
             )}
           </div>
-          <div>
-            <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">Success metrics</div>
+          <div className={refinedCls("metrics")}>
+            {sectionHead("Success metrics", "metrics")}
             {metrics.primary || metrics.guardrails.length ? (
               <div className="space-y-1.5">
                 {metrics.primary && (
