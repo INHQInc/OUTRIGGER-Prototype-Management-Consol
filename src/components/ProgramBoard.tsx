@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { NewPrototype } from "./NewPrototype";
 import { EmptyState } from "@/components/ui";
 import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
 import type { PipelineStep } from "@/lib/prototypes/pipeline";
@@ -99,11 +98,6 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] text-muted-2">Columns are ground truth — cards move when the work moves. Drag to reorder priority, or Launch → Shipped when you call it.</p>
-        <NewPrototype />
-      </div>
-
       {cards.length === 0 ? (
         <EmptyState title="No prototypes yet." hint="Create one — then build it with Claude and review it on the real site." />
       ) : (
