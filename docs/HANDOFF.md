@@ -2,36 +2,43 @@
 
 *Updated: 2026-07-23. Read AGENTS.md first (model + rules), then this (state + next moves). Debugging? `docs/RUNBOOK.md`.*
 
-## Where we are (2026-07-23)
+## Where we are (2026-07-24)
 
-**A prototype went end-to-end for the first time.** `room-detail-overlay` (Outrigger, rooms-suites page) was authored by a Claude instance in the prototypes repo, is built and pushed, and is verified serving live off branch HEAD. Remaining on it: cut a version → Optimizely bundle.
+**The full loop is real and every stage ran live**: AI-drafted brief → gate opens → agent builds in the branch → real-env review → cut + certification → API push (read-back verified) → experiment in Optimizely → running lock. `room-detail-overlay` traversed all of it.
 
-### Shipped today
+### The product surface (rebuilt this session)
 
-- **Provisioning derivations** (`lib/prototypes/derive.ts`) — per-target `data.md` (embedded data globals + DOM↔data join keys) and `design-tokens.md` (fonts, custom properties, overlay z-index ladder). `context.json` gained `referenceRepos` + `fonts`.
-- **Loader truth** — `lib/prototypes/served.ts` (the 20s cache, now introspectable) and tokenless `GET /api/loader/status?key=`: served vs head commit, cache lag, `artifactProblem`. Loader payload carries `commit`.
-- **First-provision `dist/` reset** so a fresh branch stops serving the inherited `starter` build.
-- **GitHub token diagnosis** — `friendlyGitError()`, `canCreateBranch()` (bogus-SHA write probe), and a write indicator on Settings → Repositories. `GET /repos` `permissions.push` is NOT trustworthy for fine-grained PATs.
-- **Skill library** (`/skills`, `lib/skills/`) — three tiers, full descriptions, in-app reader, built-ins seeded.
-- **Ideas channel** (`/ideas`, `lib/ideas/`) — prototype instances POST improvements back via the org API token.
-- **Init script** — required local-folder path (explicit Save + confirmation) and optional website-source checkout, symlinked into the clone as `source-site/`.
-- **Repositories UI** simplified — role checkboxes / provider dropdown / advanced fields removed; added a Reference source tile.
-- **`starter` branch** (`INHQInc/outrigger-prototypes`) — generalized font proxy (proxies stylesheets incl. CDN, rewrites font URLs; fixes CORS serif fallback), `?clean=1`, `PORT=`, `.claude/launch.json`, rewritten SKILL.md (empty-brief protocol, data-first, brand-fidelity, definition-of-done), flat hard rules in CLAUDE.md.
+- **Pipeline everywhere, one vocabulary**: Brief · Build · Review · Launch · Testing · Shipped. `lib/prototypes/pipeline.ts` derives everything from stored truth; the workspace stepper, the program board, and dashboard alerts all render it. **First-gate rule:** position holds at the first blocked gate; requirements never teleport work backwards, they block it.
+- **The brief is the gate**: no brief → no provision → no build (enforced in `provisionBranch` + UI). Push also gates on it.
+- **Draft-with-AI brief composer**: `/api/prototypes/brief-draft` → `lib/ai/brief.ts` (@anthropic-ai/sdk, claude-opus-4-8, forced-tool JSON). System prompt = the `opmc-brief-author` skill (new `delivery: "console"` scope — console skills initialize API-side Claude, never delivered to branches). Requires `ANTHROPIC_API_KEY` (set in Vercel 07-24).
+- **Program board** (`/prototypes`, Board|List tabs, `?view=` URL-backed): columns derived from pipeline + LIVE experiment status; Testing locked by the platform; hybrid drag (reorder = priority; Launch→Shipped = decision; wrong drags bounce with the reason); tall cards (hypothesis, next action, gate warnings, truth chips). List view has status filters.
+- **Certification v1** (`lib/prototypes/certify.ts`): 8 static checks run at cut, frozen on the version, gates the push (override recorded). **API push S1** (`lib/prototypes/ship.ts`): bind once, push replaces variation custom code, read-back verifies; refuses briefless prototypes and RUNNING experiments (pause in Optimizely = the human sign-off). **Token health E3**: 6-hourly probe + expiry alerts (Outrigger PAT expires 2026-10-18).
+- **Site compatibility engine O3** (`lib/capture/compat.ts` + `/api/environments/compat`): SSR/CSP/bot/reachability verdict. UI wire-up into Environments still pending.
 
-### Not wired yet (next moves)
+### Agent integration (the flywheel)
 
-1. **Skill delivery** — the library exists but selection UI + provision writing `.claude/skills/**` into the branch is not built. Until then `starter` still ships only `opmc-prototype`, so "choose which skills" has no effect. Note: skills on `starter` are inherited by every fork, so selection requires either provision removing unselected ones or the library becoming the only source.
-2. **Cut a version** on `room-detail-overlay` → Optimizely bundle (the original goal).
-3. **Reference source** not yet registered for Outrigger (Settings → Repositories → Reference source), so `referenceRepos` is empty in provisioned context.
-4. **Ship/handoff layer is not portable** — `lib/sites.ts` + the patch generator encode Outrigger's CMS layout. Every new customer needs that rewritten; the build/preview layer is generic.
+- Skills: 3-tier library + per-prototype selection + branch delivery + pruning; built-ins re-asserted from code; `opmc-prototype` teaches §0 self-sync (agents re-sync themselves on drift via the org token), dual injection timings, data-first + brand-fidelity, definition-of-done.
+- Capture intelligence: `data.md` (SSR-fetched data islands + DOM join keys), `design-tokens.md`, `fonts`, `referenceRepos` (identity only; local path via `source-site` symlink from the init script).
+- Ideas channel live and proven (agent feedback → same-day platform fix). Tokenless truth APIs: `/api/loader/status`, `/api/prototypes/sync-status`.
 
-## Known-good state
+### Strategy assets
 
-- `INHQInc/outrigger-prototypes` — private. Branches: `main`, `starter`, `prototype/room-detail-overlay`, `prototype/favorites`, `prototype/trip-planner`.
-- Outrigger GitHub connection: fine-grained PAT, write verified against the prototypes repo.
-- Prototype `room-detail-overlay` serving from repo HEAD, `artifactProblem: null`, no version cut.
+- `docs/VISION-SHIPPABLE.md` (feature map, phases w/ falsifiable exits, Program Board track) · `docs/OPAL-GAP-ANALYSIS.md` (verbatim receipts: editor-bound agent, MCP excludes variation code, generated code unsupported) · `docs/pitch/` three decks (Optimizely pitch w/ receipts slide, dev+marketer feature outline, Opal gap w/ ✓/◐/✗ feature board).
 
----
+### Next moves (build order)
+
+1. **S4 results read-back** — experiment status/results on card + workspace (Testing/Decided data).
+2. **B3 sign-off gates** — brief approval before build, review approval before push, per-role.
+3. **O3 UI** — compatibility verdict button/badge in Environments.
+4. **B5 ideas → backlog graduation** — one click idea → prototype stub.
+5. **O1/O2 GitHub App + auto-provisioned repo** — the onboarding rebuild.
+6. **A1 hosted build agents** — the anyone-can-use-it unlock (after sharp edges).
+
+### Known-good state
+
+- `room-detail-overlay`: built (`9214134`+), reviewed, v4 cut (pre-gate), running live in Optimizely Web Experiment "Room Detail Overlay" (Variation #1) after the early-injection fix (init retry + body-safe wrapper on `starter`).
+- Loader serving = HEAD, `artifactProblem: null`. Brief drafted via AI 07-24.
+- `INHQInc/outrigger-prototypes` private; fine-grained PAT w/ verified write; `starter` ships tooling but NO skills (console is sole source).
 
 <!-- Historical detail below this line is retained for context; treat anything above as current. -->
 
