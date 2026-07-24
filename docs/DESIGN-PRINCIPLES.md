@@ -34,7 +34,7 @@ don't align."*
 ## 3. Rooms, not steps
 
 Workspace tabs are the prototype's PARTS — nouns a team recognizes (Brief,
-Source Control, Skills, Review, Experimentation, Handoff) — never a restating of
+Source Control, Skills, Build, Review, Experimentation, Handoff) — never a restating of
 pipeline steps as sections. The pipeline is status (header), not information
 architecture. Never render a vertical list of step-cards.
 
