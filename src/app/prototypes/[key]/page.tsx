@@ -18,6 +18,7 @@ import { PrototypeOverview, type ActivityItem } from "@/components/PrototypeOver
 import { BriefComposer } from "@/components/BriefComposer";
 import { TargetPages } from "@/components/TargetPages";
 import { RepoBranchSettings } from "@/components/RepoBranchSettings";
+import { LocalFolders } from "@/components/LocalFolders";
 import { InitScript } from "@/components/InitScript";
 import { SkillSelector } from "@/components/SkillSelector";
 import { SourcePanel } from "@/components/SourcePanel";
@@ -31,15 +32,16 @@ export const dynamic = "force-dynamic";
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "brief", label: "Brief", step: "brief" },
-  { id: "source", label: "Source Control", step: "build" },
+  { id: "source", label: "Source Control" },
   { id: "skills", label: "Skills" },
+  { id: "build", label: "Build", step: "build" },
   { id: "review", label: "Review", step: "review" },
   { id: "experiment", label: "Experimentation", step: "launch" },
   { id: "handoff", label: "Handoff", step: "shipped" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 /** Old room ids that may live in links/bookmarks. */
-const TAB_ALIASES: Record<string, TabId> = { build: "source", pages: "review" };
+const TAB_ALIASES: Record<string, TabId> = { pages: "review" };
 
 const DOT: Record<PipelineStep["state"], string> = {
   done: "bg-ok",
@@ -157,15 +159,22 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 
       {tab === "source" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">Where the code lives and how it reaches your machine: the repo + branch, the local folders, and the command that starts Claude. The console reads the branch; it never writes your code.</p>
+          <p className="text-[14px] text-muted-2">Setup — usually touched once: which repo + branch this prototype builds in, and where it lives on your machine. The develop loop itself is in Build.</p>
           <RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} />
+          <LocalFolders prototypeKey={key} repoFullName={repo?.fullName} />
+        </div>
+      )}
+
+      {tab === "build" && (
+        <div className="max-w-4xl space-y-3">
+          <p className="text-[14px] text-muted-2">The develop loop: prepare the branch, start Claude, and re-sync when the brief or skills change. Claude builds in the repo; the console pulls the result.</p>
           <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={Boolean(p.brief.change?.trim())} />
         </div>
       )}
 
       {tab === "skills" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">What Claude wakes up knowing for this prototype. Global and brand skills come from the library; prototype skills exist only here. Changes reach the branch on the next re-sync (Source Control).</p>
+          <p className="text-[14px] text-muted-2">What Claude wakes up knowing for this prototype. Global and brand skills come from the library; prototype skills exist only here. Changes reach the branch on the next re-sync (Build).</p>
           <SkillSelector prototypeKey={key} initial={skillRows} />
         </div>
       )}

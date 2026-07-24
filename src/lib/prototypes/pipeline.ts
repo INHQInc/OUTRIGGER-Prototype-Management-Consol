@@ -119,8 +119,8 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   };
 
   // ── alerts (operational; each links to its fix) ───────────────
-  if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so Claude builds against the current brief.", anchor: "source" });
-  if (problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "source" });
+  if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so Claude builds against the current brief.", anchor: "build" });
+  if (problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   if (latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
   if (lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });
   if (lastPush && lastPush.verified === false) alerts.push({ level: "danger", text: "The last push did not read-back verify — inspect the variation in Optimizely before publishing.", anchor: "experiment" });
@@ -145,7 +145,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // 2 · Build
   const buildDone = provisioned && built && !problem;
   steps.push({
-    id: "build", title: "Build", anchor: "source",
+    id: "build", title: "Build", anchor: "build",
     state: buildDone ? "done" : "todo",
     status: !provisioned ? (briefDone ? "get the init script" : "waiting on the brief") 
       : problem === "placeholder" || !built ? (inp.claudeSeenAt ? "Claude engaged · no build pushed yet" : "provisioned · waiting on the first build")
@@ -224,8 +224,8 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
   if (!briefDone) primaryAction = { label: "Write the brief", anchor: "brief" };
-  else if (!provisioned) primaryAction = { label: "Get the init script", anchor: "source" };
-  else if (!built || problem) primaryAction = { label: "Build with Claude", anchor: "source" };
+  else if (!provisioned) primaryAction = { label: "Prepare the branch", anchor: "build" };
+  else if (!built || problem) primaryAction = { label: "Build with Claude", anchor: "build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "review" };
   else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "experiment" };
   else if (certBlocked) primaryAction = { label: "Fix certification & re-cut", anchor: "experiment" };
