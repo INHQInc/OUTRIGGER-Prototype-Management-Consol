@@ -128,7 +128,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 
   return (
     <div className="space-y-4">
-      <PipelineHeader pipeline={pipeline} />
+      <PipelineHeader pipeline={pipeline} currentTab={tab} />
 
       {/* Rooms — the prototype's parts, not its steps. Dots = that part's state. */}
       <div className="flex items-center gap-1 border-b border-border overflow-x-auto">

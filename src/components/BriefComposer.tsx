@@ -229,9 +229,26 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {metrics.primary && <span className="text-[12.5px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-foreground font-medium">📊 Decision: {metrics.primary}</span>}
-            {metrics.guardrails.map((g, i) => <span key={i} className="text-[12.5px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
+          <div>
+            <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">Success metrics</div>
+            {metrics.primary || metrics.guardrails.length ? (
+              <div className="space-y-1.5">
+                {metrics.primary && (
+                  <div className="text-[14px] text-foreground/90 leading-relaxed flex gap-2">
+                    <span className="text-[12.5px] px-1.5 py-0.5 rounded bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-accent font-semibold shrink-0 h-fit">DECISION</span>
+                    <span>{metrics.primary}</span>
+                  </div>
+                )}
+                {metrics.guardrails.map((g, i) => (
+                  <div key={i} className="text-[14px] text-muted leading-relaxed flex gap-2">
+                    <span className="text-[12.5px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 font-medium shrink-0 h-fit">GUARDRAIL</span>
+                    <span>{g}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[14px] text-muted-2">No metric set yet — add the one event that decides this experiment.</p>
+            )}
           </div>
           {saveBar}
         </div>

@@ -6,8 +6,11 @@ import type { Pipeline } from "@/lib/prototypes/pipeline";
  * Per-part detail lives on the room tabs' dots — not here. Below: ground truth
  * when everything is healthy, or the specific problems when it isn't.
  */
-export function PipelineHeader({ pipeline }: { pipeline: Pipeline }) {
+export function PipelineHeader({ pipeline, currentTab }: { pipeline: Pipeline; currentTab?: string }) {
   const { stage, primaryAction, alerts, truth } = pipeline;
+  // The CTA is the "go do the next thing" button — dead weight when you're
+  // already in the room it points to. Hide it there.
+  const showCta = primaryAction.anchor !== currentTab;
 
   const chip = stage.blocked
     ? "border-danger/50 text-danger bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
@@ -26,9 +29,11 @@ export function PipelineHeader({ pipeline }: { pipeline: Pipeline }) {
           {stage.blocked ? `Blocked at ${stage.label}` : stage.label}
         </span>
         <span className="text-[14px] text-muted min-w-0">{stage.status}</span>
-        <a href={`?tab=${primaryAction.anchor}`} className="ml-auto h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover transition-colors flex items-center shrink-0">
-          {primaryAction.label}
-        </a>
+        {showCta && (
+          <a href={`?tab=${primaryAction.anchor}`} className="ml-auto h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover transition-colors flex items-center shrink-0">
+            {primaryAction.label}
+          </a>
+        )}
       </div>
 
       {/* Ground truth: one green line, or specific problems */}

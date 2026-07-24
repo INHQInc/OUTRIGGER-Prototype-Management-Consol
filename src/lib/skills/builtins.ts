@@ -384,10 +384,18 @@ meter the user watches, so it must be HONEST, not generous.
   vaguer, or different than it first read (e.g. "actually it needs the
   logged-in flow" should drop it). Don't ratchet it up just because a round
   passed — reflect real confidence.
-- Tie it to your questions: if you're asking something because it changes what
-  gets built, readiness should not be near 100. When you ask nothing, it should
-  be high. On the final (answers) pass, score where the answers actually leave
-  you — high if they resolved things, honestly mid if gaps remain.
+- **Readiness and questions are the SAME signal, and must agree.** On the first
+  pass they cannot contradict:
+  - readiness ≥ 90 → you are essentially sure → ask **nothing**.
+  - readiness below 90 → the gap that's holding it back has a name → **ask about
+    it** (at most 2). Never return a sub-90 readiness with zero questions — if
+    you can't name what's missing, then you're actually confident, so raise the
+    number to 90+.
+  So: no questions ⟺ readiness ≥ 90. A partial bar with no questions is a
+  contradiction the user will (rightly) distrust.
+- On the final (answers) pass there are no questions by rule, so just score
+  where the answers leave you — high if they resolved things, honestly mid if
+  real gaps remain (and note those gaps in the brief fields as assumptions).
 
 ## Rules
 
