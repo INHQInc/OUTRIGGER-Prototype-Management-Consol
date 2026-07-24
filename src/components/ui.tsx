@@ -6,7 +6,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
     <header className="h-16 shrink-0 border-b border-border px-8 flex items-center justify-between gap-4">
       <div>
         <h1 className="text-[15px] font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="text-[12px] text-muted-2 mt-0.5">{subtitle}</p>}
+        {subtitle && <p className="text-[14px] text-muted-2 mt-0.5">{subtitle}</p>}
       </div>
       {actions}
     </header>
@@ -22,7 +22,7 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
     accent: "bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-accent border-[color-mix(in_srgb,var(--accent)_30%,transparent)]",
   };
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${tones[tone]}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[13px] font-medium border ${tones[tone]}`}>
       {children}
     </span>
   );
@@ -31,8 +31,8 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="border border-dashed border-border rounded-xl py-16 text-center">
-      <p className="text-[13px] text-muted">{title}</p>
-      {hint && <p className="text-[12px] text-muted-2 mt-1">{hint}</p>}
+      <p className="text-[15px] text-muted">{title}</p>
+      {hint && <p className="text-[14px] text-muted-2 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -46,7 +46,7 @@ export function TimeAgo({ iso }: { iso: string | null }) {
 
 export function LinkButton({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="text-[12px] text-accent hover:text-accent-hover font-medium">
+    <Link href={href} className="text-[14px] text-accent hover:text-accent-hover font-medium">
       {children}
     </Link>
   );

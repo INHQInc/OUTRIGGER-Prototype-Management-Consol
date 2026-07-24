@@ -23,8 +23,8 @@ export function PrototypeBoard({ prototypes }: { prototypes: PrototypeRecord[] }
             return (
               <section key={stage}>
                 <div className="flex items-center gap-2 mb-2.5">
-                  <span className="text-[12px] font-semibold">{STAGE_LABEL[stage]}</span>
-                  <span className="text-[11px] text-muted-2 tabular-nums">{items.length}</span>
+                  <span className="text-[14px] font-semibold">{STAGE_LABEL[stage]}</span>
+                  <span className="text-[13px] text-muted-2 tabular-nums">{items.length}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {items.map((p) => <PrototypeCard key={p.key} p={p} />)}

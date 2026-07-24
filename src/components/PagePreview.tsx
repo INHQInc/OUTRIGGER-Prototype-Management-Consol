@@ -21,14 +21,14 @@ export function PagePreview({ src }: { src: string }) {
           <button
             key={d.key}
             onClick={() => setDevice(d.key)}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+            className={`px-2.5 py-1 rounded-md text-[13px] font-medium transition-colors ${
               device === d.key ? "bg-surface-2 text-foreground" : "text-muted-2 hover:text-foreground"
             }`}
           >
             {d.label}
           </button>
         ))}
-        <span className="ml-auto text-[11px] text-muted-2 font-mono">{w}px</span>
+        <span className="ml-auto text-[13px] text-muted-2 font-mono">{w}px</span>
       </div>
       <div className="bg-[#0a0a0a] flex justify-center overflow-auto" style={{ height: 620 }}>
         <iframe

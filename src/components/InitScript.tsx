@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[12px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 
 /** `~` doesn't expand inside quotes; rewrite to $HOME (which does) so paths with spaces stay safe. */
 function expandHome(p: string): string {
@@ -115,28 +115,28 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   }
 
   if (!repo) {
-    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[12px]">This prototype has no repo. <Link href={`/prototypes/${prototypeKey}/settings`} className="text-accent hover:text-accent-hover font-medium">Set one →</Link></div>;
+    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[14px]">This prototype has no repo. <Link href={`/prototypes/${prototypeKey}/settings`} className="text-accent hover:text-accent-hover font-medium">Set one →</Link></div>;
   }
 
   const pathFields = (
     <div className="space-y-3">
       <div className="space-y-1">
-        <label className="block text-[11px] text-muted-2">Local folder — where the prototype clones to <span className="text-danger">*</span></label>
+        <label className="block text-[13px] text-muted-2">Local folder — where the prototype clones to <span className="text-danger">*</span></label>
         <input value={draftPath} onChange={(e) => { setDraftPath(e.target.value); setSaveMsg(null); }} spellCheck={false} placeholder="/Users/you/Projects/room-detail-overlay" className={inp} />
-        <div className="text-[10px] text-muted-2 leading-relaxed">
+        <div className="text-[12.5px] text-muted-2 leading-relaxed">
           In Finder: right-click the folder → hold <span className="font-mono">⌥ Option</span> → &ldquo;Copy … as Pathname&rdquo; → paste. The clone lands here; nothing else on your machine is touched.
         </div>
       </div>
       <div className="space-y-1">
-        <label className="block text-[11px] text-muted-2">Website source checkout <span className="text-muted-2">(optional — lets Claude read the real markup)</span></label>
+        <label className="block text-[13px] text-muted-2">Website source checkout <span className="text-muted-2">(optional — lets Claude read the real markup)</span></label>
         <input value={draftSource} onChange={(e) => { setDraftSource(e.target.value); setSaveMsg(null); }} spellCheck={false} placeholder="/Users/you/Projects/Outrigger_Website" className={inp} />
-        <div className="text-[10px] text-muted-2 leading-relaxed">
+        <div className="text-[12.5px] text-muted-2 leading-relaxed">
           Your local checkout of the production site repo. It gets symlinked in as <span className="font-mono">source-site</span> (git-ignored, never committed) so Claude builds against real components/CSS instead of only the page snapshot.
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-0.5">
-        <span className={`text-[11px] ${saveMsg ? (saveMsg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : pathOk ? "text-ok" : "text-muted-2"}`}>
+        <span className={`text-[13px] ${saveMsg ? (saveMsg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : pathOk ? "text-ok" : "text-muted-2"}`}>
           {saveMsg
             ? saveMsg.text
             : dirty
@@ -146,9 +146,9 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
                 : "Paste the folder path, then Save."}
         </span>
         {dirty ? (
-          <button onClick={savePaths} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover shrink-0">Save</button>
+          <button onClick={savePaths} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover shrink-0">Save</button>
         ) : (
-          <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[12px] font-semibold flex items-center shrink-0">Saved ✓</span>
+          <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[14px] font-semibold flex items-center shrink-0">Saved ✓</span>
         )}
       </div>
     </div>
@@ -159,17 +159,17 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
     return (
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="px-4 py-3 space-y-3">
-          <div className="text-[12px] text-muted-2 max-w-md">Get your init script — sets up the branch so Claude wakes up loaded with this prototype and its page(s).</div>
+          <div className="text-[14px] text-muted-2 max-w-md">Get your init script — sets up the branch so Claude wakes up loaded with this prototype and its page(s).</div>
           {pathFields}
           <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3">
-            <span className={`text-[11px] ${briefDone ? "text-muted-2" : "text-warn"}`}>{!briefDone ? "Write the brief first — it's the gate. Building without a spec is how prototypes drift." : pathOk ? "Ready — this is where it clones to." : "Save the local folder first."}</span>
-            <button onClick={prepare} disabled={busy || !pathOk || !briefDone} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">{busy ? "Setting up…" : err ? "Try again" : "Get init script"}</button>
+            <span className={`text-[13px] ${briefDone ? "text-muted-2" : "text-warn"}`}>{!briefDone ? "Write the brief first — it's the gate. Building without a spec is how prototypes drift." : pathOk ? "Ready — this is where it clones to." : "Save the local folder first."}</span>
+            <button onClick={prepare} disabled={busy || !pathOk || !briefDone} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">{busy ? "Setting up…" : err ? "Try again" : "Get init script"}</button>
           </div>
         </div>
         {err && (
           <div className="px-4 py-3 border-t border-danger/30 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] space-y-1.5">
-            <div className="text-[12px] text-danger leading-relaxed">{err}</div>
-            {tokenIssue && <Link href="/settings/repositories" className="inline-block text-[12px] text-accent hover:text-accent-hover font-medium">Manage the GitHub connection in Settings → Repositories →</Link>}
+            <div className="text-[14px] text-danger leading-relaxed">{err}</div>
+            {tokenIssue && <Link href="/settings/repositories" className="inline-block text-[14px] text-accent hover:text-accent-hover font-medium">Manage the GitHub connection in Settings → Repositories →</Link>}
           </div>
         )}
       </div>
@@ -199,14 +199,14 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
           touches src/ or dist/. */}
       <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-[12px] font-semibold">Branch content</div>
-          <div className="text-[11px] text-muted-2 mt-0.5 leading-relaxed">
+          <div className="text-[14px] font-semibold">Branch content</div>
+          <div className="text-[13px] text-muted-2 mt-0.5 leading-relaxed">
             Re-sync writes the current brief, page snapshots (<span className="font-mono">data.md</span>, <span className="font-mono">design-tokens.md</span>) and the selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart Claude so it picks up new skills.
           </div>
-          {err && <div className="text-[11px] text-danger mt-1">{err}</div>}
-          {synced && <div className="text-[11px] text-ok mt-1">{synced}</div>}
+          {err && <div className="text-[13px] text-danger mt-1">{err}</div>}
+          {synced && <div className="text-[13px] text-ok mt-1">{synced}</div>}
         </div>
-        <button onClick={resync} disabled={busy} className="h-8 px-3 rounded-lg border border-border text-[12px] font-semibold text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
+        <button onClick={resync} disabled={busy} className="h-8 px-3 rounded-lg border border-border text-[14px] font-semibold text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
           {busy ? "Re-syncing…" : "Re-sync"}
         </button>
       </div>
@@ -214,11 +214,11 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
       {pathOk ? (
         <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-accent/30">
-            <span className="text-[12px] font-semibold">Run this to build</span>
-            <button onClick={copy} className="text-[12px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
+            <span className="text-[14px] font-semibold">Run this to build</span>
+            <button onClick={copy} className="text-[14px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
           </div>
-          <pre className="px-4 py-3 text-[11px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
-          <div className="px-4 pb-3 text-[11px] text-muted-2 border-t border-border/60 pt-2.5">
+          <pre className="px-4 py-3 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
+          <div className="px-4 pb-3 text-[13px] text-muted-2 border-t border-border/60 pt-2.5">
             Clones straight into <span className="font-mono">{path}</span> — that folder becomes the repo (no nested subfolder).
             {srcOk
               ? <> Claude reads the real site source at <span className="font-mono">source-site/</span>, plus the page snapshot in <span className="font-mono">.opmc/</span>.</>
@@ -227,7 +227,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-4 py-3 text-[12px] text-warn">Save the local folder above to generate your clone command.</div>
+        <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-4 py-3 text-[14px] text-warn">Save the local folder above to generate your clone command.</div>
       )}
     </div>
   );

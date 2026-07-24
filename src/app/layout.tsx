@@ -39,8 +39,13 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Theme boots before paint — stored choice wins; default is Clinical Light. */}
+        <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("opmc-theme");if(t==="dark")document.documentElement.dataset.theme="dark"}catch(e){}` }} />
+      </head>
       <body className="min-h-full flex">
         <AppFrame user={user} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
       </body>

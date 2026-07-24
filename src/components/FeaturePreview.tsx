@@ -22,7 +22,7 @@ export function FeaturePreview({ featureKey }: { featureKey: string }) {
         <div className="flex items-center rounded-lg bg-background border border-border p-0.5">
           <button
             onClick={() => setVariant(false)}
-            className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${
+            className={`px-3 py-1 rounded-md text-[13px] font-medium transition-colors ${
               !variant ? "bg-surface-2 text-foreground" : "text-muted-2 hover:text-foreground"
             }`}
           >
@@ -30,7 +30,7 @@ export function FeaturePreview({ featureKey }: { featureKey: string }) {
           </button>
           <button
             onClick={() => setVariant(true)}
-            className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${
+            className={`px-3 py-1 rounded-md text-[13px] font-medium transition-colors ${
               variant ? "bg-accent text-accent-fg" : "text-muted-2 hover:text-foreground"
             }`}
           >
@@ -46,7 +46,7 @@ export function FeaturePreview({ featureKey }: { featureKey: string }) {
             <button
               key={d.key}
               onClick={() => setDevice(d.key)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-[13px] font-medium transition-colors ${
                 device === d.key ? "bg-surface-2 text-foreground" : "text-muted-2 hover:text-foreground"
               }`}
             >
@@ -64,7 +64,7 @@ export function FeaturePreview({ featureKey }: { featureKey: string }) {
             <path d="M23 4v6h-6M1 20v-6h6" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
           </svg>
         </button>
-        <span className="text-[11px] text-muted-2 font-mono">{w}px</span>
+        <span className="text-[13px] text-muted-2 font-mono">{w}px</span>
       </div>
 
       <div className="bg-[#0a0a0a] flex justify-center overflow-auto" style={{ height: 640 }}>

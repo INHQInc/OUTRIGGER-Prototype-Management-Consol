@@ -50,14 +50,14 @@ export function SkillSelector({ prototypeKey, initial }: { prototypeKey: string;
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-3">
         <div>
-          <span className="text-[12px] font-semibold">Skills</span>
-          <span className="text-[11px] text-muted-2 ml-2">What Claude wakes up knowing. Written into <span className="font-mono">.claude/skills/</span> on provision.</span>
+          <span className="text-[14px] font-semibold">Skills</span>
+          <span className="text-[13px] text-muted-2 ml-2">What Claude wakes up knowing. Written into <span className="font-mono">.claude/skills/</span> on provision.</span>
         </div>
-        <Link href="/skills" className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">Library →</Link>
+        <Link href="/skills" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">Library →</Link>
       </div>
 
       {rows.length === 0 ? (
-        <div className="px-4 py-4 text-[12px] text-muted-2">No skills in the library yet. <Link href="/skills" className="text-accent hover:text-accent-hover">Add one →</Link></div>
+        <div className="px-4 py-4 text-[14px] text-muted-2">No skills in the library yet. <Link href="/skills" className="text-accent hover:text-accent-hover">Add one →</Link></div>
       ) : (
         rows.map(({ skill, enabled }) => (
           <div key={skill.id} className="border-b border-border/60 last:border-0">
@@ -65,28 +65,28 @@ export function SkillSelector({ prototypeKey, initial }: { prototypeKey: string;
               <input type="checkbox" checked={enabled} onChange={() => toggle(skill.id)} className="mt-0.5 accent-[var(--accent)] shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[12px] font-mono font-medium">{skill.name}</span>
-                  <span className="text-[10px] text-muted-2">{SCOPE_LABEL[skill.scope]}</span>
+                  <span className="text-[14px] font-mono font-medium">{skill.name}</span>
+                  <span className="text-[12.5px] text-muted-2">{SCOPE_LABEL[skill.scope]}</span>
                 </div>
-                {skill.description && <p className="text-[11px] text-muted-2 mt-0.5 leading-relaxed">{skill.description}</p>}
+                {skill.description && <p className="text-[13px] text-muted-2 mt-0.5 leading-relaxed">{skill.description}</p>}
               </div>
-              <button onClick={() => setOpen(open === skill.id ? null : skill.id)} className="text-[11px] text-accent hover:text-accent-hover shrink-0">{open === skill.id ? "Hide" : "Read"}</button>
+              <button onClick={() => setOpen(open === skill.id ? null : skill.id)} className="text-[13px] text-accent hover:text-accent-hover shrink-0">{open === skill.id ? "Hide" : "Read"}</button>
             </div>
             {open === skill.id && (
-              <pre className="px-4 py-2.5 text-[11px] font-mono text-muted leading-relaxed whitespace-pre-wrap bg-background/40 border-t border-border/60 max-h-80 overflow-y-auto">{skill.body}</pre>
+              <pre className="px-4 py-2.5 text-[13px] font-mono text-muted leading-relaxed whitespace-pre-wrap bg-background/40 border-t border-border/60 max-h-80 overflow-y-auto">{skill.body}</pre>
             )}
           </div>
         ))
       )}
 
       <div className="px-4 py-2.5 border-t border-border flex items-center justify-between gap-3">
-        <span className={`text-[11px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : "text-muted-2"}`}>
+        <span className={`text-[13px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : "text-muted-2"}`}>
           {msg ? msg.text : dirty ? "Unsaved changes" : `${enabledIds.length} enabled`}
         </span>
         {dirty ? (
-          <button onClick={save} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Saving…" : "Save"}</button>
+          <button onClick={save} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Saving…" : "Save"}</button>
         ) : (
-          <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[12px] font-semibold flex items-center shrink-0">Saved ✓</span>
+          <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[14px] font-semibold flex items-center shrink-0">Saved ✓</span>
         )}
       </div>
     </div>

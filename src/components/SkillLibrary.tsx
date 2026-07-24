@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import type { Skill, SkillScope } from "@/lib/skills/skills";
 
-const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
-const ta = inp + " font-mono text-[12px] leading-relaxed resize-y";
+const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+const ta = inp + " font-mono text-[14px] leading-relaxed resize-y";
 
 const SCOPE_LABEL: Record<SkillScope, string> = {
   global: "generic · every prototype",
@@ -87,23 +87,23 @@ export function SkillLibrary({ initial, canManage }: { initial: Skill[]; canMana
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <div>
-            <div className="text-[13px] font-semibold">Skill library</div>
-            <div className="text-[11px] text-muted-2 mt-0.5">What Claude is told when it opens a prototype. Generic skills apply everywhere; brand skills to this customer; prototype skills to one build.</div>
+            <div className="text-[15px] font-semibold">Skill library</div>
+            <div className="text-[13px] text-muted-2 mt-0.5">What Claude is told when it opens a prototype. Generic skills apply everywhere; brand skills to this customer; prototype skills to one build.</div>
           </div>
-          {canManage && !editorOpen && <button onClick={startAdd} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">+ New skill</button>}
+          {canManage && !editorOpen && <button onClick={startAdd} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">+ New skill</button>}
         </div>
 
-        {error && <div className="px-4 py-2 text-[12px] text-danger border-b border-border">{error}</div>}
+        {error && <div className="px-4 py-2 text-[14px] text-danger border-b border-border">{error}</div>}
 
         {editorOpen && (
           <div className="px-4 py-3 border-b border-border bg-surface-2/30 space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] text-muted-2 mb-1">Name</label>
+                <label className="block text-[13px] text-muted-2 mb-1">Name</label>
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="brand-fidelity" className={inp} />
               </div>
               <div>
-                <label className="block text-[11px] text-muted-2 mb-1">Applies to</label>
+                <label className="block text-[13px] text-muted-2 mb-1">Applies to</label>
                 <select value={scope} onChange={(e) => setScope(e.target.value as SkillScope)} className={inp}>
                   <option value="global">Every prototype (generic)</option>
                   <option value="brand">This customer&apos;s prototypes</option>
@@ -112,47 +112,47 @@ export function SkillLibrary({ initial, canManage }: { initial: Skill[]; canMana
               </div>
             </div>
             <div>
-              <label className="block text-[11px] text-muted-2 mb-1">Full description — what it covers and when it applies</label>
+              <label className="block text-[13px] text-muted-2 mb-1">Full description — what it covers and when it applies</label>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={inp + " resize-y"} placeholder="Brand fidelity rules: reuse site classes, namespace custom CSS, never redefine a site class globally." />
             </div>
             <div>
-              <label className="block text-[11px] text-muted-2 mb-1">SKILL.md — the instructions Claude reads</label>
+              <label className="block text-[13px] text-muted-2 mb-1">SKILL.md — the instructions Claude reads</label>
               <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={16} className={ta} spellCheck={false} />
-              <div className="text-[10px] text-muted-2 mt-1">Keep the <span className="font-mono">---</span> frontmatter with <span className="font-mono">name</span> + <span className="font-mono">description</span> — that&apos;s what Claude reads to decide whether to load it.</div>
+              <div className="text-[12.5px] text-muted-2 mt-1">Keep the <span className="font-mono">---</span> frontmatter with <span className="font-mono">name</span> + <span className="font-mono">description</span> — that&apos;s what Claude reads to decide whether to load it.</div>
             </div>
             <div className="flex items-center justify-end gap-3">
-              <button onClick={cancel} disabled={busy} className="h-8 px-3 rounded-lg text-[12px] text-muted hover:text-foreground">Cancel</button>
-              <button onClick={save} disabled={busy || !name.trim() || !body.trim()} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : editing ? "Save changes" : "Create skill"}</button>
+              <button onClick={cancel} disabled={busy} className="h-8 px-3 rounded-lg text-[14px] text-muted hover:text-foreground">Cancel</button>
+              <button onClick={save} disabled={busy || !name.trim() || !body.trim()} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : editing ? "Save changes" : "Create skill"}</button>
             </div>
           </div>
         )}
 
         {skills.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[12px] text-muted-2">No skills yet.{canManage ? " Add one, or it'll seed from the starter branch on next load." : ""}</div>
+          <div className="px-4 py-8 text-center text-[14px] text-muted-2">No skills yet.{canManage ? " Add one, or it'll seed from the starter branch on next load." : ""}</div>
         ) : (
           skills.map((s) => (
             <div key={s.id} className="border-b border-border last:border-0">
               <div className="px-4 py-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-mono font-medium">{s.name}</span>
+                    <span className="text-[15px] font-mono font-medium">{s.name}</span>
                     <Badge tone={SCOPE_TONE[s.scope]}>{SCOPE_LABEL[s.scope]}</Badge>
                     {s.builtIn && <Badge tone="neutral">built-in</Badge>}
-                    {s.scope === "prototype" && s.prototypeKey && <span className="text-[11px] text-muted-2 font-mono">{s.prototypeKey}</span>}
+                    {s.scope === "prototype" && s.prototypeKey && <span className="text-[13px] text-muted-2 font-mono">{s.prototypeKey}</span>}
                   </div>
-                  <p className="text-[12px] text-muted mt-1 leading-relaxed">{s.description || <span className="text-muted-2">No description.</span>}</p>
+                  <p className="text-[14px] text-muted mt-1 leading-relaxed">{s.description || <span className="text-muted-2">No description.</span>}</p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <button onClick={() => setOpen(open === s.id ? null : s.id)} className="text-[12px] text-accent hover:text-accent-hover font-medium">
+                  <button onClick={() => setOpen(open === s.id ? null : s.id)} className="text-[14px] text-accent hover:text-accent-hover font-medium">
                     {open === s.id ? "Hide" : "Read"}
                   </button>
-                  {canManage && <button onClick={() => startEdit(s)} className="text-[12px] text-muted-2 hover:text-foreground">Edit</button>}
-                  {canManage && !s.builtIn && <button onClick={() => remove(s.id)} disabled={busy} className="text-[12px] text-danger hover:opacity-80">Remove</button>}
+                  {canManage && <button onClick={() => startEdit(s)} className="text-[14px] text-muted-2 hover:text-foreground">Edit</button>}
+                  {canManage && !s.builtIn && <button onClick={() => remove(s.id)} disabled={busy} className="text-[14px] text-danger hover:opacity-80">Remove</button>}
                 </div>
               </div>
               {open === s.id && (
                 <div className="border-t border-border/60 bg-background/40">
-                  <pre className="px-4 py-3 text-[11px] font-mono text-muted leading-relaxed overflow-x-auto whitespace-pre-wrap max-h-[28rem] overflow-y-auto">{s.body}</pre>
+                  <pre className="px-4 py-3 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto whitespace-pre-wrap max-h-[28rem] overflow-y-auto">{s.body}</pre>
                 </div>
               )}
             </div>

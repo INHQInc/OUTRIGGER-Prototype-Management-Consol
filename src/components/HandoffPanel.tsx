@@ -50,7 +50,7 @@ claude "Integrate the winning build v${latestVersion ?? "<n>"} of ${prototypeKey
 
   if (!latestVersion) {
     return (
-      <div className="rounded-xl border border-border bg-surface px-4 py-3 text-[12px] text-muted-2">
+      <div className="rounded-xl border border-border bg-surface px-4 py-3 text-[14px] text-muted-2">
         <span className="font-semibold text-muted">Handoff to source</span> — cut a version first; you hand off the frozen winner.
       </div>
     );
@@ -60,14 +60,14 @@ claude "Integrate the winning build v${latestVersion ?? "<n>"} of ${prototypeKey
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
         <div>
-          <span className="text-[12px] font-semibold">Handoff to source</span>
-          <span className="text-[11px] text-muted-2 ml-2">Integrate the winner into the site&apos;s production code. Claude computes the diff locally; the console keeps the record.</span>
+          <span className="text-[14px] font-semibold">Handoff to source</span>
+          <span className="text-[13px] text-muted-2 ml-2">Integrate the winner into the site&apos;s production code. Claude computes the diff locally; the console keeps the record.</span>
         </div>
-        {handoff && <span className="text-[11px] text-ok">✓ Shipped</span>}
+        {handoff && <span className="text-[13px] text-ok">✓ Shipped</span>}
       </div>
       <div className="p-4 space-y-3">
         {handoff ? (
-          <div className="text-[12px] text-muted">
+          <div className="text-[14px] text-muted">
             Handed off {handoff.by ? `by ${handoff.by}` : ""} · {new Date(handoff.at).toLocaleDateString()}
             {handoff.prLink && <> · <a href={handoff.prLink} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover break-all">{handoff.prLink}</a></>}
           </div>
@@ -75,19 +75,19 @@ claude "Integrate the winning build v${latestVersion ?? "<n>"} of ${prototypeKey
           <>
             <div className="rounded-lg border border-border bg-surface-2/20 overflow-hidden">
               <div className="px-3 py-2 flex items-center justify-between border-b border-border/60">
-                <span className="text-[11px] text-muted">Run this to generate the integration</span>
-                <button onClick={copy} className="text-[11px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
+                <span className="text-[13px] text-muted">Run this to generate the integration</span>
+                <button onClick={copy} className="text-[13px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
               </div>
-              <pre className="px-3 py-2.5 text-[11px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
+              <pre className="px-3 py-2.5 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
             </div>
             <div className="flex items-center gap-2">
-              <input value={pr} onChange={(e) => setPr(e.target.value)} placeholder="Paste the PR / patch link (optional)" className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[12px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-              <button onClick={() => record()} disabled={busy} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Saving…" : "Mark shipped"}</button>
+              <input value={pr} onChange={(e) => setPr(e.target.value)} placeholder="Paste the PR / patch link (optional)" className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[14px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none" />
+              <button onClick={() => record()} disabled={busy} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Saving…" : "Mark shipped"}</button>
             </div>
-            <div className="text-[11px] text-muted-2">The Outrigger source (Azure DevOps) is read-only from here — the PR is opened by a human against their repo. Marking shipped records it + sets the stage to Shipped.</div>
+            <div className="text-[13px] text-muted-2">The Outrigger source (Azure DevOps) is read-only from here — the PR is opened by a human against their repo. Marking shipped records it + sets the stage to Shipped.</div>
           </>
         )}
-        {err && <div className="text-[12px] text-danger">{err}</div>}
+        {err && <div className="text-[14px] text-danger">{err}</div>}
       </div>
     </div>
   );

@@ -75,51 +75,51 @@ export function CustomersManager({ initialCustomers, activeOrgId, canManage }: {
           {creating ? (
             <div className="flex items-end gap-2 w-full rounded-xl border border-border bg-surface p-3">
               <div className="flex-1">
-                <label className="block text-[12px] text-muted mb-1.5">Customer / brand name</label>
-                <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} autoFocus placeholder="e.g. Outrigger Hotels & Resorts" className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] focus:border-accent focus:outline-none" />
+                <label className="block text-[14px] text-muted mb-1.5">Customer / brand name</label>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} autoFocus placeholder="e.g. Outrigger Hotels & Resorts" className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] focus:border-accent focus:outline-none" />
               </div>
-              <button onClick={() => { setCreating(false); setError(null); }} className="h-9 px-3 rounded-lg text-[13px] text-muted hover:text-foreground">Cancel</button>
-              <button onClick={create} disabled={busy || !newName.trim()} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40">Create</button>
+              <button onClick={() => { setCreating(false); setError(null); }} className="h-9 px-3 rounded-lg text-[15px] text-muted hover:text-foreground">Cancel</button>
+              <button onClick={create} disabled={busy || !newName.trim()} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40">Create</button>
             </div>
           ) : (
-            <button onClick={() => setCreating(true)} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover transition-colors">+ New customer</button>
+            <button onClick={() => setCreating(true)} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover transition-colors">+ New customer</button>
           )}
         </div>
       )}
 
-      {error && <div className="text-[12px] text-danger">{error}</div>}
+      {error && <div className="text-[14px] text-danger">{error}</div>}
 
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
         {rows.length === 0 ? (
-          <div className="px-4 py-8 text-center text-[13px] text-muted-2">No customers yet.{canManage ? " Create one to get started." : ""}</div>
+          <div className="px-4 py-8 text-center text-[15px] text-muted-2">No customers yet.{canManage ? " Create one to get started." : ""}</div>
         ) : (
           rows.map((o) => (
             <div key={o.id} className="border-b border-border last:border-0">
               <div className="flex items-center gap-3 px-4 py-3">
-                <div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center text-[13px] font-bold shrink-0">{o.name.slice(0, 1).toUpperCase()}</div>
+                <div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center text-[15px] font-bold shrink-0">{o.name.slice(0, 1).toUpperCase()}</div>
                 <div className="min-w-0 flex-1">
                   {editId === o.id ? (
                     <div className="flex items-center gap-2">
-                      <input value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && rename(o.id)} autoFocus className="rounded-lg bg-background border border-border px-2 py-1 text-[13px] focus:border-accent focus:outline-none" />
-                      <button onClick={() => rename(o.id)} disabled={busy} className="text-[12px] text-accent hover:text-accent-hover font-medium">Save</button>
-                      <button onClick={() => setEditId(null)} className="text-[12px] text-muted-2 hover:text-foreground">Cancel</button>
+                      <input value={editName} onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && rename(o.id)} autoFocus className="rounded-lg bg-background border border-border px-2 py-1 text-[15px] focus:border-accent focus:outline-none" />
+                      <button onClick={() => rename(o.id)} disabled={busy} className="text-[14px] text-accent hover:text-accent-hover font-medium">Save</button>
+                      <button onClick={() => setEditId(null)} className="text-[14px] text-muted-2 hover:text-foreground">Cancel</button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold truncate">{o.name}</span>
+                      <span className="text-[15px] font-semibold truncate">{o.name}</span>
                       {o.id === activeOrgId && <Badge tone="accent">Active</Badge>}
                     </div>
                   )}
-                  <div className="text-[11px] text-muted-2 mt-0.5">
+                  <div className="text-[13px] text-muted-2 mt-0.5">
                     <span className="font-mono">{o.id}</span> · {o.prototypeCount} prototype{o.prototypeCount === 1 ? "" : "s"} · {o.envCount} environment{o.envCount === 1 ? "" : "s"} · created <TimeAgo iso={o.createdAt} />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {o.id !== activeOrgId && <button onClick={() => open(o.id)} className="h-8 px-3 rounded-lg border border-border text-[12px] text-muted hover:text-foreground hover:border-border-strong">Open</button>}
+                  {o.id !== activeOrgId && <button onClick={() => open(o.id)} className="h-8 px-3 rounded-lg border border-border text-[14px] text-muted hover:text-foreground hover:border-border-strong">Open</button>}
                   {canManage && editId !== o.id && (
                     <>
-                      <button onClick={() => { setEditId(o.id); setEditName(o.name); }} className="text-[12px] text-muted-2 hover:text-foreground">Rename</button>
-                      <button onClick={() => { setConfirmId(confirmId === o.id ? null : o.id); setConfirmText(""); setError(null); }} className="text-[12px] text-danger hover:opacity-80">Delete</button>
+                      <button onClick={() => { setEditId(o.id); setEditName(o.name); }} className="text-[14px] text-muted-2 hover:text-foreground">Rename</button>
+                      <button onClick={() => { setConfirmId(confirmId === o.id ? null : o.id); setConfirmText(""); setError(null); }} className="text-[14px] text-danger hover:opacity-80">Delete</button>
                     </>
                   )}
                 </div>
@@ -128,13 +128,13 @@ export function CustomersManager({ initialCustomers, activeOrgId, canManage }: {
               {confirmId === o.id && (
                 <div className="px-4 pb-3 pt-0">
                   <div className="rounded-lg border border-danger/40 bg-danger/5 p-3 space-y-2">
-                    <div className="text-[12px] text-foreground">
+                    <div className="text-[14px] text-foreground">
                       This permanently deletes <span className="font-semibold">{o.name}</span> and cascades <span className="font-semibold">all {o.prototypeCount} prototype{o.prototypeCount === 1 ? "" : "s"} and {o.envCount} environment{o.envCount === 1 ? "" : "s"}</span> — versions, promotions, repositories, integrations, and members included. This cannot be undone.
                     </div>
-                    <div className="text-[11px] text-muted-2">It does not remove branches/deploys already on the feature repo or Vercel, or experiments already in Optimizely.</div>
+                    <div className="text-[13px] text-muted-2">It does not remove branches/deploys already on the feature repo or Vercel, or experiments already in Optimizely.</div>
                     <div className="flex items-center gap-2">
-                      <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={`type "${o.name}" to confirm`} className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[12px] focus:border-danger focus:outline-none" />
-                      <button onClick={() => remove(o.id)} disabled={busy || confirmText !== o.name} className="h-9 px-4 rounded-lg bg-danger text-white text-[12px] font-semibold disabled:opacity-30 disabled:cursor-not-allowed">Delete customer</button>
+                      <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={`type "${o.name}" to confirm`} className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[14px] focus:border-danger focus:outline-none" />
+                      <button onClick={() => remove(o.id)} disabled={busy || confirmText !== o.name} className="h-9 px-4 rounded-lg bg-danger text-white text-[14px] font-semibold disabled:opacity-30 disabled:cursor-not-allowed">Delete customer</button>
                     </div>
                   </div>
                 </div>

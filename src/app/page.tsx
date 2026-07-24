@@ -132,11 +132,11 @@ export default async function Dashboard() {
         {/* Needs attention */}
         {attention.length > 0 && (
           <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-warn/30 text-[12px] font-semibold">⚠ Needs attention</div>
+            <div className="px-4 py-2.5 border-b border-warn/30 text-[14px] font-semibold">⚠ Needs attention</div>
             {attention.map((a, i) => (
               <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-warn/20 last:border-0">
-                <span className="text-[13px]">{a.text}</span>
-                <Link href={a.href} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{a.action} →</Link>
+                <span className="text-[15px]">{a.text}</span>
+                <Link href={a.href} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{a.action} →</Link>
               </div>
             ))}
           </div>
@@ -159,8 +159,8 @@ export default async function Dashboard() {
           {/* Active prototypes */}
           <section>
             <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[12px] font-semibold">Active prototypes</span>
-              <Link href="/prototypes" className="text-[12px] text-accent hover:text-accent-hover">View all →</Link>
+              <span className="text-[14px] font-semibold">Active prototypes</span>
+              <Link href="/prototypes" className="text-[14px] text-accent hover:text-accent-hover">View all →</Link>
             </div>
             {active.length === 0 ? (
               <EmptyState title="Nothing in flight." hint="Create a prototype to get started." />
@@ -174,22 +174,22 @@ export default async function Dashboard() {
           {/* Right rail */}
           <div className="space-y-5">
             <section className="rounded-xl border border-border bg-surface overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-border text-[12px] font-semibold">Live on environments</div>
+              <div className="px-4 py-2.5 border-b border-border text-[14px] font-semibold">Live on environments</div>
               {liveEnvs.length === 0 ? (
-                <div className="px-4 py-5 text-[12px] text-muted-2">Nothing promoted yet.</div>
+                <div className="px-4 py-5 text-[14px] text-muted-2">Nothing promoted yet.</div>
               ) : (
                 liveEnvs.map((env) => (
                   <div key={env.label} className="border-b border-border last:border-0">
                     <div className="px-4 pt-2.5 pb-1 flex items-center gap-2">
-                      <span className="text-[12px] font-medium">{env.label}</span>
+                      <span className="text-[14px] font-medium">{env.label}</span>
                       <Badge tone={env.kind === "production" ? "accent" : "neutral"}>{env.kind}</Badge>
                     </div>
                     {env.items.map(({ name, key, promo }) => (
                       <div key={promo.id} className="px-4 pb-2 flex items-center justify-between gap-2">
-                        <Link href={`/prototypes/${key}`} className="text-[12px] text-muted hover:text-accent truncate">{name} <span className="text-muted-2">v{promo.versionNumber}</span></Link>
+                        <Link href={`/prototypes/${key}`} className="text-[14px] text-muted hover:text-accent truncate">{name} <span className="text-muted-2">v{promo.versionNumber}</span></Link>
                         {promo.experimentUrl
-                          ? <a href={promo.experimentUrl} target="_blank" rel="noreferrer" className="text-[11px] text-accent hover:text-accent-hover shrink-0">Opti ↗</a>
-                          : <span className="text-[11px] text-muted-2 shrink-0">{promo.vehicle}</span>}
+                          ? <a href={promo.experimentUrl} target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover shrink-0">Opti ↗</a>
+                          : <span className="text-[13px] text-muted-2 shrink-0">{promo.vehicle}</span>}
                       </div>
                     ))}
                   </div>
@@ -199,16 +199,16 @@ export default async function Dashboard() {
 
             <section className="rounded-xl border border-border bg-surface overflow-hidden">
               <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
-                <span className="text-[12px] font-semibold">Recent activity</span>
-                <Link href="/settings/activity" className="text-[11px] text-muted-2 hover:text-foreground">All →</Link>
+                <span className="text-[14px] font-semibold">Recent activity</span>
+                <Link href="/settings/activity" className="text-[13px] text-muted-2 hover:text-foreground">All →</Link>
               </div>
               {events.length === 0 ? (
-                <div className="px-4 py-5 text-[12px] text-muted-2">No activity yet.</div>
+                <div className="px-4 py-5 text-[14px] text-muted-2">No activity yet.</div>
               ) : (
                 events.map((e) => (
                   <div key={e.id} className="px-4 py-2 border-b border-border last:border-0">
-                    <div className="text-[12px] truncate"><span className="font-mono text-muted-2">{e.action}</span> · {e.target}</div>
-                    <div className="text-[10px] text-muted-2"><TimeAgo iso={e.at} /> · {e.actor}</div>
+                    <div className="text-[14px] truncate"><span className="font-mono text-muted-2">{e.action}</span> · {e.target}</div>
+                    <div className="text-[12.5px] text-muted-2"><TimeAgo iso={e.at} /> · {e.actor}</div>
                   </div>
                 ))
               )}

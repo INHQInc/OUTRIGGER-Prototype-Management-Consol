@@ -48,12 +48,12 @@ export function OrgSwitcher({ orgs, activeOrgId, canCreate }: { orgs: OrgOption[
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-surface-2/50 transition-colors text-left"
       >
-        <div className="w-5 h-5 rounded bg-foreground/10 flex items-center justify-center text-[10px] font-bold shrink-0">
+        <div className="w-5 h-5 rounded bg-foreground/10 flex items-center justify-center text-[12.5px] font-bold shrink-0">
           {(current?.name ?? "?").slice(0, 1).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[9px] text-muted-2 uppercase tracking-wider leading-none">Customer</div>
-          <div className="text-[12px] font-semibold truncate leading-tight">{current ? current.name : orgs.length ? "Select org" : "No orgs yet"}</div>
+          <div className="text-[12.5px] text-muted-2 uppercase tracking-wider leading-none">Customer</div>
+          <div className="text-[14px] font-semibold truncate leading-tight">{current ? current.name : orgs.length ? "Select org" : "No orgs yet"}</div>
         </div>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-muted-2 shrink-0"><path d="M8 9l4-4 4 4M8 15l4 4 4-4" /></svg>
       </button>
@@ -63,10 +63,10 @@ export function OrgSwitcher({ orgs, activeOrgId, canCreate }: { orgs: OrgOption[
           <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setCreating(false); }} />
           <div className="absolute z-50 left-3 right-3 mt-1 rounded-xl border border-border bg-surface shadow-2xl overflow-hidden">
             <div className="max-h-64 overflow-y-auto py-1">
-              {orgs.length === 0 && <div className="px-3 py-2 text-[12px] text-muted-2">No orgs yet.</div>}
+              {orgs.length === 0 && <div className="px-3 py-2 text-[14px] text-muted-2">No orgs yet.</div>}
               {orgs.map((o) => (
-                <button key={o.id} onClick={() => switchTo(o.id)} className={`w-full text-left px-3 py-2 text-[13px] flex items-center gap-2 hover:bg-surface-2/60 ${o.id === activeOrgId ? "text-foreground" : "text-muted"}`}>
-                  <span className="w-5 h-5 rounded bg-foreground/10 flex items-center justify-center text-[10px] font-bold shrink-0">{o.name.slice(0, 1).toUpperCase()}</span>
+                <button key={o.id} onClick={() => switchTo(o.id)} className={`w-full text-left px-3 py-2 text-[15px] flex items-center gap-2 hover:bg-surface-2/60 ${o.id === activeOrgId ? "text-foreground" : "text-muted"}`}>
+                  <span className="w-5 h-5 rounded bg-foreground/10 flex items-center justify-center text-[12.5px] font-bold shrink-0">{o.name.slice(0, 1).toUpperCase()}</span>
                   <span className="truncate">{o.name}</span>
                   {o.id === activeOrgId && <span className="ml-auto text-accent">✓</span>}
                 </button>
@@ -77,7 +77,7 @@ export function OrgSwitcher({ orgs, activeOrgId, canCreate }: { orgs: OrgOption[
                 <div className="h-px bg-border" />
                 <button
                   onClick={() => { setOpen(false); router.push("/settings/experimentation"); }}
-                  className="w-full text-left px-3 py-2 text-[13px] text-muted hover:text-foreground hover:bg-surface-2/60 flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 text-[15px] text-muted hover:text-foreground hover:bg-surface-2/60 flex items-center gap-2"
                 >
                   <span className="w-5 text-center">⚙</span> Settings
                 </button>
@@ -88,15 +88,15 @@ export function OrgSwitcher({ orgs, activeOrgId, canCreate }: { orgs: OrgOption[
                 <div className="h-px bg-border" />
                 {creating ? (
                   <div className="p-2 space-y-2">
-                    <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} autoFocus placeholder="Customer / brand name" className="w-full rounded-lg bg-background border border-border px-2.5 py-1.5 text-[12px] focus:border-accent focus:outline-none" />
-                    {error && <div className="text-[11px] text-danger px-1">{error}</div>}
+                    <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} autoFocus placeholder="Customer / brand name" className="w-full rounded-lg bg-background border border-border px-2.5 py-1.5 text-[14px] focus:border-accent focus:outline-none" />
+                    {error && <div className="text-[13px] text-danger px-1">{error}</div>}
                     <div className="flex gap-1.5">
-                      <button onClick={() => { setCreating(false); setError(null); }} className="flex-1 h-8 rounded-lg text-[12px] text-muted hover:text-foreground">Cancel</button>
-                      <button onClick={create} disabled={busy || !name.trim()} className="flex-1 h-8 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold disabled:opacity-40">{busy ? "…" : "Create"}</button>
+                      <button onClick={() => { setCreating(false); setError(null); }} className="flex-1 h-8 rounded-lg text-[14px] text-muted hover:text-foreground">Cancel</button>
+                      <button onClick={create} disabled={busy || !name.trim()} className="flex-1 h-8 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold disabled:opacity-40">{busy ? "…" : "Create"}</button>
                     </div>
                   </div>
                 ) : (
-                  <button onClick={() => setCreating(true)} className="w-full text-left px-3 py-2 text-[13px] text-accent hover:bg-surface-2/60 flex items-center gap-2">
+                  <button onClick={() => setCreating(true)} className="w-full text-left px-3 py-2 text-[15px] text-accent hover:bg-surface-2/60 flex items-center gap-2">
                     <span className="w-5 text-center">＋</span> New customer / brand
                   </button>
                 )}

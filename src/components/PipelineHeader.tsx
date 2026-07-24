@@ -35,13 +35,13 @@ export function PipelineHeader({ pipeline }: { pipeline: Pipeline }) {
                     <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${DOT[s.state]} ${s.state === "done" ? "shadow-[0_0_0_3px_color-mix(in_srgb,var(--ok)_15%,transparent)]" : s.state === "current" ? "shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""}`} />
                     {i < steps.length - 1 && <span className={`h-px flex-1 ml-1.5 mr-0.5 ${s.state === "done" ? "bg-ok/50" : "bg-border"}`} />}
                   </div>
-                  <span className={`text-[12px] mt-1.5 group-hover:text-foreground ${TITLE[s.state]}`}>{s.title}</span>
-                  <span className={`text-[10px] leading-tight ${s.state === "blocked" ? "text-danger" : "text-muted-2"}`}>{s.status}</span>
+                  <span className={`text-[14px] mt-1.5 group-hover:text-foreground ${TITLE[s.state]}`}>{s.title}</span>
+                  <span className={`text-[12.5px] leading-tight ${s.state === "blocked" ? "text-danger" : "text-muted-2"}`}>{s.status}</span>
                 </a>
               </div>
             ))}
           </div>
-          <a href={`#${primaryAction.anchor}`} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover transition-colors flex items-center shrink-0">
+          <a href={`#${primaryAction.anchor}`} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover transition-colors flex items-center shrink-0">
             {primaryAction.label}
           </a>
         </div>
@@ -49,7 +49,7 @@ export function PipelineHeader({ pipeline }: { pipeline: Pipeline }) {
 
       {/* Ground truth: one green line, or specific problems */}
       {alerts.length === 0 ? (
-        <div className="rounded-lg border border-ok/25 bg-[color-mix(in_srgb,var(--ok)_4%,transparent)] px-3 py-1.5 text-[11px] text-muted flex items-center gap-3 flex-wrap">
+        <div className="rounded-lg border border-ok/25 bg-[color-mix(in_srgb,var(--ok)_4%,transparent)] px-3 py-1.5 text-[13px] text-muted flex items-center gap-3 flex-wrap">
           <span className="text-ok font-semibold">Ground truth ✓</span>
           {truth.headSha && <span>serving <span className="font-mono">{truth.headSha.slice(0, 7)}</span>{truth.built ? " = HEAD" : ""}</span>}
           <span>{truth.synced ? "synced" : "drift"}</span>
@@ -60,7 +60,7 @@ export function PipelineHeader({ pipeline }: { pipeline: Pipeline }) {
       ) : (
         <div className="space-y-1.5">
           {alerts.map((a, i) => (
-            <a key={i} href={a.anchor ? `#${a.anchor}` : undefined} className={`block rounded-lg border px-3 py-2 text-[12px] hover:opacity-90 ${a.level === "danger" ? "border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] text-danger" : "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] text-warn"}`}>
+            <a key={i} href={a.anchor ? `#${a.anchor}` : undefined} className={`block rounded-lg border px-3 py-2 text-[14px] hover:opacity-90 ${a.level === "danger" ? "border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] text-danger" : "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] text-warn"}`}>
               {a.text}{a.anchor ? " →" : ""}
             </a>
           ))}

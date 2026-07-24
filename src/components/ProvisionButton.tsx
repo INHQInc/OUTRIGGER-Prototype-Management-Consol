@@ -48,15 +48,15 @@ export function ProvisionButton({ prototypeKey, provisioned }: { prototypeKey: s
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <span className="text-[12px] font-semibold">Provision branch</span>
-          <span className="text-[11px] text-muted-2 ml-2">Commit the brief + page snapshots so <span className="font-mono">clone + claude</span> starts build-ready — no token.</span>
+          <span className="text-[14px] font-semibold">Provision branch</span>
+          <span className="text-[13px] text-muted-2 ml-2">Commit the brief + page snapshots so <span className="font-mono">clone + claude</span> starts build-ready — no token.</span>
         </div>
-        <button onClick={run} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
+        <button onClick={run} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
           {busy ? "Provisioning…" : done ? "Re-sync" : "Provision branch"}
         </button>
       </div>
       {(result || error) && (
-        <div className="px-4 py-2.5 text-[12px]">
+        <div className="px-4 py-2.5 text-[14px]">
           {error && <div className="text-danger">{error}</div>}
           {result && !error && (
             <div className="space-y-1">

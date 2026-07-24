@@ -53,8 +53,8 @@ export default async function FeaturesPage({ searchParams }: { searchParams: Pro
               return (
                 <section key={siteKey}>
                   <div className="flex items-center gap-2 mb-3">
-                    <h2 className="text-[13px] font-semibold">{label}</h2>
-                    <span className="text-[11px] text-muted-2">
+                    <h2 className="text-[15px] font-semibold">{label}</h2>
+                    <span className="text-[13px] text-muted-2">
                       {siteFeatures.length} prototype{siteFeatures.length === 1 ? "" : "s"}
                     </span>
                   </div>

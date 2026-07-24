@@ -101,7 +101,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       {cards.length === 0 ? (
         <EmptyState title="No prototypes yet." hint="Create one — then build it with Claude and review it on the real site." />
       ) : (
-        <div className="grid grid-cols-6 gap-2.5 items-start">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 items-start">
           {BOARD_COLUMNS.map((col) => {
             const items = cards.filter((c) => c.column === col.id);
             const testing = col.id === "testing";
@@ -121,11 +121,11 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
               >
                 <div className="px-1.5 pb-2 pt-0.5">
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-[11px] font-semibold ${testing ? "text-warn" : col.id === "shipped" ? "text-ok" : ""}`}>{col.label}</span>
-                    {testing && <span className="text-[10px]">🔒</span>}
-                    <span className="text-[10px] text-muted-2 tabular-nums ml-auto">{items.length}</span>
+                    <span className={`text-[13px] font-semibold ${testing ? "text-warn" : col.id === "shipped" ? "text-ok" : ""}`}>{col.label}</span>
+                    {testing && <span className="text-[12.5px]">🔒</span>}
+                    <span className="text-[12.5px] text-muted-2 tabular-nums ml-auto">{items.length}</span>
                   </div>
-                  <div className="text-[9px] text-muted-2 leading-tight">{col.hint}</div>
+                  <div className="text-[12.5px] text-muted-2 leading-tight">{col.hint}</div>
                 </div>
                 <div className="space-y-1.5">
                   {items.map((c) => (
@@ -138,39 +138,39 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                       className={dragKey === c.key ? "opacity-40" : ""}
                     >
                       <Link href={`/prototypes/${c.key}`} draggable={false} className={`block rounded-lg border px-3 py-2.5 bg-surface hover:border-border-strong transition-colors space-y-1.5 ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"}`}>
-                        <div className="text-[12.5px] font-semibold leading-snug">{c.name}</div>
-                        {c.hypothesis && <div className="text-[10.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
+                        <div className="text-[14px] font-semibold leading-snug">{c.name}</div>
+                        {c.hypothesis && <div className="text-[12.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
 
                         <MiniPipeline steps={c.pipeline.steps} />
-                        <div className={`text-[10.5px] leading-tight ${c.locked ? "text-warn font-semibold" : "text-foreground"}`}>
+                        <div className={`text-[12.5px] leading-tight ${c.locked ? "text-warn font-semibold" : "text-foreground"}`}>
                           {c.locked ? "🔒 experiment LIVE — locked" : <>
                             <span className="text-muted-2">Next: </span>{c.pipeline.primaryAction.label}
                           </>}
                         </div>
                         {!c.locked && c.pipeline.steps.some((s) => s.state === "blocked") && (
-                          <div className="text-[10px] text-danger leading-tight">⚠ {c.pipeline.steps.filter((s) => s.state === "blocked").map((s) => `${s.title}: ${s.status}`).join(" · ")}</div>
+                          <div className="text-[12.5px] text-danger leading-tight">⚠ {c.pipeline.steps.filter((s) => s.state === "blocked").map((s) => `${s.title}: ${s.status}`).join(" · ")}</div>
                         )}
                         {c.pipeline.alerts.filter((a) => a.level === "warn").slice(0, 1).map((a, i) => (
-                          <div key={i} className="text-[9.5px] text-warn leading-tight line-clamp-2">{a.text}</div>
+                          <div key={i} className="text-[12.5px] text-warn leading-tight line-clamp-2">{a.text}</div>
                         ))}
 
                         <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-border/50">
                           {c.pipeline.truth.latestVersion != null && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-2 text-muted font-mono">v{c.pipeline.truth.latestVersion}{c.pipeline.truth.certified === true ? " ✓" : c.pipeline.truth.certified === false ? " ✗" : ""}</span>
+                            <span className="text-[12.5px] px-1.5 py-0.5 rounded bg-surface-2 text-muted font-mono">v{c.pipeline.truth.latestVersion}{c.pipeline.truth.certified === true ? " ✓" : c.pipeline.truth.certified === false ? " ✗" : ""}</span>
                           )}
                           {c.pipeline.truth.pushedVersion != null && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-2 text-muted font-mono">pushed v{c.pipeline.truth.pushedVersion}</span>
+                            <span className="text-[12.5px] px-1.5 py-0.5 rounded bg-surface-2 text-muted font-mono">pushed v{c.pipeline.truth.pushedVersion}</span>
                           )}
                           {c.experimentStatus && (
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${c.experimentStatus === "running" ? "bg-[color-mix(in_srgb,var(--warn)_15%,transparent)] text-warn" : "bg-surface-2 text-muted-2"}`}>{c.experimentStatus.replace("_", " ")}</span>
+                            <span className={`text-[12.5px] px-1.5 py-0.5 rounded font-semibold ${c.experimentStatus === "running" ? "bg-[color-mix(in_srgb,var(--warn)_15%,transparent)] text-warn" : "bg-surface-2 text-muted-2"}`}>{c.experimentStatus.replace("_", " ")}</span>
                           )}
-                          {c.metric && <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 truncate max-w-[9rem]" title={`Primary metric: ${c.metric}`}>📊 {c.metric}</span>}
-                          {c.owner && <span className="text-[9px] text-muted-2 ml-auto">{c.owner}</span>}
+                          {c.metric && <span className="text-[12.5px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 truncate max-w-[9rem]" title={`Primary metric: ${c.metric}`}>📊 {c.metric}</span>}
+                          {c.owner && <span className="text-[12.5px] text-muted-2 ml-auto">{c.owner}</span>}
                         </div>
                       </Link>
                     </div>
                   ))}
-                  {items.length === 0 && <div className="px-1.5 py-3 text-[10px] text-muted-2/60">—</div>}
+                  {items.length === 0 && <div className="px-1.5 py-3 text-[12.5px] text-muted-2/60">—</div>}
                 </div>
               </div>
             );
@@ -178,10 +178,10 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
         </div>
       )}
 
-      {archivedCount > 0 && <p className="text-[10px] text-muted-2">{archivedCount} archived prototype{archivedCount === 1 ? "" : "s"} hidden.</p>}
+      {archivedCount > 0 && <p className="text-[12.5px] text-muted-2">{archivedCount} archived prototype{archivedCount === 1 ? "" : "s"} hidden.</p>}
 
       {toast && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-border-strong bg-surface px-4 py-2.5 text-[12px] text-foreground shadow-lg max-w-md">
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-border-strong bg-surface px-4 py-2.5 text-[14px] text-foreground shadow-lg max-w-md">
           {toast}
         </div>
       )}

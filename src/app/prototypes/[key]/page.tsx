@@ -41,12 +41,12 @@ function StepCard({ step, hint, children }: { step: PipelineStep; hint?: string;
     <details id={step.anchor} open={open} className="group rounded-xl border border-border bg-surface/40 scroll-mt-4 open:bg-transparent">
       <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none rounded-xl hover:bg-surface-2/30">
         <span className={`w-3 h-3 rounded-full border-2 shrink-0 ${DOT[step.state]}`} />
-        <span className={`text-[13px] font-semibold ${step.state === "todo" ? "text-muted" : ""}`}>{step.title}</span>
-        <span className={`text-[11px] ${step.state === "blocked" ? "text-danger" : "text-muted-2"}`}>{step.status}</span>
-        <span className="ml-auto text-[10px] text-muted-2 group-open:hidden">open</span>
+        <span className={`text-[15px] font-semibold ${step.state === "todo" ? "text-muted" : ""}`}>{step.title}</span>
+        <span className={`text-[13px] ${step.state === "blocked" ? "text-danger" : "text-muted-2"}`}>{step.status}</span>
+        <span className="ml-auto text-[12.5px] text-muted-2 group-open:hidden">open</span>
       </summary>
       <div className="px-4 pb-4 pt-1 space-y-3">
-        {hint && <p className="text-[11px] text-muted-2">{hint}</p>}
+        {hint && <p className="text-[13px] text-muted-2">{hint}</p>}
         {children}
       </div>
     </details>
@@ -116,12 +116,12 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
       {/* Setup — prominent until complete, then a quiet drawer */}
       <details id="setup" open={!setupComplete} className={`group rounded-xl border scroll-mt-4 ${setupComplete ? "border-border bg-surface/40" : "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_4%,transparent)]"}`}>
         <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none">
-          <span className="text-[13px]">⚙</span>
-          <span className="text-[13px] font-semibold">Setup</span>
-          <span className="text-[11px] text-muted-2 font-mono truncate">
+          <span className="text-[15px]">⚙</span>
+          <span className="text-[15px] font-semibold">Setup</span>
+          <span className="text-[13px] text-muted-2 font-mono truncate">
             {setupComplete ? `✓ ${repo?.fullName}@${repo?.branch}` : "pick the repo + branch this prototype builds in"}
           </span>
-          <span className="ml-auto text-[10px] text-muted-2 group-open:hidden">open</span>
+          <span className="ml-auto text-[12.5px] text-muted-2 group-open:hidden">open</span>
         </summary>
         <div className="px-4 pb-4"><RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} /></div>
       </details>
@@ -153,7 +153,7 @@ export default async function PrototypeWorkspace({ params }: { params: Promise<{
             optiProjectId={expCfg?.optimizely?.defaultProjectId ?? null}
           />
           <details className="group/manual">
-            <summary className="text-[11px] text-muted-2 cursor-pointer hover:text-foreground">Manual bundle (fallback — copy/paste instead of the API push)</summary>
+            <summary className="text-[13px] text-muted-2 cursor-pointer hover:text-foreground">Manual bundle (fallback — copy/paste instead of the API push)</summary>
             <div className="mt-2">
               <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
             </div>

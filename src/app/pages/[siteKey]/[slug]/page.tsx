@@ -35,12 +35,12 @@ export default async function PageDetail({ params }: { params: Promise<{ siteKey
           {/* Live preview */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[13px] font-semibold">Preview · latest</h2>
+              <h2 className="text-[15px] font-semibold">Preview · latest</h2>
               <a
                 href={`/snap/${siteKey}/${slug}/latest`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-[12px] text-accent hover:text-accent-hover font-medium"
+                className="text-[14px] text-accent hover:text-accent-hover font-medium"
               >
                 Open full ↗
               </a>
@@ -52,20 +52,20 @@ export default async function PageDetail({ params }: { params: Promise<{ siteKey
           <div className="space-y-6">
             {/* Version timeline */}
             <div>
-              <h2 className="text-[13px] font-semibold mb-3">Versions <span className="text-muted-2 font-normal">({versions.length})</span></h2>
+              <h2 className="text-[15px] font-semibold mb-3">Versions <span className="text-muted-2 font-normal">({versions.length})</span></h2>
               <div className="rounded-xl border border-border bg-surface divide-y divide-border">
                 {versions.map((v, idx) => (
                   <div key={v.version} className="px-4 py-3 flex items-center justify-between">
                     <div>
-                      <div className="text-[12px] font-medium flex items-center gap-2">
+                      <div className="text-[14px] font-medium flex items-center gap-2">
                         <TimeAgo iso={v.capturedAt} />
                         {idx === 0 && <Badge tone="accent">latest</Badge>}
                       </div>
-                      <div className="text-[11px] text-muted-2 mt-0.5">
+                      <div className="text-[13px] text-muted-2 mt-0.5">
                         {v.assetCount} assets · {bytes(v.assetBytes)} · {v.removedCount} sanitized
                       </div>
                     </div>
-                    <a href={`/snap/${siteKey}/${slug}/${v.version}`} target="_blank" rel="noreferrer" className="text-[11px] text-accent hover:text-accent-hover">view</a>
+                    <a href={`/snap/${siteKey}/${slug}/${v.version}`} target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover">view</a>
                   </div>
                 ))}
               </div>
@@ -73,17 +73,17 @@ export default async function PageDetail({ params }: { params: Promise<{ siteKey
 
             {/* Sanitization report */}
             <div>
-              <h2 className="text-[13px] font-semibold mb-3 flex items-center gap-2">
+              <h2 className="text-[15px] font-semibold mb-3 flex items-center gap-2">
                 Sanitization report <Badge tone="ok">{meta.report.removed.length} removed</Badge>
               </h2>
               <div className="rounded-xl border border-border bg-surface p-4 space-y-2">
                 {reasons.map(([reason, count]) => (
-                  <div key={reason} className="flex items-center justify-between text-[11px]">
+                  <div key={reason} className="flex items-center justify-between text-[13px]">
                     <span className="text-muted">{reason}</span>
                     <span className="tabular-nums text-muted-2">{count}</span>
                   </div>
                 ))}
-                <div className="pt-2 mt-1 border-t border-border text-[11px] text-muted-2">
+                <div className="pt-2 mt-1 border-t border-border text-[13px] text-muted-2">
                   Runtime clone-guard active · {meta.report.blockedDomains.length} tracking domains blocked
                 </div>
               </div>

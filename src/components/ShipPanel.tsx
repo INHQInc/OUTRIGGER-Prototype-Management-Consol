@@ -7,7 +7,7 @@ import type { CertificationReport } from "@/lib/certify/certify";
 import type { PrototypeExperimentBinding } from "@/lib/prototypes/types";
 import type { PushResult } from "@/lib/prototypes/ship";
 
-const sel = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[12px] font-mono text-foreground focus:border-accent focus:outline-none";
+const sel = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] font-mono text-foreground focus:border-accent focus:outline-none";
 
 /**
  * Ship to Optimizely — the end of the paste era. Bind the prototype to an
@@ -108,12 +108,12 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
     <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
       <div className="px-4 py-2.5 border-b border-accent/30 flex items-center justify-between">
         <div>
-          <span className="text-[12px] font-semibold">Ship to Optimizely</span>
-          <span className="text-[11px] text-muted-2 ml-2">Push the cut version into the experiment by API — no paste, read-back verified.</span>
+          <span className="text-[14px] font-semibold">Ship to Optimizely</span>
+          <span className="text-[13px] text-muted-2 ml-2">Push the cut version into the experiment by API — no paste, read-back verified.</span>
         </div>
-        {expUrl && <a href={expUrl} target="_blank" rel="noreferrer" className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">Open in Optimizely ↗</a>}
+        {expUrl && <a href={expUrl} target="_blank" rel="noreferrer" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">Open in Optimizely ↗</a>}
       </div>
-      <div className="p-4 space-y-3 text-[12px]">
+      <div className="p-4 space-y-3 text-[14px]">
 
         {/* Certification */}
         {latestVersion?.hasCode && (
@@ -128,7 +128,7 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
                 <span className="text-muted-2"> · v{latestVersion.version} · {latestVersion.gitSha.slice(0, 7)}</span>
               </span>
               {certification && (
-                <button onClick={() => setShowChecks(!showChecks)} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{showChecks ? "Hide checks" : `Checks (${certification.checks.length})`}</button>
+                <button onClick={() => setShowChecks(!showChecks)} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{showChecks ? "Hide checks" : `Checks (${certification.checks.length})`}</button>
               )}
             </div>
             {showChecks && certification && (
@@ -142,7 +142,7 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
               </div>
             )}
             {certification && !certification.passed && (
-              <label className="flex items-center gap-2 mt-2 pt-2 border-t border-border/60 text-[12px] text-warn cursor-pointer">
+              <label className="flex items-center gap-2 mt-2 pt-2 border-t border-border/60 text-[14px] text-warn cursor-pointer">
                 <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} className="accent-[var(--warn)]" />
                 Push anyway (recorded in the audit log as an override)
               </label>
@@ -159,12 +159,12 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
               <span className="text-muted-2"> → </span>
               <span className="font-medium">{binding.variationName ?? `variation ${binding.variationId}`}</span>
             </span>
-            <button onClick={() => setEditing(true)} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</button>
+            <button onClick={() => setEditing(true)} className="text-[14px] text-muted-2 hover:text-foreground shrink-0">Change</button>
           </div>
         ) : (
           <div className="rounded-lg border border-border bg-surface-2/20 px-3 py-2.5 space-y-2">
-            <div className="text-[11px] text-muted-2">Bind once: pick the Web Experiment and the variation this prototype ships into. Create the experiment in Optimizely first if it doesn&apos;t exist.</div>
-            {loadErr && <div className="text-[12px] text-danger">{loadErr} {loadErr.includes("connected") && <Link href="/settings/experimentation" className="text-accent hover:text-accent-hover">Connect →</Link>}</div>}
+            <div className="text-[13px] text-muted-2">Bind once: pick the Web Experiment and the variation this prototype ships into. Create the experiment in Optimizely first if it doesn&apos;t exist.</div>
+            {loadErr && <div className="text-[14px] text-danger">{loadErr} {loadErr.includes("connected") && <Link href="/settings/experimentation" className="text-accent hover:text-accent-hover">Connect →</Link>}</div>}
             <div className="grid grid-cols-2 gap-2">
               <select value={expSel} onChange={(e) => { setExpSel(e.target.value); setVarSel(""); }} className={sel}>
                 <option value="">— experiment —</option>
@@ -176,15 +176,15 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
               </select>
             </div>
             <div className="flex items-center justify-end gap-3">
-              {binding && <button onClick={() => setEditing(false)} className="text-[12px] text-muted hover:text-foreground">Cancel</button>}
-              <button onClick={saveBinding} disabled={busy || !expSel || !varSel} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save binding"}</button>
+              {binding && <button onClick={() => setEditing(false)} className="text-[14px] text-muted hover:text-foreground">Cancel</button>}
+              <button onClick={saveBinding} disabled={busy || !expSel || !varSel} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save binding"}</button>
             </div>
           </div>
         )}
 
         {/* Push + state */}
         <div className="flex items-center justify-between gap-3">
-          <span className={`text-[12px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : stale ? "text-warn" : "text-muted-2"}`}>
+          <span className={`text-[14px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : stale ? "text-warn" : "text-muted-2"}`}>
             {msg ? msg.text
               : !latestVersion?.hasCode ? "Cut a version from the repo first — the push ships the frozen cut."
               : !binding ? "Bind an experiment to enable the push."
@@ -193,7 +193,7 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
                   : `v${last.version} live · pushed ${new Date(last.at).toLocaleString()} · read-back ${last.verified ? "verified ✓" : "MISMATCH"}${last.overridden ? " · cert overridden" : ""}`)
               : "Never pushed — the variation in Optimizely is empty or hand-pasted."}
           </span>
-          <button onClick={push} disabled={busy || !canPush} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+          <button onClick={push} disabled={busy || !canPush} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
             {busy ? "Pushing…" : latestVersion ? `Push v${latestVersion.version} to Optimizely` : "Push"}
           </button>
         </div>

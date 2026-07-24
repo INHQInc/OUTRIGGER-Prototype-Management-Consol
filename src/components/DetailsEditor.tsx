@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeRecord } from "@/lib/prototypes/types";
 
-const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
-const lbl = "block text-[11px] text-muted-2 mb-1";
+const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+const lbl = "block text-[13px] text-muted-2 mb-1";
 
 /**
  * Experiment definition — the hypothesis + metrics + ownership an experiment
@@ -59,30 +59,30 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
         <div>
-          <span className="text-[12px] font-semibold">Experiment definition</span>
-          <span className="text-[11px] text-muted-2 ml-2">Hypothesis + metrics — needed before you promote to Optimizely.</span>
+          <span className="text-[14px] font-semibold">Experiment definition</span>
+          <span className="text-[13px] text-muted-2 ml-2">Hypothesis + metrics — needed before you promote to Optimizely.</span>
         </div>
         <div className="flex items-center gap-3">
-          {saved && <span className="text-[11px] text-ok">Saved</span>}
+          {saved && <span className="text-[13px] text-ok">Saved</span>}
           {editing ? (
             <>
-              <button onClick={() => setEditing(false)} disabled={busy} className="text-[12px] text-muted-2 hover:text-foreground">Cancel</button>
-              <button onClick={save} disabled={busy} className="h-7 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save"}</button>
+              <button onClick={() => setEditing(false)} disabled={busy} className="text-[14px] text-muted-2 hover:text-foreground">Cancel</button>
+              <button onClick={save} disabled={busy} className="h-7 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save"}</button>
             </>
           ) : (
-            <button onClick={() => setEditing(true)} className="text-[12px] text-accent hover:text-accent-hover font-medium">Edit</button>
+            <button onClick={() => setEditing(true)} className="text-[14px] text-accent hover:text-accent-hover font-medium">Edit</button>
           )}
         </div>
       </div>
 
-      {error && <div className="px-4 py-2 text-[12px] text-danger border-b border-border">{error}</div>}
+      {error && <div className="px-4 py-2 text-[14px] text-danger border-b border-border">{error}</div>}
 
       {!editing ? (
         <div className="divide-y divide-border">
           <div className="px-4 py-3">
             <div className={lbl}>Hypothesis</div>
             {p.hypothesis.change || p.hypothesis.outcome ? (
-              <div className="text-[13px] leading-relaxed">
+              <div className="text-[15px] leading-relaxed">
                 We believe <span className="font-medium">{p.hypothesis.change || "[change]"}</span> for{" "}
                 <span className="font-medium">{p.hypothesis.audience || "[audience]"}</span> will cause{" "}
                 <span className="font-medium">{p.hypothesis.outcome || "[outcome]"}</span>
@@ -91,10 +91,10 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
             ) : empty}
           </div>
           <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-2">
-            <div><div className={lbl}>Primary metric</div><div className="text-[13px]">{p.metrics.primary || empty}</div></div>
-            <div><div className={lbl}>Guardrails</div><div className="text-[13px]">{p.metrics.guardrails.join(", ") || empty}</div></div>
-            <div><div className={lbl}>Owner</div><div className="text-[13px]">{p.owner || empty}</div></div>
-            <div><div className={lbl}>Ticket</div><div className="text-[13px]">{p.ticketUrl ? <a href={p.ticketUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover font-mono break-all">{p.ticketUrl}</a> : empty}</div></div>
+            <div><div className={lbl}>Primary metric</div><div className="text-[15px]">{p.metrics.primary || empty}</div></div>
+            <div><div className={lbl}>Guardrails</div><div className="text-[15px]">{p.metrics.guardrails.join(", ") || empty}</div></div>
+            <div><div className={lbl}>Owner</div><div className="text-[15px]">{p.owner || empty}</div></div>
+            <div><div className={lbl}>Ticket</div><div className="text-[15px]">{p.ticketUrl ? <a href={p.ticketUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover font-mono break-all">{p.ticketUrl}</a> : empty}</div></div>
           </div>
         </div>
       ) : (

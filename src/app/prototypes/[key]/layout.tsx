@@ -22,7 +22,7 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
   return (
     <div className="flex-1 min-w-0 flex flex-col">
       <div className="px-8 pt-5 pb-0">
-        <div className="text-[11px] text-muted-2 mb-1">
+        <div className="text-[13px] text-muted-2 mb-1">
           <Link href="/prototypes" className="hover:text-foreground">Prototypes</Link>
           <span className="mx-1.5">›</span>
           <span className="text-muted">{p.name}</span>
@@ -30,7 +30,7 @@ export default async function PrototypeLayout(props: LayoutProps<"/prototypes/[k
         <div className="flex items-center gap-3">
           <h1 className="text-[18px] font-semibold tracking-tight">{p.name}</h1>
           <StageSelect prototypeKey={key} initialStage={stage} />
-          <Link href={`/prototypes/${key}/settings`} className="text-[12px] text-muted-2 hover:text-foreground ml-auto">Settings</Link>
+          <Link href={`/prototypes/${key}/settings`} className="text-[14px] text-muted-2 hover:text-foreground ml-auto">Settings</Link>
         </div>
 
       </div>

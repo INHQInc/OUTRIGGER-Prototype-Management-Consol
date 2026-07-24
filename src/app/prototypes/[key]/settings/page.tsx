@@ -15,7 +15,7 @@ export default async function PrototypeSettings({ params }: { params: Promise<{ 
     <div className="space-y-5 max-w-2xl">
       <DetailsEditor p={p} />
       <details>
-        <summary className="text-[12px] text-muted-2 cursor-pointer hover:text-foreground px-1 py-1">Advanced — change code location (repo &amp; branch)</summary>
+        <summary className="text-[14px] text-muted-2 cursor-pointer hover:text-foreground px-1 py-1">Advanced — change code location (repo &amp; branch)</summary>
         <div className="mt-2"><RepoBranchSettings prototypeKey={key} initialRepo={p.repo ?? null} /></div>
       </details>
       <DeletePrototype prototypeKey={key} name={p.name} />

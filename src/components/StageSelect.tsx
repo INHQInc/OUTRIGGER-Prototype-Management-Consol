@@ -31,11 +31,11 @@ export function StageSelect({ prototypeKey, initialStage }: { prototypeKey: stri
         value={stage}
         onChange={(e) => set(normalizeStage(e.target.value))}
         disabled={busy}
-        className={`rounded-lg bg-surface-2 border px-2 py-1 text-[12px] font-medium text-foreground focus:outline-none ${err ? "border-danger focus:border-danger" : "border-border focus:border-accent"}`}
+        className={`rounded-lg bg-surface-2 border px-2 py-1 text-[14px] font-medium text-foreground focus:outline-none ${err ? "border-danger focus:border-danger" : "border-border focus:border-accent"}`}
       >
         {PROTOTYPE_STAGES.map((s) => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
       </select>
-      {err && <span className="text-[11px] text-danger">couldn&apos;t update</span>}
+      {err && <span className="text-[13px] text-danger">couldn&apos;t update</span>}
     </div>
   );
 }

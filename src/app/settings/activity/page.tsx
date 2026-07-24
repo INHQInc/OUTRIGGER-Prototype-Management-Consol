@@ -22,15 +22,15 @@ export default async function ActivityPage() {
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="max-w-2xl rounded-xl border border-border bg-surface overflow-hidden">
           {events.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[12px] text-muted-2">No activity yet.</div>
+            <div className="px-4 py-8 text-center text-[14px] text-muted-2">No activity yet.</div>
           ) : (
             events.map((e) => (
               <div key={e.id} className="flex items-start justify-between gap-3 px-4 py-2.5 border-b border-border last:border-0">
                 <div className="min-w-0">
-                  <div className="text-[12px]"><span className="font-mono text-muted-2">{e.action}</span> · {e.target}</div>
-                  {e.detail && <div className="text-[11px] text-muted-2 mt-0.5 truncate">{e.detail}</div>}
+                  <div className="text-[14px]"><span className="font-mono text-muted-2">{e.action}</span> · {e.target}</div>
+                  {e.detail && <div className="text-[13px] text-muted-2 mt-0.5 truncate">{e.detail}</div>}
                 </div>
-                <div className="text-[11px] text-muted-2 shrink-0 text-right">
+                <div className="text-[13px] text-muted-2 shrink-0 text-right">
                   <TimeAgo iso={e.at} />
                   <div>{e.actor}</div>
                 </div>

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeRepoRef } from "@/lib/prototypes/types";
 
-const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 
 /**
  * Configure where this prototype's code lives. Repos come ONLY from the
@@ -120,20 +120,20 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border">
-        <span className="text-[12px] font-semibold">Code location</span>
-        <span className="text-[11px] text-muted-2 ml-2">Which registered repo + branch this prototype builds in.</span>
+        <span className="text-[14px] font-semibold">Code location</span>
+        <span className="text-[13px] text-muted-2 ml-2">Which registered repo + branch this prototype builds in.</span>
       </div>
       <div className="p-4 space-y-3">
         {loading ? (
-          <div className="text-[12px] text-muted-2">Loading repositories…</div>
+          <div className="text-[14px] text-muted-2">Loading repositories…</div>
         ) : blocked ? (
           <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2.5 flex items-center justify-between gap-3">
-            <span className="text-[12px] text-danger">
+            <span className="text-[14px] text-danger">
               {!gitConnected
                 ? "GitHub isn't connected for this customer — repos can't be listed."
                 : "No prototype repositories registered for this customer."}
             </span>
-            <Link href="/settings/repositories" className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">
+            <Link href="/settings/repositories" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">
               {!gitConnected ? "Connect GitHub →" : "Manage repositories →"}
             </Link>
           </div>
@@ -141,14 +141,14 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
           <>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] text-muted-2 mb-1">Repository</label>
+                <label className="block text-[13px] text-muted-2 mb-1">Repository</label>
                 <select value={repoSel} onChange={(e) => { setRepoSel(e.target.value); setMsg(null); }} className={inp}>
                   {!orgRepos.some((r) => r.fullName === repoSel) && repoSel && <option value={repoSel}>{repoSel} (not in registry)</option>}
                   {orgRepos.map((r) => <option key={r.id} value={r.fullName}>{r.fullName}{r.defaultFor.includes("prototypes") ? " (default)" : ""}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-muted-2 mb-1">Branch</label>
+                <label className="block text-[13px] text-muted-2 mb-1">Branch</label>
                 <select value={branch} onChange={(e) => { setBranch(e.target.value); setMsg(null); }} disabled={branchesLoading} className={inp}>
                   {!branches.includes(`prototype/${prototypeKey}`) && (
                     <option value={`prototype/${prototypeKey}`}>{`prototype/${prototypeKey}`} (new branch)</option>
@@ -158,16 +158,16 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
                   )}
                   {branches.map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
-                <div className="text-[10px] text-muted-2 mt-0.5">{branchesLoading ? "Loading branches…" : branchesErr ? branchesErr : `${branches.length} branch${branches.length === 1 ? "" : "es"} on GitHub.`}</div>
+                <div className="text-[12.5px] text-muted-2 mt-0.5">{branchesLoading ? "Loading branches…" : branchesErr ? branchesErr : `${branches.length} branch${branches.length === 1 ? "" : "es"} on GitHub.`}</div>
               </div>
             </div>
             {!branchesLoading && !branchesErr && repoSel && !hasStarter && (
-              <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2 text-[12px] text-danger">
+              <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2 text-[14px] text-danger">
                 This repo has no <span className="font-mono">starter</span> template branch — new prototype branches fork from <span className="font-mono">starter</span>, so this repo can&apos;t be used for prototypes. Pick your prototypes repo (the one with a <span className="font-mono">starter</span> branch).
               </div>
             )}
             <div className="flex items-center justify-between gap-3">
-              <span className={`text-[12px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : actionable ? "text-warn" : "text-ok"}`}>
+              <span className={`text-[14px] ${msg ? (msg.ok ? "text-ok" : "text-danger") : actionable ? "text-warn" : "text-ok"}`}>
                 {msg
                   ? msg.text
                   : needsBranch
@@ -177,13 +177,13 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
                       : `✓ ${saved.fullName}@${saved.branch} — you're set. Build with Claude below ↓`}
               </span>
               {branchesLoading ? (
-                <span className="h-8 px-3 rounded-lg border border-border text-muted-2 text-[12px] flex items-center shrink-0">Checking…</span>
+                <span className="h-8 px-3 rounded-lg border border-border text-muted-2 text-[14px] flex items-center shrink-0">Checking…</span>
               ) : actionable ? (
-                <button onClick={apply} disabled={busy || !repoSel.trim() || !hasStarter} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
+                <button onClick={apply} disabled={busy || !repoSel.trim() || !hasStarter} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
                   {busy ? "Working…" : needsBranch ? (dirty ? "Save & create branch" : "Create branch") : "Save changes"}
                 </button>
               ) : (
-                <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[12px] font-semibold flex items-center shrink-0">Saved ✓</span>
+                <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[14px] font-semibold flex items-center shrink-0">Saved ✓</span>
               )}
             </div>
           </>

@@ -64,51 +64,51 @@ export function UsersManager({ initialUsers, me }: { initialUsers: ConsoleUser[]
     <div className="max-w-3xl space-y-6">
       {/* Add user */}
       <form onSubmit={addUser} className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="text-[13px] font-semibold mb-3">Add user</h2>
+        <h2 className="text-[15px] font-semibold mb-3">Add user</h2>
         <div className="flex gap-2">
           <input
             type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="person@rightpoint.com"
-            className="flex-1 h-9 rounded-lg bg-background border border-border px-3 text-[13px] focus:border-accent focus:outline-none"
+            className="flex-1 h-9 rounded-lg bg-background border border-border px-3 text-[15px] focus:border-accent focus:outline-none"
           />
           <input
             value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (optional)"
-            className="w-40 h-9 rounded-lg bg-background border border-border px-3 text-[13px] focus:border-accent focus:outline-none"
+            className="w-40 h-9 rounded-lg bg-background border border-border px-3 text-[15px] focus:border-accent focus:outline-none"
           />
           <select
             value={role} onChange={(e) => setRole(e.target.value as "member" | "admin")}
-            className="h-9 rounded-lg bg-background border border-border px-2 text-[13px] focus:border-accent focus:outline-none"
+            className="h-9 rounded-lg bg-background border border-border px-2 text-[15px] focus:border-accent focus:outline-none"
           >
             <option value="member">Member</option>
             <option value="admin">Admin</option>
           </select>
-          <button type="submit" disabled={busy || !email} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40">
+          <button type="submit" disabled={busy || !email} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40">
             Add
           </button>
         </div>
-        {err && <div className="text-[12px] text-danger mt-2">{err}</div>}
+        {err && <div className="text-[14px] text-danger mt-2">{err}</div>}
       </form>
 
       {/* Generated link banner */}
       {link && (
         <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[12px] font-medium">One-time access link for {link.email}</span>
+            <span className="text-[14px] font-medium">One-time access link for {link.email}</span>
             <button onClick={() => setLink(null)} className="text-muted-2 hover:text-foreground text-sm">×</button>
           </div>
           <div className="flex gap-2">
-            <input readOnly value={link.url} className="flex-1 h-9 rounded-lg bg-background border border-border px-3 text-[11px] font-mono text-muted" />
-            <button onClick={copy} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover">
+            <input readOnly value={link.url} className="flex-1 h-9 rounded-lg bg-background border border-border px-3 text-[13px] font-mono text-muted" />
+            <button onClick={copy} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover">
               {copied ? "Copied ✓" : "Copy"}
             </button>
           </div>
-          <p className="text-[11px] text-muted-2 mt-2">Send this to {link.email}. Single-use, valid 30 days; grants a 365-day session on first open.</p>
+          <p className="text-[13px] text-muted-2 mt-2">Send this to {link.email}. Single-use, valid 30 days; grants a 365-day session on first open.</p>
         </div>
       )}
 
       {/* User list */}
       <div className="rounded-xl border border-border bg-surface overflow-hidden">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-[14px]">
           <thead>
             <tr className="text-left text-muted-2 border-b border-border">
               <th className="font-medium px-4 py-2.5">User</th>
@@ -125,7 +125,7 @@ export function UsersManager({ initialUsers, me }: { initialUsers: ConsoleUser[]
               <tr key={u.email} className="border-b border-border last:border-0 hover:bg-surface-2/40">
                 <td className="px-4 py-3">
                   <div className="font-medium">{u.name ?? u.email}</div>
-                  {u.name && <div className="text-[11px] text-muted-2">{u.email}</div>}
+                  {u.name && <div className="text-[13px] text-muted-2">{u.email}</div>}
                 </td>
                 <td className="px-4 py-3">
                   <Badge tone={u.role === "admin" ? "accent" : "neutral"}>{u.role}</Badge>
@@ -133,9 +133,9 @@ export function UsersManager({ initialUsers, me }: { initialUsers: ConsoleUser[]
                 </td>
                 <td className="px-4 py-3 text-muted"><TimeAgo iso={u.lastLoginAt ?? null} /></td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  <button onClick={() => genLink(u.email)} className="text-[12px] text-accent hover:text-accent-hover font-medium">Access link</button>
+                  <button onClick={() => genLink(u.email)} className="text-[14px] text-accent hover:text-accent-hover font-medium">Access link</button>
                   {u.email !== me && (
-                    <button onClick={() => remove(u.email)} className="text-[12px] text-danger hover:opacity-80 font-medium ml-3">Remove</button>
+                    <button onClick={() => remove(u.email)} className="text-[14px] text-danger hover:opacity-80 font-medium ml-3">Remove</button>
                   )}
                 </td>
               </tr>

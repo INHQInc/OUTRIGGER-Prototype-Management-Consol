@@ -45,21 +45,21 @@ function Verifier() {
           {state === "verifying" && (
             <>
               <div className="w-6 h-6 mx-auto mb-4 border-2 border-border border-t-accent rounded-full animate-spin" />
-              <p className="text-[13px] text-muted">Verifying your access link…</p>
+              <p className="text-[15px] text-muted">Verifying your access link…</p>
             </>
           )}
           {state === "ok" && (
             <>
               <div className="text-2xl mb-2">✔</div>
-              <p className="text-[13px] text-ok">{msg}</p>
-              <p className="text-[12px] text-muted-2 mt-1">Redirecting…</p>
+              <p className="text-[15px] text-ok">{msg}</p>
+              <p className="text-[14px] text-muted-2 mt-1">Redirecting…</p>
             </>
           )}
           {state === "error" && (
             <>
               <div className="text-2xl mb-2">✕</div>
-              <p className="text-[13px] text-danger">{msg}</p>
-              <a href="/login" className="text-[12px] text-accent hover:text-accent-hover mt-3 inline-block">Go to sign in</a>
+              <p className="text-[15px] text-danger">{msg}</p>
+              <a href="/login" className="text-[14px] text-accent hover:text-accent-hover mt-3 inline-block">Go to sign in</a>
             </>
           )}
         </div>

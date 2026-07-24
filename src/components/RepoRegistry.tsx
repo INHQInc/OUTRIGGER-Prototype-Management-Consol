@@ -66,16 +66,16 @@ export function RepoRegistry({ initialRepos, canManage }: { initialRepos: OrgRep
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <div>
-          <div className="text-[13px] font-semibold">Repositories</div>
-          <div className="text-[11px] text-muted-2 mt-0.5">The repos this brand&apos;s prototypes live in — each prototype picks one and a branch.</div>
+          <div className="text-[15px] font-semibold">Repositories</div>
+          <div className="text-[13px] text-muted-2 mt-0.5">The repos this brand&apos;s prototypes live in — each prototype picks one and a branch.</div>
         </div>
-        {canManage && <button onClick={() => { setAdding((a) => !a); setError(null); }} className="text-[12px] text-accent hover:text-accent-hover font-medium">{adding ? "Cancel" : "+ Add repo"}</button>}
+        {canManage && <button onClick={() => { setAdding((a) => !a); setError(null); }} className="text-[14px] text-accent hover:text-accent-hover font-medium">{adding ? "Cancel" : "+ Add repo"}</button>}
       </div>
 
       {adding && (
         <div className="px-4 py-3 border-b border-border bg-surface-2/30 space-y-2">
-          {error && <div className="text-[12px] text-danger">{error}</div>}
-          <label className="block text-[11px] text-muted-2">Repository</label>
+          {error && <div className="text-[14px] text-danger">{error}</div>}
+          <label className="block text-[13px] text-muted-2">Repository</label>
           <div className="flex items-center gap-2">
             <input
               list="registry-repo-options"
@@ -84,36 +84,36 @@ export function RepoRegistry({ initialRepos, canManage }: { initialRepos: OrgRep
               onKeyDown={(e) => e.key === "Enter" && add()}
               spellCheck={false}
               placeholder={account.length ? "pick from the connected account, or type owner/repo" : "owner/repo"}
-              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono focus:border-accent focus:outline-none"
+              className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] font-mono focus:border-accent focus:outline-none"
             />
-            <button onClick={add} disabled={busy || !repo.trim()} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">Add</button>
+            <button onClick={add} disabled={busy || !repo.trim()} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">Add</button>
           </div>
           <datalist id="registry-repo-options">
             {account.map((r) => <option key={r.fullName} value={r.fullName}>{r.private ? "private" : "public"}</option>)}
           </datalist>
-          <div className="text-[10px] text-muted-2">Needs a <span className="font-mono">starter</span> template branch — prototype branches fork from it.</div>
+          <div className="text-[12.5px] text-muted-2">Needs a <span className="font-mono">starter</span> template branch — prototype branches fork from it.</div>
         </div>
       )}
 
-      {!adding && error && <div className="px-4 py-2 text-[12px] text-danger">{error}</div>}
+      {!adding && error && <div className="px-4 py-2 text-[14px] text-danger">{error}</div>}
 
       {repos.length === 0 ? (
-        <div className="px-4 py-6 text-center text-[12px] text-muted-2">No repos registered.{canManage ? " Add the repo this brand's prototypes live in." : ""}</div>
+        <div className="px-4 py-6 text-center text-[14px] text-muted-2">No repos registered.{canManage ? " Add the repo this brand's prototypes live in." : ""}</div>
       ) : (
         repos.map((r) => {
           const isDefault = r.defaultFor.includes("prototypes");
           return (
             <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border last:border-0">
               <div className="min-w-0 flex items-center gap-2 flex-wrap">
-                <span className="text-[13px] font-mono font-medium truncate">{r.fullName}</span>
+                <span className="text-[15px] font-mono font-medium truncate">{r.fullName}</span>
                 {isDefault && <Badge tone="accent">default</Badge>}
               </div>
               {canManage && (
                 <div className="flex items-center gap-3 shrink-0">
                   {!isDefault && (
-                    <button onClick={() => call({ setDefault: { id: r.id, role: "prototypes" } })} disabled={busy} className="text-[12px] text-muted-2 hover:text-foreground">Make default</button>
+                    <button onClick={() => call({ setDefault: { id: r.id, role: "prototypes" } })} disabled={busy} className="text-[14px] text-muted-2 hover:text-foreground">Make default</button>
                   )}
-                  <button onClick={() => call(undefined, "DELETE", `?id=${encodeURIComponent(r.id)}`)} disabled={busy} className="text-[12px] text-danger hover:opacity-80">Remove</button>
+                  <button onClick={() => call(undefined, "DELETE", `?id=${encodeURIComponent(r.id)}`)} disabled={busy} className="text-[14px] text-danger hover:opacity-80">Remove</button>
                 </div>
               )}
             </div>

@@ -54,8 +54,8 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3">
         <div>
-          <div className="text-[13px] font-semibold">Experimentation platform</div>
-          <div className="text-[11px] text-muted-2 mt-0.5">The A/B testing platform this brand promotes experiments into.</div>
+          <div className="text-[15px] font-semibold">Experimentation platform</div>
+          <div className="text-[13px] text-muted-2 mt-0.5">The A/B testing platform this brand promotes experiments into.</div>
         </div>
         {status.connected
           ? <Badge tone="ok">Connected</Badge>
@@ -64,16 +64,16 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
 
       <div className="px-4 py-3 space-y-3">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-surface-2 border border-border flex items-center justify-center text-[12px] font-bold">O</div>
-          <div className="text-[13px] font-medium">Optimizely</div>
-          <span className="text-[10px] text-muted-2">Web Experimentation · other platforms coming</span>
+          <div className="w-7 h-7 rounded-md bg-surface-2 border border-border flex items-center justify-center text-[14px] font-bold">O</div>
+          <div className="text-[15px] font-medium">Optimizely</div>
+          <span className="text-[12.5px] text-muted-2">Web Experimentation · other platforms coming</span>
         </div>
 
-        {error && <div className="text-[12px] text-danger">{error}</div>}
+        {error && <div className="text-[14px] text-danger">{error}</div>}
 
         {!status.connected || replacing ? (
           <div className="space-y-2">
-            <label className="block text-[12px] text-muted">Personal Access Token</label>
+            <label className="block text-[14px] text-muted">Personal Access Token</label>
             <div className="flex items-end gap-2">
               <input
                 type="password"
@@ -83,16 +83,16 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
                 spellCheck={false}
                 placeholder="Optimizely API token"
                 disabled={!canManage}
-                className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[13px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none disabled:opacity-50"
+                className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[15px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none disabled:opacity-50"
               />
-              <button onClick={connect} disabled={busy || !token.trim() || !canManage} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors">
+              <button onClick={connect} disabled={busy || !token.trim() || !canManage} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors">
                 {busy ? "Verifying…" : "Connect"}
               </button>
               {replacing && (
-                <button onClick={() => { setReplacing(false); setToken(""); setError(null); }} disabled={busy} className="h-9 px-3 rounded-lg text-[13px] text-muted hover:text-foreground">Cancel</button>
+                <button onClick={() => { setReplacing(false); setToken(""); setError(null); }} disabled={busy} className="h-9 px-3 rounded-lg text-[15px] text-muted hover:text-foreground">Cancel</button>
               )}
             </div>
-            <div className="text-[11px] text-muted-2 leading-relaxed space-y-1">
+            <div className="text-[13px] text-muted-2 leading-relaxed space-y-1">
               <p><span className="text-muted font-medium">Use a dedicated service-account user, not a personal admin token.</span> Tokens are user-scoped (never project-scoped) — they reach every project that user can access. Create a machine user in the customer&apos;s Optimizely, grant it only the intended project(s) (e.g. Prep), then generate its token under Profile → API Access.</p>
               <p>Validated against its projects on connect, stored server-side, never shown again. The console only ever creates <span className="text-muted">paused drafts</span> — it never starts traffic.</p>
             </div>
@@ -100,26 +100,26 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-[12px] text-muted">Token <span className="font-mono text-foreground">••••{status.tokenLast4}</span></div>
+              <div className="text-[14px] text-muted">Token <span className="font-mono text-foreground">••••{status.tokenLast4}</span></div>
               {canManage && (
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setReplacing(true)} className="text-[12px] text-muted-2 hover:text-foreground">Replace</button>
-                  <button onClick={() => call("DELETE")} disabled={busy} className="text-[12px] text-danger hover:opacity-80">Disconnect</button>
+                  <button onClick={() => setReplacing(true)} className="text-[14px] text-muted-2 hover:text-foreground">Replace</button>
+                  <button onClick={() => call("DELETE")} disabled={busy} className="text-[14px] text-danger hover:opacity-80">Disconnect</button>
                 </div>
               )}
             </div>
 
             {status.error ? (
-              <div className="text-[12px] text-danger">Couldn&apos;t reach Optimizely: {status.error}</div>
+              <div className="text-[14px] text-danger">Couldn&apos;t reach Optimizely: {status.error}</div>
             ) : (
               <div>
-                <label className="block text-[12px] text-muted mb-1.5">Default project</label>
+                <label className="block text-[14px] text-muted mb-1.5">Default project</label>
                 <div className="flex items-center gap-2">
                   <select
                     value={projSel}
                     onChange={(e) => { setProjSel(e.target.value); setProjSaved(false); }}
                     disabled={busy || !canManage}
-                    className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-[15px] text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
                   >
                     <option value="" disabled>Select a project…</option>
                     {status.projects.map((p) => (
@@ -129,12 +129,12 @@ export function ExperimentationSettings({ initialStatus, canManage }: { initialS
                   <button
                     onClick={saveProject}
                     disabled={busy || !canManage || !projSel || projSel === (status.defaultProjectId ?? "")}
-                    className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                    className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
                   >
                     {busy ? "Saving…" : "Save"}
                   </button>
                 </div>
-                <p className="text-[11px] mt-1.5">
+                <p className="text-[13px] mt-1.5">
                   {projSaved && projSel === (status.defaultProjectId ?? "") ? (
                     <span className="text-ok">Default project saved.</span>
                   ) : projSel !== (status.defaultProjectId ?? "") ? (

@@ -25,15 +25,15 @@ export function DeletePrototype({ prototypeKey, name }: { prototypeKey: string; 
 
   return (
     <div className="rounded-xl border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_5%,transparent)] p-4 flex items-center justify-between gap-4">
-      <div className="text-[12px] text-muted-2">Delete <span className="font-medium text-foreground">{name}</span> and its overlay, versions, and promotions.</div>
+      <div className="text-[14px] text-muted-2">Delete <span className="font-medium text-foreground">{name}</span> and its overlay, versions, and promotions.</div>
       {confirming ? (
         <div className="flex items-center gap-2 shrink-0">
-          {error && <span className="text-[11px] text-danger">{error}</span>}
-          <button onClick={del} disabled={busy} className="h-9 px-4 rounded-lg bg-danger text-white text-[12px] font-semibold hover:opacity-90 disabled:opacity-40">{busy ? "Deleting…" : "Confirm delete"}</button>
-          <button onClick={() => setConfirming(false)} disabled={busy} className="h-9 px-3 rounded-lg text-[12px] text-muted hover:text-foreground">Cancel</button>
+          {error && <span className="text-[13px] text-danger">{error}</span>}
+          <button onClick={del} disabled={busy} className="h-9 px-4 rounded-lg bg-danger text-white text-[14px] font-semibold hover:opacity-90 disabled:opacity-40">{busy ? "Deleting…" : "Confirm delete"}</button>
+          <button onClick={() => setConfirming(false)} disabled={busy} className="h-9 px-3 rounded-lg text-[14px] text-muted hover:text-foreground">Cancel</button>
         </div>
       ) : (
-        <button onClick={() => setConfirming(true)} className="h-9 px-4 rounded-lg border border-danger/50 text-danger text-[12px] font-medium hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] shrink-0">Delete prototype</button>
+        <button onClick={() => setConfirming(true)} className="h-9 px-4 rounded-lg border border-danger/50 text-danger text-[14px] font-medium hover:bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] shrink-0">Delete prototype</button>
       )}
     </div>
   );

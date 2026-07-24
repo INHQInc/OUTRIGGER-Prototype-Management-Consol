@@ -27,7 +27,7 @@ export default async function PrototypesBoard({ searchParams }: { searchParams: 
 
   const tab = (id: string, label: string) => (
     <Link href={id === "board" ? "/prototypes" : `/prototypes?view=${id}`}
-      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${view === id ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`}>
+      className={`px-3 py-1.5 rounded-lg text-[14px] font-semibold transition-colors ${view === id ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`}>
       {label}
     </Link>
   );
@@ -37,7 +37,7 @@ export default async function PrototypesBoard({ searchParams }: { searchParams: 
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="flex items-center gap-4 mb-4">
           <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 shrink-0">{tab("board", "Board")}{tab("list", "List")}</div>
-          <p className="text-[11px] text-muted-2 min-w-0 truncate">
+          <p className="text-[13px] text-muted-2 min-w-0 truncate">
             {view === "list"
               ? "Every prototype, filterable by stage — same truth as the board."
               : "Columns are ground truth — cards move when the work moves. Drag to reorder priority, or Launch → Shipped when you call it."}

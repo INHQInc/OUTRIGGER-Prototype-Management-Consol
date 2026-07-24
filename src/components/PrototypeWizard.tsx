@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 
 type Target = { url: string; source: "clone" | "live" };
 
-const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 const inpMono = inp + " font-mono";
 const ta = inp + " resize-none leading-relaxed";
-const lbl = "block text-[12px] font-medium text-muted mb-1";
-const hint = "text-[11px] text-muted-2 mt-1";
+const lbl = "block text-[14px] font-medium text-muted mb-1";
+const hint = "text-[13px] text-muted-2 mt-1";
 
 function isUrl(s: string): boolean {
   try { new URL(s.trim()); return true; } catch { return false; }
@@ -115,11 +115,11 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
         <div>
           <label className={lbl}>Repository &amp; branch</label>
           {loadingRepos ? (
-            <div className="text-[12px] text-muted-2">Loading repositories…</div>
+            <div className="text-[14px] text-muted-2">Loading repositories…</div>
           ) : blocked ? (
             <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2.5 flex items-center justify-between gap-3">
-              <span className="text-[12px] text-danger">{!gitConnected ? "GitHub isn't connected for this customer." : "No prototype repositories registered."}</span>
-              <Link href="/settings/repositories" className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{!gitConnected ? "Connect GitHub →" : "Register a repo →"}</Link>
+              <span className="text-[14px] text-danger">{!gitConnected ? "GitHub isn't connected for this customer." : "No prototype repositories registered."}</span>
+              <Link href="/settings/repositories" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{!gitConnected ? "Connect GitHub →" : "Register a repo →"}</Link>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
@@ -133,34 +133,34 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
             </div>
           )}
           {!loadingRepos && !blocked && repo && !branchesLoading && !hasStarter && (
-            <div className="text-[11px] text-danger mt-1">This repo has no <span className="font-mono">starter</span> template branch — prototypes can&apos;t fork from it. Pick your prototypes repo.</div>
+            <div className="text-[13px] text-danger mt-1">This repo has no <span className="font-mono">starter</span> template branch — prototypes can&apos;t fork from it. Pick your prototypes repo.</div>
           )}
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className={`${lbl} mb-0`}>Page(s) to build on</label>
-            <button type="button" onClick={() => setTargets((ts) => [...ts, { url: "", source: "live" }])} className="text-[12px] text-accent hover:text-accent-hover font-medium">+ Add page</button>
+            <button type="button" onClick={() => setTargets((ts) => [...ts, { url: "", source: "live" }])} className="text-[14px] text-accent hover:text-accent-hover font-medium">+ Add page</button>
           </div>
           {targets.map((t, i) => (
             <div key={i} className="flex items-center gap-2 mb-2">
               <input list={`w-envs-${i}`} className={inpMono} value={t.url} onChange={(e) => setTarget(i, { url: e.target.value })} placeholder="https://prep.example.com/path/to/page" spellCheck={false} />
               <datalist id={`w-envs-${i}`}>{envUrls.map((u) => <option key={u} value={u} />)}</datalist>
-              {targets.length > 1 && <button type="button" onClick={() => setTargets((ts) => ts.filter((_, j) => j !== i))} className="text-[13px] text-danger hover:opacity-80 px-1">✕</button>}
+              {targets.length > 1 && <button type="button" onClick={() => setTargets((ts) => ts.filter((_, j) => j !== i))} className="text-[15px] text-danger hover:opacity-80 px-1">✕</button>}
             </div>
           ))}
         </div>
 
-        {error && <div className="text-[12px] text-danger">{error}</div>}
+        {error && <div className="text-[14px] text-danger">{error}</div>}
       </div>
 
       <div className="flex items-center justify-between mt-4">
-        <button onClick={() => router.push("/prototypes")} disabled={busy} className="h-9 px-4 rounded-lg text-[13px] text-muted hover:text-foreground disabled:opacity-40">Cancel</button>
-        <button onClick={create} disabled={busy || !valid} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        <button onClick={() => router.push("/prototypes")} disabled={busy} className="h-9 px-4 rounded-lg text-[15px] text-muted hover:text-foreground disabled:opacity-40">Cancel</button>
+        <button onClick={create} disabled={busy || !valid} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
           {busy ? "Creating…" : "Create & set up"}
         </button>
       </div>
-      <p className="text-[11px] text-muted-2 mt-3">Next: verify the injection on your page(s), then get your Claude init script to start building.</p>
+      <p className="text-[13px] text-muted-2 mt-3">Next: verify the injection on your page(s), then get your Claude init script to start building.</p>
     </div>
   );
 }

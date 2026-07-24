@@ -28,7 +28,7 @@ export function StatusSummary({ features }: { features: FeatureManifest[] }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {STATUS_ORDER.map((s) => (
-        <span key={s} className="inline-flex items-center gap-1.5 text-[11px] text-muted-2">
+        <span key={s} className="inline-flex items-center gap-1.5 text-[13px] text-muted-2">
           <Badge tone={STATUS_TONE[s]}>{s}</Badge>
           <span className="tabular-nums">{features.filter((f) => f.status === s).length}</span>
         </span>
@@ -45,13 +45,13 @@ export function FeatureCard({ f }: { f: FeatureManifest }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[13px] font-semibold truncate">{f.name}</div>
-          <div className="text-[11px] text-muted-2 mt-0.5 font-mono truncate">{f.key}</div>
+          <div className="text-[15px] font-semibold truncate">{f.name}</div>
+          <div className="text-[13px] text-muted-2 mt-0.5 font-mono truncate">{f.key}</div>
         </div>
         <Badge tone={STATUS_TONE[f.status]}>{f.status}</Badge>
       </div>
-      {f.description && <p className="text-[12px] text-muted mt-2.5 leading-relaxed line-clamp-2">{f.description}</p>}
-      <div className="flex items-center gap-3 mt-3 text-[11px] text-muted-2">
+      {f.description && <p className="text-[14px] text-muted mt-2.5 leading-relaxed line-clamp-2">{f.description}</p>}
+      <div className="flex items-center gap-3 mt-3 text-[13px] text-muted-2">
         <span>{f.injections.length} injection{f.injections.length === 1 ? "" : "s"}</span>
         {f.liveUrls?.length ? <span>· {f.liveUrls.length} live URL{f.liveUrls.length === 1 ? "" : "s"}</span> : null}
       </div>
@@ -70,9 +70,9 @@ export function PagePrototypeGroups({ siteKey, features }: { siteKey: string; fe
       {[...byPage.entries()].map(([slug, pageFeatures]) => (
         <div key={slug}>
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-[11px] font-mono text-muted-2">{slug === "_none" ? "no target" : pagePath(slug)}</span>
+            <span className="text-[13px] font-mono text-muted-2">{slug === "_none" ? "no target" : pagePath(slug)}</span>
             {slug !== "_none" && (
-              <Link href={`/pages/${siteKey}/${slug}`} className="text-[11px] text-accent hover:text-accent-hover">
+              <Link href={`/pages/${siteKey}/${slug}`} className="text-[13px] text-accent hover:text-accent-hover">
                 open page →
               </Link>
             )}

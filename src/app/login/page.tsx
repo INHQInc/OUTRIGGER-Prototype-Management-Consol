@@ -43,43 +43,43 @@ function LoginForm() {
 
         <div className="rounded-2xl border border-border bg-surface p-6">
           <h1 className="text-[15px] font-semibold mb-1">Admin sign in</h1>
-          <p className="text-[12px] text-muted-2 mb-5">Members: open the access link you were sent instead.</p>
+          <p className="text-[14px] text-muted-2 mb-5">Members: open the access link you were sent instead.</p>
 
           <form onSubmit={submit} className="space-y-3">
             <div>
-              <label className="block text-[12px] font-medium text-muted mb-1.5">Email</label>
+              <label className="block text-[14px] font-medium text-muted mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="username"
-                className="w-full h-10 rounded-lg bg-background border border-border px-3 text-[13px] focus:border-accent focus:outline-none"
+                className="w-full h-10 rounded-lg bg-background border border-border px-3 text-[15px] focus:border-accent focus:outline-none"
                 placeholder="you@company.com"
               />
             </div>
             <div>
-              <label className="block text-[12px] font-medium text-muted mb-1.5">Access secret</label>
+              <label className="block text-[14px] font-medium text-muted mb-1.5">Access secret</label>
               <input
                 type="password"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
                 autoComplete="current-password"
-                className="w-full h-10 rounded-lg bg-background border border-border px-3 text-[13px] focus:border-accent focus:outline-none"
+                className="w-full h-10 rounded-lg bg-background border border-border px-3 text-[15px] focus:border-accent focus:outline-none"
                 placeholder="••••••••"
               />
             </div>
-            {err && <div className="text-[12px] text-danger">{err}</div>}
+            {err && <div className="text-[14px] text-danger">{err}</div>}
             <button
               type="submit"
               disabled={busy || !email || !secret}
-              className="w-full h-10 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
+              className="w-full h-10 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
             >
               {busy ? "Signing in…" : "Sign in"}
             </button>
           </form>
         </div>
 
-        <p className="text-[11px] text-muted-2 text-center mt-4">Sessions last 365 days · noindex · tracking-free clones</p>
+        <p className="text-[13px] text-muted-2 text-center mt-4">Sessions last 365 days · noindex · tracking-free clones</p>
       </div>
     </div>
   );

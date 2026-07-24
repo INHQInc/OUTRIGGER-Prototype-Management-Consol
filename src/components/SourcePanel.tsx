@@ -32,11 +32,11 @@ function GetStarted({ repo, branch }: { repo: string; branch: string }) {
   return (
     <div className="rounded-lg border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
       <div className="px-3 py-2 flex items-center justify-between border-b border-border/60">
-        <span className="text-[12px] font-medium">Get started — run this on your machine</span>
-        <button onClick={copy} className="text-[12px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
+        <span className="text-[14px] font-medium">Get started — run this on your machine</span>
+        <button onClick={copy} className="text-[14px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
       </div>
-      <pre className="px-3 py-2.5 text-[11px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
-      <div className="px-3 pb-2.5 text-[11px] text-muted-2">
+      <pre className="px-3 py-2.5 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
+      <div className="px-3 pb-2.5 text-[13px] text-muted-2">
         Claude Code loads the repo&apos;s <span className="font-mono">opmc-prototype</span> skill, pulls this brief, and knows the whole loop. First time on this machine? Set the env exports from <Link href="/settings/repositories" className="text-accent hover:text-accent-hover">Settings → Repositories → API access</Link>.
       </div>
     </div>
@@ -96,16 +96,16 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-2.5 border-b border-border">
-        <span className="text-[12px] font-semibold">{compact ? "Cut a version" : "Source"}</span>
-        <span className="text-[11px] text-muted-2 ml-2">{compact ? "Freeze the current build — that's what the bundle ships." : "The variation is built in the feature repo — the console pulls it (it never edits code)."}</span>
+        <span className="text-[14px] font-semibold">{compact ? "Cut a version" : "Source"}</span>
+        <span className="text-[13px] text-muted-2 ml-2">{compact ? "Freeze the current build — that's what the bundle ships." : "The variation is built in the feature repo — the console pulls it (it never edits code)."}</span>
       </div>
 
       <div className="p-4 space-y-3">
         {loadErr && (
           <div className="rounded-lg border border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] px-3 py-2.5 flex items-center justify-between gap-3">
-            <span className="text-[12px] text-danger">{loadErr}</span>
+            <span className="text-[14px] text-danger">{loadErr}</span>
             {loadErr.includes("No repo set") && (
-              <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">Set the repo →</Link>
+              <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">Set the repo →</Link>
             )}
           </div>
         )}
@@ -114,16 +114,16 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
           <>
             {!compact && (
               <div className="flex items-start justify-between gap-3">
-                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[14px]">
                   <span className="text-muted-2">Repo</span><span className="font-mono">{status.repo}</span>
                   <span className="text-muted-2">Branch</span><span className="font-mono">{status.branch}</span>
                   <span className="text-muted-2">Artifact</span><span className="font-mono">{status.artifactPath}</span>
                 </div>
-                <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
+                <Link href={`/prototypes/${prototypeKey}/settings`} className="text-[14px] text-muted-2 hover:text-foreground shrink-0">Change</Link>
               </div>
             )}
             {status.artifactProblem && (
-              <div className="rounded-lg border border-warn/50 bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-3 py-2 text-[12px] text-warn leading-relaxed">
+              <div className="rounded-lg border border-warn/50 bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-3 py-2 text-[14px] text-warn leading-relaxed">
                 ⚠ {status.artifactProblem === "starter-build"
                   ? <>This branch is still serving the inherited <span className="font-mono">starter</span> build — the review URL shows the wrong prototype.</>
                   : <>No real build yet — this is the provisioned placeholder.</>} Run <span className="font-mono">node build.mjs</span>, commit <span className="font-mono">dist/variation.js</span>, and push.
@@ -131,32 +131,32 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
             )}
             {status.found ? (
               <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-2/30 px-3 py-2">
-                <div className="text-[12px] text-ok">
+                <div className="text-[14px] text-ok">
                   ✓ Built variation present <span className="font-mono text-muted-2">· {status.headSha?.slice(0, 7)} · {status.bytes.toLocaleString()} bytes</span>
                 </div>
-                <button onClick={cutFromRepo} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors shrink-0">
+                <button onClick={cutFromRepo} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors shrink-0">
                   {busy ? "Cutting…" : "Cut version from repo"}
                 </button>
               </div>
             ) : compact ? (
-              <div className="rounded-lg border border-border bg-surface-2/20 px-3 py-2 text-[12px] text-muted-2">Not built yet — build it in <span className="text-muted">Build with Claude</span> and push, then cut a version here.</div>
+              <div className="rounded-lg border border-border bg-surface-2/20 px-3 py-2 text-[14px] text-muted-2">Not built yet — build it in <span className="text-muted">Build with Claude</span> and push, then cut a version here.</div>
             ) : !status.branchExists ? (
               <GetStarted repo={status.repo} branch={status.branch} />
             ) : (
-              <div className="rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3 py-2 text-[12px] text-muted">
+              <div className="rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3 py-2 text-[14px] text-muted">
                 {status.error ?? `Build the prototype on ${status.branch} and commit ${status.artifactPath}.`}
-                <div className="text-[11px] text-muted-2 mt-1">Build it in the repo with Claude, run <span className="font-mono text-muted">node build.mjs</span>, commit <span className="font-mono text-muted">{status.artifactPath}</span>, push — the console pulls it here.</div>
+                <div className="text-[13px] text-muted-2 mt-1">Build it in the repo with Claude, run <span className="font-mono text-muted">node build.mjs</span>, commit <span className="font-mono text-muted">{status.artifactPath}</span>, push — the console pulls it here.</div>
               </div>
             )}
           </>
         )}
 
-        {cutErr && <div className="text-[12px] text-danger">{cutErr}</div>}
-        {cutMsg && <div className="text-[12px] text-ok">{cutMsg}</div>}
+        {cutErr && <div className="text-[14px] text-danger">{cutErr}</div>}
+        {cutMsg && <div className="text-[14px] text-ok">{cutMsg}</div>}
 
         {versions.length > 0 && (
           <div className="rounded-lg border border-border bg-surface-2/20 overflow-hidden">
-            <div className="px-3 py-2 flex items-center justify-between text-[12px]">
+            <div className="px-3 py-2 flex items-center justify-between text-[14px]">
               <span className="text-muted">Latest cut: <span className="font-semibold text-foreground">v{versions[0].version}</span> <span className="font-mono text-muted-2">{versions[0].gitSha.slice(0, 7)}</span> · <TimeAgo iso={versions[0].createdAt} />
                 {versions[0].certification && (
                   versions[0].certification.passed
@@ -164,16 +164,16 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
                     : <span className="text-danger"> · certification failed ({versions[0].certification.checks.filter((c) => c.level === "fail").length})</span>
                 )}
               </span>
-              {!versions[0].variationJs && <span className="text-[10px] text-warn">no code</span>}
+              {!versions[0].variationJs && <span className="text-[12.5px] text-warn">no code</span>}
             </div>
             {versions[0].gitSha && status?.branchExists && status.headSha && versions[0].gitSha !== status.headSha && (
-              <div className="px-3 py-1.5 border-t border-border/60 text-[11px] text-warn">● HEAD has moved past v{versions[0].version} (<span className="font-mono">{versions[0].gitSha.slice(0, 7)}</span> → <span className="font-mono">{status.headSha.slice(0, 7)}</span>) — cut a new version to freeze the latest.</div>
+              <div className="px-3 py-1.5 border-t border-border/60 text-[13px] text-warn">● HEAD has moved past v{versions[0].version} (<span className="font-mono">{versions[0].gitSha.slice(0, 7)}</span> → <span className="font-mono">{status.headSha.slice(0, 7)}</span>) — cut a new version to freeze the latest.</div>
             )}
             {versions.length > 1 && (
               <details className="border-t border-border/60">
-                <summary className="px-3 py-1.5 text-[11px] text-muted-2 cursor-pointer hover:text-foreground">Version history ({versions.length})</summary>
+                <summary className="px-3 py-1.5 text-[13px] text-muted-2 cursor-pointer hover:text-foreground">Version history ({versions.length})</summary>
                 {versions.map((v) => (
-                  <div key={v.id} className="px-3 py-1.5 border-t border-border/60 flex items-center justify-between text-[11px]">
+                  <div key={v.id} className="px-3 py-1.5 border-t border-border/60 flex items-center justify-between text-[13px]">
                     <span className="text-muted">v{v.version} · <span className="font-mono text-muted-2">{v.gitSha.slice(0, 7)}</span>{v.gitRef ? ` · ${v.gitRef}` : ""}</span>
                     <span className="text-muted-2"><TimeAgo iso={v.createdAt} />{v.createdBy ? ` · ${v.createdBy}` : ""}</span>
                   </div>
@@ -182,7 +182,7 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
             )}
           </div>
         )}
-        {!compact && <p className="text-[11px] text-muted-2">Preview on a live env: open the page with <span className="font-mono text-muted">?opmc={prototypeKey}</span> (the loader injects the current build).</p>}
+        {!compact && <p className="text-[13px] text-muted-2">Preview on a live env: open the page with <span className="font-mono text-muted">?opmc={prototypeKey}</span> (the loader injects the current build).</p>}
       </div>
     </div>
   );

@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import type { PrototypeBrief, PrototypeHypothesis, PrototypeMetrics } from "@/lib/prototypes/types";
 import type { BriefDraft } from "@/lib/ai/brief";
 
-const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[12.5px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 const ta = inp + " resize-y leading-relaxed";
-const lbl = "block text-[11px] text-muted-2 mb-1";
+const lbl = "block text-[13px] text-muted-2 mb-1";
 
 /** Split a stored criteria string back into checkable lines. */
 function criteriaLines(s: string): string[] {
@@ -100,15 +100,15 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
 
   const saveBar = (
     <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-      <span className={`text-[11px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : hasContent ? "text-ok" : "text-muted-2"}`}>
+      <span className={`text-[13px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : hasContent ? "text-ok" : "text-muted-2"}`}>
         {msg ? msg.text : dirty ? "Unsaved changes — the gate reads the saved brief." : hasContent ? "Saved — the gate is open." : "The brief is the gate: no build until it's written."}
       </span>
       <div className="flex items-center gap-2 shrink-0">
-        <button onClick={() => setEditing(!editing)} className="h-8 px-3 rounded-lg border border-border text-[12px] text-muted hover:text-foreground hover:border-border-strong">{editing ? "Read view" : "Edit fields"}</button>
+        <button onClick={() => setEditing(!editing)} className="h-8 px-3 rounded-lg border border-border text-[14px] text-muted hover:text-foreground hover:border-border-strong">{editing ? "Read view" : "Edit fields"}</button>
         {dirty ? (
-          <button onClick={save} disabled={busy} className="h-8 px-3.5 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save brief"}</button>
+          <button onClick={save} disabled={busy} className="h-8 px-3.5 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40">{busy ? "Saving…" : "Save brief"}</button>
         ) : (
-          <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[12px] font-semibold flex items-center">Saved ✓</span>
+          <span className="h-8 px-3 rounded-lg border border-ok/40 text-ok text-[14px] font-semibold flex items-center">Saved ✓</span>
         )}
       </div>
     </div>
@@ -119,27 +119,27 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       {/* AI on-ramp — prominent when empty, a quiet drawer once the brief exists */}
       <details open={aiOpen} onToggle={(e) => setAiOpen((e.target as HTMLDetailsElement).open)} className="group rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)]">
         <summary className="px-3.5 py-2.5 cursor-pointer select-none list-none flex items-center gap-2">
-          <span className="text-[12px] font-semibold">✦ Draft with AI</span>
-          <span className="text-[11px] text-muted-2">explain it in your own words — Claude writes the structured brief</span>
-          <span className="ml-auto text-[10px] text-muted-2 group-open:hidden">open</span>
+          <span className="text-[14px] font-semibold">✦ Draft with AI</span>
+          <span className="text-[13px] text-muted-2">explain it in your own words — Claude writes the structured brief</span>
+          <span className="ml-auto text-[12.5px] text-muted-2 group-open:hidden">open</span>
         </summary>
         <div className="px-3.5 pb-3.5 space-y-2.5">
           <textarea value={explain} onChange={(e) => setExplain(e.target.value)} rows={3} className={ta}
             placeholder="e.g. When people click a room card I want a rich overlay with the gallery, amenities and a booking button, instead of losing them to the detail page. Success is more availability checks." />
           {questions.length > 0 && (
             <div className="rounded-lg border border-warn/30 bg-surface-2/30 px-3 py-2.5 space-y-3">
-              <div className="text-[11px] font-semibold text-warn">Claude asked {questions.length} question{questions.length === 1 ? "" : "s"} — answer any of them and draft again:</div>
+              <div className="text-[13px] font-semibold text-warn">Claude asked {questions.length} question{questions.length === 1 ? "" : "s"} — answer any of them and draft again:</div>
               {questions.map((q, i) => (
                 <div key={i} className="space-y-1">
-                  <div className="text-[11.5px] text-foreground leading-snug">{i + 1} · {q}</div>
+                  <div className="text-[13px] text-foreground leading-snug">{i + 1} · {q}</div>
                   <input value={qAnswers[i] ?? ""} onChange={(e) => setQAnswers((a) => a.map((v, j) => (j === i ? e.target.value : v)))} className={inp} placeholder="Your answer (optional)" />
                 </div>
               ))}
             </div>
           )}
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[11px] text-muted-2 min-w-0">{aiErr ? <span className="text-danger">{aiErr}</span> : "The draft lands as a readable brief below — you stay the editor."}</span>
-            <button onClick={draft} disabled={drafting || !explain.trim()} className="h-8 px-3.5 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
+            <span className="text-[13px] text-muted-2 min-w-0">{aiErr ? <span className="text-danger">{aiErr}</span> : "The draft lands as a readable brief below — you stay the editor."}</span>
+            <button onClick={draft} disabled={drafting || !explain.trim()} className="h-8 px-3.5 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
               {drafting ? "Drafting…" : questions.length ? "Draft again" : "Draft with AI"}
             </button>
           </div>
@@ -150,29 +150,29 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       {!editing && hasContent ? (
         <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-2 mb-1">The change</div>
-            <p className="text-[13.5px] text-foreground leading-relaxed">{brief.change}</p>
+            <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">The change</div>
+            <p className="text-[15px] text-foreground leading-relaxed">{brief.change}</p>
           </div>
           {brief.where && (
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Where · trigger</div>
-              <p className="text-[12.5px] text-ice text-foreground/90 leading-relaxed">{brief.where}</p>
+              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Where · trigger</div>
+              <p className="text-[14px] text-foreground/90 leading-relaxed">{brief.where}</p>
             </div>
           )}
           {brief.doneLooksLike?.trim() && (
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">Done looks like</div>
+              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">Done looks like</div>
               <ul className="space-y-1">
                 {criteriaLines(brief.doneLooksLike).map((c, i) => (
-                  <li key={i} className="text-[12.5px] text-foreground/90 leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
+                  <li key={i} className="text-[14px] text-foreground/90 leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
                 ))}
               </ul>
             </div>
           )}
           {(hyp.change || hyp.outcome) && (
             <div className="rounded-lg bg-surface-2/40 border border-border/60 px-3.5 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Hypothesis</div>
-              <p className="text-[12.5px] leading-relaxed text-foreground/90">
+              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Hypothesis</div>
+              <p className="text-[14px] leading-relaxed text-foreground/90">
                 We believe <b className="text-foreground">{hyp.change || "[the change]"}</b> for <b className="text-foreground">{hyp.audience || "[audience]"}</b> will cause <b className="text-foreground">{hyp.outcome || "[outcome]"}</b>{hyp.rationale ? <> because {hyp.rationale}</> : null}.
               </p>
             </div>
@@ -180,20 +180,20 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
           <div className="grid grid-cols-2 gap-4">
             {brief.problem?.trim() && (
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Problem · opportunity</div>
-                <p className="text-[12px] text-muted leading-relaxed">{brief.problem}</p>
+                <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Problem · opportunity</div>
+                <p className="text-[14px] text-muted leading-relaxed">{brief.problem}</p>
               </div>
             )}
             {brief.constraints?.trim() && (
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Guardrails · do-not-touch</div>
-                <p className="text-[12px] text-muted leading-relaxed">{brief.constraints}</p>
+                <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Guardrails · do-not-touch</div>
+                <p className="text-[14px] text-muted leading-relaxed">{brief.constraints}</p>
               </div>
             )}
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
-            {metrics.primary && <span className="text-[10.5px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-foreground font-medium">📊 Decision: {metrics.primary}</span>}
-            {metrics.guardrails.map((g, i) => <span key={i} className="text-[10.5px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
+            {metrics.primary && <span className="text-[12.5px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-foreground font-medium">📊 Decision: {metrics.primary}</span>}
+            {metrics.guardrails.map((g, i) => <span key={i} className="text-[12.5px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
           </div>
           {saveBar}
         </div>
@@ -222,7 +222,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
             <div><label className={lbl}>Guardrails / do-not-touch</label><textarea value={brief.constraints ?? ""} onChange={(e) => setBrief({ ...brief, constraints: e.target.value || undefined })} rows={3} className={ta} /></div>
           </div>
           <div className="rounded-lg border border-border/60 bg-surface-2/20 p-3 space-y-2">
-            <div className="text-[11px] font-semibold text-muted">Hypothesis — we believe…</div>
+            <div className="text-[13px] font-semibold text-muted">Hypothesis — we believe…</div>
             <div className="grid grid-cols-2 gap-2">
               <textarea value={hyp.change} onChange={(e) => setHyp({ ...hyp, change: e.target.value })} rows={2} className={ta} placeholder="the change…" />
               <textarea value={hyp.audience} onChange={(e) => setHyp({ ...hyp, audience: e.target.value })} rows={2} className={ta} placeholder="for this audience…" />

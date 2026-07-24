@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Environment, EnvironmentKind } from "@/lib/environments";
 import { Badge, TimeAgo } from "@/components/ui";
 
-const inp = "rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+const inp = "rounded-lg bg-background border border-border px-3 py-2 text-[15px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 
 /**
  * The customer's environments — where prototypes are reviewed and promoted.
@@ -76,11 +76,11 @@ export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canMa
       {canManage && (
         <div className="rounded-xl border border-border bg-surface p-3 flex items-end gap-2">
           <div className="flex-1 min-w-0">
-            <label className="block text-[11px] text-muted-2 mb-1">Environment URL</label>
+            <label className="block text-[13px] text-muted-2 mb-1">Environment URL</label>
             <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false} placeholder="https://prep.example.com" className={`${inp} w-full font-mono`} />
           </div>
           <div className="w-32 shrink-0">
-            <label className="block text-[11px] text-muted-2 mb-1">Label</label>
+            <label className="block text-[13px] text-muted-2 mb-1">Label</label>
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="optional" className={`${inp} w-full`} />
           </div>
           <select value={kind} onChange={(e) => setKind(e.target.value as EnvironmentKind)} className={`${inp} shrink-0`}>
@@ -88,15 +88,15 @@ export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canMa
             <option value="staging">staging</option>
             <option value="production">production</option>
           </select>
-          <button onClick={add} disabled={busy || !url.trim()} className="h-9 px-4 shrink-0 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40">Add</button>
+          <button onClick={add} disabled={busy || !url.trim()} className="h-9 px-4 shrink-0 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40">Add</button>
         </div>
       )}
-      {error && <div className="text-[12px] text-danger">{error}</div>}
+      {error && <div className="text-[14px] text-danger">{error}</div>}
 
       {initialEnvironments.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center">
-          <div className="text-[13px] font-medium">No environments yet.</div>
-          <div className="text-[12px] text-muted-2 mt-1">Add the customer&apos;s site URL(s) — prototypes are reviewed and promoted on these.</div>
+          <div className="text-[15px] font-medium">No environments yet.</div>
+          <div className="text-[14px] text-muted-2 mt-1">Add the customer&apos;s site URL(s) — prototypes are reviewed and promoted on these.</div>
         </div>
       ) : (
         initialEnvironments.map((env) => {
@@ -106,18 +106,18 @@ export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canMa
               <div className="px-4 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold">{env.label}</span>
+                    <span className="text-[15px] font-semibold">{env.label}</span>
                     <Badge tone={env.kind === "production" ? "accent" : "neutral"}>{env.kind}</Badge>
                     {seen
-                      ? <span className="text-[11px] text-ok">✓ loader verified · <TimeAgo iso={seen} /></span>
-                      : <span className="text-[11px] text-muted-2">loader not detected</span>}
+                      ? <span className="text-[13px] text-ok">✓ loader verified · <TimeAgo iso={seen} /></span>
+                      : <span className="text-[13px] text-muted-2">loader not detected</span>}
                   </div>
-                  <a href={env.url} target="_blank" rel="noreferrer" className="text-[11px] font-mono text-muted-2 hover:text-accent break-all">{env.url}</a>
+                  <a href={env.url} target="_blank" rel="noreferrer" className="text-[13px] font-mono text-muted-2 hover:text-accent break-all">{env.url}</a>
                 </div>
                 {canManage && (
                   <div className="flex items-center gap-3 shrink-0">
-                    <button onClick={() => startEdit(env)} className="text-[12px] text-muted-2 hover:text-foreground">Edit</button>
-                    <button onClick={() => remove(env.id)} disabled={busy} className="text-[12px] text-danger hover:opacity-80">Remove</button>
+                    <button onClick={() => startEdit(env)} className="text-[14px] text-muted-2 hover:text-foreground">Edit</button>
+                    <button onClick={() => remove(env.id)} disabled={busy} className="text-[14px] text-danger hover:opacity-80">Remove</button>
                   </div>
                 )}
               </div>
@@ -129,16 +129,16 @@ export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canMa
                     <option value="staging">staging</option>
                     <option value="production">production</option>
                   </select>
-                  <button onClick={() => saveEdit(env.id)} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Saving…" : "Save"}</button>
-                  <button onClick={() => setEditId(null)} className="text-[12px] text-muted-2 hover:text-foreground shrink-0">Cancel</button>
+                  <button onClick={() => saveEdit(env.id)} disabled={busy} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">{busy ? "Saving…" : "Save"}</button>
+                  <button onClick={() => setEditId(null)} className="text-[14px] text-muted-2 hover:text-foreground shrink-0">Cancel</button>
                 </div>
               )}
               <div className="px-4 py-2.5 border-t border-border bg-surface-2/20 flex items-center justify-between gap-3">
-                <code className="text-[11px] font-mono text-muted truncate">{tagFor(env)}</code>
-                <button onClick={() => copyTag(env)} className="text-[12px] text-accent hover:text-accent-hover font-medium shrink-0">{copied === env.id ? "Copied" : "Copy tag"}</button>
+                <code className="text-[13px] font-mono text-muted truncate">{tagFor(env)}</code>
+                <button onClick={() => copyTag(env)} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{copied === env.id ? "Copied" : "Copy tag"}</button>
               </div>
               {!seen && (
-                <div className="px-4 py-2 border-t border-border text-[11px] text-muted-2">Install the tag in the environment&apos;s CMS/layout, then open the site once — it verifies itself here.</div>
+                <div className="px-4 py-2 border-t border-border text-[13px] text-muted-2">Install the tag in the environment&apos;s CMS/layout, then open the site once — it verifies itself here.</div>
               )}
             </div>
           );

@@ -35,11 +35,11 @@ export function SyncButton({ siteKey, url }: { siteKey: string; url: string }) {
 
   return (
     <div className="flex items-center gap-2">
-      {msg && <span className="text-[11px] text-muted-2">{msg}</span>}
+      {msg && <span className="text-[13px] text-muted-2">{msg}</span>}
       <button
         onClick={sync}
         disabled={busy}
-        className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-50 transition-colors flex items-center gap-2"
+        className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-50 transition-colors flex items-center gap-2"
       >
         {busy && <span className="w-3 h-3 border-2 border-accent-fg/40 border-t-accent-fg rounded-full animate-spin" />}
         {busy ? "Syncing…" : "Sync Content"}
