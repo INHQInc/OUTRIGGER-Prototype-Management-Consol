@@ -27,21 +27,24 @@ export function PrototypeOverview({ proto, pipeline, versions, push, activity }:
   const b = proto.brief;
   const hasBrief = Boolean(b.change?.trim());
   const blocked = pipeline.steps.filter((s) => s.state === "blocked");
+  // A blocked step and its alert say the same thing — say it once.
+  const blockedAnchors = new Set(blocked.map((s) => s.anchor));
+  const extraAlerts = pipeline.alerts.filter((a) => !a.anchor || !blockedAnchors.has(a.anchor));
   const latest = versions[0];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_20rem] gap-4 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem] gap-4 items-start">
       {/* ── The thing itself ── */}
       <div className="space-y-4 min-w-0">
         {/* What's missing — only when something is */}
-        {(blocked.length > 0 || pipeline.alerts.length > 0) && (
+        {(blocked.length > 0 || extraAlerts.length > 0) && (
           <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_4%,transparent)] p-4">
             <div className="text-[13px] font-semibold uppercase tracking-wider text-warn mb-2">Needs attention</div>
             <div className="space-y-1.5">
               {blocked.map((s) => (
                 <Link key={s.id} href={`?tab=${s.anchor}`} className="block text-[14px] text-danger hover:opacity-80">⚠ {s.title}: {s.status} →</Link>
               ))}
-              {pipeline.alerts.map((a, i) => (
+              {extraAlerts.map((a, i) => (
                 <Link key={i} href={a.anchor ? `?tab=${a.anchor}` : "#"} className={`block text-[14px] hover:opacity-80 ${a.level === "danger" ? "text-danger" : "text-warn"}`}>{a.text} →</Link>
               ))}
             </div>
@@ -56,7 +59,7 @@ export function PrototypeOverview({ proto, pipeline, versions, push, activity }:
           </div>
           {hasBrief ? (
             <>
-              <p className="text-[15px] leading-relaxed">{b.change}</p>
+              <p className="text-[15px] leading-relaxed max-w-[70ch]">{b.change}</p>
               {b.doneLooksLike?.trim() && (
                 <ul className="space-y-1">
                   {criteriaLines(b.doneLooksLike).slice(0, 5).map((c, i) => (
@@ -75,7 +78,7 @@ export function PrototypeOverview({ proto, pipeline, versions, push, activity }:
         </div>
 
         {/* The parts, at a glance — each links to its room */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 2xl:grid-cols-4 gap-3">
           <Link href="?tab=build" className="rounded-xl border border-border bg-surface p-4 hover:border-border-strong transition-colors">
             <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2 mb-1">Build</div>
             <div className="text-[14px]">{pipeline.steps.find((s) => s.id === "build")?.status}</div>

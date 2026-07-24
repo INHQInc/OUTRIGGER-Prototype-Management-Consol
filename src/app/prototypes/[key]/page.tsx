@@ -120,7 +120,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const stepFor = (id?: string) => (id ? pipeline.steps.find((s) => s.id === id) : undefined);
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4">
       <PipelineHeader pipeline={pipeline} />
 
       {/* Rooms — nouns, not steps. The dot on each tab is that room's status. */}
@@ -144,14 +144,14 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       )}
 
       {tab === "brief" && (
-        <div className="max-w-3xl space-y-3">
+        <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">What are we building, and how do we know it worked? The brief is the gate — it becomes Claude&apos;s instructions and the experiment&apos;s description.</p>
           <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} />
         </div>
       )}
 
       {tab === "build" && (
-        <div className="max-w-3xl space-y-3">
+        <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">The agent&apos;s room: where the code lives, what Claude wakes up knowing, and the command that starts it. Claude builds in the repo; the console pulls the result.</p>
           <details className={`group rounded-xl border ${repo?.fullName && source?.branchExists ? "border-border bg-surface/40" : "border-warn/40"}`} open={!(repo?.fullName && source?.branchExists)}>
             <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none list-none">
@@ -168,14 +168,14 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       )}
 
       {tab === "pages" && (
-        <div className="max-w-3xl space-y-3">
+        <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">The page(s) this prototype runs on. Install the tag once per site, then verify each page actually injects — review happens on the real environment.</p>
           <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
         </div>
       )}
 
       {tab === "experiment" && (
-        <div className="max-w-3xl space-y-3">
+        <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">The A/B test, end to end: <b>1</b> cut an immutable version (certification runs automatically) · <b>2</b> bind the experiment once · <b>3</b> push — the API replaces the variation code and verifies the read-back · <b>4</b> start it in Optimizely. A running experiment locks everything.</p>
           <SourcePanel prototypeKey={key} versions={versions} compact />
           <ShipPanel
@@ -196,7 +196,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       )}
 
       {tab === "handoff" && (
-        <div className="max-w-3xl space-y-3">
+        <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">When the experiment wins, the code graduates: the winning variation is handed to the dev team to become real production code — a reviewed change in the site&apos;s own repo, not client-side JavaScript forever.</p>
           <HandoffPanel prototypeKey={key} repoFullName={repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
         </div>
