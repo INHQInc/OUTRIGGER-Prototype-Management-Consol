@@ -9,18 +9,20 @@ import type { PushResult } from "@/lib/prototypes/ship";
 
 const sel = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] font-mono text-foreground focus:border-accent focus:outline-none";
 
+export interface ShipVersion { version: number; gitSha: string; hasCode: boolean; certification: CertificationReport | null }
+
 /**
  * Ship to Optimizely — the end of the paste era. Pick the project, then bind
  * an existing experiment OR create one from here (paused draft, URL-targeted
- * from the prototype's page, seeded with the latest cut). Every push replaces
- * the variation's custom code by API and read-back verifies it. The
- * certification report gates the button; a failed cert requires an explicit
- * override.
+ * from the prototype's page, seeded with the latest cut). Pick WHICH cut to
+ * push — any frozen version ships, so rollback is just pushing an older cut.
+ * Every push replaces the variation's custom code by API and read-back
+ * verifies it; the SELECTED version's certification gates the button (a
+ * failed cert requires an explicit override).
  */
-export function ShipPanel({ prototypeKey, latestVersion, certification, initialBinding, initialLastPush, optiProjectId, targetCount = 0, prototypeName }: {
+export function ShipPanel({ prototypeKey, versions = [], initialBinding, initialLastPush, optiProjectId, targetCount = 0, prototypeName }: {
   prototypeKey: string;
-  latestVersion?: { version: number; gitSha: string; hasCode: boolean };
-  certification?: CertificationReport | null;
+  versions?: ShipVersion[];
   initialBinding: PrototypeExperimentBinding | null;
   initialLastPush: PushResult | null;
   optiProjectId?: string | null;
@@ -28,6 +30,10 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
   prototypeName?: string;
 }) {
   const router = useRouter();
+  const latest = versions[0];
+  const [selV, setSelV] = useState<number | undefined>(latest?.version);
+  const cut = versions.find((v) => v.version === selV) ?? latest;
+  const certification = cut?.certification ?? null;
   const [binding, setBinding] = useState(initialBinding);
   const [last, setLast] = useState(initialLastPush);
   const [editing, setEditing] = useState(!initialBinding);
@@ -136,8 +142,9 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
 
   const certFails = certification?.checks.filter((c) => c.level === "fail") ?? [];
   const certWarns = certification?.checks.filter((c) => c.level === "warn") ?? [];
-  const canPush = Boolean(binding && latestVersion?.hasCode && (certification ? certification.passed || override : true));
-  const stale = last && latestVersion && last.version < latestVersion.version;
+  const canPush = Boolean(binding && cut?.hasCode && (certification ? certification.passed || override : true));
+  const stale = last && latest && last.version < latest.version;
+  const rollback = cut && latest && cut.version < latest.version;
   const expUrl = binding && (projectId || optiProjectId) ? `https://app.optimizely.com/v2/projects/${projectId || optiProjectId}/experiments/${binding.experimentId}/variations` : null;
 
   async function push() {
@@ -146,7 +153,7 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
     try {
       const res = await fetch("/api/prototypes/ship", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, push: true, override: override || undefined }),
+        body: JSON.stringify({ key: prototypeKey, push: true, version: cut?.version, override: override || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Push failed" }); return; }
@@ -167,22 +174,35 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
       </div>
       <div className="p-4 space-y-3 text-[14px]">
 
-        {/* Certification */}
-        {latestVersion?.hasCode && (
+        {/* Which frozen cut ships — any version, so rollback is just picking an older one */}
+        {cut && (
           <div className={`rounded-lg border px-3 py-2.5 ${certification ? (certification.passed ? "border-ok/40 bg-[color-mix(in_srgb,var(--ok)_5%,transparent)]" : "border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)]") : "border-border bg-surface-2/20"}`}>
-            <div className="flex items-center justify-between gap-3">
-              <span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-2 shrink-0">
+                <span className="text-[13px] text-muted-2">Version</span>
+                <select value={cut.version} onChange={(e) => { setSelV(Number(e.target.value)); setOverride(false); setShowChecks(false); setMsg(null); }}
+                  className="rounded-lg bg-background border border-border px-2.5 py-1.5 text-[13px] font-mono text-foreground focus:border-accent focus:outline-none">
+                  {versions.map((v) => (
+                    <option key={v.version} value={v.version}>
+                      v{v.version} · {v.gitSha.slice(0, 7)}{!v.hasCode ? " · no code" : v.certification ? (v.certification.passed ? " · certified ✓" : " · cert FAILED") : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="min-w-0">
                 {certification
                   ? certification.passed
                     ? <span className="text-ok font-semibold">✓ Certified{certWarns.length ? <span className="font-normal text-muted-2"> · {certWarns.length} warning{certWarns.length === 1 ? "" : "s"}</span> : null}</span>
                     : <span className="text-danger font-semibold">✗ Certification failed · {certFails.map((c) => c.title).join(" · ")}</span>
-                  : <span className="text-muted-2">v{latestVersion.version} predates certification — re-cut to run the QA gate.</span>}
-                <span className="text-muted-2"> · v{latestVersion.version} · {latestVersion.gitSha.slice(0, 7)}</span>
+                  : <span className="text-muted-2">v{cut.version} predates certification — re-cut to run the QA gate.</span>}
               </span>
               {certification && (
-                <button onClick={() => setShowChecks(!showChecks)} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{showChecks ? "Hide checks" : `Checks (${certification.checks.length})`}</button>
+                <button onClick={() => setShowChecks(!showChecks)} className="ml-auto text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">{showChecks ? "Hide checks" : `Checks (${certification.checks.length})`}</button>
               )}
             </div>
+            {rollback && (
+              <div className="mt-2 pt-2 border-t border-border/60 text-[13px] text-warn">↩ Rollback: pushing v{cut.version} while the latest cut is v{latest!.version}. Same gates — just an older frozen snapshot.</div>
+            )}
             {showChecks && certification && (
               <div className="mt-2 space-y-1 border-t border-border/60 pt-2">
                 {certification.checks.map((c) => (
@@ -255,7 +275,7 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
               <>
                 <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Experiment name" spellCheck={false} className={sel} />
                 <div className="text-[13px] text-muted-2 leading-relaxed">
-                  Creates a <b>paused draft</b> A/B in Optimizely: URL-targeted to the prototype&apos;s page, Original vs Variation #1 at 50/50{latestVersion ? <>, seeded with <span className="font-mono">v{latestVersion.version}</span></> : ", seeded with a placeholder until you cut + push"}. No traffic runs until a human starts it there.
+                  Creates a <b>paused draft</b> A/B in Optimizely: URL-targeted to the prototype&apos;s page, Original vs Variation #1 at 50/50{latest ? <>, seeded with <span className="font-mono">v{latest.version}</span></> : ", seeded with a placeholder until you cut + push"}. No traffic runs until a human starts it there.
                   {targetCount === 0 && <span className="text-warn"> Add a target page (Review) first — it defines the URL targeting.</span>}
                 </div>
                 <div className="flex items-center justify-end gap-3">
@@ -271,15 +291,15 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
         <div className="flex items-center justify-between gap-3">
           <span className={`text-[14px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : stale ? "text-warn" : "text-muted-2"}`}>
             {msg ? msg.text
-              : !latestVersion?.hasCode ? "Cut a version from the repo first — the push ships the frozen cut."
+              : !cut?.hasCode ? (cut ? `v${cut.version} carries no code snapshot — pick a cut that does.` : "Cut a version from the repo first — the push ships the frozen cut.")
               : !binding ? "Bind or create an experiment to enable the push."
               : last ? (stale
-                  ? `v${last.version} is live in Optimizely · latest cut is v${latestVersion.version} — push to update`
+                  ? `v${last.version} is live in Optimizely · latest cut is v${latest!.version} — push to update`
                   : `v${last.version} live · pushed ${new Date(last.at).toLocaleString()} · read-back ${last.verified ? "verified ✓" : "MISMATCH"}${last.overridden ? " · cert overridden" : ""}`)
               : "Never pushed — the variation in Optimizely is empty or hand-pasted."}
           </span>
           <button onClick={push} disabled={busy || !canPush} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
-            {busy ? "Pushing…" : latestVersion ? `Push v${latestVersion.version} to Optimizely` : "Push"}
+            {busy ? "Pushing…" : cut ? `Push v${cut.version} to Optimizely${rollback ? " ↩" : ""}` : "Push"}
           </button>
         </div>
       </div>

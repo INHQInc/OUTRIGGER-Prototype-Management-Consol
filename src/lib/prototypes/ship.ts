@@ -40,7 +40,7 @@ export async function lastPush(prototypeKey: string): Promise<PushResult | null>
   try { return JSON.parse(raw) as PushResult; } catch { return null; }
 }
 
-export async function pushToOptimizely(prototypeKey: string, opts: { override?: boolean; actor?: string } = {}): Promise<PushResult> {
+export async function pushToOptimizely(prototypeKey: string, opts: { version?: number; override?: boolean; actor?: string } = {}): Promise<PushResult> {
   const store = await getContentStore();
   const proto = await store.getPrototype(prototypeKey);
   if (!proto) throw new Error("Unknown prototype");
@@ -55,15 +55,21 @@ export async function pushToOptimizely(prototypeKey: string, opts: { override?: 
   const client = await getOptimizelyClientForOrg(orgId);
   if (!client) throw new Error("Optimizely isn't connected for this customer (Settings → Experimentation).");
 
+  // Any CUT version is shippable — that's the point of freezing them. Rollback
+  // = pushing an older cut; same gates, run against THAT version's frozen cert.
   const versions = await listArtifactVersions(prototypeKey);
-  const latest = versions[0];
-  if (!latest?.variationJs) throw new Error("No cut version with code — cut a version from the repo first.");
+  const chosen = opts.version != null ? versions.find((v) => v.version === opts.version) : versions[0];
+  if (opts.version != null && !chosen) throw new Error(`v${opts.version} is not a cut version of this prototype.`);
+  if (!chosen?.variationJs) {
+    throw new Error(chosen ? `v${chosen.version} carries no code snapshot — pick a cut that does.` : "No cut version with code — cut a version from the repo first.");
+  }
+  const rollback = versions[0] && chosen.version < versions[0].version;
 
   // The gate: a failed certification blocks the push unless explicitly overridden.
-  const cert = latest.certification;
+  const cert = chosen.certification;
   if (cert && !cert.passed && !opts.override) {
     const fails = cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ");
-    throw new Error(`Certification failed (${fails}). Fix and re-cut, or push with an explicit override.`);
+    throw new Error(`Certification failed on v${chosen.version} (${fails}). Fix and re-cut, or push with an explicit override.`);
   }
 
   const { experimentId, variationId } = proto.experiment;
@@ -81,16 +87,16 @@ export async function pushToOptimizely(prototypeKey: string, opts: { override?: 
     /* status unreadable → proceed; the push itself will surface real API errors */
   }
 
-  const exp = await client.setVariationCustomCode(experimentId, variationId, latest.variationJs);
+  const exp = await client.setVariationCustomCode(experimentId, variationId, chosen.variationJs);
   const stored = OptimizelyClient.customCodeOf(exp, variationId);
-  const verified = stored === latest.variationJs;
+  const verified = stored === chosen.variationJs;
 
   const result: PushResult = {
     pushed: true,
     verified,
-    version: latest.version,
-    gitSha: latest.gitSha,
-    bytes: Buffer.byteLength(latest.variationJs, "utf8"),
+    version: chosen.version,
+    gitSha: chosen.gitSha,
+    bytes: Buffer.byteLength(chosen.variationJs, "utf8"),
     experimentId: String(experimentId),
     variationId: String(variationId),
     certificationPassed: cert?.passed,
@@ -99,8 +105,8 @@ export async function pushToOptimizely(prototypeKey: string, opts: { override?: 
   };
   await store.setFlag(pushFlag(prototypeKey), JSON.stringify(result));
   await audit(orgId, opts.actor ?? "system", "optimizely.push",
-    `${prototypeKey} v${latest.version} → exp ${experimentId}/var ${variationId}`,
-    `${result.bytes.toLocaleString()} bytes · ${latest.gitSha.slice(0, 7)} · read-back ${verified ? "VERIFIED" : "MISMATCH"}${result.overridden ? " · CERT OVERRIDDEN" : ""}`);
+    `${prototypeKey} v${chosen.version} → exp ${experimentId}/var ${variationId}`,
+    `${result.bytes.toLocaleString()} bytes · ${chosen.gitSha.slice(0, 7)} · read-back ${verified ? "VERIFIED" : "MISMATCH"}${result.overridden ? " · CERT OVERRIDDEN" : ""}${rollback ? ` · ROLLBACK (latest is v${versions[0].version})` : ""}`);
 
   if (!verified) throw new Error("Pushed, but the read-back did not byte-match what Optimizely stored. Re-open the variation in Optimizely and inspect before publishing.");
   return result;

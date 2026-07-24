@@ -183,8 +183,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
           <SourcePanel prototypeKey={key} versions={versions} compact />
           <ShipPanel
             prototypeKey={key}
-            latestVersion={versions[0] ? { version: versions[0].version, gitSha: versions[0].gitSha, hasCode: Boolean(versions[0].variationJs) } : undefined}
-            certification={versions[0]?.certification ?? null}
+            versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, hasCode: Boolean(v.variationJs), certification: v.certification ?? null }))}
             initialBinding={p.experiment ?? null}
             initialLastPush={push}
             optiProjectId={expCfg?.optimizely?.defaultProjectId ?? null}

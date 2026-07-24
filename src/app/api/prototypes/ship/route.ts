@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
  * ship after a cut); the certification gate still applies to everyone.
  */
 export async function POST(req: NextRequest) {
-  let body: { key?: string; bind?: { experimentId?: string; variationId?: string; experimentName?: string; variationName?: string }; push?: boolean; override?: boolean };
+  let body: { key?: string; bind?: { experimentId?: string; variationId?: string; experimentName?: string; variationName?: string }; push?: boolean; version?: number; override?: boolean };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const g = await guardPrototypeAccess(body.key ?? null, req.headers.get("authorization"));
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       await store.putPrototype(proto);
     }
     if (body.push) {
-      const result = await pushToOptimizely(g.proto.key, { override: body.override, actor });
+      const result = await pushToOptimizely(g.proto.key, { version: typeof body.version === "number" ? body.version : undefined, override: body.override, actor });
       return NextResponse.json({ result, experiment: (await getContentStore().then((s) => s.getPrototype(g.proto.key)))?.experiment ?? null });
     }
     return NextResponse.json({ ok: true, experiment: (await getContentStore().then((s) => s.getPrototype(g.proto.key)))?.experiment ?? null });
