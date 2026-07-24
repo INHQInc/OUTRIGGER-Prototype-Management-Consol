@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 export interface HandoffVersionMeta { version: number; gitSha: string; createdAt: string; certPassed: boolean | null }
 
@@ -36,8 +36,10 @@ const JS_TOKEN = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n
 const CSS_TOKEN = /(\/\*[\s\S]*?\*\/)|("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')|((?<![\w-])-?\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|s|ms|fr|deg)?\b)|(@[\w-]+|![\w-]+)/g;
 
 const CODE_EXT = /\.(m?[jt]sx?|css|scss|json|html?|md|ya?ml|sh|mjs)$/i;
+/** Above this, token spans (tens of thousands of elements) freeze the tab — plain text instead. */
+const MAX_TOKENIZE_CHARS = 150_000;
 function tokenize(content: string, path: string): { kind: TokKind; text: string }[] {
-  if (!CODE_EXT.test(path)) return [{ kind: "plain", text: content }];
+  if (!CODE_EXT.test(path) || content.length > MAX_TOKENIZE_CHARS) return [{ kind: "plain", text: content }];
   const re = /\.(css|scss)$/i.test(path) ? CSS_TOKEN : JS_TOKEN;
   const out: { kind: TokKind; text: string }[] = [];
   let last = 0;
@@ -59,6 +61,25 @@ const TOK_CLASS: Record<TokKind, string> = {
   number: "text-warn",
   plain: "",
 };
+
+/**
+ * Memoized so parent state churn (copy flash, folder toggles) never
+ * re-reconciles tens of thousands of token spans — the pane re-renders only
+ * when the file itself changes.
+ */
+const CodePane = memo(function CodePane({ content, path, truncated }: { content: string; path: string; truncated?: boolean }) {
+  const gutter = useMemo(() => content.split("\n").map((_, i) => `${i + 1}\n`).join(""), [content]);
+  const tokens = useMemo(() => tokenize(content, path), [content, path]);
+  return (
+    <div className="flex text-[12.5px] leading-[1.6] font-mono">
+      <pre aria-hidden className="px-3 py-3 text-right text-muted-2/70 select-none border-r border-border/60 bg-surface-2/20 shrink-0">{gutter}</pre>
+      <pre className="px-4 py-3 text-foreground/90 min-w-0">
+        {tokens.map((t, i) => t.kind === "plain" ? t.text : <span key={i} className={TOK_CLASS[t.kind]}>{t.text}</span>)}
+        {truncated && <span className="text-warn">{"\n"}… truncated at 400 KB — pull the branch to see the rest.</span>}
+      </pre>
+    </div>
+  );
+});
 
 /**
  * The Handoff explorer — a VS-style, read-only browse of a CUT VERSION at its
@@ -114,11 +135,7 @@ export function HandoffExplorer({ prototypeKey, versions }: { prototypeKey: stri
 
   const tree = useMemo(() => (files ? buildTree(files) : null), [files]);
   const selMeta = files?.find((f) => f.path === selPath);
-  const lines = file?.content != null ? file.content.split("\n") : [];
-  const tokens = useMemo(
-    () => (file?.content != null && file.path === selPath ? tokenize(file.content, file.path) : null),
-    [file, selPath],
-  );
+  const lineCount = useMemo(() => (file?.content != null ? file.content.split("\n").length : 0), [file]);
 
   const toggleDir = useCallback((p: string) => {
     setCollapsed((prev) => { const next = new Set(prev); if (next.has(p)) next.delete(p); else next.add(p); return next; });
@@ -197,7 +214,7 @@ export function HandoffExplorer({ prototypeKey, versions }: { prototypeKey: stri
             <div className="px-3.5 py-2 border-b border-border flex items-center gap-3 text-[12.5px] text-muted-2">
               <span className="font-mono truncate text-muted">{selPath ?? "select a file"}</span>
               {selMeta && <span className="shrink-0">{fmtBytes(selMeta.size)}</span>}
-              {file?.content != null && lines.length > 0 && <span className="shrink-0">{lines.length.toLocaleString()} lines</span>}
+              {file?.content != null && lineCount > 0 && <span className="shrink-0">{lineCount.toLocaleString()} lines</span>}
               {file?.content != null && (
                 <button onClick={copy} className="ml-auto shrink-0 text-accent hover:text-accent-hover font-medium text-[13px]">{copied ? "Copied" : "Copy file"}</button>
               )}
@@ -210,16 +227,7 @@ export function HandoffExplorer({ prototypeKey, versions }: { prototypeKey: stri
               ) : file?.binary ? (
                 <div className="px-4 py-4 text-[14px] text-muted-2">Binary file — not rendered.</div>
               ) : file?.content != null ? (
-                <div className="flex text-[12.5px] leading-[1.6] font-mono">
-                  <pre aria-hidden className="px-3 py-3 text-right text-muted-2/70 select-none border-r border-border/60 bg-surface-2/20 shrink-0">
-                    {lines.map((_, i) => `${i + 1}\n`).join("")}
-                  </pre>
-                  <pre className="px-4 py-3 text-foreground/90 min-w-0">
-                    {tokens?.map((t, i) => t.kind === "plain" ? t.text : <span key={i} className={TOK_CLASS[t.kind]}>{t.text}</span>)}
-                    {file.truncated && <span className="text-warn">
-{"\n"}… truncated at 400 KB — pull the branch to see the rest.</span>}
-                  </pre>
-                </div>
+                <CodePane content={file.content} path={file.path} truncated={file.truncated} />
               ) : (
                 <div className="px-4 py-4 text-[13px] text-muted-2">Select a file on the left.</div>
               )}

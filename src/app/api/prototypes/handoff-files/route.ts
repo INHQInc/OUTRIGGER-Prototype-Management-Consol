@@ -22,6 +22,12 @@ export async function GET(req: NextRequest) {
   const sha = req.nextUrl.searchParams.get("sha") ?? "";
   const path = req.nextUrl.searchParams.get("path");
   if (!/^[0-9a-f]{7,40}$/i.test(sha)) return NextResponse.json({ error: "sha must be a commit SHA" }, { status: 400 });
+  // Traversal guard: "." / ".." / empty segments survive encodeURIComponent and
+  // the URL parser collapses them, which would escape /contents/ and turn the
+  // org's GitHub token into a free-roaming proxy. Repo paths never need them.
+  if (path && (path.startsWith("/") || path.split("/").some((seg) => seg === "" || seg === "." || seg === ".."))) {
+    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
 
   const versions = await listArtifactVersions(g.proto.key);
   const version = versions.find((v) => v.gitSha === sha || v.gitSha.startsWith(sha));

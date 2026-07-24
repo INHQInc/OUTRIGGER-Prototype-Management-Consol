@@ -73,16 +73,26 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
   }, [editing, expSel, prototypeKey]);
 
   async function changeProject(id: string) {
-    setProjectId(id);
-    if (!id) return;
-    setMsg(null);
-    const res = await fetch("/api/optimizely/experiments", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: prototypeKey, setProjectId: id }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Couldn't switch the project" }); return; }
-    setExpSel(""); setVarSel(""); setReloadTick((t) => t + 1);
+    if (busy || !id || id === projectId) return;
+    const prev = projectId;
+    setBusy(true); setMsg(null);
+    // The old project's experiments must not stay bindable while we switch —
+    // clear the pickers NOW; busy keeps Save/Create disabled until we're done.
+    setProjectId(id); setExperiments([]); setVariations([]); setExpSel(""); setVarSel("");
+    try {
+      const res = await fetch("/api/optimizely/experiments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, setProjectId: id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setProjectId(prev); setMsg({ ok: false, text: data.error ?? "Couldn't switch the project" }); return; }
+    } catch (e) {
+      setProjectId(prev);
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Couldn't switch the project" });
+    } finally {
+      setBusy(false);
+      setReloadTick((t) => t + 1); // refetch for whichever project we ended on
+    }
   }
 
   async function saveBinding() {
@@ -119,7 +129,7 @@ export function ShipPanel({ prototypeKey, latestVersion, certification, initialB
       const data = await res.json();
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Couldn't create the experiment" }); return; }
       setBinding(data.binding); setEditing(false);
-      setMsg({ ok: true, text: `Created "${data.experiment.name}" as a paused draft${data.seededVersion ? ` · seeded with v${data.seededVersion}` : ""} — it's bound; start it in Optimizely when you're ready.` });
+      setMsg({ ok: true, text: `Created "${data.experiment.name}" as a paused draft${data.seededVersion ? ` · seeded with v${data.seededVersion}` : data.certBlocked ? " · NOT seeded — the latest cut failed certification; fix, re-cut, then push" : ""} — it's bound; start it in Optimizely when you're ready.` });
       router.refresh();
     } finally { setBusy(false); }
   }

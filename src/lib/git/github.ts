@@ -192,6 +192,11 @@ export class GitHubClient {
 
   /** Read a file's decoded text content at a ref (branch/sha). null if absent. */
   async readFileAtRef(owner: string, repo: string, path: string, ref: string): Promise<string | null> {
+    // encodeURIComponent leaves "." intact, so "."/".."/empty segments would be
+    // collapsed by the URL parser and escape /contents/ — refuse them outright.
+    if (path.startsWith("/") || path.split("/").some((seg) => seg === "" || seg === "." || seg === "..")) {
+      throw new GitError(400, `Invalid repo path: ${path}`);
+    }
     const encPath = path.split("/").map(encodeURIComponent).join("/");
     try {
       const r = await this.gh<{ content?: string; encoding?: string }>(`/repos/${owner}/${repo}/contents/${encPath}?ref=${encodeURIComponent(ref)}`);

@@ -13,7 +13,7 @@
 import type { PrototypeRecord, ArtifactVersion } from "./types";
 import type { RepoSource } from "./source";
 import type { PushResult } from "./ship";
-import { injectionPasses } from "./types";
+import { injectionPasses, normalizeStage } from "./types";
 import { contentHashOf } from "./provision";
 import { artifactProblem } from "./served";
 
@@ -100,7 +100,9 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   const bound = Boolean(proto.experiment?.experimentId && proto.experiment?.variationId);
   const pushCurrent = Boolean(lastPush && latest && lastPush.version === latest.version && lastPush.verified);
   const running = inp.experimentStatus === "running";
-  const stageShipped = proto.status === "shipped";
+  // normalizeStage, like every other reader — a legacy "handed-off" record must
+  // say Shipped here AND on the board, or the one-vocabulary contract is a lie.
+  const stageShipped = normalizeStage(proto.status) === "shipped";
 
   const truth: GroundTruth = {
     servingSha: built ? source?.headSha : undefined,

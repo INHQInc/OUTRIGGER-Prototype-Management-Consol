@@ -60,6 +60,11 @@ export async function POST(req: NextRequest) {
 
   try {
     if (body.setProjectId) {
+      // Org-level config change — same gate as Settings → Experimentation:
+      // admin session only. The org API token can never change configuration.
+      if (g.viaToken || !user || user.role !== "admin") {
+        return NextResponse.json({ error: "Only an admin can change the brand's Optimizely project (Settings → Experimentation)." }, { status: 403 });
+      }
       await setDefaultProject(g.orgId, String(body.setProjectId));
       await audit(g.orgId, actor, "experiment.project", g.proto.name, `default project → ${body.setProjectId}`);
       return NextResponse.json({ ok: true, defaultProjectId: String(body.setProjectId) });
@@ -80,9 +85,16 @@ export async function POST(req: NextRequest) {
       let pathSubstring: string;
       try { pathSubstring = new URL(target.url).pathname; } catch { return NextResponse.json({ error: `Target URL is invalid: ${target.url}` }, { status: 400 }); }
 
+      // Seed only code that could also pass the push gate: a failed cert never
+      // leaves the console via create either (someone WILL start what they find).
       const latest = (await listArtifactVersions(proto.key))[0];
-      const variationJs = latest?.variationJs
-        ?? `/* ${proto.key}: no version cut yet — push v1 after cutting to replace this placeholder. */`;
+      const certFailed = Boolean(latest?.certification && !latest.certification.passed);
+      const seedable = latest?.variationJs && !certFailed;
+      const variationJs = seedable
+        ? latest!.variationJs!
+        : certFailed
+          ? `/* ${proto.key}: v${latest!.version} FAILED certification — fix, re-cut, then push. Not seeded. */`
+          : `/* ${proto.key}: no version cut yet — push v1 after cutting to replace this placeholder. */`;
 
       const page = await client.createPage(`${proto.name} — page`, target.url, pathSubstring);
       const description = (proto.brief.change || proto.hypothesis.change || proto.name).slice(0, 900);
@@ -100,12 +112,13 @@ export async function POST(req: NextRequest) {
       };
       proto.updatedAt = new Date().toISOString();
       await store.putPrototype(proto);
-      await audit(g.orgId, actor, "experiment.create", proto.name, `"${name}" (${exp.id}) · paused draft · page ${page.id}${latest ? ` · seeded v${latest.version}` : ""}`);
+      await audit(g.orgId, actor, "experiment.create", proto.name, `"${name}" (${exp.id}) · paused draft · page ${page.id}${seedable ? ` · seeded v${latest!.version}` : certFailed ? ` · NOT seeded (v${latest!.version} cert failed)` : " · placeholder"}`);
 
       return NextResponse.json({
         experiment: { id: String(exp.id), name: exp.name, status: exp.status },
         binding: proto.experiment,
-        seededVersion: latest?.version ?? null,
+        seededVersion: seedable ? latest!.version : null,
+        certBlocked: certFailed || undefined,
       });
     }
 
