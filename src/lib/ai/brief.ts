@@ -14,7 +14,7 @@ import { ensureSkillsSeeded } from "../skills/seed";
 import type { PrototypeRecord } from "../prototypes/types";
 
 export interface BriefDraft {
-  brief: { change: string; problem: string; where: string; doneLooksLike: string; constraints: string };
+  brief: { change: string; problem: string; where: string; doneLooksLike: string[]; constraints: string };
   hypothesis: { change: string; audience: string; outcome: string; rationale: string };
   metrics: { primary: string; guardrails: string[] };
   clarifying_questions: string[];
@@ -30,7 +30,8 @@ const DRAFT_TOOL = {
         type: "object" as const,
         properties: {
           change: { type: "string" as const }, problem: { type: "string" as const },
-          where: { type: "string" as const }, doneLooksLike: { type: "string" as const },
+          where: { type: "string" as const },
+          doneLooksLike: { type: "array" as const, items: { type: "string" as const }, description: "3-5 acceptance criteria, each independently checkable on the live preview" },
           constraints: { type: "string" as const },
         },
         required: ["change", "problem", "where", "doneLooksLike", "constraints"],
