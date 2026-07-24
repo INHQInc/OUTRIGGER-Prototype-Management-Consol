@@ -52,7 +52,7 @@ const DRAFT_TOOL = {
         },
         required: ["primary", "guardrails"],
       },
-      clarifying_questions: { type: "array" as const, items: { type: "string" as const } },
+      clarifying_questions: { type: "array" as const, items: { type: "string" as const }, description: "OPTIONAL and rare — usually empty. At most 2, only on the first draft, and only for a missing answer that would change what gets built. MUST be empty when the user has already answered earlier questions." },
     },
     required: ["brief", "hypothesis", "metrics", "clarifying_questions"],
   },
@@ -78,6 +78,14 @@ export async function draftBrief(opts: {
     opts.proto.metrics.primary ? `Existing primary metric: ${opts.proto.metrics.primary}` : "",
   ].filter(Boolean).join("\n");
 
+  // The answers pass is TERMINAL: the user has answered once, so this draft is
+  // final and asks nothing further. Told to the model AND enforced below, so an
+  // endless question loop is structurally impossible, not just discouraged.
+  const finalPass = Boolean(opts.answers?.trim());
+  const closing = finalPass
+    ? `\n\nAnswers to your earlier clarifying questions:\n"""\n${opts.answers!.trim()}\n"""\n\nThis is the FINAL draft — you now have enough. Commit to the brief and return clarifying_questions as an empty array; do not ask anything new.`
+    : `\n\nDraft the complete brief now. Only include a clarifying question if a missing answer would genuinely change what gets built — otherwise return clarifying_questions empty.`;
+
   const client = new Anthropic();
   const res = await client.messages.create({
     model: "claude-opus-4-8",
@@ -85,7 +93,7 @@ export async function draftBrief(opts: {
     system,
     messages: [{
       role: "user",
-      content: `${context}\n\nThe team explains the experiment in their own words:\n"""\n${opts.userText.trim()}\n"""${opts.answers ? `\n\nAnswers to your earlier clarifying questions:\n"""\n${opts.answers.trim()}\n"""` : ""}\n\nDraft the complete brief now.`,
+      content: `${context}\n\nThe team explains the experiment in their own words:\n"""\n${opts.userText.trim()}\n"""${closing}`,
     }],
     tools: [DRAFT_TOOL],
     tool_choice: { type: "tool", name: "draft_brief" },
@@ -93,5 +101,10 @@ export async function draftBrief(opts: {
 
   const tu = res.content.find((c) => c.type === "tool_use");
   if (!tu || tu.type !== "tool_use") throw new Error("The model returned no draft — try again.");
-  return tu.input as BriefDraft;
+  const draft = tu.input as BriefDraft;
+
+  // Hard backstop: the answers pass never returns questions, and the first pass
+  // is capped at 2. The model's doctrine says the same; this makes it true.
+  draft.clarifying_questions = finalPass ? [] : (draft.clarifying_questions ?? []).slice(0, 2);
+  return draft;
 }
