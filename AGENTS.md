@@ -2,7 +2,7 @@
 
 *Last updated: 2026-07-24 (pipeline + program board + gates + AI brief composer; 07-23: skills library, ideas channel, provisioning derivations, loader status)*
 
-> **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work — authoritative for "where are we"**).
+> **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work — authoritative for "where are we"**). Touching ANY UI? [`docs/DESIGN-PRINCIPLES.md`](docs/DESIGN-PRINCIPLES.md) first — say-it-once, one card grammar, rooms-not-steps; every rule there is a past user correction.
 >
 > **Debugging anything?** [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — every failure mode that has cost real time (token scopes, stale artifacts, CORS fonts, cache lag) with the check that settles it. Read it BEFORE theorising about a bug.
 
@@ -156,6 +156,7 @@ Claude never enters credentials — the user pastes them into Vercel / the app's
 | Doc | For |
 |---|---|
 | [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) | the locked lifecycle model (read first) |
+| [`docs/DESIGN-PRINCIPLES.md`](docs/DESIGN-PRINCIPLES.md) | **UI layout laws — read before touching any screen** |
 | [`docs/CONSOLE-UI-SPEC.md`](docs/CONSOLE-UI-SPEC.md) | UI spec |
 | [`docs/HANDOFF.md`](docs/HANDOFF.md) | CURRENT STATE + in-flight work (read on session start) |
 | [`docs/EXPERIMENT-INTEGRATION.md`](docs/EXPERIMENT-INTEGRATION.md) | experiment binding/drift |
