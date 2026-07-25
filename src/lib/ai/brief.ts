@@ -117,6 +117,33 @@ function clampReadiness(r: unknown): number {
   return Math.max(0, Math.min(100, Math.round(Number(r) || 0)));
 }
 
+/**
+ * Coalesce the model's tool output into a COMPLETE BriefDraft. A forced tool
+ * call does not hard-guarantee every nested required field is present, and a
+ * missing one (e.g. `hypothesis`) crashed the composer's render (black screen).
+ * Normalizing here — at the boundary — means the UI can never receive a partial
+ * shape, no matter what the model returns.
+ */
+function normalizeDraft(d: unknown): BriefDraft {
+  const o = (d ?? {}) as Partial<BriefDraft>;
+  const b = (o.brief ?? {}) as Partial<BriefDraft["brief"]>;
+  const h = (o.hypothesis ?? {}) as Partial<BriefDraft["hypothesis"]>;
+  const m = (o.metrics ?? {}) as Partial<BriefDraft["metrics"]>;
+  return {
+    brief: {
+      change: b.change ?? "",
+      problem: b.problem ?? "",
+      where: b.where ?? "",
+      doneLooksLike: Array.isArray(b.doneLooksLike) ? b.doneLooksLike.filter((x) => typeof x === "string") : [],
+      constraints: b.constraints ?? "",
+    },
+    hypothesis: { change: h.change ?? "", audience: h.audience ?? "", outcome: h.outcome ?? "", rationale: h.rationale ?? "" },
+    metrics: { primary: m.primary ?? "", guardrails: Array.isArray(m.guardrails) ? m.guardrails.filter((x) => typeof x === "string") : [] },
+    clarifying_questions: Array.isArray(o.clarifying_questions) ? o.clarifying_questions.filter((x) => typeof x === "string") : [],
+    readiness: clampReadiness(o.readiness),
+  };
+}
+
 async function runDraft(client: Anthropic, system: string, content: string): Promise<BriefDraft> {
   const res = await client.messages.create({
     model: "claude-opus-4-8",
@@ -128,7 +155,7 @@ async function runDraft(client: Anthropic, system: string, content: string): Pro
   });
   const tu = res.content.find((c) => c.type === "tool_use");
   if (!tu || tu.type !== "tool_use") throw new Error("The model returned no draft — try again.");
-  return tu.input as BriefDraft;
+  return normalizeDraft(tu.input);
 }
 
 /** The brief sections a user can correct in place. */

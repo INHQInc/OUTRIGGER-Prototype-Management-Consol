@@ -206,19 +206,21 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const addRef = (url: string, label?: string) => { setBrief((b) => ({ ...b, references: [...(b.references ?? []), { url, label, kind: referenceKind(url) }] })); setMsg(null); };
   const removeRef = (i: number) => { setBrief((b) => ({ ...b, references: (b.references ?? []).filter((_, j) => j !== i) })); setMsg(null); };
 
-  /** Fold a returned draft into the split state. */
+  /** Fold a returned draft into the split state. Defensive: the server already
+   *  normalizes, but a missing field must never crash the render (black screen). */
   function applyDraft(d: BriefDraft) {
+    const db = d.brief ?? ({} as BriefDraft["brief"]);
     setBrief((b) => ({
-      change: d.brief.change,
-      problem: d.brief.problem,
-      doneLooksLike: (d.brief.doneLooksLike ?? []).join("\n"),
-      where: d.brief.where || undefined,
-      constraints: d.brief.constraints || undefined,
+      change: db.change ?? "",
+      problem: db.problem ?? "",
+      doneLooksLike: (db.doneLooksLike ?? []).join("\n"),
+      where: db.where || undefined,
+      constraints: db.constraints || undefined,
       reference: b.reference,
       references: b.references, // links are the user's, never rewritten by a draft
     }));
-    setHyp(d.hypothesis);
-    setMetrics({ primary: d.metrics.primary, guardrails: d.metrics.guardrails ?? [] });
+    setHyp(d.hypothesis ?? { change: "", audience: "", outcome: "", rationale: "" });
+    setMetrics({ primary: d.metrics?.primary ?? "", guardrails: d.metrics?.guardrails ?? [] });
     setReadiness(typeof d.readiness === "number" ? d.readiness : null);
   }
 
