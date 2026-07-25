@@ -25,8 +25,13 @@ function ReferencesEditor({ references, onAdd, onRemove }: {
 }) {
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
-  const valid = /^https?:\/\/\S+$/i.test(url.trim());
-  function add() { if (!valid) return; onAdd(url.trim(), label.trim() || undefined); setUrl(""); setLabel(""); }
+  const trimmed = url.trim();
+  const valid = /^https?:\/\/\S+$/i.test(trimmed);
+  const touched = trimmed.length > 0;
+  // No w-full here — appending it to `inp` collided with flex-1/w-40 and
+  // collapsed the URL field to nothing.
+  const field = "rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+  function add() { if (!valid) return; onAdd(trimmed, label.trim() || undefined); setUrl(""); setLabel(""); }
   return (
     <div className="space-y-2">
       {references.length > 0 && (
@@ -44,12 +49,16 @@ function ReferencesEditor({ references, onAdd, onRemove }: {
           })}
         </div>
       )}
-      <div className="flex items-center gap-2">
+      {/* URL is the field — full width, on its own line. Label + Add below. */}
+      <div className="space-y-1.5">
         <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
-          placeholder="Paste a Figma / design / screenshot / page URL" className={inp + " text-[13px] flex-1"} />
-        <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
-          placeholder="label (optional)" className={inp + " text-[13px] w-40 shrink-0"} />
-        <button onClick={add} disabled={!valid} className="h-9 px-3 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">Add</button>
+          placeholder="Paste a link — Figma, a design file, a screenshot, a page…" className={`${field} w-full`} />
+        <div className="flex items-center gap-2">
+          <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
+            placeholder="Label (optional)" className={`${field} flex-1 min-w-0`} />
+          <button onClick={add} disabled={!valid} title={valid ? "" : "Paste a full http(s) link first"} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">Add link</button>
+        </div>
+        {touched && !valid && <div className="text-[12.5px] text-warn">That doesn&apos;t look like a full link — start with http:// or https://</div>}
       </div>
     </div>
   );

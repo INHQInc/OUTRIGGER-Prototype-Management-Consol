@@ -10,16 +10,29 @@ banner, badge, or empty-state sentence, ask: **where does this fact already
 appear?** If it appears anywhere, link to it — don't restate it.
 
 - Status/stage → the header chip. Nowhere else.
-- Gates & problems → **Needs Attention on Overview** (and the header alert strip
-  for operational faults like drift or failed pushes — never for gates the chip
-  already names).
-- The CTA states the action ("Write the brief"), not the reason — the reason
-  lives where the gate is listed.
+- Gates & problems → **the Overview checklist** (one row per room, colored by
+  severity, description + link). It is the Overview status home, so the header
+  status strip is HIDDEN on Overview and shown only on the working tabs.
+- The CTA states the action ("Write the brief"), not the reason. And it is
+  HIDDEN when you're already in the room it points to (a link back to the
+  current tab is dead weight).
 - An empty state may guide ("explain the experiment…") ONLY if no other element
   on the screen already says the thing is missing.
 
 *Origin: "why do we need to repeat about the brief this many times" — the same
-fact appeared 5× (chip, chip status, banner, Needs Attention, empty card, CTA).*
+fact appeared 5× (chip, chip status, banner, Needs Attention, empty card, CTA).
+"why do we need this?" — the parts grid restated the tab bar.*
+
+## 1b. One status color vocabulary — four meanings, everywhere
+
+🔴 **critical** = blocked, no way forward · 🟠 **attention** = needs you now
+(the active step, or a warning on a done one) · 🟢 **good** = done + verified ·
+⚪ **pending** = not started. Derived once in `lib/prototypes/severity.ts`
+(`stepSeverity`); every dot and checklist row colors from it. Never invent a
+fifth color or reuse a meaning (the old blue "current" dot broke this).
+
+*Origin: "CRITICAL no way to move forward is red, needs attention is orange,
+done/good is green, not started is gray."*
 
 ## 2. One vocabulary, one derivation
 
