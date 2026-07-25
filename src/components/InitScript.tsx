@@ -111,9 +111,14 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   const branch = repo.branch || `prototype/${prototypeKey}`;
   const checkout = buildStatus.branchExists ? `git checkout ${branch}` : `git checkout -b ${branch} origin/starter && git push -u origin ${branch}`;
   const linkLine = src ? `\nln -sfn "${expandHome(src)}" source-site && echo "source-site" >> .git/info/exclude   # real site source — local only` : "";
-  const preview = previewUrl ? `TARGET_URL="${previewUrl}" node dev.mjs      # preview → http://localhost:4400` : `node dev.mjs      # preview → http://localhost:4400`;
-  const cmds = `git clone git@github.com:${fullName}.git "${expandHome(path)}"\ncd "${expandHome(path)}"\n${checkout}${linkLine}\nclaude\n${preview}`;
+  // Launch the agent WITH its first task, so it wakes up oriented — reads the
+  // brief, loads the skill, and starts building — instead of asking what to do.
+  const orient = `You are the OPMC prototype engineer for the ${prototypeKey} prototype. Before anything else: read .opmc/brief.md and .opmc/context.json, load the opmc-prototype skill, then summarize the brief and its target page(s) and your build plan in a few lines, and start building. Do not ask what to work on — you are building this prototype.`;
+  const cmds = `git clone git@github.com:${fullName}.git "${expandHome(path)}"\ncd "${expandHome(path)}"\n${checkout}${linkLine}\nclaude "${orient}"`;
+  // Preview is a SECOND terminal — claude above is interactive and blocks this one.
+  const previewCmd = `${previewUrl ? `TARGET_URL="${previewUrl}" ` : ""}node dev.mjs`;
   async function copy() { try { await navigator.clipboard.writeText(cmds); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ } }
+  async function copyPreview() { try { await navigator.clipboard.writeText(previewCmd); } catch { /* clipboard blocked */ } }
   const tokenIssue = err ? /(403|not allowed|not accessible|Contents|reconnect|token)/i.test(err) : false;
 
   return (
@@ -173,9 +178,18 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
             </div>
             <pre className="px-3 py-2.5 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
             <div className="px-3 pb-2.5 text-[12.5px] text-muted-2 border-t border-border/60 pt-2">
-              Clones into <span className="font-mono">{path}</span>{src ? <> · the agent reads the site source at <span className="font-mono">source-site/</span></> : null}
+              Clones into <span className="font-mono">{path}</span>, then launches the agent already tasked to read the brief and build — no coaching needed.{src ? <> It reads the real site source at <span className="font-mono">source-site/</span>.</> : null}
               {buildStatus.found === true && <span className="text-ok"> · ✓ built ({buildStatus.headSha?.slice(0, 7)})</span>}
             </div>
+          </div>
+        )}
+        {provisioned && pathOk && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[12.5px] text-muted-2">Live preview — a <b>second</b> terminal (the agent above holds the first):</span>
+              <button onClick={copyPreview} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Copy</button>
+            </div>
+            <pre className="rounded-lg border border-border bg-background/60 px-3 py-2 text-[12.5px] font-mono text-muted overflow-x-auto">{previewCmd}<span className="text-muted-2">   # → http://localhost:4400</span></pre>
           </div>
         )}
       </Step>

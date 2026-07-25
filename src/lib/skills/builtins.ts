@@ -71,6 +71,13 @@ it wins.
 
 ## 1. Orient yourself (do this first, unprompted — no token needed)
 
+**Your very FIRST reply in a session is this orientation — do it before waiting
+for any instruction.** The console already gave you the job: build this
+prototype. So the first thing the user should see is you summarizing the brief,
+the target page(s), and your build plan in a few lines — then getting to work.
+**Never open with "what would you like to work on"** — that means you skipped
+reading \`.opmc/\`, which is the one unforgivable start.
+
 The console has provisioned everything you need into **\`.opmc/\`** on this branch. Read it from the working tree — in order:
 
 - **\`.opmc/context.json\`** — your identity: prototype key, repo/branch, target URLs + their \`?opmc\` review links, snapshot paths, \`referenceRepos\`, and the brand \`fonts\` list. (The \`OPMC_API_TOKEN\` is **not** here — it lives in the shell env, and only *cutting a version* needs it. Building + review need no token.)
