@@ -141,7 +141,7 @@ function ReadinessMeter({ readiness, drafting }: { readiness: number | null; dra
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-[12.5px]">
-        <span className="text-muted-2">{drafting ? "Reading your idea…" : "Claude's confidence this is buildable"}</span>
+        <span className="text-muted-2">{drafting ? "Reading your idea…" : "Confidence this is buildable"}</span>
         {readiness != null && !drafting && <span className="font-semibold" style={{ color: band.color }}>{band.label} · {readiness}%</span>}
       </div>
       <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden">
@@ -329,20 +329,20 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       <details open={aiOpen} onToggle={(e) => setAiOpen((e.target as HTMLDetailsElement).open)} className="group rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)]">
         <summary className="px-3.5 py-2.5 cursor-pointer select-none list-none flex items-center gap-2">
           <span className="text-[14px] font-semibold">✦ Draft with AI</span>
-          <span className="text-[13px] text-muted-2">explain it in your own words — Claude writes the structured brief</span>
+          <span className="text-[13px] text-muted-2">explain it in your own words — AI writes the structured brief</span>
           <span className="ml-auto text-[12.5px] text-muted-2 group-open:hidden">open</span>
         </summary>
         <div className="px-3.5 pb-3.5 space-y-2.5">
           <textarea value={explain} onChange={(e) => setExplain(e.target.value)} rows={3} className={ta}
             placeholder="e.g. When people click a room card I want a rich overlay with the gallery, amenities and a booking button, instead of losing them to the detail page. Success is more availability checks." />
           <div className="space-y-1.5">
-            <div className="text-[13px] text-muted-2">Supporting files — Figma, designs, screenshots, reference pages. Claude reads these when drafting and may ask about them.</div>
+            <div className="text-[13px] text-muted-2">Supporting files — Figma, designs, screenshots, reference pages. The AI reads these when drafting and may ask about them.</div>
             <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
           </div>
           {(readiness != null || drafting) && <ReadinessMeter readiness={readiness} drafting={drafting} />}
           {questions.length > 0 && (
             <div className="rounded-lg border border-warn/30 bg-surface-2/30 px-3 py-2.5 space-y-3">
-              <div className="text-[13px] font-semibold text-warn">Claude asked {questions.length} question{questions.length === 1 ? "" : "s"} — answer any of them and draft again:</div>
+              <div className="text-[13px] font-semibold text-warn">The AI asked {questions.length} question{questions.length === 1 ? "" : "s"} — answer any of them and draft again:</div>
               {questions.map((q, i) => (
                 <div key={i} className="space-y-1">
                   <div className="text-[13px] text-foreground leading-snug">{i + 1} · {q}</div>

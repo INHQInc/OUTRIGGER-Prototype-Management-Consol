@@ -37,7 +37,7 @@ function GetStarted({ repo, branch }: { repo: string; branch: string }) {
       </div>
       <pre className="px-3 py-2.5 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
       <div className="px-3 pb-2.5 text-[13px] text-muted-2">
-        Claude Code loads the repo&apos;s <span className="font-mono">opmc-prototype</span> skill, pulls this brief, and knows the whole loop. First time on this machine? Set the env exports from <Link href="/settings/repositories" className="text-accent hover:text-accent-hover">Settings → Repositories → API access</Link>.
+        The build agent loads the repo&apos;s <span className="font-mono">opmc-prototype</span> skill, pulls this brief, and knows the whole loop. First time on this machine? Set the env exports from <Link href="/settings/repositories" className="text-accent hover:text-accent-hover">Settings → Repositories → API access</Link>.
       </div>
     </div>
   );
@@ -139,13 +139,13 @@ export function SourcePanel({ prototypeKey, versions = [], compact = false }: { 
                 </button>
               </div>
             ) : compact ? (
-              <div className="rounded-lg border border-border bg-surface-2/20 px-3 py-2 text-[14px] text-muted-2">Not built yet — build it in <span className="text-muted">Build with Claude</span> and push, then cut a version here.</div>
+              <div className="rounded-lg border border-border bg-surface-2/20 px-3 py-2 text-[14px] text-muted-2">Not built yet — build it in the <span className="text-muted">Build</span> room and push, then cut a version here.</div>
             ) : !status.branchExists ? (
               <GetStarted repo={status.repo} branch={status.branch} />
             ) : (
               <div className="rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3 py-2 text-[14px] text-muted">
                 {status.error ?? `Build the prototype on ${status.branch} and commit ${status.artifactPath}.`}
-                <div className="text-[13px] text-muted-2 mt-1">Build it in the repo with Claude, run <span className="font-mono text-muted">node build.mjs</span>, commit <span className="font-mono text-muted">{status.artifactPath}</span>, push — the console pulls it here.</div>
+                <div className="text-[13px] text-muted-2 mt-1">Build it in the repo with the agent, run <span className="font-mono text-muted">node build.mjs</span>, commit <span className="font-mono text-muted">{status.artifactPath}</span>, push — the console pulls it here.</div>
               </div>
             )}
           </>

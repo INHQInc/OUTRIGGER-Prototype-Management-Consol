@@ -168,7 +168,7 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   // Claude's instructions and the experiment's description — building without
   // one is building without a spec.
   if (!proto.brief.change?.trim()) {
-    throw new Error("No brief yet — write what we're building first. The brief is the gate: it becomes Claude's instructions and, later, the experiment's description.");
+    throw new Error("No brief yet — write what we're building first. The brief is the gate: it becomes the agent's instructions and, later, the experiment's description.");
   }
   const orgId = await resolvePrototypeOrg(proto);
   if (!orgId) throw new Error("This prototype has no owning customer.");
@@ -278,7 +278,7 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   // verification lie. Never on re-sync: that would clobber Claude's real build.
   if (branchCreated) {
     const ns = `opmc-${proto.key}`;
-    const stub = `/* OPMC · ${proto.key} · placeholder artifact, provisioned ${provisionedAt}.\n   Claude replaces this by editing src/ and running \`node build.mjs\`. */\n(function () {\n  var NS = ${JSON.stringify(ns)};\n  window.__opmc = window.__opmc || {};\n  if (window.__opmc[NS]) return;\n  window.__opmc[NS] = { built: false };\n  console.info("[opmc] " + NS + ": no build yet — edit src/ and run node build.mjs");\n})();\n`;
+    const stub = `/* OPMC · ${proto.key} · placeholder artifact, provisioned ${provisionedAt}.\n   The agent replaces this by editing src/ and running \`node build.mjs\`. */\n(function () {\n  var NS = ${JSON.stringify(ns)};\n  window.__opmc = window.__opmc || {};\n  if (window.__opmc[NS]) return;\n  window.__opmc[NS] = { built: false };\n  console.info("[opmc] " + NS + ": no build yet — edit src/ and run node build.mjs");\n})();\n`;
     files.push({ path: repoRef.artifactPath || DEFAULT_ARTIFACT, content: Buffer.from(stub, "utf8") });
   }
 

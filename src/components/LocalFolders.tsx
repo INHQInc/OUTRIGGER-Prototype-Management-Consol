@@ -74,10 +74,10 @@ export function LocalFolders({ prototypeKey, repoFullName }: { prototypeKey: str
           </div>
         </div>
         <div className="space-y-1">
-          <label className="block text-[13px] text-muted-2">Website source checkout <span className="text-muted-2">(optional — lets Claude read the real markup)</span></label>
+          <label className="block text-[13px] text-muted-2">Website source checkout <span className="text-muted-2">(optional — lets the agent read the real markup)</span></label>
           <input value={draftSource} onChange={(e) => { setDraftSource(e.target.value); setSaveMsg(null); }} spellCheck={false} placeholder="/Users/you/Projects/Outrigger_Website" className={inp} />
           <div className="text-[12.5px] text-muted-2 leading-relaxed">
-            Your local checkout of the production site repo. It gets symlinked in as <span className="font-mono">source-site</span> (git-ignored, never committed) so Claude builds against real components/CSS instead of only the page snapshot.
+            Your local checkout of the production site repo. It gets symlinked in as <span className="font-mono">source-site</span> (git-ignored, never committed) so the agent builds against real components/CSS instead of only the page snapshot.
           </div>
         </div>
 

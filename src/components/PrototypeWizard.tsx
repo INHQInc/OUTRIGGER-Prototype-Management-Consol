@@ -160,7 +160,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
           {busy ? "Creating…" : "Create & set up"}
         </button>
       </div>
-      <p className="text-[13px] text-muted-2 mt-3">Next: verify the injection on your page(s), then get your Claude init script to start building.</p>
+      <p className="text-[13px] text-muted-2 mt-3">Next: verify the injection on your page(s), then get your init script to start building.</p>
     </div>
   );
 }

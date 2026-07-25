@@ -51,7 +51,7 @@ export function SkillSelector({ prototypeKey, initial }: { prototypeKey: string;
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between gap-3">
         <div>
           <span className="text-[14px] font-semibold">Skills</span>
-          <span className="text-[13px] text-muted-2 ml-2">What Claude wakes up knowing. Written into <span className="font-mono">.claude/skills/</span> on provision.</span>
+          <span className="text-[13px] text-muted-2 ml-2">What the agent wakes up knowing. Written into <span className="font-mono">.claude/skills/</span> on provision.</span>
         </div>
         <Link href="/skills" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">Library →</Link>
       </div>

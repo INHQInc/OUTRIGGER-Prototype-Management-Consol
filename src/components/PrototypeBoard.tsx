@@ -14,7 +14,7 @@ export function PrototypeBoard({ prototypes }: { prototypes: PrototypeRecord[] }
       </div>
 
       {prototypes.length === 0 ? (
-        <EmptyState title="No prototypes yet." hint="Create one — then build it in the repo with Claude and review it live." />
+        <EmptyState title="No prototypes yet." hint="Create one — then build it in the repo with the agent and review it live." />
       ) : (
         <div className="space-y-6">
           {PROTOTYPE_STAGES.map((stage) => {

@@ -82,7 +82,7 @@ The console has provisioned everything you need into **\`.opmc/\`** on this bran
 
 Prototype key also = branch name minus prefix: \`git rev-parse --abbrev-ref HEAD\` → \`prototype/<key>\`.
 
-**Check in (once, right after reading \`.opmc/\`):** \`curl -s -X POST "<consoleUrl>/api/loader/checkin?key=<key>"\` (values from \`context.json\`; no token). This lights up "Claude · Engaged" so the human knows the handoff landed.
+**Check in (once, right after reading \`.opmc/\`):** \`curl -s -X POST "<consoleUrl>/api/loader/checkin?key=<key>"\` (values from \`context.json\`; no token). This lights up "Agent engaged" so the human knows the handoff landed.
 
 If \`.opmc/\` is missing, ask the user to click **Get init script / Provision** on the prototype page (then \`git pull\`). **Never write to \`.opmc/\` yourself** — the console is its sole author.
 

@@ -34,7 +34,7 @@ export function ApiAccessTile({ initialToken, consoleUrl, canManage }: { initial
   return (
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-3 border-b border-border">
-        <div className="text-[15px] font-semibold">API access (Claude Code skill)</div>
+        <div className="text-[15px] font-semibold">API access (build agent)</div>
         <div className="text-[13px] text-muted-2 mt-0.5">Lets the prototype skill read briefs, check builds, and cut versions from the dev machine. Org-scoped, read-mostly — it can never promote or configure.</div>
       </div>
       <div className="p-4 space-y-2">

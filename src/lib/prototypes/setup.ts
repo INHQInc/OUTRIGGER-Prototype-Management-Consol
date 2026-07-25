@@ -85,7 +85,7 @@ export async function getPrototypeSetup(proto: PrototypeRecord, orgId: string): 
       done: hasBrief,
       tab: "setup",
       action: "Write brief",
-      hint: "One or two lines is enough — Claude reads this to know what to build.",
+      hint: "One or two lines is enough — the agent reads this to know what to build.",
     },
     {
       key: "pages",

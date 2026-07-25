@@ -45,7 +45,7 @@ export function PipelineHeader({ pipeline, currentTab, showStatusStrip = true }:
           <span>{truth.synced ? "synced" : "drift"}</span>
           {truth.latestVersion != null && <span>v{truth.latestVersion}{truth.certified === true ? " certified" : truth.certified === false ? " FAILED" : ""}</span>}
           {truth.pushedVersion != null && <span>v{truth.pushedVersion} pushed{truth.pushVerified ? " ✓" : ""}</span>}
-          {truth.claudeSeenAt && <span>Claude engaged</span>}
+          {truth.claudeSeenAt && <span>Agent engaged</span>}
         </div>
       ) : (
         <div className="space-y-1.5">

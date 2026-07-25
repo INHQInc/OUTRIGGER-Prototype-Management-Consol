@@ -49,7 +49,7 @@ export function ReferenceRepos({ initial, canManage }: { initial: ReferenceRepo[
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       <div className="px-4 py-3 border-b border-border">
         <div className="text-[15px] font-semibold">Reference source</div>
-        <div className="text-[13px] text-muted-2 mt-0.5">Read-only production repos Claude should consult for real markup + tokens. Recorded in the prototype context; never written to.</div>
+        <div className="text-[13px] text-muted-2 mt-0.5">Read-only production repos the agent should consult for real markup + tokens. Recorded in the prototype context; never written to.</div>
       </div>
 
       {canManage && (
@@ -64,7 +64,7 @@ export function ReferenceRepos({ initial, canManage }: { initial: ReferenceRepo[
       )}
 
       {repos.length === 0 ? (
-        <div className="px-4 py-5 text-center text-[14px] text-muted-2">None set. Add the production site repo so Claude builds against real components instead of scraped CSS.</div>
+        <div className="px-4 py-5 text-center text-[14px] text-muted-2">None set. Add the production site repo so the agent builds against real components instead of scraped CSS.</div>
       ) : (
         repos.map((r, i) => (
           <div key={`${r.url}-${i}`} className="flex items-start justify-between gap-3 px-4 py-2.5 border-b border-border last:border-0">

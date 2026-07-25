@@ -134,7 +134,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   };
 
   // ── alerts (operational; each links to its fix) ───────────────
-  if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so Claude builds against the current brief.", anchor: "build" });
+  if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
   if (problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   if (latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
   if (lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });
@@ -163,7 +163,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     id: "build", title: "Build", anchor: "build",
     state: buildDone ? "done" : "todo",
     status: !provisioned ? (briefDone ? "get the init script" : "waiting on the brief") 
-      : problem === "placeholder" || !built ? (inp.claudeSeenAt ? "Claude engaged · no build pushed yet" : "provisioned · waiting on the first build")
+      : problem === "placeholder" || !built ? (inp.claudeSeenAt ? "Agent engaged · no build pushed yet" : "provisioned · waiting on the first build")
       : problem === "starter-build" ? "serving the starter build"
       : `built · ${source?.headSha?.slice(0, 7) ?? ""}`,
   });
@@ -240,7 +240,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   let primaryAction: Pipeline["primaryAction"];
   if (!briefDone) primaryAction = { label: "Write the brief", anchor: "brief" };
   else if (!provisioned) primaryAction = { label: "Prepare the branch", anchor: "build" };
-  else if (!built || problem) primaryAction = { label: "Build with Claude", anchor: "build" };
+  else if (!built || problem) primaryAction = { label: "Build with the agent", anchor: "build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "review" };
   else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "experiment" };
   else if (certBlocked) primaryAction = { label: "Fix certification & re-cut", anchor: "experiment" };
@@ -253,7 +253,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // ── the Overview checklist: one row per pipeline-backed room ──
   const ROOMS: { step: PipelineStep["id"]; tab: string; label: string; pending: string }[] = [
     { step: "brief", tab: "brief", label: "Brief", pending: "Describe the change and how success is judged." },
-    { step: "build", tab: "build", label: "Build", pending: "Provision the branch and build the variation with Claude." },
+    { step: "build", tab: "build", label: "Build", pending: "Provision the branch and build the variation with the agent." },
     { step: "review", tab: "review", label: "Review", pending: "Add the page(s) and verify the variation injects on the real site." },
     { step: "launch", tab: "experiment", label: "Experimentation", pending: "Cut a version, bind an Optimizely experiment, and push." },
     { step: "shipped", tab: "handoff", label: "Handoff", pending: "When the experiment wins, hand the winning version to the dev team." },

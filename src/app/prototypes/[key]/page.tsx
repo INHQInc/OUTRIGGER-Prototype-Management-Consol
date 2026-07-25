@@ -111,7 +111,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       activity.push({ at: e.at, text: `${labelForAction(e.action)}${e.detail ? ` — ${e.detail}` : ""}`, who: e.actor });
     }
   }
-  if (claudeSeen) activity.push({ at: claudeSeen, text: "Claude checked in on the branch" });
+  if (claudeSeen) activity.push({ at: claudeSeen, text: "The agent checked in on the branch" });
   for (const v of versions) activity.push({ at: v.createdAt, text: `v${v.version} cut${v.certification ? (v.certification.passed ? " · certified ✓" : " · certification FAILED") : ""}`, who: v.createdBy });
   if (push) activity.push({ at: push.at, text: `v${push.version} pushed to Optimizely${push.verified ? " · read-back verified ✓" : " · VERIFY FAILED"}` });
   activity.sort((a, b) => b.at.localeCompare(a.at));
@@ -146,7 +146,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 
       {tab === "brief" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">What are we building, and how do we know it worked? The brief is the gate — it becomes Claude&apos;s instructions and the experiment&apos;s description.</p>
+          <p className="text-[14px] text-muted-2">What are we building, and how do we know it worked? The brief is the gate — it becomes the agent&apos;s instructions and the experiment&apos;s description.</p>
           <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} />
         </div>
       )}
@@ -161,14 +161,14 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 
       {tab === "build" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">The develop loop: prepare the branch, start Claude, and re-sync when the brief or skills change. Claude builds in the repo; the console pulls the result.</p>
+          <p className="text-[14px] text-muted-2">The develop loop: prepare the branch, start the agent, and re-sync when the brief or skills change. The agent builds in the repo; the console pulls the result.</p>
           <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={Boolean(p.brief.change?.trim())} />
         </div>
       )}
 
       {tab === "skills" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">What Claude wakes up knowing for this prototype. Global and brand skills come from the library; prototype skills exist only here. Changes reach the branch on the next re-sync (Build).</p>
+          <p className="text-[14px] text-muted-2">What the agent wakes up knowing for this prototype. Global and brand skills come from the library; prototype skills exist only here. Changes reach the branch on the next re-sync (Build).</p>
           <SkillSelector prototypeKey={key} initial={skillRows} />
         </div>
       )}

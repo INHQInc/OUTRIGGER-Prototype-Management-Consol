@@ -43,7 +43,7 @@ export function SkillLibrary({ initial, canManage }: { initial: Skill[]; canMana
   function startAdd() {
     setEditing(null); setAdding(true); setError(null);
     setName(""); setScope("global"); setDescription("");
-    setBody("---\nname: my-skill\ndescription: When Claude should load this and what it covers.\n---\n\n# My skill\n\nInstructions here.\n");
+    setBody("---\nname: my-skill\ndescription: When the agent should load this and what it covers.\n---\n\n# My skill\n\nInstructions here.\n");
   }
   function startEdit(s: Skill) {
     setAdding(false); setEditing(s); setError(null);
@@ -88,7 +88,7 @@ export function SkillLibrary({ initial, canManage }: { initial: Skill[]; canMana
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <div>
             <div className="text-[15px] font-semibold">Skill library</div>
-            <div className="text-[13px] text-muted-2 mt-0.5">What Claude is told when it opens a prototype. Generic skills apply everywhere; brand skills to this customer; prototype skills to one build.</div>
+            <div className="text-[13px] text-muted-2 mt-0.5">What the agent is told when it opens a prototype. Generic skills apply everywhere; brand skills to this customer; prototype skills to one build.</div>
           </div>
           {canManage && !editorOpen && <button onClick={startAdd} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">+ New skill</button>}
         </div>
@@ -116,9 +116,9 @@ export function SkillLibrary({ initial, canManage }: { initial: Skill[]; canMana
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={inp + " resize-y"} placeholder="Brand fidelity rules: reuse site classes, namespace custom CSS, never redefine a site class globally." />
             </div>
             <div>
-              <label className="block text-[13px] text-muted-2 mb-1">SKILL.md — the instructions Claude reads</label>
+              <label className="block text-[13px] text-muted-2 mb-1">SKILL.md — the instructions the agent reads</label>
               <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={16} className={ta} spellCheck={false} />
-              <div className="text-[12.5px] text-muted-2 mt-1">Keep the <span className="font-mono">---</span> frontmatter with <span className="font-mono">name</span> + <span className="font-mono">description</span> — that&apos;s what Claude reads to decide whether to load it.</div>
+              <div className="text-[12.5px] text-muted-2 mt-1">Keep the <span className="font-mono">---</span> frontmatter with <span className="font-mono">name</span> + <span className="font-mono">description</span> — that&apos;s what the agent reads to decide whether to load it.</div>
             </div>
             <div className="flex items-center justify-end gap-3">
               <button onClick={cancel} disabled={busy} className="h-8 px-3 rounded-lg text-[14px] text-muted hover:text-foreground">Cancel</button>

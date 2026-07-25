@@ -42,7 +42,7 @@ export function IdeaInbox({ initial, canManage }: { initial: Idea[]; canManage: 
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <div>
           <div className="text-[15px] font-semibold">Ideas</div>
-          <div className="text-[13px] text-muted-2 mt-0.5">Improvements proposed by the Claude instances building prototypes — the friction they hit, sent back instead of lost.</div>
+          <div className="text-[13px] text-muted-2 mt-0.5">Improvements proposed by the agents building prototypes — the friction they hit, sent back instead of lost.</div>
         </div>
         <button onClick={() => setFilter(filter === "open" ? "all" : "open")} className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">
           {filter === "open" ? `Show all (${ideas.length})` : "Show open only"}
@@ -51,7 +51,7 @@ export function IdeaInbox({ initial, canManage }: { initial: Idea[]; canManage: 
 
       {shown.length === 0 ? (
         <div className="px-4 py-8 text-center text-[14px] text-muted-2">
-          No {filter === "open" ? "open " : ""}ideas yet. They arrive when a prototype-building Claude submits one.
+          No {filter === "open" ? "open " : ""}ideas yet. They arrive when a prototype-building agent submits one.
         </div>
       ) : (
         shown.map((i) => (
@@ -64,7 +64,7 @@ export function IdeaInbox({ initial, canManage }: { initial: Idea[]; canManage: 
                   <Badge tone="neutral">{i.category}</Badge>
                 </div>
                 <div className="text-[13px] text-muted-2 mt-0.5">
-                  {i.source === "claude" ? "Claude" : "human"}
+                  {i.source === "claude" ? "agent" : "human"}
                   {i.prototypeKey ? <> · <span className="font-mono">{i.prototypeKey}</span></> : null} · <TimeAgo iso={i.createdAt} />
                 </div>
               </div>

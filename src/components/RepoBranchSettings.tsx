@@ -174,7 +174,7 @@ export function RepoBranchSettings({ prototypeKey, initialRepo }: { prototypeKey
                     ? `${targetBranch} isn't in the repo yet — create it to start building`
                     : dirty
                       ? `Unsaved — will set ${repoSel}@${targetBranch}`
-                      : `✓ ${saved.fullName}@${saved.branch} — you're set. Build with Claude below ↓`}
+                      : `✓ ${saved.fullName}@${saved.branch} — you're set. Build with the agent below ↓`}
               </span>
               {branchesLoading ? (
                 <span className="h-8 px-3 rounded-lg border border-border text-muted-2 text-[14px] flex items-center shrink-0">Checking…</span>

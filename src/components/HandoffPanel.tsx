@@ -61,7 +61,7 @@ claude "Integrate the winning build v${latestVersion ?? "<n>"} of ${prototypeKey
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
         <div>
           <span className="text-[14px] font-semibold">Handoff to source</span>
-          <span className="text-[13px] text-muted-2 ml-2">Integrate the winner into the site&apos;s production code. Claude computes the diff locally; the console keeps the record.</span>
+          <span className="text-[13px] text-muted-2 ml-2">Integrate the winner into the site&apos;s production code. The agent computes the diff locally; the console keeps the record.</span>
         </div>
         {handoff && <span className="text-[13px] text-ok">✓ Shipped</span>}
       </div>
