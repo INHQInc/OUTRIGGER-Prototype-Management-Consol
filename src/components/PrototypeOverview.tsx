@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { TimeAgo, SEVERITY_DOT, SEVERITY_TEXT } from "@/components/ui";
+import { Recommendations } from "@/components/Recommendations";
 import type { Pipeline } from "@/lib/prototypes/pipeline";
 import type { StepSeverity } from "@/lib/prototypes/severity";
 import type { PrototypeRecord } from "@/lib/prototypes/types";
+import type { Idea } from "@/lib/ideas/ideas";
 
 const SEVERITY_RANK: Record<StepSeverity, number> = { critical: 0, attention: 1, good: 3, pending: 2 };
 const SEVERITY_WORD: Record<StepSeverity, string> = { critical: "Blocked", attention: "Needs attention", good: "Done", pending: "Not started" };
@@ -20,10 +22,12 @@ function criteriaLines(s: string): string[] {
  * rooms), and what's HAPPENING (the activity feed — every heartbeat the system
  * already records, finally visible).
  */
-export function PrototypeOverview({ proto, pipeline, activity }: {
+export function PrototypeOverview({ proto, pipeline, activity, recommendations, canManage }: {
   proto: PrototypeRecord;
   pipeline: Pipeline;
   activity: ActivityItem[];
+  recommendations: Idea[];
+  canManage: boolean;
 }) {
   const b = proto.brief;
   const hasBrief = Boolean(b.change?.trim());
@@ -81,6 +85,9 @@ export function PrototypeOverview({ proto, pipeline, activity }: {
 
         {/* No parts grid: the tab row directly above IS the map of the rooms,
             dots included. Restating it as cards was the tab bar said twice. */}
+
+        {/* Recommendations for this prototype — agent build-friction, triaged here. */}
+        <Recommendations prototypeKey={proto.key} initial={recommendations} canManage={canManage} />
       </div>
 
       {/* ── The heartbeat ── */}

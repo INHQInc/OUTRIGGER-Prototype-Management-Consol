@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { referenceKind, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
+import { referenceKind, normalizeReferenceUrl, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
 import type { BriefDraft, BriefSection } from "@/lib/ai/brief";
 
 const REF_META: Record<BriefReferenceKind, { icon: string; label: string }> = {
@@ -25,13 +25,18 @@ function ReferencesEditor({ references, onAdd, onRemove }: {
 }) {
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
-  const trimmed = url.trim();
-  const valid = /^https?:\/\/\S+$/i.test(trimmed);
-  const touched = trimmed.length > 0;
+  const [hint, setHint] = useState(false);
+  // Smart: accept "figma.com/…", "www.foo.com", a bare domain, or a full link.
+  const normalized = normalizeReferenceUrl(url);
   // No w-full here — appending it to `inp` collided with flex-1/w-40 and
   // collapsed the URL field to nothing.
   const field = "rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
-  function add() { if (!valid) return; onAdd(trimmed, label.trim() || undefined); setUrl(""); setLabel(""); }
+  // Never a greyed always-disabled button — click always does something, and
+  // an invalid/empty URL explains itself instead of looking broken.
+  function add() {
+    if (!normalized) { setHint(true); return; }
+    onAdd(normalized, label.trim() || undefined); setUrl(""); setLabel(""); setHint(false);
+  }
   return (
     <div className="space-y-2">
       {references.length > 0 && (
@@ -51,14 +56,14 @@ function ReferencesEditor({ references, onAdd, onRemove }: {
       )}
       {/* URL is the field — full width, on its own line. Label + Add below. */}
       <div className="space-y-1.5">
-        <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
-          placeholder="Paste a link — Figma, a design file, a screenshot, a page…" className={`${field} w-full`} />
+        <input value={url} onChange={(e) => { setUrl(e.target.value); setHint(false); }} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
+          placeholder="Paste a link — figma.com/…, a screenshot, a page (no https:// needed)" className={`${field} w-full`} />
         <div className="flex items-center gap-2">
           <input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} spellCheck={false}
             placeholder="Label (optional)" className={`${field} flex-1 min-w-0`} />
-          <button onClick={add} disabled={!valid} title={valid ? "" : "Paste a full http(s) link first"} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">Add link</button>
+          <button onClick={add} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover shrink-0">Add link</button>
         </div>
-        {touched && !valid && <div className="text-[12.5px] text-warn">That doesn&apos;t look like a full link — start with http:// or https://</div>}
+        {hint && !normalized && <div className="text-[12.5px] text-warn">That doesn&apos;t look like a web address — try something like <span className="font-mono">figma.com/file/…</span> or a full URL.</div>}
       </div>
     </div>
   );

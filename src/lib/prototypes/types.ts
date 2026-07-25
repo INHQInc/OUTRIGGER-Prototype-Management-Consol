@@ -77,6 +77,32 @@ export interface BriefReference {
   kind: BriefReferenceKind;
 }
 
+/**
+ * Normalize what a person actually pastes into a full URL, or null if it can't
+ * be one. Accepts bare domains and paths ("figma.com/file/…", "www.foo.com",
+ * "example.co.uk/x"), infers https://, and keeps existing http(s) links. Rejects
+ * plain words, other schemes (javascript:, data:, mailto:), and hosts with no
+ * dot (except localhost).
+ */
+export function normalizeReferenceUrl(raw: string): string | null {
+  let s = (raw ?? "").trim();
+  if (!s || /\s/.test(s)) return null;
+  const scheme = s.match(/^([a-z][a-z0-9+.-]*):\/\//i);
+  if (scheme) {
+    if (!/^https?$/i.test(scheme[1])) return null; // no javascript:/data:/ftp:/etc.
+  } else if (/^[a-z][a-z0-9+.-]*:/i.test(s)) {
+    return null; // scheme-like but not // (mailto:, tel:) — not a browsable link
+  } else {
+    s = `https://${s}`;
+  }
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.hostname.includes(".") && u.hostname !== "localhost") return null;
+    return u.toString();
+  } catch { return null; }
+}
+
 /** Classify a reference URL so the UI (and the building agent) can treat it right. */
 export function referenceKind(url: string): BriefReferenceKind {
   const u = url.toLowerCase();

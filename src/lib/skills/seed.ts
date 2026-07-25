@@ -5,8 +5,11 @@
  * seeding lived only in `GET /api/skills` (which nothing calls — the client
  * only POSTs) the library rendered empty forever.
  */
-import { listGlobalSkills, upsertSkill, parseFrontmatter, slugify } from "./skills";
+import { listGlobalSkills, upsertSkill, deleteSkill, parseFrontmatter, slugify } from "./skills";
 import { SYSTEM_SKILL, IDEAS_SKILL, PROTOTYPE_SKILL, BRIEF_AUTHOR_SKILL } from "./builtins";
+
+/** Built-in skill ids that were renamed/removed — pruned on seed so they don't linger. */
+const RETIRED_BUILTIN_IDS = ["opmc-ideas"]; // → opmc-recommendations
 import { getGitClientForOrg } from "../git/connection";
 import { defaultOrgRepo } from "../git/org-repos";
 
@@ -27,6 +30,11 @@ async function seedBuiltins(): Promise<void> {
     if (prev && prev.builtIn === false) continue; // human-forked — don't clobber
     if (prev && prev.body === md) continue;         // already current
     await upsertSkill({ id, name: fm.name ?? id, scope: "global", description: fm.description ?? "", body: md, builtIn: true, delivery: id === "opmc-brief-author" ? "console" : "branch" });
+  }
+  // Prune renamed/removed built-ins (only if still a built-in — never a fork).
+  for (const id of RETIRED_BUILTIN_IDS) {
+    const prev = byId.get(id);
+    if (prev && prev.builtIn !== false) await deleteSkill(null, id);
   }
 }
 

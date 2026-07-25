@@ -109,6 +109,9 @@ export async function deleteSkill(orgId: string | null | undefined, id: string):
   }
 }
 
+/** Built-in skills that were renamed — old stored selection ids map forward. */
+const RENAMED_SKILL_IDS: Record<string, string> = { "opmc-ideas": "opmc-recommendations" };
+
 /**
  * Which skills apply to a prototype, and whether each is on.
  *
@@ -124,6 +127,9 @@ export async function resolveSkillsForPrototype(orgId: string | null | undefined
   if (raw) {
     try { const v = JSON.parse(raw); if (Array.isArray(v)) enabledIds = v as string[]; } catch { /* default-on */ }
   }
+  // A stored selection may name a since-renamed built-in — map it so a rename
+  // never silently drops an already-enabled skill.
+  if (enabledIds) enabledIds = enabledIds.map((id) => RENAMED_SKILL_IDS[id] ?? id);
   return applicable.map((skill) => ({ skill, enabled: enabledIds ? enabledIds.includes(skill.id) : true }));
 }
 

@@ -27,6 +27,9 @@ import { OptimizelyBundle } from "@/components/OptimizelyBundle";
 import { ShipPanel } from "@/components/ShipPanel";
 import { HandoffPanel } from "@/components/HandoffPanel";
 import { HandoffExplorer } from "@/components/HandoffExplorer";
+import { Recommendations } from "@/components/Recommendations";
+import { listRecommendations } from "@/lib/ideas/ideas";
+import { currentUser } from "@/lib/auth/current";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +68,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const orgId = await resolvePrototypeOrg(p);
   const repo = await resolvePrototypeRepo(p, orgId);
 
-  const [hdrs, source, provisionFlag, environments, versions, push, expCfg, claudeSeen, handoffRaw, auditEvents] = await Promise.all([
+  const [hdrs, source, provisionFlag, environments, versions, push, expCfg, claudeSeen, handoffRaw, auditEvents, recommendations, user] = await Promise.all([
     headers(),
     resolveRepoSource(key).catch(() => null),
     store.getFlag(`provision:${key}`).catch(() => null),
@@ -76,6 +79,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     store.getFlag(`claude:seen:${key}`).catch(() => null),
     store.getFlag(`handoff:${key}`).catch(() => null),
     orgId ? listAuditEvents(orgId, 200).catch(() => []) : Promise.resolve([]),
+    listRecommendations(orgId, key).catch(() => []),
+    currentUser().catch(() => null),
   ]);
   await ensureSkillsSeeded(orgId);
   const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
@@ -141,7 +146,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       </div>
 
       {tab === "overview" && (
-        <PrototypeOverview proto={p} pipeline={pipeline} activity={feed} />
+        <PrototypeOverview proto={p} pipeline={pipeline} activity={feed} recommendations={recommendations} canManage={Boolean(user)} />
       )}
 
       {tab === "brief" && (

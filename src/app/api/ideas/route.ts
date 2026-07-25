@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { getActiveOrgId } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
-import { addIdea, listIdeas, setIdeaStatus, deleteIdea } from "@/lib/ideas/ideas";
+import { addIdea, listBacklog, listRecommendations, setIdeaStatus, deleteIdea } from "@/lib/ideas/ideas";
+
+/** The scoped view the caller is looking at — recommendations for a prototype, else the backlog. */
+async function scopedList(orgId: string | null, prototypeKey: string | null) {
+  return prototypeKey ? listRecommendations(orgId, prototypeKey) : listBacklog(orgId);
+}
 
 /**
- * POST — submit an idea. Called by the Claude instance building a prototype,
- * authenticated with the org's API token (same Bearer the skill already holds
- * for cutting versions), scoped to the prototype it's working on.
- *
- * A human in the console can also post one without a prototypeKey.
+ * POST — submit a backlog item or a recommendation. A prototype-scoped
+ * submission (agent via the org API token, or a human) is a RECOMMENDATION
+ * about that prototype's build. A submission with no prototypeKey is a
+ * BACKLOG item — a thing to build.
  */
 export async function POST(req: NextRequest) {
   let body: { prototypeKey?: string; title?: string; body?: string; category?: string };
@@ -46,10 +50,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+/** GET → the backlog; GET ?prototypeKey= → that prototype's recommendations. */
+export async function GET(req: NextRequest) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  return NextResponse.json({ ideas: await listIdeas(await getActiveOrgId()) });
+  const orgId = await getActiveOrgId();
+  const ideas = await scopedList(orgId, req.nextUrl.searchParams.get("prototypeKey"));
+  return NextResponse.json({ ideas });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -60,7 +67,9 @@ export async function PATCH(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.id || !body.status) return NextResponse.json({ error: "id and status required" }, { status: 400 });
   try {
-    return NextResponse.json({ ideas: await setIdeaStatus(orgId, body.id, body.status) });
+    await setIdeaStatus(orgId, body.id, body.status);
+    // Return the SAME scoped view the caller renders — else the other kind leaks in.
+    return NextResponse.json({ ideas: await scopedList(orgId, req.nextUrl.searchParams.get("prototypeKey")) });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
@@ -68,9 +77,10 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const [user, orgId] = await Promise.all([currentUser(), getActiveOrgId()]);
-  if (!user || user.role !== "admin") return NextResponse.json({ error: "Only an admin can delete ideas." }, { status: 403 });
+  if (!user || user.role !== "admin") return NextResponse.json({ error: "Only an admin can delete these." }, { status: 403 });
   if (!orgId) return NextResponse.json({ error: "No active customer." }, { status: 400 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  return NextResponse.json({ ideas: await deleteIdea(orgId, id) });
+  await deleteIdea(orgId, id);
+  return NextResponse.json({ ideas: await scopedList(orgId, req.nextUrl.searchParams.get("prototypeKey")) });
 }

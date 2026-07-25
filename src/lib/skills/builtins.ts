@@ -236,11 +236,11 @@ Normal visitors never see anything — the review URL is token-gated.
 
 Skills are managed in the console, in three tiers:
 
-- **generic** — every prototype, every customer (this skill, the build loop, the ideas channel)
+- **generic** — every prototype, every customer (this skill, the build loop, the recommendations channel)
 - **brand** — one customer's prototypes (their fidelity rules, their stack)
 - **prototype** — a single build
 
-A prototype's effective set is materialized into \`.claude/skills/\` on its branch. If a skill you need doesn't exist, that's worth submitting — see \`opmc-ideas\`.
+A prototype's effective set is materialized into \`.claude/skills/\` on its branch. If a skill you need doesn't exist, that's worth a recommendation — see \`opmc-recommendations\`.
 
 ## What the console can and can't do
 
@@ -254,13 +254,13 @@ The console exposes \`GET <consoleUrl>/api/loader/status?key=<key>\` (no token).
 `;
 
 export const IDEAS_SKILL = `---
-name: opmc-ideas
-description: Send an improvement back to the OPMC platform — a missing capability, a skill that should exist, a console bug, or friction that cost you time. Use whenever you hit something the system should have done for you.
+name: opmc-recommendations
+description: Send a recommendation back to the OPMC platform — a missing capability, a skill that should exist, a console bug, or friction that cost you time. Use whenever you hit something the system should have done for you. Attributed to the prototype you're building.
 ---
 
-# Sending ideas back
+# Sending recommendations back
 
-You see this system's friction more directly than anyone: a file that should have been in \`.opmc/\`, a skill that should exist, a status that lied, a step that took an hour and should have taken a minute. **That knowledge is worth more than the prototype you're building**, and it evaporates when the session ends unless you send it.
+You see this system's friction more directly than anyone: a file that should have been in \`.opmc/\`, a skill that should exist, a status that lied, a step that took an hour and should have taken a minute. **That knowledge is worth more than the prototype you're building**, and it evaporates when the session ends unless you send it back as a recommendation.
 
 ## When to submit
 
@@ -290,9 +290,9 @@ curl -s -X POST "$OPMC_URL/api/ideas" \\
 
 Take \`OPMC_URL\` and the prototype key from \`.opmc/context.json\`. The token is the same one used for cutting versions — it's in your shell env, never in the repo.
 
-## What makes an idea useful
+## What makes a recommendation useful
 
-A good submission is **specific and grounded in what actually happened**:
+A good recommendation is **specific and grounded in what actually happened**:
 
 - **What you hit** — the concrete situation, not a generalization.
 - **What it cost** — "spent 40 minutes finding the room JSON by trial and error."
@@ -306,7 +306,7 @@ If you can name the file that should exist, name it. If you can draft it, say so
 
 ## Don't
 
-- Don't submit secrets, tokens, or customer data — ideas are read by humans in a shared console.
+- Don't submit secrets, tokens, or customer data — recommendations are read by humans in a shared console.
 - Don't submit instead of doing the work; submit alongside it.
 - Don't editorialize about the user. Describe the system.
 `;

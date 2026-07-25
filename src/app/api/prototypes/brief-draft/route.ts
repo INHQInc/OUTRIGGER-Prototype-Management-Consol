@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { draftBrief, refineBrief, type BriefDraft, type BriefSection } from "@/lib/ai/brief";
-import { referenceKind, type BriefReference } from "@/lib/prototypes/types";
+import { referenceKind, normalizeReferenceUrl, type BriefReference } from "@/lib/prototypes/types";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 
 /** Sanitize inbound references the same way the brief PATCH does. */
 function cleanRefs(raw: { url?: string; label?: string }[] | undefined): BriefReference[] {
-  return (raw ?? [])
-    .map((r) => ({ url: (r?.url ?? "").trim(), label: r?.label?.trim() || undefined }))
-    .filter((r) => /^https?:\/\//i.test(r.url))
-    .slice(0, 20)
-    .map((r) => ({ ...r, kind: referenceKind(r.url) }));
+  const out: BriefReference[] = [];
+  for (const r of raw ?? []) {
+    const url = normalizeReferenceUrl(r?.url ?? "");
+    if (!url) continue;
+    out.push({ url, label: r?.label?.trim() || undefined, kind: referenceKind(url) });
+    if (out.length >= 20) break;
+  }
+  return out;
 }
 
 export const maxDuration = 60;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
-import { normalizeStage, referenceKind, type PrototypeRecord, type PrototypeBrief, type BriefReference } from "@/lib/prototypes/types";
+import { normalizeStage, referenceKind, normalizeReferenceUrl, type PrototypeRecord, type PrototypeBrief, type BriefReference } from "@/lib/prototypes/types";
 import { accessibleOrgIds, canAccessOrg, getActiveOrgId } from "@/lib/active-org";
 import { listOrgEnvironments } from "@/lib/environments";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
@@ -18,11 +18,13 @@ function prototypeBranch(input: string | undefined, key: string): string {
 
 /** Sanitize + normalize a brief payload identically on create and update. */
 function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?: string; where?: string; constraints?: string; reference?: string; references?: { url?: string; label?: string }[] } | undefined): PrototypeBrief {
-  const refs: BriefReference[] = (raw?.references ?? [])
-    .map((r) => ({ url: (r?.url ?? "").trim(), label: r?.label?.trim() || undefined }))
-    .filter((r) => /^https?:\/\//i.test(r.url))   // http(s) only — no javascript:/data: URLs in the brief
-    .slice(0, 20)
-    .map((r) => ({ ...r, kind: referenceKind(r.url) }));
+  const refs: BriefReference[] = [];
+  for (const r of raw?.references ?? []) {
+    const url = normalizeReferenceUrl(r?.url ?? ""); // drops non-URLs / javascript:/data:
+    if (!url) continue;
+    refs.push({ url, label: r?.label?.trim() || undefined, kind: referenceKind(url) });
+    if (refs.length >= 20) break;
+  }
   return {
     problem: raw?.problem?.trim() ?? "",
     change: raw?.change?.trim() ?? "",
