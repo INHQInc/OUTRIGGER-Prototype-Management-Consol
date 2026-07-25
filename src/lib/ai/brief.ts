@@ -54,7 +54,7 @@ const DRAFT_TOOL = {
         },
         required: ["primary", "guardrails"],
       },
-      clarifying_questions: { type: "array" as const, items: { type: "string" as const }, description: "OPTIONAL and rare — usually empty. At most 2, only on the first draft, and only for a missing answer that would change what gets built. MUST be empty when the user has already answered earlier questions." },
+      clarifying_questions: { type: "array" as const, items: { type: "string" as const }, description: "Tied to readiness: REQUIRED (1–2, naming what's unsure) whenever readiness is below 90; empty ONLY when readiness is 90+. At most 2, first draft only. MUST be empty on the answers pass." },
       readiness: { type: "integer" as const, minimum: 0, maximum: 100, description: "0–100: your HONEST confidence that this brief is complete enough to build and judge with no further input. 100 = a stranger could build it with zero questions. Lower it when you are guessing at the change, its trigger/location, or the decision metric. It should RISE as answers resolve your uncertainty, and may FALL if an answer reveals the idea is bigger or vaguer than it first seemed. Be honest, not generous." },
     },
     required: ["brief", "hypothesis", "metrics", "clarifying_questions", "readiness"],
@@ -88,32 +88,47 @@ export async function draftBrief(opts: {
   // final and asks nothing further. Told to the model AND enforced below, so an
   // endless question loop is structurally impossible, not just discouraged.
   const finalPass = Boolean(opts.answers?.trim());
+  const READY = 90; // at/above this the brief is buildable with no questions
   const closing = finalPass
     ? `\n\nAnswers to your earlier clarifying questions:\n"""\n${opts.answers!.trim()}\n"""\n\nThis is the FINAL draft — you now have enough. Commit to the brief and return clarifying_questions as an empty array; do not ask anything new.`
-    : `\n\nDraft the complete brief now. Only include a clarifying question if a missing answer would genuinely change what gets built — otherwise return clarifying_questions empty.`;
+    : `\n\nDraft the complete brief now, then score your readiness honestly. If readiness is below ${READY} you are NOT sure enough to build without guessing — you MUST return 1–2 clarifying_questions naming exactly what is holding your confidence down. Return an empty clarifying_questions array ONLY when readiness is ${READY}+.`;
 
   const client = new Anthropic();
+  const draft = await runDraft(client, system, `${context}\n\nThe team explains the experiment in their own words:\n"""\n${opts.userText.trim()}\n"""${closing}`);
+
+  draft.clarifying_questions = finalPass ? [] : (draft.clarifying_questions ?? []).slice(0, 2);
+  draft.readiness = clampReadiness(draft.readiness);
+
+  // ENFORCE THE CONTRACT IN CODE, not just the prompt: an under-confident first
+  // draft with no questions is invalid (the model reliably ignores the "ask
+  // when unsure" instruction because it can always produce a full draft). When
+  // that happens, make a focused follow-up that ONLY extracts the questions.
+  if (!finalPass && draft.readiness < READY && draft.clarifying_questions.length === 0) {
+    const repair = await runDraft(client, system,
+      `${context}\n\nYou drafted this brief and scored your own readiness at ${draft.readiness}/100 — below ${READY}, which means you are guessing about something that changes what gets built. You returned NO clarifying questions, which contradicts that score.\n\nYour draft:\n"""\n${JSON.stringify({ brief: draft.brief, hypothesis: draft.hypothesis, metrics: draft.metrics }, null, 2)}\n"""\n\nReturn the SAME brief unchanged, but now with 1–2 specific clarifying_questions naming exactly what is holding your confidence below ${READY} (the concrete unknowns — trigger, audience, data source, the decision metric — not vague ones). Keep the same readiness.`);
+    const qs = (repair.clarifying_questions ?? []).map((q) => q.trim()).filter(Boolean).slice(0, 2);
+    if (qs.length) draft.clarifying_questions = qs;
+    else draft.readiness = READY; // model insists it has nothing to ask → it's actually confident; make the score honest
+  }
+  return draft;
+}
+
+function clampReadiness(r: unknown): number {
+  return Math.max(0, Math.min(100, Math.round(Number(r) || 0)));
+}
+
+async function runDraft(client: Anthropic, system: string, content: string): Promise<BriefDraft> {
   const res = await client.messages.create({
     model: "claude-opus-4-8",
     max_tokens: 3000,
     system,
-    messages: [{
-      role: "user",
-      content: `${context}\n\nThe team explains the experiment in their own words:\n"""\n${opts.userText.trim()}\n"""${closing}`,
-    }],
+    messages: [{ role: "user", content }],
     tools: [DRAFT_TOOL],
     tool_choice: { type: "tool", name: "draft_brief" },
   });
-
   const tu = res.content.find((c) => c.type === "tool_use");
   if (!tu || tu.type !== "tool_use") throw new Error("The model returned no draft — try again.");
-  const draft = tu.input as BriefDraft;
-
-  // Hard backstop: the answers pass never returns questions, and the first pass
-  // is capped at 2. The model's doctrine says the same; this makes it true.
-  draft.clarifying_questions = finalPass ? [] : (draft.clarifying_questions ?? []).slice(0, 2);
-  draft.readiness = Math.max(0, Math.min(100, Math.round(Number(draft.readiness) || 0)));
-  return draft;
+  return tu.input as BriefDraft;
 }
 
 /** The brief sections a user can correct in place. */
