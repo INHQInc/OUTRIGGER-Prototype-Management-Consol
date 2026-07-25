@@ -6,7 +6,6 @@ import { resolveSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { DetailsEditor } from "@/components/DetailsEditor";
 import { RepoBranchSettings } from "@/components/RepoBranchSettings";
-import { LocalFolders } from "@/components/LocalFolders";
 import { SkillSelector } from "@/components/SkillSelector";
 import { DeletePrototype } from "@/components/DeletePrototype";
 
@@ -40,10 +39,9 @@ export default async function PrototypeSettings({ params }: { params: Promise<{ 
       <section className="space-y-3">
         <div>
           <h2 className="text-[15px] font-semibold">Source control</h2>
-          <p className="text-[13px] text-muted-2">Which repo + branch this prototype builds in, and where it lives on your machine. Touched once.</p>
+          <p className="text-[13px] text-muted-2">Which registered repo + branch this prototype builds in. Touched once. (Your local folder is set in the Build tab, where the start command uses it.)</p>
         </div>
         <RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} />
-        <LocalFolders prototypeKey={key} repoFullName={repo?.fullName} />
       </section>
 
       <section className="space-y-3">
