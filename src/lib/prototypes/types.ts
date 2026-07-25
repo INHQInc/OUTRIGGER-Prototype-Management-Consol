@@ -137,6 +137,17 @@ export interface PrototypeMetrics {
 }
 
 /**
+ * The ONE definition of a complete brief — the gate. A brief answers two
+ * questions: what are we building (change) AND how do we know it worked
+ * (a decision metric). A one-line change with no metric is NOT a brief; it
+ * must not open the gate. Every gate check (pipeline, provision, push, UI)
+ * uses this so "done" means the same thing everywhere.
+ */
+export function isBriefComplete(brief: PrototypeBrief, metrics: PrototypeMetrics): boolean {
+  return Boolean(brief.change?.trim()) && Boolean(metrics.primary?.trim());
+}
+
+/**
  * An immutable build of a prototype, pinned to a git SHA. This is the unit that
  * gets PROMOTED across environments unchanged — "build once, promote immutably"
  * (docs/LIFECYCLE-ARCHITECTURE.md). Append-only: versions are never edited, only

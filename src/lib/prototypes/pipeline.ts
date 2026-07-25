@@ -13,7 +13,7 @@
 import type { PrototypeRecord, ArtifactVersion } from "./types";
 import type { RepoSource } from "./source";
 import type { PushResult } from "./ship";
-import { injectionPasses, normalizeStage } from "./types";
+import { injectionPasses, normalizeStage, isBriefComplete } from "./types";
 import { contentHashOf } from "./provision";
 import { artifactProblem } from "./served";
 
@@ -143,15 +143,22 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // ── steps ─────────────────────────────────────────────────────
   const steps: PipelineStep[] = [];
 
-  // 1 · Brief — a REQUIREMENT, not a position.
-  const briefDone = Boolean(proto.brief.change?.trim());
+  // 1 · Brief — a REQUIREMENT, not a position. A brief is only DONE when it
+  // says what we're building AND how we judge it (a decision metric); a bare
+  // change is in-progress, not done.
+  const hasChange = Boolean(proto.brief.change?.trim());
+  const briefDone = isBriefComplete(proto.brief, proto.metrics);
   const workStarted = provisioned || built;
   steps.push({
     id: "brief", title: "Brief", anchor: "brief",
-    state: briefDone ? "done" : workStarted ? "blocked" : "todo",
-    status: briefDone
-      ? proto.metrics.primary ? "described · metric set" : "described · no metric yet"
-      : workStarted ? "missing — required before launch" : "what are we building?",
+    state: briefDone ? "done"
+      : workStarted ? "blocked"        // building against an incomplete brief — must fix
+      : hasChange ? "current"          // mid-brief: has the change, needs the metric
+      : "todo",
+    status: briefDone ? "described · metric set"
+      : hasChange ? "needs a success metric — how do we know it worked?"
+      : workStarted ? "missing — required before launch"
+      : "what are we building?",
   });
   // NO alert for a missing brief: the blocked step already says it — the chip
   // shows "Blocked at Brief" and Overview's Needs Attention lists the gate.
@@ -162,7 +169,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   steps.push({
     id: "build", title: "Build", anchor: "build",
     state: buildDone ? "done" : "todo",
-    status: !provisioned ? (briefDone ? "get the init script" : "waiting on the brief") 
+    status: !provisioned ? (briefDone ? "prepare the branch, then build" : "waiting on the brief")
       : problem === "placeholder" || !built ? (inp.claudeSeenAt ? "Agent engaged · no build pushed yet" : "provisioned · waiting on the first build")
       : problem === "starter-build" ? "serving the starter build"
       : `built · ${source?.headSha?.slice(0, 7) ?? ""}`,
@@ -238,7 +245,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
 
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
-  if (!briefDone) primaryAction = { label: "Write the brief", anchor: "brief" };
+  if (!briefDone) primaryAction = { label: hasChange ? "Add a success metric" : "Write the brief", anchor: "brief" };
   else if (!provisioned) primaryAction = { label: "Prepare the branch", anchor: "build" };
   else if (!built || problem) primaryAction = { label: "Build with the agent", anchor: "build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "review" };

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { referenceKind, normalizeReferenceUrl, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
+import { referenceKind, normalizeReferenceUrl, isBriefComplete, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
 import type { BriefDraft, BriefSection } from "@/lib/ai/brief";
 
 const REF_META: Record<BriefReferenceKind, { icon: string; label: string }> = {
@@ -183,7 +183,6 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const [readiness, setReadiness] = useState<number | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
-  const [aiOpen, setAiOpen] = useState(!initialBrief.change?.trim());
 
   const [brief, setBrief] = useState<PrototypeBrief>(initialBrief);
   const [hyp, setHyp] = useState<PrototypeHypothesis>(initialHypothesis);
@@ -201,7 +200,8 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const [refineErr, setRefineErr] = useState<string | null>(null);
 
   const dirty = JSON.stringify({ brief, hyp, metrics }) !== saved;
-  const hasContent = Boolean(brief.change?.trim());
+  const hasContent = Boolean(brief.change?.trim());   // enough to render the document
+  const gateOpen = isBriefComplete(brief, metrics);   // change + metric — the real gate
   const refs = brief.references ?? [];
   const addRef = (url: string, label?: string) => { setBrief((b) => ({ ...b, references: [...(b.references ?? []), { url, label, kind: referenceKind(url) }] })); setMsg(null); };
   const removeRef = (i: number) => { setBrief((b) => ({ ...b, references: (b.references ?? []).filter((_, j) => j !== i) })); setMsg(null); };
@@ -307,15 +307,19 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       const data = await res.json();
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
       setSaved(JSON.stringify({ brief, hyp, metrics }));
-      setMsg({ ok: true, text: "Brief saved — the gate is open." });
+      setMsg({ ok: true, text: isBriefComplete(brief, metrics) ? "Brief saved — the gate is open." : "Saved — now add a success metric to open the gate." });
       router.refresh();
     } finally { setBusy(false); }
   }
 
   const saveBar = (
     <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-      <span className={`text-[13px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : hasContent ? "text-ok" : "text-muted-2"}`}>
-        {msg ? msg.text : dirty ? "Unsaved changes — the gate reads the saved brief." : hasContent ? "Saved — the gate is open." : "The brief is the gate: no build until it's written."}
+      <span className={`text-[13px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : dirty ? "text-warn" : gateOpen ? "text-ok" : "text-warn"}`}>
+        {msg ? msg.text
+          : dirty ? "Unsaved changes — the gate reads the saved brief."
+          : gateOpen ? "Saved — the gate is open."
+          : hasContent ? "Add a success metric to finish the brief — how do we know it worked?"
+          : "The brief is the gate: no build until it's written."}
       </span>
       <div className="flex items-center gap-2 shrink-0">
         <button onClick={() => setEditing(!editing)} className="h-8 px-3 rounded-lg border border-border text-[14px] text-muted hover:text-foreground hover:border-border-strong">{editing ? "Read view" : "Edit fields"}</button>
@@ -330,13 +334,12 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
 
   return (
     <div className="space-y-3">
-      {/* AI on-ramp — prominent when empty, a quiet drawer once the brief exists */}
-      <details open={aiOpen} onToggle={(e) => setAiOpen((e.target as HTMLDetailsElement).open)} className="group rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)]">
-        <summary className="px-3.5 py-2.5 cursor-pointer select-none list-none flex items-center gap-2">
+      {/* AI on-ramp — always open; drafting the brief is the whole point of this room. */}
+      <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)]">
+        <div className="px-3.5 py-2.5 flex items-center gap-2">
           <span className="text-[14px] font-semibold">✦ Draft with AI</span>
           <span className="text-[13px] text-muted-2">explain it in your own words — AI writes the structured brief</span>
-          <span className="ml-auto text-[12.5px] text-muted-2 group-open:hidden">open</span>
-        </summary>
+        </div>
         <div className="px-3.5 pb-3.5 space-y-2.5">
           <textarea value={explain} onChange={(e) => setExplain(e.target.value)} rows={3} className={ta}
             placeholder="e.g. When people click a room card I want a rich overlay with the gallery, amenities and a booking button, instead of losing them to the detail page. Success is more availability checks." />
@@ -363,7 +366,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
             </button>
           </div>
         </div>
-      </details>
+      </div>
 
       {/* THE BRIEF — a document first, a form only on request. Each section is
           its own card so they read as independent parts, not one flowing page. */}

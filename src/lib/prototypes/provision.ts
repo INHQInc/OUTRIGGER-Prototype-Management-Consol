@@ -19,7 +19,7 @@ import { deriveDataGlobals, deriveDesignTokens, fetchPageHtml, type FontRef } fr
 import { listReferenceRepos } from "../git/reference-repos";
 import { enabledSkillsForPrototype } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
-import type { PrototypeRecord } from "./types";
+import { isBriefComplete, type PrototypeRecord } from "./types";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
 
@@ -167,8 +167,10 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   // THE GATE: you can't build until the brief is done. The brief becomes
   // Claude's instructions and the experiment's description — building without
   // one is building without a spec.
-  if (!proto.brief.change?.trim()) {
-    throw new Error("No brief yet — write what we're building first. The brief is the gate: it becomes the agent's instructions and, later, the experiment's description.");
+  if (!isBriefComplete(proto.brief, proto.metrics)) {
+    throw new Error(!proto.brief.change?.trim()
+      ? "No brief yet — write what we're building first. The brief is the gate: it becomes the agent's instructions and, later, the experiment's description."
+      : "The brief has no success metric — add the one event that decides this experiment before building. The brief is the gate.");
   }
   const orgId = await resolvePrototypeOrg(proto);
   if (!orgId) throw new Error("This prototype has no owning customer.");

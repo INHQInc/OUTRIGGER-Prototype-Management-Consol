@@ -17,6 +17,7 @@ import { getOptimizelyClientForOrg } from "../experimentation";
 import { OptimizelyClient } from "../optimizely/api";
 import { resolvePrototypeOrg } from "./org";
 import { listArtifactVersions } from "./versions";
+import { isBriefComplete } from "./types";
 import { audit } from "../audit";
 
 export interface PushResult {
@@ -49,8 +50,10 @@ export async function pushToOptimizely(prototypeKey: string, opts: { version?: n
   if (!proto.experiment?.experimentId || !proto.experiment?.variationId) {
     throw new Error("No experiment bound — pick the Optimizely experiment and variation in the Ship panel first.");
   }
-  if (!proto.brief.change?.trim()) {
-    throw new Error("No brief on record — write one sentence describing the change before launching. It gates the push and becomes the experiment's description.");
+  if (!isBriefComplete(proto.brief, proto.metrics)) {
+    throw new Error(!proto.brief.change?.trim()
+      ? "No brief on record — describe the change before launching. It becomes the experiment's description."
+      : "The brief has no success metric — set the one event that decides this experiment before launching.");
   }
   const client = await getOptimizelyClientForOrg(orgId);
   if (!client) throw new Error("Optimizely isn't connected for this customer (Settings → Experimentation).");

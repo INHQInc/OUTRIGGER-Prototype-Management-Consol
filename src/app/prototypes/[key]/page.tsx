@@ -13,6 +13,7 @@ import { lastPush } from "@/lib/prototypes/ship";
 import { getExperimentationConfig, getOptimizelyClientForOrg } from "@/lib/experimentation";
 import { listAuditEvents } from "@/lib/audit";
 import { derivePipeline, stepSeverity } from "@/lib/prototypes/pipeline";
+import { isBriefComplete } from "@/lib/prototypes/types";
 import { SEVERITY_DOT } from "@/components/ui";
 import { PipelineHeader } from "@/components/PipelineHeader";
 import { PrototypeOverview, type ActivityItem } from "@/components/PrototypeOverview";
@@ -167,7 +168,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       {tab === "build" && (
         <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">The develop loop: prepare the branch, start the agent, and re-sync when the brief or skills change. The agent builds in the repo; the console pulls the result.</p>
-          <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={Boolean(p.brief.change?.trim())} />
+          <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={isBriefComplete(p.brief, p.metrics)} />
         </div>
       )}
 

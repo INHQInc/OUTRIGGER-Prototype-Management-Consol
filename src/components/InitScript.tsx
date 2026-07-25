@@ -80,7 +80,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
           <span className="text-[13px] text-muted-2 ml-2">Writes the brief, page snapshots and selected skills into the branch — the agent wakes up loaded.</span>
         </div>
         <div className="px-4 py-3 flex items-center justify-between gap-4">
-          <span className={`text-[13px] ${briefDone ? "text-muted-2" : "text-warn"}`}>{briefDone ? "One commit to .opmc/** — never your code." : "Write the brief first — it's the gate. Building without a spec is how prototypes drift."}</span>
+          <span className={`text-[13px] ${briefDone ? "text-muted-2" : "text-warn"}`}>{briefDone ? "One commit to .opmc/** — never your code." : "Finish the brief first (the change AND a success metric) — it's the gate. Building without a spec is how prototypes drift."}</span>
           <button onClick={() => provision(false)} disabled={busy || !briefDone} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">{busy ? "Preparing…" : err ? "Try again" : "Prepare branch"}</button>
         </div>
         {err && (

@@ -6,7 +6,6 @@ import type { StepSeverity } from "@/lib/prototypes/severity";
 import type { PrototypeRecord } from "@/lib/prototypes/types";
 import type { Idea } from "@/lib/ideas/ideas";
 
-const SEVERITY_RANK: Record<StepSeverity, number> = { critical: 0, attention: 1, good: 3, pending: 2 };
 const SEVERITY_WORD: Record<StepSeverity, string> = { critical: "Blocked", attention: "Needs attention", good: "Done", pending: "Not started" };
 
 export interface ActivityItem { at: string; text: string; who?: string }
@@ -31,8 +30,10 @@ export function PrototypeOverview({ proto, pipeline, activity, recommendations, 
 }) {
   const b = proto.brief;
   const hasBrief = Boolean(b.change?.trim());
-  // The checklist, most-urgent first — critical then attention, done last.
-  const checklist = [...pipeline.checklist].sort((a, c) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[c.severity] || 0);
+  // PIPELINE ORDER, always — the checklist IS the flow (Brief → Build → Review →
+  // Experimentation → Handoff). Status is the dot's color, never the position;
+  // reordering by urgency destroys the one thing a checklist is for.
+  const checklist = pipeline.checklist;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem] gap-4 items-start">
