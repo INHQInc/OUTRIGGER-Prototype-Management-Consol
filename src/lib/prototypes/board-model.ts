@@ -6,15 +6,15 @@
  */
 import type { Pipeline } from "./pipeline";
 
-export type BoardColumn = "brief" | "build" | "review" | "launch" | "testing" | "shipped";
+// The ONE canonical stage list — identical to the pipeline steps and the tabs.
+export type BoardColumn = "brief" | "build" | "review" | "experiment" | "handoff";
 
 export const BOARD_COLUMNS: { id: BoardColumn; label: string; hint: string }[] = [
   { id: "brief", label: "Brief", hint: "what & why being written" },
   { id: "build", label: "Build", hint: "agent at work in the repo" },
   { id: "review", label: "Review", hint: "verifying on the real site" },
-  { id: "launch", label: "Launch", hint: "cut · certify · push · start" },
-  { id: "testing", label: "Testing", hint: "experiment LIVE — locked" },
-  { id: "shipped", label: "Shipped", hint: "winner in production code" },
+  { id: "experiment", label: "Experimentation", hint: "cut · push · run (locked when live)" },
+  { id: "handoff", label: "Handoff", hint: "winner → production code" },
 ];
 
 export interface BoardCard {

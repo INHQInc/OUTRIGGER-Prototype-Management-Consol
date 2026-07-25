@@ -46,9 +46,9 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     const locked = experimentStatus === "running";
     const pipeline = derivePipeline({ proto: p, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt, experimentStatus });
 
-    const column: BoardColumn = stage === "shipped" ? "shipped"
-      : locked ? "testing"
-      : pipeline.stage.id;
+    // The column IS the canonical stage — shipped → handoff, running → experiment
+    // (locked badge), all handled inside pipeline.stage.id. One source of truth.
+    const column: BoardColumn = pipeline.stage.id;
 
     return {
       key: p.key, name: p.name, column, locked, experimentStatus, pipeline,

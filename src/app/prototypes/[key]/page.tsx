@@ -4,8 +4,6 @@ import { headers } from "next/headers";
 import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { resolvePrototypeRepo } from "@/lib/prototypes/repo";
-import { resolveSkillsForPrototype } from "@/lib/skills/skills";
-import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { listOrgEnvironments, envLoaderSeenAt } from "@/lib/environments";
@@ -19,10 +17,7 @@ import { PipelineHeader } from "@/components/PipelineHeader";
 import { PrototypeOverview, type ActivityItem } from "@/components/PrototypeOverview";
 import { BriefComposer } from "@/components/BriefComposer";
 import { TargetPages } from "@/components/TargetPages";
-import { RepoBranchSettings } from "@/components/RepoBranchSettings";
-import { LocalFolders } from "@/components/LocalFolders";
 import { InitScript } from "@/components/InitScript";
-import { SkillSelector } from "@/components/SkillSelector";
 import { SourcePanel } from "@/components/SourcePanel";
 import { OptimizelyBundle } from "@/components/OptimizelyBundle";
 import { ShipPanel } from "@/components/ShipPanel";
@@ -34,18 +29,18 @@ import { currentUser } from "@/lib/auth/current";
 
 export const dynamic = "force-dynamic";
 
+// The tab row IS the canonical stage list — identical to the board columns and
+// the Overview checklist. Setup (Source Control, Skills) lives in Settings.
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "brief", label: "Brief", step: "brief" },
-  { id: "source", label: "Source Control" },
-  { id: "skills", label: "Skills" },
   { id: "build", label: "Build", step: "build" },
   { id: "review", label: "Review", step: "review" },
-  { id: "experiment", label: "Experimentation", step: "launch" },
-  { id: "handoff", label: "Handoff", step: "shipped" },
+  { id: "experiment", label: "Experimentation", step: "experiment" },
+  { id: "handoff", label: "Handoff", step: "handoff" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
-/** Old room ids that may live in links/bookmarks. */
+/** Old room ids that may live in links/bookmarks. Setup moved to Settings. */
 const TAB_ALIASES: Record<string, TabId> = { pages: "review" };
 
 /**
@@ -83,9 +78,6 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     listRecommendations(orgId, key).catch(() => []),
     currentUser().catch(() => null),
   ]);
-  await ensureSkillsSeeded(orgId);
-  const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
-
   const consoleUrl = `https://${hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "outrigger-prototype-management-cons.vercel.app"}`;
   const envs = await Promise.all(environments.map(async (e) => ({
     id: e.id, label: e.label, kind: e.kind, url: e.url, loaderKey: e.siteKey ?? e.id, heartbeatAt: await envLoaderSeenAt(e),
@@ -157,25 +149,10 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         </div>
       )}
 
-      {tab === "source" && (
-        <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">Setup — usually touched once: which repo + branch this prototype builds in, and where it lives on your machine. The develop loop itself is in Build.</p>
-          <RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} />
-          <LocalFolders prototypeKey={key} repoFullName={repo?.fullName} />
-        </div>
-      )}
-
       {tab === "build" && (
         <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">The develop loop: prepare the branch, start the agent, and re-sync when the brief or skills change. The agent builds in the repo; the console pulls the result.</p>
+          <p className="text-[14px] text-muted-2">The develop loop: prepare the branch, start the agent, and re-sync when the brief or skills change. The agent builds in the repo; the console pulls the result. (Repo, branch &amp; skills live in <Link href={`/prototypes/${key}/settings`} className="text-accent hover:text-accent-hover">Settings</Link>.)</p>
           <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={isBriefComplete(p.brief, p.metrics)} />
-        </div>
-      )}
-
-      {tab === "skills" && (
-        <div className="max-w-4xl space-y-3">
-          <p className="text-[14px] text-muted-2">What the agent wakes up knowing for this prototype. Global and brand skills come from the library; prototype skills exist only here. Changes reach the branch on the next re-sync (Build).</p>
-          <SkillSelector prototypeKey={key} initial={skillRows} />
         </div>
       )}
 

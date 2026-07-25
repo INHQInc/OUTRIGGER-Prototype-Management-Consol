@@ -12,14 +12,13 @@ export function PipelineHeader({ pipeline, currentTab, showStatusStrip = true }:
   // already in the room it points to. Hide it there.
   const showCta = primaryAction.anchor !== currentTab;
 
+  const shipped = stage.id === "handoff";
   const chip = stage.blocked
     ? "border-danger/50 text-danger bg-[color-mix(in_srgb,var(--danger)_7%,transparent)]"
-    : stage.live
+    : stage.live || shipped
       ? "border-ok/50 text-ok bg-[color-mix(in_srgb,var(--ok)_8%,transparent)]"
-      : stage.id === "shipped"
-        ? "border-ok/50 text-ok bg-[color-mix(in_srgb,var(--ok)_8%,transparent)]"
-        : "border-accent/50 text-accent bg-[color-mix(in_srgb,var(--accent)_7%,transparent)]";
-  const dot = stage.blocked ? "bg-danger" : stage.live || stage.id === "shipped" ? "bg-ok" : "bg-accent";
+      : "border-accent/50 text-accent bg-[color-mix(in_srgb,var(--accent)_7%,transparent)]";
+  const dot = stage.blocked ? "bg-danger" : stage.live || shipped ? "bg-ok" : "bg-accent";
 
   return (
     <div className="space-y-2.5">

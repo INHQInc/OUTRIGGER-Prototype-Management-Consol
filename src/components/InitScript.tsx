@@ -68,7 +68,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   }
 
   if (!repo) {
-    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[14px]">This prototype has no repo yet. <Link href={`/prototypes/${prototypeKey}?tab=source`} className="text-accent hover:text-accent-hover font-medium">Set it up in Source Control →</Link></div>;
+    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[14px]">This prototype has no repo yet. <Link href={`/prototypes/${prototypeKey}/settings`} className="text-accent hover:text-accent-hover font-medium">Set it up in Settings →</Link></div>;
   }
 
   if (!provisioned) {
@@ -118,13 +118,13 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
             Clones straight into <span className="font-mono">{path}</span> — that folder becomes the repo (no nested subfolder).
             {src
               ? <> The agent reads the real site source at <span className="font-mono">source-site/</span>, plus the page snapshot in <span className="font-mono">.opmc/</span>.</>
-              : <> Add the website source checkout in <Link href={`/prototypes/${prototypeKey}?tab=source`} className="text-accent hover:text-accent-hover">Source Control</Link> and the agent can build against real components instead of only the page snapshot.</>}
+              : <> Add the website source checkout in <Link href={`/prototypes/${prototypeKey}/settings`} className="text-accent hover:text-accent-hover">Settings</Link> and the agent can build against real components instead of only the page snapshot.</>}
             {buildStatus.found === true && <span className="text-ok"> · ✓ built ({buildStatus.headSha?.slice(0, 7)})</span>}
           </div>
         </div>
       ) : (
         <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-4 py-3 text-[14px] text-warn">
-          No local folder saved — <Link href={`/prototypes/${prototypeKey}?tab=source`} className="text-accent hover:text-accent-hover font-medium">set it in Source Control →</Link> to generate your start command.
+          No local folder saved — <Link href={`/prototypes/${prototypeKey}/settings`} className="text-accent hover:text-accent-hover font-medium">set it in Settings →</Link> to generate your start command.
         </div>
       )}
 

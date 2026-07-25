@@ -13,9 +13,8 @@ const BOUNCE: Record<BoardColumn, string> = {
   brief: "Brief is where cards start — they move on when a build begins, not when they're dragged.",
   build: "Build means a real build exists on the branch. It moves when the agent pushes one.",
   review: "Review means the pages verify on the real site. Verify them and the card moves itself.",
-  launch: "Launch means cut + certified + pushed. Do those and the card arrives on its own.",
-  testing: "Only a RUNNING experiment puts a card in Testing — start it in Optimizely.",
-  shipped: "Shipped is a decision — but only from Launch: finish the pipeline first.",
+  experiment: "Experimentation means cut + certified + pushed. Do those and the card arrives on its own.",
+  handoff: "Handoff is a decision — drag here only from Experimentation, once the winner is chosen.",
 };
 
 function MiniPipeline({ pipeline }: { pipeline: Pipeline }) {
@@ -49,7 +48,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
 
   const dragging = cards.find((c) => c.key === dragKey) ?? null;
   const dropAllowed = (col: BoardColumn) =>
-    dragging !== null && !dragging.locked && (col === dragging.column || (col === "shipped" && dragging.column === "launch"));
+    dragging !== null && !dragging.locked && (col === dragging.column || (col === "handoff" && dragging.column === "experiment"));
 
   async function persistPriorities(colCards: BoardCard[]) {
     await Promise.all(colCards.map((c, i) =>
@@ -58,14 +57,14 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   }
 
   async function markShipped(card: BoardCard) {
-    setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: "shipped" as BoardColumn } : c)));
+    setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: "handoff" as BoardColumn } : c)));
     const res = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, status: "shipped" }) });
     if (!res.ok) {
       setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: card.column } : c)));
-      say("Couldn't mark it shipped — try again.");
+      say("Couldn't hand it off — try again.");
       return;
     }
-    say(`${card.name} marked shipped.`);
+    say(`${card.name} handed off.`);
     router.refresh();
   }
 
@@ -86,7 +85,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       void persistPriorities(next);
       return;
     }
-    if (col === "shipped" && card.column === "launch") { void markShipped(card); return; }
+    if (col === "handoff" && card.column === "experiment") { void markShipped(card); return; }
     say(BOUNCE[col]);
   }
 
@@ -95,10 +94,10 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       {cards.length === 0 ? (
         <EmptyState title="No prototypes yet." hint="Create one — then build it with the agent and review it on the real site." />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 items-start">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 items-start">
           {BOARD_COLUMNS.map((col) => {
             const items = cards.filter((c) => c.column === col.id);
-            const testing = col.id === "testing";
+            const anyLocked = col.id === "experiment" && items.some((c) => c.locked);
             const highlight = overCol === col.id && dropAllowed(col.id);
             const rejecting = overCol === col.id && dragging !== null && !dropAllowed(col.id);
             return (
@@ -110,13 +109,12 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                 className={`rounded-xl border p-2 min-h-[9rem] transition-colors ${
                   highlight ? "border-accent bg-[color-mix(in_srgb,var(--accent)_6%,transparent)]"
                   : rejecting ? "border-danger/40"
-                  : testing ? "border-warn/40 bg-[color-mix(in_srgb,var(--warn)_3%,transparent)]"
                   : "border-border bg-surface/40"}`}
               >
                 <div className="px-1.5 pb-2 pt-0.5">
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-[13px] font-semibold ${testing ? "text-warn" : col.id === "shipped" ? "text-ok" : ""}`}>{col.label}</span>
-                    {testing && <span className="text-[12.5px]">🔒</span>}
+                    <span className={`text-[13px] font-semibold ${col.id === "handoff" ? "text-ok" : ""}`}>{col.label}</span>
+                    {anyLocked && <span className="text-[12.5px]" title="a running experiment is locked">🔒</span>}
                     <span className="text-[12.5px] text-muted-2 tabular-nums ml-auto">{items.length}</span>
                   </div>
                   <div className="text-[12.5px] text-muted-2 leading-tight">{col.hint}</div>

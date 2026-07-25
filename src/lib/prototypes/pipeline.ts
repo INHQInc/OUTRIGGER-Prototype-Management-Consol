@@ -2,10 +2,11 @@
  * The pipeline — ONE derivation of "where is this prototype and what's next,"
  * computed from ground truth the system already stores. Nothing self-reported.
  *
- * ONE VOCABULARY, everywhere: Brief · Build · Review · Launch · Testing ·
- * Shipped. The workspace stepper and the program board render THIS — same
- * words, same states, two zoom levels. (Cut & certify are substeps of Launch:
- * cut → certify → bind → push → start.)
+ * ONE canonical stage list, everywhere (tabs, board, header chip, checklist):
+ *   Brief · Build · Review · Experimentation · Handoff.
+ * There are no other "steps." Experimentation is one stage that runs
+ * cut → certify → bind → push → start → live (the live/locked state is a
+ * badge, not a separate stage). Handoff is the winner graduating to source.
  *
  * Position derives from the WORK axis; requirements (like a missing brief on
  * started work) block gates and badge — they never teleport position backwards.
@@ -20,7 +21,7 @@ import { artifactProblem } from "./served";
 export type StepState = "done" | "current" | "todo" | "blocked";
 
 export interface PipelineStep {
-  id: "brief" | "build" | "review" | "launch" | "testing" | "shipped";
+  id: "brief" | "build" | "review" | "experiment" | "handoff";
   title: string;
   state: StepState;
   /** One line of honest status, e.g. "3/3 pages inject ✓" or "v4 certified · not pushed". */
@@ -185,37 +186,33 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     status: pages === 0 ? "add the page(s) it runs on" : `${passing}/${pages} page${pages === 1 ? "" : "s"} inject${reviewDone ? " ✓" : ""}`,
   });
 
-  // 4 · Launch — cut → certify → bind → push → start, one stage.
+  // 4 · Experimentation — cut → certify → bind → push → start → live, ONE stage.
+  // The running/locked state is a badge (stage.live), not a separate stage.
+  // DONE only once the experiment is actually live or concluded — a pushed-but-
+  // not-started version is still IN this stage (you must click Start), so it is
+  // NOT done. (Marking it done here promoted Handoff to current and stranded
+  // the card in the Handoff column, un-shippable.)
   const certBlocked = Boolean(latest && cert && !cert.passed);
-  const launchDone = Boolean(cutFresh && !certBlocked && bound && pushCurrent && (running || stageShipped));
-  const launchStatus = !latest ? "no version cut"
+  const expDone = Boolean(running || stageShipped);
+  const expStatus = !latest ? "no version cut"
     : !cutFresh ? `v${latest.version} · HEAD moved — cut a new version`
     : certBlocked ? `v${latest.version} · certification FAILED`
     : !bound ? `v${latest.version}${certified ? " certified ✓" : ""} · no experiment bound`
     : !pushCurrent ? `v${latest.version}${certified ? " certified ✓" : ""} · not pushed`
-    : running || stageShipped ? `v${lastPush?.version} pushed ✓ · started`
+    : running ? "live — prototype locked"
+    : stageShipped ? "concluded"
     : `v${lastPush?.version} pushed ✓ · start it in Optimizely`;
   steps.push({
-    id: "launch", title: "Launch", anchor: "experiment",
-    state: certBlocked ? "blocked" : launchDone ? "done" : "todo",
-    status: launchStatus,
+    id: "experiment", title: "Experimentation", anchor: "experiment",
+    state: certBlocked ? "blocked" : expDone ? "done" : "todo",
+    status: expStatus,
   });
 
-  // 5 · Testing — the experiment's live status is the truth.
+  // 5 · Handoff — the winner graduates into production code.
   steps.push({
-    id: "testing", title: "Testing", anchor: "experiment",
-    state: stageShipped ? "done" : running ? "current" : "todo",
-    status: running ? "experiment LIVE — prototype locked"
-      : stageShipped ? "concluded"
-      : inp.experimentStatus === "paused" ? "paused in Optimizely"
-      : "—",
-  });
-
-  // 6 · Shipped — the decision (until winner→PR automates it).
-  steps.push({
-    id: "shipped", title: "Shipped", anchor: "handoff",
+    id: "handoff", title: "Handoff", anchor: "handoff",
     state: stageShipped ? "done" : "todo",
-    status: stageShipped ? "winner in production code" : "—",
+    status: stageShipped ? "winner in production code" : "when the experiment wins",
   });
 
   // THE RULE: the pipeline holds at the FIRST gate that needs you. A blocked
@@ -225,15 +222,16 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   if (!running && !stageShipped) {
     const gate = steps.find((s) => s.state === "blocked");
     if (!gate) {
-      const firstOpen = steps.find((s) => s.id !== "testing" && s.state !== "done");
+      // Handoff is terminal — reached only by shipping, never auto-promoted.
+      const firstOpen = steps.find((s) => s.id !== "handoff" && s.state !== "done");
       if (firstOpen && firstOpen.state === "todo") firstOpen.state = "current";
     }
   }
 
   // ── the one stage word (shared verbatim with the board column) ──
-  const stageId: PipelineStep["id"] = stageShipped ? "shipped"
-    : running ? "testing"
-    : (steps.find((s) => s.state === "blocked" || s.state === "current")?.id ?? "launch");
+  const stageId: PipelineStep["id"] = stageShipped ? "handoff"
+    : running ? "experiment"
+    : (steps.find((s) => s.state === "blocked" || s.state === "current")?.id ?? "experiment");
   const stageStep = steps.find((s) => s.id === stageId)!;
   const stage: PipelineStage = {
     id: stageId,
@@ -255,15 +253,15 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   else if (!pushCurrent) primaryAction = { label: `Push v${latest!.version} to Optimizely`, anchor: "experiment" };
   else if (running) primaryAction = { label: "Running — watch results", anchor: "experiment" };
   else if (!stageShipped) primaryAction = { label: "Start the experiment in Optimizely", anchor: "experiment" };
-  else primaryAction = { label: "Shipped ✓", anchor: "experiment" };
+  else primaryAction = { label: "Hand off the winner", anchor: "handoff" };
 
-  // ── the Overview checklist: one row per pipeline-backed room ──
+  // ── the Overview checklist: one row per stage, in flow order ──
   const ROOMS: { step: PipelineStep["id"]; tab: string; label: string; pending: string }[] = [
     { step: "brief", tab: "brief", label: "Brief", pending: "Describe the change and how success is judged." },
     { step: "build", tab: "build", label: "Build", pending: "Provision the branch and build the variation with the agent." },
     { step: "review", tab: "review", label: "Review", pending: "Add the page(s) and verify the variation injects on the real site." },
-    { step: "launch", tab: "experiment", label: "Experimentation", pending: "Cut a version, bind an Optimizely experiment, and push." },
-    { step: "shipped", tab: "handoff", label: "Handoff", pending: "When the experiment wins, hand the winning version to the dev team." },
+    { step: "experiment", tab: "experiment", label: "Experimentation", pending: "Cut a version, bind an Optimizely experiment, and push." },
+    { step: "handoff", tab: "handoff", label: "Handoff", pending: "When the experiment wins, hand the winning version to the dev team." },
   ];
   const checklist: ChecklistItem[] = ROOMS.map(({ step: sid, tab, label, pending }) => {
     const st = steps.find((s) => s.id === sid)!;

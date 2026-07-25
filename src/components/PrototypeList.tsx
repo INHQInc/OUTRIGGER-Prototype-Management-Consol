@@ -50,7 +50,7 @@ export function PrototypeList({ cards }: { cards: BoardCard[] }) {
                 <span className="text-[14px] font-semibold block truncate">{c.name}</span>
                 {c.hypothesis && <span className="text-[12.5px] text-muted-2 block truncate">{c.hypothesis}</span>}
               </span>
-              <span className={`text-[13px] font-medium ${c.column === "testing" ? "text-warn" : c.column === "shipped" ? "text-ok" : "text-muted"}`}>
+              <span className={`text-[13px] font-medium ${c.locked ? "text-warn" : c.column === "handoff" ? "text-ok" : "text-muted"}`}>
                 {c.locked ? "🔒 " : ""}{col.label}
               </span>
               <span className="flex items-center gap-1">

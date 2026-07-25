@@ -10,16 +10,10 @@ const SEVERITY_WORD: Record<StepSeverity, string> = { critical: "Blocked", atten
 
 export interface ActivityItem { at: string; text: string; who?: string }
 
-/** Split stored criteria back into checkable lines. */
-function criteriaLines(s: string): string[] {
-  return s.split(/\n+/).map((l) => l.replace(/^[-•]\s*/, "").trim()).filter(Boolean);
-}
-
 /**
- * Overview — the prototype as a living thing, not a list of steps.
- * What it IS (the brief, rendered), what's MISSING (the gates, linked to their
- * rooms), and what's HAPPENING (the activity feed — every heartbeat the system
- * already records, finally visible).
+ * Overview — the prototype's status home: the flow checklist (what's done /
+ * what's next), the recommendations raised against it, and the activity feed.
+ * The brief itself lives in its own tab, not here.
  */
 export function PrototypeOverview({ proto, pipeline, activity, recommendations, canManage }: {
   proto: PrototypeRecord;
@@ -28,8 +22,6 @@ export function PrototypeOverview({ proto, pipeline, activity, recommendations, 
   recommendations: Idea[];
   canManage: boolean;
 }) {
-  const b = proto.brief;
-  const hasBrief = Boolean(b.change?.trim());
   // PIPELINE ORDER, always — the checklist IS the flow (Brief → Build → Review →
   // Experimentation → Handoff). Status is the dot's color, never the position;
   // reordering by urgency destroys the one thing a checklist is for.
@@ -61,31 +53,8 @@ export function PrototypeOverview({ proto, pipeline, activity, recommendations, 
           </div>
         </div>
 
-        {/* The brief, as its document — only when there IS one (the checklist's
-            Brief row guides an empty one). */}
-        {hasBrief && (
-          <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-[13px] font-semibold uppercase tracking-wider text-muted-2">The brief</div>
-              <Link href="?tab=brief" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">Edit →</Link>
-            </div>
-            <p className="text-[15px] leading-relaxed max-w-[70ch]">{b.change}</p>
-            {b.doneLooksLike?.trim() && (
-              <ul className="space-y-1">
-                {criteriaLines(b.doneLooksLike).slice(0, 5).map((c, i) => (
-                  <li key={i} className="text-[14px] text-muted leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
-                ))}
-              </ul>
-            )}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {proto.metrics.primary && <span className="text-[13px] px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] font-medium">📊 {proto.metrics.primary}</span>}
-              {proto.metrics.guardrails.slice(0, 3).map((g, i) => <span key={i} className="text-[13px] px-2 py-1 rounded-md bg-surface-2 text-muted-2">🛡 {g}</span>)}
-            </div>
-          </div>
-        )}
-
-        {/* No parts grid: the tab row directly above IS the map of the rooms,
-            dots included. Restating it as cards was the tab bar said twice. */}
+        {/* The brief has its own tab AND a checklist row above — no third copy
+            here. Overview = status (checklist) + recommendations + activity. */}
 
         {/* Recommendations for this prototype — agent build-friction, triaged here. */}
         <Recommendations prototypeKey={proto.key} initial={recommendations} canManage={canManage} />
