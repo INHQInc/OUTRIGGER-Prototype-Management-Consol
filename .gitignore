@@ -5,3 +5,6 @@ node_modules/
 snapshots/
 .DS_Store
 .data/
+
+# TS incremental build cache — generated, not source
+tsconfig.tsbuildinfo
