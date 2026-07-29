@@ -9,10 +9,10 @@ Every fact has exactly ONE home per screen. Before adding any status text,
 banner, badge, or empty-state sentence, ask: **where does this fact already
 appear?** If it appears anywhere, link to it — don't restate it.
 
-- Status/stage → the header chip. Nowhere else.
-- Gates & problems → **the Overview checklist** (one row per room, colored by
-  severity, description + link). It is the Overview status home, so the header
-  status strip is HIDDEN on Overview and shown only on the working tabs.
+- Status/stage → the rail's status block (stage chip + stage strip). Nowhere else.
+- Gates & problems → **the command rail** — every lifecycle row carries its live
+  severity dot; the gate line sits under the CTA. THE RAIL IS THE CHECKLIST;
+  there is no Overview page.
 - The CTA states the action ("Write the brief"), not the reason. And it is
   HIDDEN when you're already in the room it points to (a link back to the
   current tab is dead weight).
@@ -46,10 +46,17 @@ don't align."*
 
 ## 3. Rooms, not steps
 
-Workspace tabs are the prototype's PARTS — nouns a team recognizes (Brief,
-Source Control, Skills, Build, Review, Experimentation, Handoff) — never a restating of
-pipeline steps as sections. The pipeline is status (header), not information
-architecture. Never render a vertical list of step-cards.
+The workspace rail's rows are the prototype's PARTS — nouns a team recognizes,
+grouped Opti-style (Plan→Brief · Build→Agent/Skills/Recommendations ·
+Target→Pages · Experiment→Versions/Optimizely · Handoff→Explorer/Ship record ·
+Settings) — never a restating of pipeline steps as sections. The pipeline is
+status (the rail's status block + dots), not information architecture. Never
+render a vertical list of step-cards.
+
+**Opti-native grammar (user-locked 07-25):** the /prototypes front door is an
+Optimizations-style table; the workspace is a command rail; the app sidebar
+collapses to an icon rail inside a prototype. When adding a surface, ask "how
+does Optimizely say this?" first — familiarity to an Opti user is a feature.
 
 *Origin: "it's all super confusing… a prototype has a brief, source control
 setup, experimentation setup, skills setup, code handoff — not a list of steps."*
