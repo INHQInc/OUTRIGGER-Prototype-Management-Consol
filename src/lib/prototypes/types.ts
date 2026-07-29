@@ -168,6 +168,13 @@ export interface ArtifactVersion {
   createdBy?: string;
   /** QA-gate report from cut time (see lib/certify). Absent on legacy versions. */
   certification?: import("../certify/certify").CertificationReport;
+  /**
+   * The brief AS IT WAS at cut time — the spec this exact code was built to
+   * satisfy. The live brief keeps evolving (agent + human co-author it); the
+   * frozen copy is what you judge THIS version's results against. This is the
+   * brief's version history: one immutable snapshot per cut.
+   */
+  briefSnapshot?: { brief: PrototypeBrief; hypothesis: PrototypeHypothesis; metrics: PrototypeMetrics };
 }
 
 /** Binding to the Optimizely experiment this prototype ships into.

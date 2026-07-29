@@ -76,6 +76,10 @@ export async function cutArtifactVersionFromRepo(
     variationJs: src.variationJs,
   });
   version.certification = certification;
+  // Freeze the brief this code was built against — the live brief keeps
+  // evolving; each cut carries its own immutable spec (hypothesis → commit
+  // traceability, per the lifecycle model).
+  if (proto) version.briefSnapshot = { brief: proto.brief, hypothesis: proto.hypothesis, metrics: proto.metrics };
   // persist the report onto the stored record (append-only store: re-add same id overwrites)
   try { await (await getContentStore()).addArtifactVersion(version); } catch { /* stores that reject dup ids keep the plain version */ }
   const orgId = proto ? await resolvePrototypeOrg(proto) : "";

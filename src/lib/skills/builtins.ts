@@ -66,8 +66,16 @@ the user plainly:
 > "Skills changed — I've pulled them, but they won't take effect until you
 > restart me (quit and re-run \`claude\`)."
 
-Do **not** silently build against a stale brief — the console is canonical, and
-it wins.
+Do **not** silently build against a stale brief — but know WHAT is canonical:
+
+- **Intent is console-canonical**: target pages, the decision metric,
+  guardrails, the hypothesis. If these changed in the console, they win —
+  adapt the build.
+- **Design details you iterated WITH the user are build-canonical**: if
+  \`.opmc/brief.md\` still describes an older design (a "modal" you and the
+  user deliberately turned into a tray), that is the BRIEF lagging, not the
+  build being wrong. **Never revert iterated work to match a stale brief** —
+  update the brief instead (see "The brief stays true").
 
 ## 1. Orient yourself (do this first, unprompted — no token needed)
 
@@ -103,6 +111,27 @@ If \`brief.md\` says *"no change described yet"* (or is vague enough that you'd 
 4. **Success** — what makes this a win vs. the control?
 
 Then **PATCH the brief back to the console** (§5) so it's the shared source of truth, *then* build.
+
+## The brief stays true — a two-way contract
+
+The brief has two layers with different owners:
+
+- **Intent (human-owned, console-canonical):** hypothesis, decision metric,
+  guardrails, target pages. You NEVER change these silently. If iteration
+  makes you believe one is wrong ("this metric can't be measured on this
+  page"), say so and propose the change — the human decides.
+- **Design (build-canonical, you are the scribe):** the change description,
+  where/trigger, done-looks-like. These legitimately evolve as you iterate
+  with the user. **When a user-directed change alters WHAT is being built or
+  what done looks like, PATCH the brief back to the console (§5) in the SAME
+  session.** Don't batch it for later; a session that ends with the build
+  ahead of the brief has failed its definition of done.
+
+Why this matters: the brief becomes the Optimizely experiment's description
+and the record the team judges results against. If you let it rot while the
+build evolves, the record lies at exactly the moment it matters. And a stale
+brief re-synced into \`.opmc/\` will confuse the NEXT session into doubting
+deliberate work. Whoever changes reality updates the spec — that's you.
 
 ## 3. Data-first, brand-second
 
