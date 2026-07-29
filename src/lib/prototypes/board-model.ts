@@ -25,7 +25,11 @@ export interface BoardCard {
   experimentStatus?: string;     // not_started | running | paused | archived
   pipeline: Pipeline;
   metric?: string;
+  guardrailCount?: number;
   hypothesis?: string;
+  /** The brief's change, one line — the table's description row. */
+  description?: string;
+  versionCount?: number;
   owner?: string;
   priority?: number;
 }

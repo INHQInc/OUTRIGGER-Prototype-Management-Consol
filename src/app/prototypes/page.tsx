@@ -2,15 +2,19 @@ import { getActiveOrgId } from "@/lib/active-org";
 import { PageHeader, EmptyState } from "@/components/ui";
 import Link from "next/link";
 import { ProgramBoard } from "@/components/ProgramBoard";
-import { PrototypeList } from "@/components/PrototypeList";
+import { PrototypeTable } from "@/components/PrototypeTable";
 import { buildBoard } from "@/lib/prototypes/board";
 import { NewPrototype } from "@/components/NewPrototype";
 
 export const dynamic = "force-dynamic";
 
-/** The customer-wide prototype view — one truth, two lenses (Board | List). */
+/**
+ * The customer-wide prototype view. The TABLE is the front door — Optimizely's
+ * Optimizations grammar, so an Opti user reads it with zero onboarding. The
+ * board survives as a program lens (?view=board).
+ */
 export default async function PrototypesBoard({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
-  const view = (await searchParams).view === "list" ? "list" : "board";
+  const view = (await searchParams).view === "board" ? "board" : "table";
   const orgId = await getActiveOrgId();
   if (!orgId) {
     return (
@@ -26,25 +30,25 @@ export default async function PrototypesBoard({ searchParams }: { searchParams: 
   const { cards, archivedCount } = await buildBoard(orgId);
 
   const tab = (id: string, label: string) => (
-    <Link href={id === "board" ? "/prototypes" : `/prototypes?view=${id}`}
+    <Link href={id === "table" ? "/prototypes" : `/prototypes?view=${id}`}
       className={`px-3 py-1.5 rounded-lg text-[14px] font-semibold transition-colors ${view === id ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground"}`}>
       {label}
     </Link>
   );
   return (
     <>
-      <PageHeader title="Prototypes" subtitle="Where every experiment actually is — same truth, two lenses" />
+      <PageHeader title="Prototypes" subtitle="Every prototype, its stage, and its experiment — one truth" />
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="flex items-center gap-4 mb-4">
-          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 shrink-0">{tab("board", "Board")}{tab("list", "List")}</div>
+          <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 shrink-0">{tab("table", "Table")}{tab("board", "Board")}</div>
           <p className="text-[13px] text-muted-2 min-w-0 truncate">
-            {view === "list"
-              ? "Every prototype, filterable by stage — same truth as the board."
-              : "Columns are ground truth — cards move when the work moves. Drag to reorder priority, or Launch → Shipped when you call it."}
+            {view === "board"
+              ? "The program lens — columns are ground truth; drag to reorder priority, or Experimentation → Handoff when you call it."
+              : "Click a prototype to open it. Status and stage strip are derived — they can't lie."}
           </p>
           <div className="ml-auto shrink-0"><NewPrototype /></div>
         </div>
-        {view === "list" ? <PrototypeList cards={cards} /> : <ProgramBoard cards={cards} archivedCount={archivedCount} />}
+        {view === "board" ? <ProgramBoard cards={cards} archivedCount={archivedCount} /> : <PrototypeTable cards={cards} />}
       </div>
     </>
   );

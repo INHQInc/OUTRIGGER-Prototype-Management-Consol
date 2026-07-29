@@ -53,7 +53,10 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     return {
       key: p.key, name: p.name, column, locked, experimentStatus, pipeline,
       metric: p.metrics.primary || undefined,
+      guardrailCount: p.metrics.guardrails.length || undefined,
       hypothesis: p.hypothesis.change || undefined,
+      description: p.brief.change || undefined,
+      versionCount: versions.length || undefined,
       owner: p.owner,
       priority: p.priority,
     };

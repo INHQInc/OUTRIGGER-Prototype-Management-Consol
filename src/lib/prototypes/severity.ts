@@ -1,6 +1,6 @@
 /**
  * Client-safe severity model — the four-color status vocabulary, split out so
- * client components (ProgramBoard, PrototypeList) can value-import it without
+ * client components (ProgramBoard, PrototypeTable) can value-import it without
  * pulling pipeline.ts's server graph (store/auth) into the browser bundle.
  * Only TYPE imports here, so this module has zero runtime dependencies.
  */

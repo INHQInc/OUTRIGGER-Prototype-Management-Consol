@@ -109,7 +109,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   }
 
   if (!repo) {
-    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[14px]">This prototype has no repo yet. <Link href={`/prototypes/${prototypeKey}/settings`} className="text-accent hover:text-accent-hover font-medium">Choose one in Settings →</Link></div>;
+    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[14px]">This prototype has no repo yet. <Link href={`/prototypes/${prototypeKey}?tab=repo`} className="text-accent hover:text-accent-hover font-medium">Choose one in Settings →</Link></div>;
   }
 
   const fullName = repo.fullName;
