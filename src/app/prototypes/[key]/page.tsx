@@ -206,11 +206,14 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
           {gate && <div className="mt-2.5 text-[12px] leading-snug text-warn">⚠ {gate}</div>}
         </div>
 
-        {/* Grouped sections — every lifecycle row carries its live severity dot */}
+        {/* Grouped sections. Hierarchy is carried by ALIGNMENT: the group
+            label owns the outer edge; every row reserves the same dot slot
+            (transparent when the row has no lifecycle dot) so all item labels
+            sit in one indented column under their header. */}
         {GROUPS.map((g) => (
-          <div key={g.label} className="mt-4">
-            <div className="px-2 text-[10.5px] font-semibold uppercase tracking-wider text-muted-2">{g.label}</div>
-            <div className="mt-1 space-y-0.5">
+          <div key={g.label} className="mt-5">
+            <div className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-2">{g.label}</div>
+            <div className="mt-1.5 space-y-0.5">
               {g.items.map((item) => {
                 const sev = dotFor(item);
                 const active = tab === item.id;
@@ -218,7 +221,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
                   <Link key={item.id} href={`?tab=${item.id}`}
                     className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[13.5px] transition-colors ${
                       active ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-foreground font-semibold" : "text-muted hover:text-foreground hover:bg-surface-2/60 font-medium"}`}>
-                    {sev && <span className={`w-2 h-2 rounded-full shrink-0 ${SEVERITY_DOT[sev]}`} />}
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${sev ? SEVERITY_DOT[sev] : "bg-transparent"}`} />
                     <span className="truncate">{item.label}</span>
                     {item.id === "recs" && openRecs > 0 && (
                       <span className="ml-auto text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-warn bg-[color-mix(in_srgb,var(--warn)_12%,transparent)]">{openRecs}</span>
