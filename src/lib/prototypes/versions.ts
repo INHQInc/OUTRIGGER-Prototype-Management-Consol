@@ -10,7 +10,9 @@ import { audit } from "../audit";
 import { certifyVariation } from "../certify/certify";
 import { resolvePrototypeOrg } from "./org";
 import { getCoverage } from "./coverage";
-import type { ArtifactVersion } from "./types";
+import { getBriefDrift, briefFingerprint } from "./brief-drift-state";
+import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit } from "./brief-audit";
+import { isBriefComplete, type ArtifactVersion } from "./types";
 
 export async function listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
   return (await getContentStore()).listArtifactVersions(prototypeKey);
@@ -74,6 +76,36 @@ export async function cutArtifactVersionFromRepo(
     throw new Error(src.error ?? "No built variation found on the prototype's branch.");
   }
   const proto = await (await getContentStore()).getPrototype(prototypeKey);
+  // SELF-AWARE GATE: a cut freezes briefSnapshot — never freeze a lie. If
+  // this (build, brief) pair has never been judged, audit it NOW — forced
+  // (an in-flight page-view audit must not let the cut slip through
+  // unjudged) and pinned to the EXACT code this cut freezes (no second
+  // repo pull, no verdict about a different commit). Infra failures fail
+  // OPEN (the next console view re-audits); a drifted verdict fails CLOSED.
+  if (proto) {
+    let drift = await getBriefDrift(prototypeKey, proto).catch(() => null);
+    let gateDrifted = false;
+    if (!drift && isBriefComplete(proto.brief, proto.metrics)) {
+      const marker = await getBriefAuditMarker(prototypeKey).catch(() => null);
+      if (briefAuditNeeded(marker, src.headSha, briefFingerprint(proto))) {
+        const outcome = await runBriefAudit(proto, {
+          actor: opts.createdBy ?? "console (auto-audit)",
+          force: true,
+          build: { variationJs: src.variationJs, builtSha: src.headSha },
+        }).catch(() => null);
+        // The gate trusts the verdict it just got DIRECTLY — it judged the
+        // exact code this cut freezes, so it fails closed even if its
+        // persist lost a race with a concurrent run's write.
+        gateDrifted = Boolean(outcome?.ran && !outcome.report.inSync);
+      }
+      // Re-read regardless: either our forced run just persisted a verdict,
+      // or a concurrent audit landed one between the two reads above.
+      drift = drift ?? await getBriefDrift(prototypeKey, proto).catch(() => null);
+    }
+    if (drift || gateDrifted) {
+      throw new Error("Brief ↔ build drift is unresolved — this cut would freeze a brief that doesn't match the code. Resolve it in the Brief room (update the brief, or dismiss the audit if the brief is accurate), then cut.");
+    }
+  }
   // Everything frozen with the version is computed BEFORE the cut, so the one
   // append-only write carries the complete record:
   //  · certification — "was this build safe to ship?" has one immutable answer

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { resolvePrototypeRepo } from "@/lib/prototypes/repo";
@@ -16,7 +17,8 @@ import { isBriefComplete, normalizeStage } from "@/lib/prototypes/types";
 import { resolveSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { listRecommendations } from "@/lib/ideas/ideas";
-import { getBriefDrift } from "@/lib/prototypes/brief-drift-state";
+import { getBriefDrift, briefFingerprint } from "@/lib/prototypes/brief-drift-state";
+import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetSha } from "@/lib/prototypes/brief-audit";
 import { getCoverage, coverageGate, coverageStale } from "@/lib/prototypes/coverage";
 import { CoveragePanel } from "@/components/CoveragePanel";
 import { currentUser } from "@/lib/auth/current";
@@ -38,6 +40,9 @@ import { DetailsEditor } from "@/components/DetailsEditor";
 import { DeletePrototype } from "@/components/DeletePrototype";
 
 export const dynamic = "force-dynamic";
+// The after()-scheduled self-audit is an LLM call and runs within this
+// function's lifetime budget — same reason every LLM route here sets this.
+export const maxDuration = 60;
 
 interface ActivityItem { at: string; text: string; who?: string }
 
@@ -112,6 +117,18 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     bytes: source?.variationJs ? Buffer.byteLength(source.variationJs, "utf8") : undefined,
     branchExists: source?.branchExists,
   };
+
+  // SELF-AWARE: if the console can see a build it has never judged against
+  // the current brief, audit it after this response ships — the rail turns
+  // red by itself; nobody has to remember to click Check drift. Marker-deduped
+  // (one LLM call per build×brief pair) and locked against view stampedes.
+  // auditTargetSha is the runner's OWN resolution rule — page and runner must
+  // agree on which sha is current or this trigger re-queues forever.
+  const briefAudit = await getBriefAuditMarker(key).catch(() => null);
+  const auditSha = auditTargetSha(source, versions[0]);
+  if (!briefDrift && briefAuditNeeded(briefAudit, auditSha, briefFingerprint(p))) {
+    after(() => runBriefAudit(p, { actor: "console (auto-audit)" }).catch(() => {}));
+  }
 
   let experimentStatus: string | null = null;
   if (p.experiment?.experimentId && orgId) {
@@ -239,7 +256,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       <main className="overflow-y-auto px-6 py-5">
         {tab === "brief" && (
           <Room title="Brief" sub="What are we building, and how do we know it worked? The brief is the gate — it becomes the agent's instructions and the experiment's description.">
-            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} />
+            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} initialAudit={briefAudit ? { inSync: briefAudit.inSync, builtSha: briefAudit.builtSha, checkedAt: briefAudit.checkedAt, checkedBy: briefAudit.checkedBy, current: !briefAuditNeeded(briefAudit, auditSha, briefFingerprint(p)) } : null} />
           </Room>
         )}
 

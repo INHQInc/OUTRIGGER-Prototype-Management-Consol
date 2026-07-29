@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
-import { resolveRepoSource } from "@/lib/prototypes/source";
-import { listArtifactVersions } from "@/lib/prototypes/versions";
-import { checkBriefDrift } from "@/lib/ai/brief";
-import { setBriefDrift, clearBriefDrift, briefFingerprint } from "@/lib/prototypes/brief-drift-state";
+import { runBriefAudit, setBriefAuditMarker } from "@/lib/prototypes/brief-audit";
+import { getBriefDrift, clearBriefDrift } from "@/lib/prototypes/brief-drift-state";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 
 export const maxDuration = 60;
 
 /**
- * POST { key }                 → AI drift audit vs the BUILT code. The verdict
- *                                PERSISTS: drifted → stored (blocks re-sync,
- *                                reds the rail) until resolved; in-sync → clears.
+ * POST { key }                 → AI drift audit vs the BUILT code (forced —
+ *                                an explicit human ask always runs, marker or
+ *                                not). The verdict PERSISTS: drifted → stored
+ *                                (blocks re-sync + cut, reds the rail) until
+ *                                resolved; in-sync → clears. The console also
+ *                                runs this audit BY ITSELF whenever it sees an
+ *                                unjudged build (lib/prototypes/brief-audit).
  * POST { key, dismiss: true }  → human overrides: "the brief is accurate."
- *                                Audited; clears the block.
+ *                                Audited; clears the block. The audit marker
+ *                                stays, so the dismissal stands until the
+ *                                build or the brief actually changes.
  * Session-only — spends console-level API credit.
  */
 export async function POST(req: NextRequest) {
@@ -27,33 +31,31 @@ export async function POST(req: NextRequest) {
 
   try {
     if (body.dismiss) {
+      // Write the marker for the dismissed pair FIRST — without it (legacy
+      // records, partial writes) the next page view would re-audit the same
+      // pair and silently reinstate the block the human just dismissed.
+      const rec = await getBriefDrift(g.proto.key);
+      if (rec) {
+        await setBriefAuditMarker(g.proto.key, {
+          builtSha: rec.builtSha ?? "", briefFingerprint: rec.briefFingerprint,
+          inSync: false, checkedAt: new Date().toISOString(), checkedBy: actor,
+        });
+      }
       await clearBriefDrift(g.proto.key);
       await audit(g.orgId, actor, "brief.drift-dismissed", g.proto.name, "human confirmed the brief is accurate despite the audit");
       return NextResponse.json({ ok: true });
     }
 
-    const source = await resolveRepoSource(g.proto.key).catch(() => null);
-    let variationJs = source?.found ? source.variationJs : undefined;
-    let builtSha = source?.headSha;
-    if (!variationJs) {
-      const latest = (await listArtifactVersions(g.proto.key))[0];
-      variationJs = latest?.variationJs;
-      builtSha = latest?.gitSha;
+    const outcome = await runBriefAudit(g.proto, { actor, force: true });
+    if (!outcome.ran) {
+      const msg = outcome.reason === "nothing-built"
+        ? "Nothing built yet — there's no code to compare the brief against."
+        : outcome.reason === "source-unavailable"
+          ? "Couldn't read the branch right now (repo unreachable) — try again in a moment."
+          : "The brief is incomplete — describe the change and set a decision metric first.";
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
-    if (!variationJs) return NextResponse.json({ error: "Nothing built yet — there's no code to compare the brief against." }, { status: 400 });
-
-    const report = await checkBriefDrift({ orgId: g.orgId, proto: g.proto, variationJs, builtSha });
-    if (report.inSync) {
-      await clearBriefDrift(g.proto.key);
-    } else {
-      await setBriefDrift(g.proto.key, {
-        report, builtSha, checkedAt: new Date().toISOString(), checkedBy: actor,
-        briefFingerprint: briefFingerprint(g.proto),
-      });
-    }
-    await audit(g.orgId, actor, "brief.drift-check", g.proto.name,
-      `${report.inSync ? "IN SYNC" : `DRIFTED · ${report.mismatches.length} mismatch${report.mismatches.length === 1 ? "" : "es"} · blocks re-sync until resolved`}${builtSha ? ` · vs ${builtSha.slice(0, 7)}` : ""}`);
-    return NextResponse.json({ report, builtSha });
+    return NextResponse.json({ report: outcome.report, builtSha: outcome.builtSha });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

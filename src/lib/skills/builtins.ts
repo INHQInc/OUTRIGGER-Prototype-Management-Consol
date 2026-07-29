@@ -133,6 +133,12 @@ build evolves, the record lies at exactly the moment it matters. And a stale
 brief re-synced into \`.opmc/\` will confuse the NEXT session into doubting
 deliberate work. Whoever changes reality updates the spec — that's you.
 
+The console is SELF-AWARE here: every new build you push gets auto-audited
+against the brief, and an unresolved drift verdict blocks re-sync AND version
+cuts until a human resolves it. Scribe in the same session (§5) and the audit
+stays green; skip it and the console flags the drift anyway — you've just
+turned a 30-second PATCH into a human's cleanup job.
+
 ## 3. Data-first, brand-second
 
 - **Data:** read \`data.md\` and probe in-page globals before designing any network call.

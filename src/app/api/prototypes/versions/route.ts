@@ -3,6 +3,12 @@ import { listArtifactVersions, cutArtifactVersion, cutArtifactVersionFromRepo } 
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { currentUser } from "@/lib/auth/current";
 
+// A repo cut may run the Brief ↔ Build audit synchronously (the self-aware
+// gate) — an LLM call on top of the GitHub pull + certification. 120 gives
+// the audit real headroom (the sibling brief-drift route spends 60 on the
+// audit alone); plans that cap lower clamp this silently.
+export const maxDuration = 120;
+
 /** GET ?key=<prototypeKey> → the prototype's immutable versions (newest first). */
 export async function GET(req: NextRequest) {
   const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"));

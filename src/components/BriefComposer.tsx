@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { referenceKind, normalizeReferenceUrl, isBriefComplete, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
 import type { BriefDraft, BriefSection, BriefDriftReport } from "@/lib/ai/brief";
+import { TimeAgo } from "@/components/ui";
 
 const REF_META: Record<BriefReferenceKind, { icon: string; label: string }> = {
   figma: { icon: "🎨", label: "Figma" },
@@ -170,7 +171,7 @@ function ReadinessMeter({ readiness, drafting }: { readiness: number | null; dra
  * Claude (initialized by the opmc-brief-author library skill) drafts; each
  * clarifying question gets its own answer box; the human stays the editor.
  */
-export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, initialMetrics, buildAvailable = false, initialDrift = null }: {
+export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, initialMetrics, buildAvailable = false, initialDrift = null, initialAudit = null }: {
   prototypeKey: string;
   initialBrief: PrototypeBrief;
   initialHypothesis: PrototypeHypothesis;
@@ -179,6 +180,9 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   buildAvailable?: boolean;
   /** Persisted drift verdict from a previous audit — survives refresh; blocks re-sync until resolved. */
   initialDrift?: { report: BriefDriftReport; builtSha?: string } | null;
+  /** The console's last SELF-audit of this (build, brief) pair — proof the
+   *  system is watching. `current` = the pair on screen is the judged one. */
+  initialAudit?: { inSync: boolean; builtSha?: string; checkedAt: string; checkedBy?: string; current: boolean } | null;
 }) {
   const router = useRouter();
   const [explain, setExplain] = useState("");
@@ -447,6 +451,16 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
               {driftBusy ? "Auditing…" : drift ? "Re-check" : "Check drift"}
             </button>
           </div>
+          {/* The console audits by itself — this line is the proof it's watching. */}
+          {!drift && !driftErr && initialAudit && (
+            <div className="px-4 py-2.5 text-[12.5px] text-muted-2">
+              {!initialAudit.current
+                ? <>Self-audit queued — the build or brief changed; the console re-audits automatically.</>
+                : initialAudit.inSync
+                  ? <><span className="text-ok">✓</span> Self-audit: in sync{initialAudit.builtSha ? <> with build <span className="font-mono">{initialAudit.builtSha.slice(0, 7)}</span></> : null} · <TimeAgo iso={initialAudit.checkedAt} /> · re-runs on every new build</>
+                  : <>Drift was found and dismissed — brief confirmed accurate{initialAudit.builtSha ? <> vs <span className="font-mono">{initialAudit.builtSha.slice(0, 7)}</span></> : null} · <TimeAgo iso={initialAudit.checkedAt} /></>}
+            </div>
+          )}
           {(driftErr || drift) && (
             <div className="px-4 py-3 space-y-2.5">
               {driftErr && <div className="text-[14px] text-danger">{driftErr}</div>}
