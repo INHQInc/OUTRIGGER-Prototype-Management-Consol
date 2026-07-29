@@ -51,7 +51,8 @@ interface ActivityItem { at: string; text: string; who?: string }
 const GROUPS = [
   { label: "Plan", items: [{ id: "brief", label: "Brief", step: "brief" }] },
   { label: "Build", items: [{ id: "agent", label: "Agent", step: "build" }, { id: "skills", label: "Skills" }, { id: "recs", label: "Recommendations" }] },
-  { label: "Target", items: [{ id: "pages", label: "Pages", step: "review" }, { id: "coverage", label: "Coverage" }] },
+  { label: "Target", items: [{ id: "pages", label: "Pages", step: "review" }] },
+  { label: "QA", items: [{ id: "coverage", label: "Scenarios" }] },
   { label: "Experiment", items: [{ id: "versions", label: "Versions" }, { id: "optimizely", label: "Optimizely", step: "experiment" }] },
   { label: "Handoff", items: [{ id: "explorer", label: "Code explorer" }, { id: "ship", label: "Ship record", step: "handoff" }] },
   { label: "Settings", items: [{ id: "repo", label: "Repo & branch" }, { id: "details", label: "Details" }, { id: "history", label: "History" }] },
@@ -267,7 +268,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         )}
 
         {tab === "coverage" && (
-          <Room title="Coverage" sub="Every scenario this prototype must survive — use cases with checkable tests per device, derived from the brief AND the built code. Walk them on the real review URL and click the device cells; gaps are scenarios the build doesn't handle.">
+          <Room title="QA scenarios" sub="Validate the prototype before the experiment runs — and hand the record to the devs building the final product. Use cases with checkable tests per device, derived from the brief AND the built code; walk them on the real review URL and click the device cells. Gaps are scenarios the build doesn't handle.">
             <CoveragePanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
           </Room>
         )}
@@ -404,9 +405,14 @@ function labelForAction(action: string): string {
     "prototype.create": "Prototype created",
     "version.cut": "Version cut",
     "experiment.push": "Pushed to Optimizely",
+    "optimizely.push": "Pushed to Optimizely",
     "experiment.bind": "Experiment bound",
     "experiment.create": "Experiment created in Optimizely",
     "brief.correction": "Brief refined",
+    "brief.drift-check": "Brief ↔ build drift checked",
+    "brief.drift-dismissed": "Brief drift dismissed — brief confirmed accurate",
+    "coverage.generated": "QA spec generated",
+    "coverage.reviewed": "QA review completed",
   };
   return map[action] ?? action;
 }

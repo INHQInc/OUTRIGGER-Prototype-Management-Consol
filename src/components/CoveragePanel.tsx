@@ -96,13 +96,13 @@ export function CoveragePanel({ prototypeKey, initial, currentSha, buildAvailabl
     return (
       <div className="rounded-xl border border-border bg-surface px-4 py-4 space-y-3">
         <p className="text-[14px] text-muted-2 max-w-[75ch]">
-          No coverage spec yet. Generation reads the brief AND the built code and derives every scenario — core flows, edge states, device behaviors, interaction hygiene — each with checkable acceptance tests. Scenarios the code <b>doesn&apos;t</b> handle get flagged as gaps.
+          No QA spec yet. Generation reads the brief AND the built code and derives every scenario — core flows, edge states, device behaviors, interaction hygiene — each with checkable acceptance tests. Scenarios the code <b>doesn&apos;t</b> handle get flagged as gaps.
         </p>
         <div className="flex items-center justify-between gap-3">
           <span className="text-[13px] text-danger min-w-0">{err}</span>
-          <button onClick={generate} disabled={busy || !buildAvailable} title={buildAvailable ? "" : "Build first — coverage derives from the built code"}
+          <button onClick={generate} disabled={busy || !buildAvailable} title={buildAvailable ? "" : "Build first — the QA spec derives from the built code"}
             className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
-            {busy ? "Deriving from the build…" : "Generate coverage"}
+            {busy ? "Deriving from the build…" : "Generate QA spec"}
           </button>
         </div>
       </div>
@@ -114,7 +114,7 @@ export function CoveragePanel({ prototypeKey, initial, currentSha, buildAvailabl
     <div className="space-y-3">
       {stale && (
         <div className="rounded-lg border border-warn/50 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3.5 py-2.5 flex items-center gap-3 text-[13.5px] text-warn">
-          <span className="min-w-0">The build has moved past this coverage (spec vs <span className="font-mono">{spec.builtSha?.slice(0, 7)}</span>, branch at <span className="font-mono">{currentSha?.slice(0, 7)}</span>) — regenerate to re-derive from the current code.</span>
+          <span className="min-w-0">The build has moved past this QA spec (derived vs <span className="font-mono">{spec.builtSha?.slice(0, 7)}</span>, branch at <span className="font-mono">{currentSha?.slice(0, 7)}</span>) — regenerate to re-derive from the current code.</span>
           <button onClick={generate} disabled={busy} className="ml-auto h-8 px-3 rounded-lg bg-warn text-accent-fg text-[13.5px] font-semibold hover:opacity-90 disabled:opacity-40 shrink-0">{busy ? "Regenerating…" : "Regenerate"}</button>
         </div>
       )}

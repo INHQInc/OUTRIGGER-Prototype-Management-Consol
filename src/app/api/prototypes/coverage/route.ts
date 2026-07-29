@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         variationJs = latest?.variationJs;
         builtSha = latest?.gitSha;
       }
-      if (!variationJs) return NextResponse.json({ error: "Nothing built yet — coverage is derived from the built code." }, { status: 400 });
+      if (!variationJs) return NextResponse.json({ error: "Nothing built yet — the QA spec is derived from the built code." }, { status: 400 });
 
       const scenarios = await generateCoverage({ proto: g.proto, variationJs, builtSha });
       // Carry review results forward where scenario ids survived regeneration —
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     if (body.results) {
       const spec = await getCoverage(g.proto.key);
-      if (!spec) return NextResponse.json({ error: "No coverage spec yet — generate it first." }, { status: 400 });
+      if (!spec) return NextResponse.json({ error: "No QA spec yet — generate it first." }, { status: 400 });
       const byId = new Map(spec.scenarios.map((s) => [s.id, s]));
       const wasReviewed = coverageReviewed(spec);
       for (const [sid, byDevice] of Object.entries(body.results)) {

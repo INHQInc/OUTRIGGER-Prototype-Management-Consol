@@ -163,7 +163,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
         const err = String(data.error ?? "Push failed");
         if (err.startsWith("COVERAGE_ACK_REQUIRED:")) {
           setCovAckNeeded(err.replace("COVERAGE_ACK_REQUIRED:", "").trim());
-          setMsg({ ok: false, text: "Coverage isn't signed off — review it, or acknowledge below to push anyway." });
+          setMsg({ ok: false, text: "QA isn't signed off — review it, or acknowledge below to push anyway." });
           return;
         }
         setMsg({ ok: false, text: err });

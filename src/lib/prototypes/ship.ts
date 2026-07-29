@@ -76,17 +76,18 @@ export async function pushToOptimizely(prototypeKey: string, opts: { version?: n
     throw new Error(`Certification failed on v${chosen.version} (${fails}). Fix and re-cut, or push with an explicit override.`);
   }
 
-  // Coverage: a WARN with teeth, not a hard block (certification is objective;
-  // coverage review is human judgment — hard-gating arrives with role sign-offs).
-  // Unreviewed or failing coverage demands an explicit acknowledgement, recorded.
+  // QA (user-facing name; internally "coverage"): a WARN with teeth, not a
+  // hard block (certification is objective; QA review is human judgment —
+  // hard-gating arrives with role sign-offs). Unreviewed or failing QA
+  // demands an explicit acknowledgement, recorded.
   const coverage = await getCoverage(prototypeKey).catch(() => null);
   const covGate = coverageGate(coverage);
-  const covProblem = covGate === "none" ? "no coverage spec has been generated"
-    : covGate === "unreviewed" ? "core coverage scenarios are unreviewed"
-    : covGate === "failing" ? "coverage has FAILING checks"
+  const covProblem = covGate === "none" ? "no QA spec has been generated"
+    : covGate === "unreviewed" ? "core QA scenarios are unreviewed"
+    : covGate === "failing" ? "QA has FAILING checks"
     : null;
   if (covProblem && !opts.coverageAck) {
-    throw new Error(`COVERAGE_ACK_REQUIRED: ${covProblem} — review the Coverage tab, or acknowledge and push anyway (recorded in the audit log).`);
+    throw new Error(`COVERAGE_ACK_REQUIRED: ${covProblem} — review the QA room, or acknowledge and push anyway (recorded in the audit log).`);
   }
 
   const { experimentId, variationId } = proto.experiment;
@@ -123,7 +124,7 @@ export async function pushToOptimizely(prototypeKey: string, opts: { version?: n
   await store.setFlag(pushFlag(prototypeKey), JSON.stringify(result));
   await audit(orgId, opts.actor ?? "system", "optimizely.push",
     `${prototypeKey} v${chosen.version} → exp ${experimentId}/var ${variationId}`,
-    `${result.bytes.toLocaleString()} bytes · ${chosen.gitSha.slice(0, 7)} · read-back ${verified ? "VERIFIED" : "MISMATCH"}${result.overridden ? " · CERT OVERRIDDEN" : ""}${covProblem ? ` · COVERAGE ACK (${covProblem})` : ""}${rollback ? ` · ROLLBACK (latest is v${versions[0].version})` : ""}`);
+    `${result.bytes.toLocaleString()} bytes · ${chosen.gitSha.slice(0, 7)} · read-back ${verified ? "VERIFIED" : "MISMATCH"}${result.overridden ? " · CERT OVERRIDDEN" : ""}${covProblem ? ` · QA ACK (${covProblem})` : ""}${rollback ? ` · ROLLBACK (latest is v${versions[0].version})` : ""}`);
 
   if (!verified) throw new Error("Pushed, but the read-back did not byte-match what Optimizely stored. Re-open the variation in Optimizely and inspect before publishing.");
   return result;
