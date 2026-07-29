@@ -290,12 +290,9 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
               targetCount={p.targets.length}
               prototypeName={p.name}
             />
-            <details className="group/manual mt-3">
-              <summary className="text-[13px] text-muted-2 cursor-pointer hover:text-foreground">Manual bundle (fallback — copy/paste instead of the API push)</summary>
-              <div className="mt-2">
-                <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
-              </div>
-            </details>
+            <div className="mt-3">
+              <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
+            </div>
           </Room>
         )}
 
