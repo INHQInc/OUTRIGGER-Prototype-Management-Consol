@@ -210,6 +210,11 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const dirty = JSON.stringify({ brief, hyp, metrics }) !== saved;
   const hasContent = Boolean(brief.change?.trim());   // enough to render the document
   const gateOpen = isBriefComplete(brief, metrics);   // change + metric — the real gate
+  // Once a COMPLETE brief is SAVED, drafting retires: "Draft with AI" replaces
+  // the whole document — a destructive action once the brief has matured.
+  // Refine + the drift audit are the evolution tools from then on. Clearing the
+  // change and saving brings the drafting drawer back (the natural start-over).
+  const [savedComplete, setSavedComplete] = useState(() => isBriefComplete(initialBrief, initialMetrics));
   const refs = brief.references ?? [];
   const addRef = (url: string, label?: string) => { setBrief((b) => ({ ...b, references: [...(b.references ?? []), { url, label, kind: referenceKind(url) }] })); setMsg(null); };
   const removeRef = (i: number) => { setBrief((b) => ({ ...b, references: (b.references ?? []).filter((_, j) => j !== i) })); setMsg(null); };
@@ -347,6 +352,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       const data = await res.json();
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
       setSaved(JSON.stringify({ brief, hyp, metrics }));
+      setSavedComplete(isBriefComplete(brief, metrics));
       setMsg({ ok: true, text: isBriefComplete(brief, metrics) ? "Brief saved — the gate is open." : "Saved — now add a success metric to open the gate." });
       router.refresh();
     } finally { setBusy(false); }
@@ -374,7 +380,10 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
 
   return (
     <div className="space-y-3">
-      {/* AI on-ramp — always open; drafting the brief is the whole point of this room. */}
+      {/* AI on-ramp — the drafting phase only. Once a complete brief is SAVED
+          it retires (a redraft would clobber the matured document); Refine and
+          the drift audit take over. */}
+      {!savedComplete && (
       <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)]">
         <div className="px-3.5 py-2.5 flex items-center gap-2">
           <span className="text-[14px] font-semibold">✦ Draft with AI</span>
@@ -407,6 +416,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
           </div>
         </div>
       </div>
+      )}
 
       {/* Brief ↔ Build — the drift audit. Only meaningful once something is built. */}
       {buildAvailable && (
