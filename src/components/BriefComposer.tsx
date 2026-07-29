@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { referenceKind, normalizeReferenceUrl, isBriefComplete, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
-import type { BriefDraft, BriefSection } from "@/lib/ai/brief";
+import type { BriefDraft, BriefSection, BriefDriftReport } from "@/lib/ai/brief";
 
 const REF_META: Record<BriefReferenceKind, { icon: string; label: string }> = {
   figma: { icon: "🎨", label: "Figma" },
@@ -170,11 +170,13 @@ function ReadinessMeter({ readiness, drafting }: { readiness: number | null; dra
  * Claude (initialized by the opmc-brief-author library skill) drafts; each
  * clarifying question gets its own answer box; the human stays the editor.
  */
-export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, initialMetrics }: {
+export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, initialMetrics, buildAvailable = false }: {
   prototypeKey: string;
   initialBrief: PrototypeBrief;
   initialHypothesis: PrototypeHypothesis;
   initialMetrics: PrototypeMetrics;
+  /** A built variation exists — enables the brief↔build drift audit. */
+  buildAvailable?: boolean;
 }) {
   const router = useRouter();
   const [explain, setExplain] = useState("");
@@ -191,6 +193,12 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [editing, setEditing] = useState(false);
+
+  // Brief ↔ Build drift audit — the API-side Claude compares the brief to the
+  // actual built variation.js and reports mismatches.
+  const [drift, setDrift] = useState<{ report: BriefDriftReport; builtSha?: string } | null>(null);
+  const [driftBusy, setDriftBusy] = useState(false);
+  const [driftErr, setDriftErr] = useState<string | null>(null);
 
   // Per-section "Refine" — correct one output in place.
   const [refineOpen, setRefineOpen] = useState<BriefSection | null>(null);
@@ -239,6 +247,36 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       clarifying_questions: [],
       readiness: readiness ?? 0,
     };
+  }
+
+  async function checkDrift() {
+    if (driftBusy) return;
+    setDriftBusy(true); setDriftErr(null);
+    try {
+      const res = await fetch("/api/prototypes/brief-drift", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setDriftErr(data.error ?? "Drift check failed"); return; }
+      setDrift({ report: data.report, builtSha: data.builtSha });
+    } catch (e) {
+      setDriftErr(e instanceof Error ? e.message : "Drift check failed");
+    } finally { setDriftBusy(false); }
+  }
+
+  /** Adopt the audit's design-layer suggestion — human clicks, save bar takes over. */
+  function applyDriftSuggestion() {
+    const s = drift?.report.suggested;
+    if (!s) return;
+    setBrief((b) => ({
+      ...b,
+      change: s.change || b.change,
+      where: s.where || b.where,
+      doneLooksLike: s.doneLooksLike.length ? s.doneLooksLike.join("\n") : b.doneLooksLike,
+    }));
+    setMsg(null);
+    setDrift(null);
   }
 
   async function runRefine(section: BriefSection) {
@@ -369,6 +407,50 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
           </div>
         </div>
       </div>
+
+      {/* Brief ↔ Build — the drift audit. Only meaningful once something is built. */}
+      {buildAvailable && (
+        <div className={`rounded-xl border bg-surface overflow-hidden ${drift ? (drift.report.inSync ? "border-ok/40" : "border-warn/50") : "border-border"}`}>
+          <div className="px-4 py-2.5 border-b border-border flex items-center gap-3">
+            <span className="text-[14px] font-semibold shrink-0">Brief ↔ Build</span>
+            <span className="text-[13px] text-muted-2 min-w-0 truncate">Does the brief still describe what was actually built? The AI reads the built code and compares.</span>
+            <button onClick={checkDrift} disabled={driftBusy}
+              className="ml-auto h-8 px-3 rounded-lg border border-border text-[14px] font-semibold text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
+              {driftBusy ? "Auditing…" : drift ? "Re-check" : "Check drift"}
+            </button>
+          </div>
+          {(driftErr || drift) && (
+            <div className="px-4 py-3 space-y-2.5">
+              {driftErr && <div className="text-[14px] text-danger">{driftErr}</div>}
+              {drift && (
+                <>
+                  <div className={`text-[14px] font-semibold ${drift.report.inSync ? "text-ok" : "text-warn"}`}>
+                    {drift.report.inSync ? "✓ In sync" : "⚠ Drifted"}{drift.builtSha ? <span className="font-mono font-normal text-muted-2 text-[12.5px]"> · vs build {drift.builtSha.slice(0, 7)}</span> : null}
+                  </div>
+                  <p className="text-[13.5px] text-muted leading-relaxed">{drift.report.summary}</p>
+                  {drift.report.mismatches.length > 0 && (
+                    <div className="rounded-lg border border-border/70 overflow-hidden">
+                      {drift.report.mismatches.map((m, i) => (
+                        <div key={i} className="px-3 py-2 border-b border-border/60 last:border-0 text-[13px]">
+                          <span className="font-semibold uppercase text-[11px] tracking-wide text-warn">{m.aspect}</span>
+                          <div className="mt-0.5 text-muted"><span className="text-muted-2">brief says:</span> {m.briefSays}</div>
+                          <div className="text-foreground/90"><span className="text-muted-2">build does:</span> {m.buildDoes}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {drift.report.suggested && (
+                    <div className="flex items-center justify-between gap-3 pt-0.5">
+                      <span className="text-[13px] text-muted-2 min-w-0">The audit drafted updated change / where / done-looks-like matching the build. Your hypothesis &amp; metrics stay untouched.</span>
+                      <button onClick={applyDriftSuggestion} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover shrink-0">Update brief to match build</button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* THE BRIEF — a document first, a form only on request. Each section is
           its own card so they read as independent parts, not one flowing page. */}

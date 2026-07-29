@@ -222,7 +222,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       <main className="overflow-y-auto px-6 py-5">
         {tab === "brief" && (
           <Room title="Brief" sub="What are we building, and how do we know it worked? The brief is the gate — it becomes the agent's instructions and the experiment's description.">
-            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} />
+            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
           </Room>
         )}
 

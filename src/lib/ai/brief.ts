@@ -220,3 +220,116 @@ export async function refineBrief(opts: {
   draft.readiness = Math.max(0, Math.min(100, Math.round(Number(draft.readiness) || 0)));
   return draft;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Drift check — does the brief still describe what was actually built?
+// The console can't compare prose to code; its API-side Claude can. It reads
+// the brief AND the built variation.js and reports the specific mismatches,
+// plus suggested DESIGN-layer fields (intent — metrics/hypothesis — stays
+// human-owned and is only flagged, never rewritten).
+// ────────────────────────────────────────────────────────────────────────────
+
+export interface BriefDriftReport {
+  inSync: boolean;
+  /** One honest sentence: the verdict. */
+  summary: string;
+  mismatches: { aspect: string; briefSays: string; buildDoes: string }[];
+  /** Updated design-layer fields matching the build — applied only by a human click. */
+  suggested?: { change: string; where: string; doneLooksLike: string[] };
+}
+
+const DRIFT_TOOL = {
+  name: "report_drift",
+  description: "Report whether the brief still describes the built implementation.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      inSync: { type: "boolean" as const, description: "true only if a stranger reading the brief would correctly understand what this code does" },
+      summary: { type: "string" as const, description: "One sentence: the verdict, concrete." },
+      mismatches: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            aspect: { type: "string" as const, description: "short label, e.g. 'trigger', 'layout', 'CTA'" },
+            briefSays: { type: "string" as const },
+            buildDoes: { type: "string" as const },
+          },
+          required: ["aspect", "briefSays", "buildDoes"],
+        },
+      },
+      suggested: {
+        type: "object" as const,
+        description: "Updated DESIGN-layer brief fields describing what was actually built. Omit when inSync.",
+        properties: {
+          change: { type: "string" as const },
+          where: { type: "string" as const },
+          doneLooksLike: { type: "array" as const, items: { type: "string" as const } },
+        },
+        required: ["change", "where", "doneLooksLike"],
+      },
+    },
+    required: ["inSync", "summary", "mismatches"],
+  },
+};
+
+/** Data URIs and megabyte bundles bloat the prompt without adding evidence. */
+function trimCodeForAudit(js: string): string {
+  const stripped = js.replace(/data:[a-zA-Z0-9/+;=.-]{300,}/g, "data:<inlined-asset-stripped>");
+  return stripped.length > 90_000 ? `${stripped.slice(0, 90_000)}\n/* …truncated for audit (${stripped.length.toLocaleString()} chars total) */` : stripped;
+}
+
+export async function checkBriefDrift(opts: {
+  orgId: string | null;
+  proto: PrototypeRecord;
+  variationJs: string;
+  builtSha?: string;
+}): Promise<BriefDriftReport> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables.");
+  }
+  const client = new Anthropic();
+  const res = await client.messages.create({
+    model: "claude-opus-4-8",
+    max_tokens: 2500,
+    system: "You audit experiment briefs against their shipped implementation. You read client-side variation code (DOM selectors, injected markup, text content, event wiring) as evidence of what was actually built, and judge whether the brief still describes it. Be concrete and terse; cite only what the code evidences — never invent behavior you cannot see in the code. The hypothesis and metrics are the humans' contract: flag a mismatch if the code contradicts them (e.g. the CTA the metric counts does not exist), but never propose rewriting them.",
+    messages: [{
+      role: "user",
+      content: `Prototype: ${opts.proto.name}${opts.builtSha ? ` · built at ${opts.builtSha.slice(0, 7)}` : ""}
+Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ") || "none set"}
+
+THE BRIEF (current, live):
+"""
+${JSON.stringify({ brief: opts.proto.brief, hypothesis: opts.proto.hypothesis, metrics: opts.proto.metrics }, null, 2)}
+"""
+
+THE BUILT CODE (dist/variation.js from the branch):
+"""
+${trimCodeForAudit(opts.variationJs)}
+"""
+
+Compare them. Report inSync + the specific mismatches (aspect · brief says · build does). If out of sync, propose updated DESIGN-layer fields (change, where, doneLooksLike) that describe what was ACTUALLY built — terse, reviewer-checkable, same voice as a good brief. Do not touch hypothesis or metrics in the suggestion.`,
+    }],
+    tools: [DRIFT_TOOL],
+    tool_choice: { type: "tool", name: "report_drift" },
+  });
+
+  const tu = res.content.find((c) => c.type === "tool_use");
+  if (!tu || tu.type !== "tool_use") throw new Error("The audit returned nothing — try again.");
+  // Normalize at the boundary — never hand the UI a partial shape.
+  const o = (tu.input ?? {}) as Partial<BriefDriftReport>;
+  const mismatches = Array.isArray(o.mismatches)
+    ? o.mismatches.filter((m) => m && typeof m === "object").map((m) => ({
+        aspect: String(m.aspect ?? "—"), briefSays: String(m.briefSays ?? ""), buildDoes: String(m.buildDoes ?? ""),
+      }))
+    : [];
+  const s = o.suggested;
+  return {
+    inSync: Boolean(o.inSync) && mismatches.length === 0,
+    summary: String(o.summary ?? (mismatches.length ? "The brief no longer matches the build." : "The brief matches the build.")),
+    mismatches,
+    suggested: s && typeof s === "object"
+      ? { change: String(s.change ?? ""), where: String(s.where ?? ""), doneLooksLike: Array.isArray(s.doneLooksLike) ? s.doneLooksLike.filter((x) => typeof x === "string") : [] }
+      : undefined,
+  };
+}
