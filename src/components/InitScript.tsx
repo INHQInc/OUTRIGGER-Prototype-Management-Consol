@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { TimeAgo } from "@/components/ui";
 
 const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
 /** `~` doesn't expand inside quotes; rewrite to $HOME (which does) so paths with spaces stay safe. */
@@ -33,13 +34,17 @@ function Step({ n, title, state, children }: { n: number; title: string; state: 
  * done wrong. Local folders live HERE (per-machine, part of the loop); the
  * registered repo + skills are one-time setup in Settings.
  */
-export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildStatus, briefDone = true }: {
+export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildStatus, briefDone = true, claudeSeenAt = null, inSync = true }: {
   prototypeKey: string;
   repo?: { fullName: string; branch: string };
   provisioned: boolean;
   previewUrl?: string;
   buildStatus: { found: boolean | null; headSha?: string; bytes?: number; branchExists?: boolean };
   briefDone?: boolean;
+  /** Ground truth that the agent actually started: its check-in beacon. */
+  claudeSeenAt?: string | null;
+  /** Ground truth that the branch matches the console (brief/pages unchanged). */
+  inSync?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -115,6 +120,8 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   // brief, loads the skill, and starts building — instead of asking what to do.
   const orient = `You are the OPMC prototype engineer for the ${prototypeKey} prototype. Before anything else: read .opmc/brief.md and .opmc/context.json, load the opmc-prototype skill, then summarize the brief and its target page(s) and your build plan in a few lines, and start building. Do not ask what to work on — you are building this prototype.`;
   const cmds = `git clone git@github.com:${fullName}.git "${expandHome(path)}"\ncd "${expandHome(path)}"\n${checkout}${linkLine}\nclaude "${orient}"`;
+  // Ground truth the agent started: its check-in beacon, or a real build landed.
+  const agentStarted = Boolean(claudeSeenAt || buildStatus.found);
   // Preview is a SECOND terminal — claude above is interactive and blocks this one.
   const previewCmd = `${previewUrl ? `TARGET_URL="${previewUrl}" ` : ""}node dev.mjs`;
   async function copy() { try { await navigator.clipboard.writeText(cmds); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ } }
@@ -166,43 +173,61 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
         </div>
       </Step>
 
-      {/* 3 · Start the agent */}
-      <Step n={3} title="Start the agent" state={provisioned && pathOk ? "active" : "locked"}>
+      {/* 3 · Start the agent — DONE from ground truth: the agent's check-in
+          beacon, or a real build on the branch. Never eternally "active". */}
+      <Step n={3} title="Start the agent" state={!provisioned || !pathOk ? "locked" : agentStarted ? "done" : "active"}>
         {!provisioned || !pathOk ? (
           <div className="text-[13px] text-warn">Finish {[!provisioned ? "step 1" : null, !pathOk ? "step 2" : null].filter(Boolean).join(" and ")} first — then your clone + start command appears here.</div>
         ) : (
-          <div className="rounded-lg border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
-            <div className="px-3 py-2 flex items-center justify-between border-b border-accent/30">
-              <span className="text-[13px] font-medium">Run this in your terminal</span>
-              <button onClick={copy} className="text-[13px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
+          <div className="space-y-3">
+            {agentStarted && (
+              <div className="text-[13px] text-ok">
+                {claudeSeenAt ? <>Agent engaged <TimeAgo iso={claudeSeenAt} /></> : "The agent has built on the branch"}
+                {buildStatus.found === true && <span> · ✓ built (<span className="font-mono">{buildStatus.headSha?.slice(0, 7)}</span>)</span>}
+              </div>
+            )}
+            <div className="rounded-lg border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
+              <div className="px-3 py-2 flex items-center justify-between border-b border-accent/30">
+                <span className="text-[13px] font-medium">{agentStarted ? "Start another session — run this in your terminal" : "Run this in your terminal"}</span>
+                <button onClick={copy} className="text-[13px] text-accent hover:text-accent-hover font-medium">{copied ? "Copied" : "Copy"}</button>
+              </div>
+              <pre className="px-3 py-2.5 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
+              <div className="px-3 pb-2.5 text-[12.5px] text-muted-2 border-t border-border/60 pt-2">
+                Clones into <span className="font-mono">{path}</span>, then launches the agent already tasked to read the brief and build — no coaching needed.{src ? <> It reads the real site source at <span className="font-mono">source-site/</span>.</> : null}
+              </div>
             </div>
-            <pre className="px-3 py-2.5 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
-            <div className="px-3 pb-2.5 text-[12.5px] text-muted-2 border-t border-border/60 pt-2">
-              Clones into <span className="font-mono">{path}</span>, then launches the agent already tasked to read the brief and build — no coaching needed.{src ? <> It reads the real site source at <span className="font-mono">source-site/</span>.</> : null}
-              {buildStatus.found === true && <span className="text-ok"> · ✓ built ({buildStatus.headSha?.slice(0, 7)})</span>}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[12.5px] text-muted-2">Live preview — a <b>second</b> terminal (the agent above holds the first):</span>
+                <button onClick={copyPreview} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Copy</button>
+              </div>
+              <pre className="rounded-lg border border-border bg-background/60 px-3 py-2 text-[12.5px] font-mono text-muted overflow-x-auto">{previewCmd}<span className="text-muted-2">   # → http://localhost:4400</span></pre>
             </div>
-          </div>
-        )}
-        {provisioned && pathOk && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[12.5px] text-muted-2">Live preview — a <b>second</b> terminal (the agent above holds the first):</span>
-              <button onClick={copyPreview} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Copy</button>
-            </div>
-            <pre className="rounded-lg border border-border bg-background/60 px-3 py-2 text-[12.5px] font-mono text-muted overflow-x-auto">{previewCmd}<span className="text-muted-2">   # → http://localhost:4400</span></pre>
           </div>
         )}
       </Step>
 
-      {/* 4 · Keep it in sync */}
-      <Step n={4} title="Keep it in sync" state={provisioned ? "active" : "locked"}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-[13px] text-muted-2 leading-relaxed min-w-0">Re-sync whenever the brief or skills change — writes them into the branch. Then <span className="font-mono">git pull</span> and restart the agent to load new skills.</div>
-          <button onClick={() => provision(true)} disabled={busy || !provisioned} className="h-8 px-3 rounded-lg border border-border text-[14px] font-semibold text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">{busy ? "Re-syncing…" : "Re-sync"}</button>
+      {/* Sync status — NOT a numbered step: it's ongoing maintenance with a live
+          state (in sync / drifted), so it renders as a status card. This card is
+          the HOME of the drift fact; the header alert deep-links here. */}
+      <div className={`rounded-xl border bg-surface overflow-hidden ${!provisioned ? "border-border opacity-55" : inSync ? "border-ok/30" : "border-warn/50"}`}>
+        <div className="px-4 py-2.5 border-b border-border flex items-center gap-2.5">
+          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${!provisioned ? "bg-border-strong" : inSync ? "bg-ok" : "bg-warn"}`} />
+          <span className="text-[14px] font-semibold">Sync</span>
+          <span className={`text-[13px] ${!provisioned ? "text-muted-2" : inSync ? "text-ok" : "text-warn"}`}>
+            {!provisioned ? "starts after the branch is prepared" : inSync ? "in sync — the branch matches the console" : "the brief or pages changed — re-sync so the agent builds against the current brief"}
+          </span>
+          <button onClick={() => provision(true)} disabled={busy || !provisioned}
+            className={`ml-auto h-8 px-3 rounded-lg text-[14px] font-semibold shrink-0 disabled:opacity-40 ${inSync ? "border border-border text-muted hover:text-foreground hover:border-border-strong" : "bg-warn text-accent-fg hover:opacity-90"}`}>
+            {busy ? "Re-syncing…" : "Re-sync"}
+          </button>
         </div>
-        {err && provisioned && <div className="text-[13px] text-danger mt-1">{err}</div>}
-        {synced && <div className="text-[13px] text-ok mt-1">{synced}</div>}
-      </Step>
+        <div className="px-4 py-2.5">
+          <div className="text-[12.5px] text-muted-2 leading-relaxed">Writes the current brief, page snapshots and selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart the agent so it picks up new skills.</div>
+          {err && provisioned && <div className="text-[13px] text-danger mt-1">{err}</div>}
+          {synced && <div className="text-[13px] text-ok mt-1">{synced}</div>}
+        </div>
+      </div>
     </div>
   );
 }

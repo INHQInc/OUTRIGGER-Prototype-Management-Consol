@@ -152,7 +152,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       {tab === "build" && (
         <div className="max-w-4xl space-y-3">
           <p className="text-[14px] text-muted-2">The develop loop: prepare the branch, start the agent, and re-sync when the brief or skills change. The agent builds in the repo; the console pulls the result. (Repo, branch &amp; skills live in <Link href={`/prototypes/${key}/settings`} className="text-accent hover:text-accent-hover">Settings</Link>.)</p>
-          <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={isBriefComplete(p.brief, p.metrics)} />
+          <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={isBriefComplete(p.brief, p.metrics)} claudeSeenAt={claudeSeen} inSync={pipeline.truth.synced} />
         </div>
       )}
 
