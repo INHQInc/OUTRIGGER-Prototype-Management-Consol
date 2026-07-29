@@ -58,8 +58,16 @@ Optimizations-style table; the workspace is a command rail; the app sidebar
 collapses to an icon rail inside a prototype. When adding a surface, ask "how
 does Optimizely say this?" first — familiarity to an Opti user is a feature.
 
+**Rail hierarchy is carried by ALIGNMENT (07-29):** the group label owns the
+outer edge; EVERY row reserves the same dot slot (transparent when the row has
+no lifecycle dot) so all item labels sit in one indented column under their
+header. A row whose label starts at the header's x reads as a header — never
+let dot-less rows collapse the indent.
+
 *Origin: "it's all super confusing… a prototype has a brief, source control
-setup, experimentation setup, skills setup, code handoff — not a list of steps."*
+setup, experimentation setup, skills setup, code handoff — not a list of steps."
+/ "items that don't have the status dots look like they are at the same level
+of nav as each section."*
 
 ## 4. One card grammar per room
 
