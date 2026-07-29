@@ -48,10 +48,14 @@ don't align."*
 
 The workspace rail's rows are the prototype's PARTS — nouns a team recognizes,
 grouped Opti-style (Plan→Brief · Build→Agent/Skills/Recommendations ·
-Target→Pages · Experiment→Versions/Optimizely · Handoff→Explorer/Ship record ·
-Settings) — never a restating of pipeline steps as sections. The pipeline is
-status (the rail's status block + dots), not information architecture. Never
-render a vertical list of step-cards.
+Target→Pages · QA→Scenarios · Experiment→Versions/Optimizely ·
+Handoff→Explorer/Ship record · Settings) — never a restating of pipeline steps
+as sections. The pipeline is status (the rail's status block + dots), not
+information architecture. Never render a vertical list of step-cards.
+Single-row groups are fine when the concern is distinct (Plan → Brief,
+QA → Scenarios); a room must live under the concern it serves — QA was briefly
+under Target and read as a mislabel (user: "Coverage? That does not feel like
+what this is").
 
 **Opti-native grammar (user-locked 07-25):** the /prototypes front door is an
 Optimizations-style table; the workspace is a command rail; the app sidebar
