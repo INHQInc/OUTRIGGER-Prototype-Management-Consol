@@ -17,6 +17,8 @@ import { resolveSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { listRecommendations } from "@/lib/ideas/ideas";
 import { getBriefDrift } from "@/lib/prototypes/brief-drift-state";
+import { getCoverage, coverageGate, coverageStale } from "@/lib/prototypes/coverage";
+import { CoveragePanel } from "@/components/CoveragePanel";
 import { currentUser } from "@/lib/auth/current";
 import { SEVERITY_DOT, TimeAgo } from "@/components/ui";
 import { StageStrip } from "@/components/StageStrip";
@@ -49,7 +51,7 @@ interface ActivityItem { at: string; text: string; who?: string }
 const GROUPS = [
   { label: "Plan", items: [{ id: "brief", label: "Brief", step: "brief" }] },
   { label: "Build", items: [{ id: "agent", label: "Agent", step: "build" }, { id: "skills", label: "Skills" }, { id: "recs", label: "Recommendations" }] },
-  { label: "Target", items: [{ id: "pages", label: "Pages", step: "review" }] },
+  { label: "Target", items: [{ id: "pages", label: "Pages", step: "review" }, { id: "coverage", label: "Coverage" }] },
   { label: "Experiment", items: [{ id: "versions", label: "Versions" }, { id: "optimizely", label: "Optimizely", step: "experiment" }] },
   { label: "Handoff", items: [{ id: "explorer", label: "Code explorer" }, { id: "ship", label: "Ship record", step: "handoff" }] },
   { label: "Settings", items: [{ id: "repo", label: "Repo & branch" }, { id: "details", label: "Details" }, { id: "history", label: "History" }] },
@@ -95,6 +97,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     currentUser().catch(() => null),
   ]);
   const briefDrift = await getBriefDrift(key, p).catch(() => null);
+  const coverage = await getCoverage(key).catch(() => null);
   await ensureSkillsSeeded(orgId);
   const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
 
@@ -163,6 +166,13 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       const latest = versions[0];
       if (!latest) return "pending";
       return latest.certification ? (latest.certification.passed ? "good" : "critical") : "attention";
+    }
+    if (item.id === "coverage") {
+      const gate = coverageGate(coverage);
+      if (gate === "none") return "pending";
+      if (gate === "failing") return "critical";
+      if (coverageStale(coverage, buildStatus.headSha)) return "attention";
+      return gate === "ok" ? "good" : "attention";
     }
     return null;
   };
@@ -250,6 +260,12 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         {tab === "pages" && (
           <Room title="Pages" sub="The page(s) this prototype runs on. Verify each page actually injects — review happens on the real environment, not a mockup.">
             <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
+          </Room>
+        )}
+
+        {tab === "coverage" && (
+          <Room title="Coverage" sub="Every scenario this prototype must survive — use cases with checkable tests per device, derived from the brief AND the built code. Walk them on the real review URL and click the device cells; gaps are scenarios the build doesn't handle.">
+            <CoveragePanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
           </Room>
         )}
 

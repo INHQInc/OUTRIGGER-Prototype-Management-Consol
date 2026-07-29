@@ -157,6 +157,9 @@ export class NeonContentStore implements ContentStore {
         created_by text
       )`);
     await this.ddl(() => this.sql`alter table artifact_version add column if not exists variation_js text`);
+    // JSON blob for what's FROZEN with a cut (certification, briefSnapshot,
+    // coverageSnapshot) — columns stay for the queryable identity fields.
+    await this.ddl(() => this.sql`alter table artifact_version add column if not exists extras text`);
     await this.ddl(() => this.sql`create index if not exists artifact_version_proto_idx on artifact_version (prototype_key)`);
     await this.ddl(() => this.sql`
       create table if not exists promotion (
@@ -234,23 +237,33 @@ export class NeonContentStore implements ContentStore {
 
   async listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
     const rows = await this.sql`select * from artifact_version where prototype_key = ${prototypeKey} order by version desc`;
-    return rows.map((r) => ({
-      id: r.id as string,
-      prototypeKey: r.prototype_key as string,
-      siteKey: r.site_key as string,
-      version: Number(r.version),
-      gitSha: r.git_sha as string,
-      gitRef: (r.git_ref as string) || undefined,
-      variationJs: (r.variation_js as string) || undefined,
-      notes: (r.notes as string) || undefined,
-      createdAt: new Date(r.created_at as string).toISOString(),
-      createdBy: (r.created_by as string) || undefined,
-    }));
+    return rows.map((r) => {
+      let extras: Pick<ArtifactVersion, "certification" | "briefSnapshot" | "coverageSnapshot"> = {};
+      if (r.extras) { try { extras = JSON.parse(r.extras as string); } catch { /* legacy/garbled extras → plain version */ } }
+      return {
+        id: r.id as string,
+        prototypeKey: r.prototype_key as string,
+        siteKey: r.site_key as string,
+        version: Number(r.version),
+        gitSha: r.git_sha as string,
+        gitRef: (r.git_ref as string) || undefined,
+        variationJs: (r.variation_js as string) || undefined,
+        notes: (r.notes as string) || undefined,
+        createdAt: new Date(r.created_at as string).toISOString(),
+        createdBy: (r.created_by as string) || undefined,
+        certification: extras.certification,
+        briefSnapshot: extras.briefSnapshot,
+        coverageSnapshot: extras.coverageSnapshot,
+      };
+    });
   }
   async addArtifactVersion(v: ArtifactVersion): Promise<void> {
+    const extras = v.certification || v.briefSnapshot || v.coverageSnapshot
+      ? JSON.stringify({ certification: v.certification, briefSnapshot: v.briefSnapshot, coverageSnapshot: v.coverageSnapshot })
+      : null;
     await this.sql`
-      insert into artifact_version (id, prototype_key, site_key, version, git_sha, git_ref, variation_js, notes, created_at, created_by)
-      values (${v.id}, ${v.prototypeKey}, ${v.siteKey}, ${v.version}, ${v.gitSha}, ${v.gitRef ?? null}, ${v.variationJs ?? null}, ${v.notes ?? null}, ${v.createdAt}, ${v.createdBy ?? null})
+      insert into artifact_version (id, prototype_key, site_key, version, git_sha, git_ref, variation_js, notes, created_at, created_by, extras)
+      values (${v.id}, ${v.prototypeKey}, ${v.siteKey}, ${v.version}, ${v.gitSha}, ${v.gitRef ?? null}, ${v.variationJs ?? null}, ${v.notes ?? null}, ${v.createdAt}, ${v.createdBy ?? null}, ${extras})
       on conflict (id) do nothing`;
   }
 

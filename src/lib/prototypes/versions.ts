@@ -9,6 +9,7 @@ import { resolveRepoSource } from "./source";
 import { audit } from "../audit";
 import { certifyVariation } from "../certify/certify";
 import { resolvePrototypeOrg } from "./org";
+import { getCoverage } from "./coverage";
 import type { ArtifactVersion } from "./types";
 
 export async function listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
@@ -23,7 +24,12 @@ export async function listArtifactVersions(prototypeKey: string): Promise<Artifa
 export async function cutArtifactVersion(
   prototypeKey: string,
   siteKey: string,
-  input: { gitSha: string; gitRef?: string; notes?: string; createdBy?: string; variationJs?: string },
+  input: {
+    gitSha: string; gitRef?: string; notes?: string; createdBy?: string; variationJs?: string;
+    certification?: ArtifactVersion["certification"];
+    briefSnapshot?: ArtifactVersion["briefSnapshot"];
+    coverageSnapshot?: ArtifactVersion["coverageSnapshot"];
+  },
 ): Promise<ArtifactVersion> {
   const gitSha = input.gitSha.trim();
   if (!gitSha) throw new Error("A git commit SHA is required to pin the version");
@@ -31,6 +37,9 @@ export async function cutArtifactVersion(
   const store = await getContentStore();
   const existing = await store.listArtifactVersions(prototypeKey);
   const version = existing.reduce((max, v) => Math.max(max, v.version), 0) + 1;
+  // The record must be COMPLETE before the one write — the stores are
+  // append-only and ignore re-adds of the same id, so anything attached
+  // after addArtifactVersion() would be silently dropped.
   const record: ArtifactVersion = {
     id: `${prototypeKey}-v${version}`,
     prototypeKey,
@@ -42,6 +51,9 @@ export async function cutArtifactVersion(
     notes: input.notes?.trim() || undefined,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy?.trim() || undefined,
+    certification: input.certification,
+    briefSnapshot: input.briefSnapshot,
+    coverageSnapshot: input.coverageSnapshot,
   };
   await store.addArtifactVersion(record);
   return record;
@@ -62,26 +74,26 @@ export async function cutArtifactVersionFromRepo(
     throw new Error(src.error ?? "No built variation found on the prototype's branch.");
   }
   const proto = await (await getContentStore()).getPrototype(prototypeKey);
-  // Certification runs at cut time — the report is frozen with the version,
-  // so "was this build safe to ship?" has one immutable answer forever.
+  // Everything frozen with the version is computed BEFORE the cut, so the one
+  // append-only write carries the complete record:
+  //  · certification — "was this build safe to ship?" has one immutable answer
+  //  · briefSnapshot — the spec this exact code was built to satisfy
+  //  · coverageSnapshot — the scenarios + review results as of this cut
   const certification = certifyVariation(src.variationJs, {
     key: prototypeKey,
     targetOrigins: (proto?.targets ?? []).map((t) => t.url),
   });
+  const coverage = await getCoverage(prototypeKey).catch(() => null);
   const version = await cutArtifactVersion(prototypeKey, siteKey, {
     gitSha: src.headSha,
     gitRef: src.branch,
     notes: opts.notes,
     createdBy: opts.createdBy,
     variationJs: src.variationJs,
+    certification,
+    briefSnapshot: proto ? { brief: proto.brief, hypothesis: proto.hypothesis, metrics: proto.metrics } : undefined,
+    coverageSnapshot: coverage ?? undefined,
   });
-  version.certification = certification;
-  // Freeze the brief this code was built against — the live brief keeps
-  // evolving; each cut carries its own immutable spec (hypothesis → commit
-  // traceability, per the lifecycle model).
-  if (proto) version.briefSnapshot = { brief: proto.brief, hypothesis: proto.hypothesis, metrics: proto.metrics };
-  // persist the report onto the stored record (append-only store: re-add same id overwrites)
-  try { await (await getContentStore()).addArtifactVersion(version); } catch { /* stores that reject dup ids keep the plain version */ }
   const orgId = proto ? await resolvePrototypeOrg(proto) : "";
   await audit(orgId, opts.createdBy ?? "system", "version.cut", `${prototypeKey} v${version.version}`, `${src.repo}@${src.branch} · ${src.headSha.slice(0, 7)} · certification ${version.certification?.passed ? "PASSED" : "FAILED"}`);
   return version;

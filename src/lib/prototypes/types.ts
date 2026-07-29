@@ -175,6 +175,9 @@ export interface ArtifactVersion {
    * brief's version history: one immutable snapshot per cut.
    */
   briefSnapshot?: { brief: PrototypeBrief; hypothesis: PrototypeHypothesis; metrics: PrototypeMetrics };
+  /** Coverage spec + review results AS OF cut time — the scenarios this exact
+   *  code was verified against. Part of the handoff pack. */
+  coverageSnapshot?: import("./coverage").CoverageSpec;
 }
 
 /** Binding to the Optimizely experiment this prototype ships into.

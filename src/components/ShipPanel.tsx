@@ -51,6 +51,9 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
   const [override, setOverride] = useState(false);
   const [showChecks, setShowChecks] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+  // Coverage warn-with-teeth: the server refuses until explicitly acknowledged.
+  const [covAckNeeded, setCovAckNeeded] = useState<string | null>(null);
+  const [covAck, setCovAck] = useState(false);
 
   // Load projects + the experiment list when the picker is open.
   useEffect(() => {
@@ -153,10 +156,20 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
     try {
       const res = await fetch("/api/prototypes/ship", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, push: true, version: cut?.version, override: override || undefined }),
+        body: JSON.stringify({ key: prototypeKey, push: true, version: cut?.version, override: override || undefined, coverageAck: covAck || undefined }),
       });
       const data = await res.json();
-      if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Push failed" }); return; }
+      if (!res.ok) {
+        const err = String(data.error ?? "Push failed");
+        if (err.startsWith("COVERAGE_ACK_REQUIRED:")) {
+          setCovAckNeeded(err.replace("COVERAGE_ACK_REQUIRED:", "").trim());
+          setMsg({ ok: false, text: "Coverage isn't signed off — review it, or acknowledge below to push anyway." });
+          return;
+        }
+        setMsg({ ok: false, text: err });
+        return;
+      }
+      setCovAckNeeded(null); setCovAck(false);
       setLast(data.result);
       setMsg({ ok: true, text: `Pushed v${data.result.version} · ${Number(data.result.bytes).toLocaleString()} bytes · read-back verified ✓` });
       router.refresh();
@@ -285,6 +298,14 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
               </>
             )}
           </div>
+        )}
+
+        {/* Coverage acknowledgement — warn with teeth, recorded in the audit log */}
+        {covAckNeeded && (
+          <label className="flex items-start gap-2 rounded-lg border border-warn/50 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3 py-2.5 text-[13.5px] text-warn cursor-pointer">
+            <input type="checkbox" checked={covAck} onChange={(e) => setCovAck(e.target.checked)} className="mt-0.5 accent-[var(--warn)]" />
+            <span>I acknowledge: {covAckNeeded}. Push anyway — this acknowledgement is recorded in the audit log.</span>
+          </label>
         )}
 
         {/* Push + state */}
