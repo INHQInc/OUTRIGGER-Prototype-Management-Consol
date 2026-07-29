@@ -25,15 +25,21 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
   const pathname = usePathname();
   const router = useRouter();
 
+  // Opti's trick: inside a prototype (its command rail owns the left edge),
+  // the app nav collapses to an icon rail — labels become hover flyouts, icons
+  // grow, the active node stays highlighted. Everywhere else: full nav.
+  const collapsed = /^\/prototypes\/(?!new(?:\/|$))[^/]+/.test(pathname);
+
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
   }
 
-  const sectionHeader = (label: string) => (
-    <div className="px-3 pt-3 pb-1 text-[12.5px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>
-  );
+  const sectionHeader = (label: string) =>
+    collapsed ? <div className="mx-3 my-2 border-t border-border/70" aria-hidden /> : (
+      <div className="px-3 pt-3 pb-1 text-[12.5px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>
+    );
 
   const renderLink = (item: NavItem) => {
     const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -41,29 +47,37 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
       <Link
         key={item.href}
         href={item.href}
-        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[15px] font-medium transition-colors ${
-          active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/50"
-        }`}
+        aria-label={item.label}
+        className={`group relative flex items-center rounded-lg font-medium transition-colors ${
+          collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2 text-[15px]"
+        } ${active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/50"}`}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? "text-accent" : ""}>
+        <svg width={collapsed ? 21 : 16} height={collapsed ? 21 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? "text-accent" : ""}>
           <path d={item.icon} />
         </svg>
-        {item.label}
+        {!collapsed && item.label}
+        {collapsed && (
+          <span className="pointer-events-none absolute left-full ml-2 px-2.5 py-1.5 rounded-lg border border-border bg-surface text-[13px] font-medium text-foreground whitespace-nowrap shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50">
+            {item.label}
+          </span>
+        )}
       </Link>
     );
   };
 
   return (
-    <aside className="w-60 shrink-0 border-r border-border bg-surface flex flex-col">
-      <div className="px-5 h-14 flex items-center gap-2.5 border-b border-border">
-        <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold text-[15px]">O</div>
-        <div className="text-[15px] font-semibold tracking-tight">Prototype Console</div>
+    <aside className={`shrink-0 border-r border-border bg-surface flex flex-col transition-[width] duration-200 ${collapsed ? "w-16" : "w-60"}`}>
+      <div className={`h-14 flex items-center border-b border-border ${collapsed ? "justify-center" : "px-5 gap-2.5"}`}>
+        <Link href="/" aria-label="Dashboard" className="w-7 h-7 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold text-[15px] shrink-0">O</Link>
+        {!collapsed && <div className="text-[15px] font-semibold tracking-tight">Prototype Console</div>}
       </div>
 
-      <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
+      {!collapsed && <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />}
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
-        {sectionHeader("Work")}
+      {/* Collapsed: overflow must stay visible or the hover flyouts get clipped
+          (overflow-y:auto forces x-clipping too). The icon rail is short enough. */}
+      <nav className={`flex-1 space-y-0.5 ${collapsed ? "p-2 pt-3 overflow-visible" : "p-3 overflow-y-auto"}`}>
+        {!collapsed && sectionHeader("Work")}
         {renderLink({ href: "/", label: "Dashboard", icon: ICON.overview, exact: true })}
         {renderLink({ href: "/prototypes", label: "Prototypes", icon: ICON.prototypes })}
         {renderLink({ href: "/handoff", label: "Handoff", icon: ICON.handoff })}
@@ -85,22 +99,36 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
       </nav>
 
       {user ? (
-        <div className="p-3 border-t border-border">
-          <div className="flex items-center gap-2.5 px-2 py-1.5">
-            <div className="w-7 h-7 rounded-full bg-surface-2 border border-border flex items-center justify-center text-[13px] font-semibold uppercase">
-              {(user.name ?? user.sub).slice(0, 1)}
+        <div className={`border-t border-border ${collapsed ? "p-2" : "p-3"}`}>
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-2 py-1">
+              <div title={user.name ?? user.sub} className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center text-[13px] font-semibold uppercase">
+                {(user.name ?? user.sub).slice(0, 1)}
+              </div>
+              <ThemeToggle />
+              <button onClick={logout} title="Sign out" className="text-muted-2 hover:text-foreground p-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                </svg>
+              </button>
             </div>
-            <div className="min-w-0 flex-1 leading-tight">
-              <div className="text-[14px] font-medium truncate">{user.name ?? user.sub}</div>
-              <div className="text-[12.5px] text-muted-2 capitalize">{user.role}</div>
+          ) : (
+            <div className="flex items-center gap-2.5 px-2 py-1.5">
+              <div className="w-7 h-7 rounded-full bg-surface-2 border border-border flex items-center justify-center text-[13px] font-semibold uppercase">
+                {(user.name ?? user.sub).slice(0, 1)}
+              </div>
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="text-[14px] font-medium truncate">{user.name ?? user.sub}</div>
+                <div className="text-[12.5px] text-muted-2 capitalize">{user.role}</div>
+              </div>
+              <ThemeToggle />
+              <button onClick={logout} title="Sign out" className="text-muted-2 hover:text-foreground p-1">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                </svg>
+              </button>
             </div>
-            <ThemeToggle />
-            <button onClick={logout} title="Sign out" className="text-muted-2 hover:text-foreground p-1">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-              </svg>
-            </button>
-          </div>
+          )}
         </div>
       ) : null}
     </aside>
