@@ -12,6 +12,7 @@ import { resolveRepoSource } from "./source";
 import { listArtifactVersions } from "./versions";
 import { lastPush } from "./ship";
 import { derivePipeline, type Pipeline } from "./pipeline";
+import { getBriefDrift } from "./brief-drift-state";
 import { getOptimizelyClientForOrg } from "../experimentation";
 import { normalizeStage, type PrototypeRecord } from "./types";
 
@@ -31,12 +32,13 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     const stage = normalizeStage(p.status);
     if (stage === "archived") return null;
 
-    const [source, versions, push, provisionFlagRaw, claudeSeenAt] = await Promise.all([
+    const [source, versions, push, provisionFlagRaw, claudeSeenAt, briefDrift] = await Promise.all([
       resolveRepoSource(p.key).catch(() => null),
       listArtifactVersions(p.key).catch(() => []),
       lastPush(p.key).catch(() => null),
       store.getFlag(`provision:${p.key}`).catch(() => null),
       store.getFlag(`claude:seen:${p.key}`).catch(() => null),
+      getBriefDrift(p.key, p).catch(() => null),
     ]);
     // Live experiment status — the Testing lock's source of truth.
     let experimentStatus: string | undefined;
@@ -44,7 +46,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       try { experimentStatus = (await client.getExperiment(p.experiment.experimentId)).status; } catch { /* unreachable → no lock */ }
     }
     const locked = experimentStatus === "running";
-    const pipeline = derivePipeline({ proto: p, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt, experimentStatus });
+    const pipeline = derivePipeline({ proto: p, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt, experimentStatus, briefDrifted: Boolean(briefDrift) });
 
     // The column IS the canonical stage — shipped → handoff, running → experiment
     // (locked badge), all handled inside pipeline.stage.id. One source of truth.

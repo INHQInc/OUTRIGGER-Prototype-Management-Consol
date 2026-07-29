@@ -170,13 +170,15 @@ function ReadinessMeter({ readiness, drafting }: { readiness: number | null; dra
  * Claude (initialized by the opmc-brief-author library skill) drafts; each
  * clarifying question gets its own answer box; the human stays the editor.
  */
-export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, initialMetrics, buildAvailable = false }: {
+export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, initialMetrics, buildAvailable = false, initialDrift = null }: {
   prototypeKey: string;
   initialBrief: PrototypeBrief;
   initialHypothesis: PrototypeHypothesis;
   initialMetrics: PrototypeMetrics;
   /** A built variation exists — enables the brief↔build drift audit. */
   buildAvailable?: boolean;
+  /** Persisted drift verdict from a previous audit — survives refresh; blocks re-sync until resolved. */
+  initialDrift?: { report: BriefDriftReport; builtSha?: string } | null;
 }) {
   const router = useRouter();
   const [explain, setExplain] = useState("");
@@ -196,9 +198,24 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
 
   // Brief ↔ Build drift audit — the API-side Claude compares the brief to the
   // actual built variation.js and reports mismatches.
-  const [drift, setDrift] = useState<{ report: BriefDriftReport; builtSha?: string } | null>(null);
+  const [drift, setDrift] = useState<{ report: BriefDriftReport; builtSha?: string } | null>(initialDrift);
   const [driftBusy, setDriftBusy] = useState(false);
   const [driftErr, setDriftErr] = useState<string | null>(null);
+
+  /** Human override: the audit is wrong, the brief IS accurate. Audited server-side. */
+  async function dismissDrift() {
+    if (driftBusy) return;
+    setDriftBusy(true); setDriftErr(null);
+    try {
+      const res = await fetch("/api/prototypes/brief-drift", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, dismiss: true }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setDriftErr(d.error ?? "Couldn't dismiss"); return; }
+      setDrift(null);
+      router.refresh(); // unblocks the rail + re-sync immediately
+    } finally { setDriftBusy(false); }
+  }
 
   // Per-section "Refine" — correct one output in place.
   const [refineOpen, setRefineOpen] = useState<BriefSection | null>(null);
@@ -265,6 +282,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       const data = await res.json();
       if (!res.ok) { setDriftErr(data.error ?? "Drift check failed"); return; }
       setDrift({ report: data.report, builtSha: data.builtSha });
+      router.refresh(); // the verdict persists — rail dot + re-sync gate update now
     } catch (e) {
       setDriftErr(e instanceof Error ? e.message : "Drift check failed");
     } finally { setDriftBusy(false); }
@@ -449,10 +467,15 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
                       ))}
                     </div>
                   )}
-                  {drift.report.suggested && (
-                    <div className="flex items-center justify-between gap-3 pt-0.5">
-                      <span className="text-[13px] text-muted-2 min-w-0">The audit drafted updated change / where / done-looks-like matching the build. Your hypothesis &amp; metrics stay untouched.</span>
-                      <button onClick={applyDriftSuggestion} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover shrink-0">Update brief to match build</button>
+                  {!drift.report.inSync && (
+                    <div className="flex items-center justify-between gap-3 pt-0.5 flex-wrap">
+                      <span className="text-[13px] text-muted-2 min-w-0">{drift.report.suggested ? "The audit drafted updated change / where / done-looks-like matching the build. Your hypothesis & metrics stay untouched." : "Update the brief to match the build, or dismiss if the audit is wrong."} Until resolved, re-sync is blocked.</span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <button onClick={dismissDrift} disabled={driftBusy} className="h-8 px-3 rounded-lg border border-border text-[13.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40">Dismiss — brief is accurate</button>
+                        {drift.report.suggested && (
+                          <button onClick={applyDriftSuggestion} className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[14px] font-semibold hover:bg-accent-hover">Update brief to match build</button>
+                        )}
+                      </span>
                     </div>
                   )}
                 </>

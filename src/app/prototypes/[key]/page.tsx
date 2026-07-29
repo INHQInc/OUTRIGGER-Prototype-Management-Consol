@@ -16,6 +16,7 @@ import { isBriefComplete, normalizeStage } from "@/lib/prototypes/types";
 import { resolveSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { listRecommendations } from "@/lib/ideas/ideas";
+import { getBriefDrift } from "@/lib/prototypes/brief-drift-state";
 import { currentUser } from "@/lib/auth/current";
 import { SEVERITY_DOT, TimeAgo } from "@/components/ui";
 import { StageStrip } from "@/components/StageStrip";
@@ -93,6 +94,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     listRecommendations(orgId, key).catch(() => []),
     currentUser().catch(() => null),
   ]);
+  const briefDrift = await getBriefDrift(key, p).catch(() => null);
   await ensureSkillsSeeded(orgId);
   const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
 
@@ -118,6 +120,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const pipeline = derivePipeline({
     proto: p, provisionFlagRaw: provisionFlag, source, versions,
     lastPush: push, claudeSeenAt: claudeSeen, experimentStatus,
+    briefDrifted: Boolean(briefDrift),
   });
 
   // The "experiment" anchor covers TWO rooms now: cutting lives on Versions,
@@ -222,7 +225,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       <main className="overflow-y-auto px-6 py-5">
         {tab === "brief" && (
           <Room title="Brief" sub="What are we building, and how do we know it worked? The brief is the gate — it becomes the agent's instructions and the experiment's description.">
-            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
+            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} />
           </Room>
         )}
 

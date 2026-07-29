@@ -12,6 +12,7 @@ import { getGitClientForOrg } from "../git/connection";
 import { GitError, friendlyGitError } from "../git/github";
 import { resolvePrototypeOrg } from "./org";
 import { resolvePrototypeRepo } from "./repo";
+import { getBriefDrift } from "./brief-drift-state";
 import { listOrgEnvironments } from "../environments";
 import { captureRawHtml, slugForUrl } from "../capture/capture";
 import { audit } from "../audit";
@@ -171,6 +172,11 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     throw new Error(!proto.brief.change?.trim()
       ? "No brief yet — write what we're building first. The brief is the gate: it becomes the agent's instructions and, later, the experiment's description."
       : "The brief has no success metric — add the one event that decides this experiment before building. The brief is the gate.");
+  }
+  // A known-drifted brief must not be synced into the branch — the next agent
+  // session would build against a spec the audit proved wrong. Resolve first.
+  if (await getBriefDrift(prototypeKey, proto)) {
+    throw new Error("Brief ↔ Build drift is unresolved — the audit found the brief no longer matches the build. Update the brief (Brief tab → apply the suggestion or edit), or dismiss the audit if the brief is right. Then re-sync.");
   }
   const orgId = await resolvePrototypeOrg(proto);
   if (!orgId) throw new Error("This prototype has no owning customer.");

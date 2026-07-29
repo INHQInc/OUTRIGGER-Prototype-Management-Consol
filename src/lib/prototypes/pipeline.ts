@@ -96,6 +96,8 @@ export interface PipelineInputs {
   claudeSeenAt?: string | null;
   /** Live experiment status from the Optimizely API, when bound + reachable. */
   experimentStatus?: string | null;
+  /** Unresolved Brief ↔ Build drift (persisted audit verdict) — blocks the Brief step + re-sync. */
+  briefDrifted?: boolean;
 }
 
 export function derivePipeline(inp: PipelineInputs): Pipeline {
@@ -149,14 +151,17 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // change is in-progress, not done.
   const hasChange = Boolean(proto.brief.change?.trim());
   const briefDone = isBriefComplete(proto.brief, proto.metrics);
+  const drifted = Boolean(inp.briefDrifted);
   const workStarted = provisioned || built;
   steps.push({
     id: "brief", title: "Brief", anchor: "brief",
-    state: briefDone ? "done"
+    state: drifted ? "blocked"         // the audit proved the brief wrong — resolve before anything syncs
+      : briefDone ? "done"
       : workStarted ? "blocked"        // building against an incomplete brief — must fix
       : hasChange ? "current"          // mid-brief: has the change, needs the metric
       : "todo",
-    status: briefDone ? "described · metric set"
+    status: drifted ? "brief ↔ build drift — update the brief or dismiss the audit"
+      : briefDone ? "described · metric set"
       : hasChange ? "needs a success metric — how do we know it worked?"
       : workStarted ? "missing — required before launch"
       : "what are we building?",
@@ -243,7 +248,8 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
 
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
-  if (!briefDone) primaryAction = { label: hasChange ? "Add a success metric" : "Write the brief", anchor: "brief" };
+  if (drifted) primaryAction = { label: "Resolve brief ↔ build drift", anchor: "brief" };
+  else if (!briefDone) primaryAction = { label: hasChange ? "Add a success metric" : "Write the brief", anchor: "brief" };
   else if (!provisioned) primaryAction = { label: "Prepare the branch", anchor: "build" };
   else if (!built || problem) primaryAction = { label: "Build with the agent", anchor: "build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "review" };
