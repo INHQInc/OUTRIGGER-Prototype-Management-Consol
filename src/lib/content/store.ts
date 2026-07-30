@@ -32,6 +32,14 @@ export interface ContentStore {
   // --- Key/value flags (one-time migrations, seed markers) ---
   getFlag(key: string): Promise<string | null>;
   setFlag(key: string, value: string): Promise<void>;
+  /**
+   * Compare-and-set: write `value` ONLY if the flag currently holds `expect`
+   * (null = "create only if absent"). Returns false on a lost race so the
+   * caller can re-read, re-apply, and retry — the primitive that makes
+   * read-modify-write over a whole-blob flag safe with concurrent writers
+   * (e.g. an agent's test-run batch landing while a human clicks cells).
+   */
+  compareAndSetFlag(key: string, expect: string | null, value: string): Promise<boolean>;
 
   // --- Orgs (tenants) + membership ---
   listOrgs(): Promise<Org[]>;

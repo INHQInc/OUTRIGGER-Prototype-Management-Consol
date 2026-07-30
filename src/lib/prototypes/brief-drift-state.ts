@@ -14,6 +14,8 @@ import type { PrototypeRecord } from "./types";
 export interface BriefDriftRecord {
   report: BriefDriftReport;
   builtSha?: string;
+  /** Content hash of the judged code — the audit's identity key. */
+  codeHash?: string;
   checkedAt: string;
   checkedBy?: string;
   /** The exact brief the audit judged — if the live brief differs, the record is stale and auto-clears. */

@@ -11,7 +11,7 @@ import { certifyVariation } from "../certify/certify";
 import { resolvePrototypeOrg } from "./org";
 import { getCoverage } from "./coverage";
 import { getBriefDrift, briefFingerprint } from "./brief-drift-state";
-import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit } from "./brief-audit";
+import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, codeHashOf } from "./brief-audit";
 import { isBriefComplete, type ArtifactVersion } from "./types";
 
 export async function listArtifactVersions(prototypeKey: string): Promise<ArtifactVersion[]> {
@@ -87,7 +87,7 @@ export async function cutArtifactVersionFromRepo(
     let gateDrifted = false;
     if (!drift && isBriefComplete(proto.brief, proto.metrics)) {
       const marker = await getBriefAuditMarker(prototypeKey).catch(() => null);
-      if (briefAuditNeeded(marker, src.headSha, briefFingerprint(proto))) {
+      if (briefAuditNeeded(marker, codeHashOf(src.variationJs), briefFingerprint(proto))) {
         const outcome = await runBriefAudit(proto, {
           actor: opts.createdBy ?? "console (auto-audit)",
           force: true,

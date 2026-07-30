@@ -11,6 +11,7 @@
  * stands until the build or the brief actually changes. A short-lived lock
  * stops concurrent page views from stampeding the same audit.
  */
+import { createHash } from "crypto";
 import { getContentStore } from "../content/store";
 import { resolveRepoSource } from "./source";
 import { resolvePrototypeOrg } from "./org";
@@ -19,7 +20,21 @@ import { setBriefDrift, clearBriefDrift, briefFingerprint } from "./brief-drift-
 import { isBriefComplete, type PrototypeRecord } from "./types";
 import { audit } from "../audit";
 
+/**
+ * The audit judges CODE against BRIEF, so its identity key is a hash of the
+ * code CONTENT — never the branch sha. A console re-sync commits `.opmc/**`
+ * and moves HEAD without touching dist/variation.js; keying by sha made every
+ * sync invalidate the verdict (audit → brief fix → sync → new sha → re-audit
+ * → forever). Content hashing ends that loop.
+ */
+export function codeHashOf(variationJs: string): string {
+  return createHash("sha256").update(variationJs).digest("hex").slice(0, 16);
+}
+
 export interface BriefAuditMarker {
+  /** Content hash of the judged code — the identity key. */
+  codeHash?: string;
+  /** The sha it was judged at — display only. */
   builtSha: string;
   briefFingerprint: string;
   inSync: boolean;
@@ -42,24 +57,25 @@ export async function setBriefAuditMarker(prototypeKey: string, marker: BriefAud
 }
 
 /**
- * The sha an audit would judge — ONE rule shared by the runner and every
+ * The code an audit would judge — ONE rule shared by the runner and every
  * trigger, or they disagree forever (a trigger comparing the marker against a
- * sha the runner will never write re-queues a no-op audit on every view).
+ * key the runner will never write re-queues a no-op audit on every view).
  * Mirrors the runner exactly: the branch artifact when it EXISTS at HEAD,
  * else the newest cut — and only if that cut carries code.
  */
-export function auditTargetSha(
-  source: { found?: boolean | null; headSha?: string } | null | undefined,
+export function auditTargetCode(
+  source: { found?: boolean | null; headSha?: string; variationJs?: string } | null | undefined,
   latestVersion: { gitSha: string; variationJs?: string } | undefined,
-): string | undefined {
-  if (source?.found && source.headSha) return source.headSha;
-  return latestVersion?.variationJs ? latestVersion.gitSha : undefined;
+): { codeHash?: string; sha?: string } {
+  if (source?.found && source.variationJs) return { codeHash: codeHashOf(source.variationJs), sha: source.headSha };
+  if (latestVersion?.variationJs) return { codeHash: codeHashOf(latestVersion.variationJs), sha: latestVersion.gitSha };
+  return {};
 }
 
-/** TRUE when the current (build, brief) pair has no recorded verdict yet. */
-export function briefAuditNeeded(marker: BriefAuditMarker | null, builtSha: string | undefined, fingerprint: string): boolean {
-  if (!builtSha) return false; // nothing built — nothing to judge
-  return !marker || marker.builtSha !== builtSha || marker.briefFingerprint !== fingerprint;
+/** TRUE when the current (code, brief) pair has no recorded verdict yet. */
+export function briefAuditNeeded(marker: BriefAuditMarker | null, codeHash: string | undefined, fingerprint: string): boolean {
+  if (!codeHash) return false; // nothing built — nothing to judge
+  return !marker || marker.codeHash !== codeHash || marker.briefFingerprint !== fingerprint;
 }
 
 export type BriefAuditOutcome =
@@ -109,11 +125,12 @@ export async function runBriefAudit(
   if (!variationJs) return { ran: false, reason: "nothing-built" };
 
   const fp = briefFingerprint(proto);
+  const codeHash = codeHashOf(variationJs);
   const store = await getContentStore();
   // Snapshot for the post-LLM supersession check below — EVERY run takes it.
   const before = await getBriefAuditMarker(proto.key);
   if (!opts.force) {
-    if (!briefAuditNeeded(before, builtSha, fp)) return { ran: false, reason: "already-audited" };
+    if (!briefAuditNeeded(before, codeHash, fp)) return { ran: false, reason: "already-audited" };
     // Best-effort lock (the flag store has no CAS): it stops page-view
     // stampedes; a rare double-run costs one duplicate LLM call, nothing more.
     const lockRaw = await store.getFlag(lockKey(proto.key));
@@ -141,9 +158,9 @@ export async function runBriefAudit(
     if (report.inSync) {
       await clearBriefDrift(proto.key);
     } else {
-      await setBriefDrift(proto.key, { report, builtSha, checkedAt: new Date().toISOString(), checkedBy: actor, briefFingerprint: fp });
+      await setBriefDrift(proto.key, { report, builtSha, codeHash, checkedAt: new Date().toISOString(), checkedBy: actor, briefFingerprint: fp });
     }
-    await setBriefAuditMarker(proto.key, { builtSha: builtSha ?? "", briefFingerprint: fp, inSync: report.inSync, checkedAt: new Date().toISOString(), checkedBy: actor });
+    await setBriefAuditMarker(proto.key, { codeHash, builtSha: builtSha ?? "", briefFingerprint: fp, inSync: report.inSync, checkedAt: new Date().toISOString(), checkedBy: actor });
     await audit(orgId ?? "", actor, "brief.drift-check", proto.name,
       `${report.inSync ? "IN SYNC" : `DRIFTED · ${report.mismatches.length} mismatch${report.mismatches.length === 1 ? "" : "es"} · blocks re-sync + cut until resolved`}${builtSha ? ` · vs ${builtSha.slice(0, 7)}` : ""}`);
     return { ran: true, report, builtSha };

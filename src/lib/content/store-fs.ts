@@ -142,6 +142,14 @@ export class FsContentStore implements ContentStore {
     await mkdir(this.root(), { recursive: true });
     await writeFile(this.metaFile(), JSON.stringify(m, null, 2) + "\n", "utf8");
   }
+  async compareAndSetFlag(key: string, expect: string | null, value: string): Promise<boolean> {
+    // Local dev is single-process — read-compare-write is race-safe enough
+    // here; the Neon implementation is the real conditional write.
+    const cur = await this.getFlag(key);
+    if ((expect === null && cur !== null) || (expect !== null && cur !== expect)) return false;
+    await this.setFlag(key, value);
+    return true;
+  }
   private pagesDir(siteKey: string): string { return join(this.root(), siteKey, "pages"); }
   private assetsDir(siteKey: string): string { return join(this.root(), siteKey, "assets"); }
 

@@ -25,10 +25,12 @@ const CELL_LABEL: Record<CheckResult | "", string> = { "": "—", pass: "✓", f
  * flagged loudest. Unreviewed core coverage makes the Optimizely push demand
  * an acknowledged override.
  */
-export function CoveragePanel({ prototypeKey, initial, currentSha, buildAvailable }: {
+export function CoveragePanel({ prototypeKey, initial, currentSha, currentCodeHash, buildAvailable }: {
   prototypeKey: string;
   initial: CoverageSpec | null;
   currentSha?: string | null;
+  /** Content hash of the current built code — staleness key (sha is display). */
+  currentCodeHash?: string | null;
   buildAvailable: boolean;
 }) {
   const router = useRouter();
@@ -90,7 +92,7 @@ export function CoveragePanel({ prototypeKey, initial, currentSha, buildAvailabl
     });
   }
 
-  const stale = coverageStale(spec, currentSha);
+  const stale = coverageStale(spec, currentSha, currentCodeHash);
 
   if (!spec) {
     return (

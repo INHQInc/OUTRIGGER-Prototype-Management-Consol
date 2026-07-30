@@ -7,7 +7,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import type { PrototypeRecord } from "../prototypes/types";
-import type { CoverageScenario, CoverageDevice } from "../prototypes/coverage";
+import type { CoverageScenario, CoverageDevice, TestCase } from "../prototypes/coverage";
 
 const DEVICES: CoverageDevice[] = ["desktop", "tablet", "mobile"];
 
@@ -108,4 +108,120 @@ Produce the coverage spec.`,
   }
   if (!scenarios.length) throw new Error("Coverage generation produced no scenarios — try again.");
   return scenarios;
+}
+
+const TESTCASES_TOOL = {
+  name: "report_test_cases",
+  description: "Return traditional test cases derived from the scenarios and the built code.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      testCases: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            id: { type: "string" as const, description: "stable slug: tc-<scenarioId>-<n>, e.g. tc-open-overlay-from-card-1" },
+            scenarioId: { type: "string" as const, description: "the parent scenario's id, verbatim" },
+            title: { type: "string" as const },
+            priority: { type: "string" as const, enum: ["core", "edge"] },
+            preconditions: { type: "array" as const, items: { type: "string" as const }, description: "concrete starting state: the URL, viewport, data state" },
+            steps: {
+              type: "array" as const,
+              items: {
+                type: "object" as const,
+                properties: {
+                  action: { type: "string" as const, description: "one imperative, mechanical action" },
+                  expect: { type: "string" as const, description: "the observable expected result of this step" },
+                },
+                required: ["action", "expect"],
+              },
+            },
+            devices: { type: "array" as const, items: { type: "string" as const, enum: ["desktop", "tablet", "mobile"] } },
+          },
+          required: ["id", "scenarioId", "title", "priority", "preconditions", "steps", "devices"],
+        },
+      },
+    },
+    required: ["testCases"],
+  },
+};
+
+/**
+ * Expand the scenarios into TRADITIONAL test cases — numbered steps, each
+ * with its own expected result — executable verbatim by a person following
+ * the script or by a browser agent driving the review URL.
+ */
+export async function generateTestCases(opts: {
+  proto: PrototypeRecord;
+  scenarios: CoverageScenario[];
+  variationJs: string;
+  builtSha?: string;
+}): Promise<TestCase[]> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables.");
+  }
+  const client = new Anthropic();
+  const res = await client.messages.create({
+    model: "claude-opus-4-8",
+    max_tokens: 8000,
+    system: "You write TRADITIONAL test cases for client-side injected web experiments: per scenario, 1–3 concrete step-scripts a QA analyst executes verbatim. Each case: concrete preconditions (exact URL with the preview param, viewport, required data state), then numbered steps where every step is ONE mechanical action with ONE observable expected result. Ground every selector, label, and behavior in the BUILT code — never invent UI the code doesn't create. Steps must be executable by a human following the script OR a browser agent driving the page: no vague actions ('interact with the tray'), no compound steps, no unverifiable expectations. Include the scenario's edge/negative paths as their own cases where they need different steps. Keep ids stable: tc-<scenarioId>-<n>. Skip gap:true scenarios — untestable until built.",
+    messages: [{
+      role: "user",
+      content: `Prototype: ${opts.proto.name}${opts.builtSha ? ` · built at ${opts.builtSha.slice(0, 7)}` : ""}
+Review page(s) (the ?opmc preview param activates the prototype): ${opts.proto.targets.map((t) => t.url).join(", ") || "none set"}
+
+THE SCENARIOS (parent use cases — derive test cases from these):
+"""
+${JSON.stringify(opts.scenarios.map((s) => ({ id: s.id, title: s.title, priority: s.priority, gap: s.gap, given: s.given, when: s.when, then: s.then, devices: s.devices, deviceNotes: s.deviceNotes })), null, 2)}
+"""
+
+THE BUILT CODE (dist/variation.js — the evidence for selectors and behavior):
+"""
+${trimCode(opts.variationJs)}
+"""
+
+Produce the test cases.`,
+    }],
+    tools: [TESTCASES_TOOL],
+    tool_choice: { type: "tool", name: "report_test_cases" },
+  });
+
+  const tu = res.content.find((c) => c.type === "tool_use");
+  if (!tu || tu.type !== "tool_use") throw new Error("Test-case generation returned nothing — try again.");
+  const raw = ((tu.input ?? {}) as { testCases?: unknown }).testCases;
+  const list = Array.isArray(raw) ? raw : [];
+  const scenarioIds = new Set(opts.scenarios.map((s) => s.id));
+  const byScenario = new Map(opts.scenarios.map((s) => [s.id, s]));
+  const seen = new Set<string>();
+  const cases: TestCase[] = [];
+  for (const r of list) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const scenarioId = String(o.scenarioId ?? "").trim();
+    if (!scenarioIds.has(scenarioId)) continue; // orphan — no parent use case
+    if (byScenario.get(scenarioId)?.gap) continue; // gap = untestable until built — enforced in code, not just the prompt
+    let id = String(o.id ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!id) id = `tc-${scenarioId}-${cases.length + 1}`;
+    while (seen.has(id)) id = `${id}-2`;
+    seen.add(id);
+    const steps = (Array.isArray(o.steps) ? o.steps : [])
+      .filter((s): s is { action?: unknown; expect?: unknown } => Boolean(s) && typeof s === "object")
+      .map((s) => ({ action: String(s.action ?? "").trim(), expect: String(s.expect ?? "").trim() }))
+      .filter((s) => s.action && s.expect);
+    if (!steps.length) continue;
+    const parent = byScenario.get(scenarioId);
+    const devices = (Array.isArray(o.devices) ? o.devices : []).filter((d): d is CoverageDevice => (DEVICES as string[]).includes(String(d)));
+    cases.push({
+      id,
+      scenarioId,
+      title: String(o.title ?? id),
+      priority: o.priority === "edge" ? "edge" : "core",
+      preconditions: (Array.isArray(o.preconditions) ? o.preconditions : []).filter((x): x is string => typeof x === "string" && x.trim().length > 0),
+      steps,
+      devices: devices.length ? devices : (parent?.devices?.length ? [...parent.devices] : [...DEVICES]),
+    });
+  }
+  if (!cases.length) throw new Error("Test-case generation produced no runnable cases — try again.");
+  return cases;
 }

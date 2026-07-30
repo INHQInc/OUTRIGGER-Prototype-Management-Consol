@@ -208,6 +208,20 @@ export class NeonContentStore implements ContentStore {
       insert into content_meta (key, val, updated_at) values (${key}, ${value}, now())
       on conflict (key) do update set val = excluded.val, updated_at = now()`;
   }
+  async compareAndSetFlag(key: string, expect: string | null, value: string): Promise<boolean> {
+    if (expect === null) {
+      const rows = await this.sql`
+        insert into content_meta (key, val, updated_at) values (${key}, ${value}, now())
+        on conflict (key) do nothing
+        returning key`;
+      return rows.length > 0;
+    }
+    const rows = await this.sql`
+      update content_meta set val = ${value}, updated_at = now()
+      where key = ${key} and val = ${expect}
+      returning key`;
+    return rows.length > 0;
+  }
 
   async listPrototypes(siteKey?: string): Promise<PrototypeRecord[]> {
     const rows = siteKey

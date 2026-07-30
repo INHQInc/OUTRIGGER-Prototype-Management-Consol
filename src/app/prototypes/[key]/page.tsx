@@ -18,9 +18,10 @@ import { resolveSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { listRecommendations } from "@/lib/ideas/ideas";
 import { getBriefDrift, briefFingerprint } from "@/lib/prototypes/brief-drift-state";
-import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetSha } from "@/lib/prototypes/brief-audit";
-import { getCoverage, coverageGate, coverageStale } from "@/lib/prototypes/coverage";
+import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetCode } from "@/lib/prototypes/brief-audit";
+import { getCoverage, coverageGate, coverageStale, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
 import { CoveragePanel } from "@/components/CoveragePanel";
+import { TestCasesPanel } from "@/components/TestCasesPanel";
 import { currentUser } from "@/lib/auth/current";
 import { SEVERITY_DOT, TimeAgo } from "@/components/ui";
 import { StageStrip } from "@/components/StageStrip";
@@ -57,7 +58,7 @@ const GROUPS = [
   { label: "Plan", items: [{ id: "brief", label: "Brief", step: "brief" }] },
   { label: "Build", items: [{ id: "agent", label: "Agent", step: "build" }, { id: "skills", label: "Skills" }, { id: "recs", label: "Recommendations" }] },
   { label: "Target", items: [{ id: "pages", label: "Pages", step: "review" }] },
-  { label: "QA", items: [{ id: "coverage", label: "Scenarios" }] },
+  { label: "QA", items: [{ id: "coverage", label: "Scenarios" }, { id: "tests", label: "Test cases" }] },
   { label: "Experiment", items: [{ id: "versions", label: "Versions" }, { id: "optimizely", label: "Optimizely", step: "experiment" }] },
   { label: "Handoff", items: [{ id: "explorer", label: "Code explorer" }, { id: "ship", label: "Ship record", step: "handoff" }] },
   { label: "Settings", items: [{ id: "repo", label: "Repo & branch" }, { id: "details", label: "Details" }, { id: "history", label: "History" }] },
@@ -121,12 +122,13 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   // SELF-AWARE: if the console can see a build it has never judged against
   // the current brief, audit it after this response ships — the rail turns
   // red by itself; nobody has to remember to click Check drift. Marker-deduped
-  // (one LLM call per build×brief pair) and locked against view stampedes.
-  // auditTargetSha is the runner's OWN resolution rule — page and runner must
-  // agree on which sha is current or this trigger re-queues forever.
+  // (one LLM call per code×brief pair, keyed by CODE CONTENT so console
+  // re-sync commits never invalidate a verdict) and locked against stampedes.
+  // auditTargetCode is the runner's OWN resolution rule — page and runner
+  // must agree on the key or this trigger re-queues forever.
   const briefAudit = await getBriefAuditMarker(key).catch(() => null);
-  const auditSha = auditTargetSha(source, versions[0]);
-  if (!briefDrift && briefAuditNeeded(briefAudit, auditSha, briefFingerprint(p))) {
+  const auditTarget = auditTargetCode(source, versions[0]);
+  if (!briefDrift && briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p))) {
     after(() => runBriefAudit(p, { actor: "console (auto-audit)" }).catch(() => {}));
   }
 
@@ -189,8 +191,15 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       const gate = coverageGate(coverage);
       if (gate === "none") return "pending";
       if (gate === "failing") return "critical";
-      if (coverageStale(coverage, buildStatus.headSha)) return "attention";
+      if (coverageStale(coverage, buildStatus.headSha, auditTarget.codeHash)) return "attention";
       return gate === "ok" ? "good" : "attention";
+    }
+    if (item.id === "tests") {
+      if (!coverage?.testCases?.length) return "pending";
+      const anyFail = coverage.testCases.some((t) => t.devices.some((d) => coverage.testResults?.[t.id]?.[d]?.status === "fail"));
+      if (anyFail) return "critical";
+      if (testCasesStale(coverage, buildStatus.headSha, auditTarget.codeHash)) return "attention";
+      return testCasesRun(coverage) ? "good" : "attention";
     }
     return null;
   };
@@ -256,7 +265,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       <main className="overflow-y-auto px-6 py-5">
         {tab === "brief" && (
           <Room title="Brief" sub="What are we building, and how do we know it worked? The brief is the gate — it becomes the agent's instructions and the experiment's description.">
-            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} initialAudit={briefAudit ? { inSync: briefAudit.inSync, builtSha: briefAudit.builtSha, checkedAt: briefAudit.checkedAt, checkedBy: briefAudit.checkedBy, current: !briefAuditNeeded(briefAudit, auditSha, briefFingerprint(p)) } : null} />
+            <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} initialAudit={briefAudit ? { inSync: briefAudit.inSync, builtSha: briefAudit.builtSha, checkedAt: briefAudit.checkedAt, checkedBy: briefAudit.checkedBy, current: !briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p)) } : null} />
           </Room>
         )}
 
@@ -286,7 +295,13 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 
         {tab === "coverage" && (
           <Room title="QA scenarios" sub="Validate the prototype before the experiment runs — and hand the record to the devs building the final product. Use cases with checkable tests per device, derived from the brief AND the built code; walk them on the real review URL and click the device cells. Gaps are scenarios the build doesn't handle.">
-            <CoveragePanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
+            <CoveragePanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} currentCodeHash={auditTarget.codeHash} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
+          </Room>
+        )}
+
+        {tab === "tests" && (
+          <Room title="Test cases" sub="The traditional layer under the scenarios: step-scripts with preconditions and an expected result per step, grounded in the built code. Your agent runs them on the review URL and reports back; humans walk the same scripts. One record, attributed — failures feed the QA gate and auto-file Recommendations.">
+            <TestCasesPanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} currentCodeHash={auditTarget.codeHash} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
           </Room>
         )}
 
@@ -427,6 +442,9 @@ function labelForAction(action: string): string {
     "brief.drift-dismissed": "Brief drift dismissed — brief confirmed accurate",
     "coverage.generated": "QA spec generated",
     "coverage.reviewed": "QA review completed",
+    "coverage.tests-generated": "Test cases generated",
+    "coverage.tests-run": "Test cases run by the agent",
+    "coverage.tests-complete": "Every core test case run",
   };
   return map[action] ?? action;
 }
