@@ -1,124 +1,87 @@
 /**
- * Prototype setup state — the "ready to build" checklist, mirroring the org
- * Customer-setup checklist. These are the things genuinely required before
- * someone (with Claude) can start building this prototype:
+ * Set up, then operate — the two-mode workspace.
  *
- *   1. Code location   — a registered repo + branch (needs GitHub connected)
- *   2. Build brief     — what to build; Claude's skill reads this from the console
- *   3. Test pages      — at least one URL to review/inject on
- *   4. Injection ready — the loader tag is live on the review environment
+ * Setup is genuinely LINEAR (brief → branch/agent → first build → page
+ * verification: each step depends on the last), so until the base is set the
+ * workspace renders a guided single-column flow, one step at a time. The
+ * working model (command rail, rooms) is genuinely NON-linear and takes over
+ * permanently once the base is set. Completion is GROUND TRUTH — steps tick
+ * themselves; nothing here is a checkbox a human asserts.
  *
- * When all four are done we hand over the exact local commands (clone → branch
- * → push → claude). The built variation is the OUTPUT of running them, tracked
- * separately as the build status.
+ * Pure derivation, client-safe: the page supplies the truth inputs it
+ * already fetches. The "base is set" flip is ONE-WAY — the page writes
+ * setupdone:<key> the first time this derives complete, so later
+ * regressions (drift, a deleted branch) never throw an operating prototype
+ * back into setup.
  */
-import type { PrototypeRecord } from "./types";
-import { getGitClientForOrg } from "../git/connection";
-import { listOrgEnvironments, envLoaderSeenAt } from "../environments";
-import { defaultOrgRepo } from "../git/org-repos";
 
-export interface SetupStepState {
-  key: "code" | "brief" | "pages" | "injection";
+export interface SetupInputs {
+  briefComplete: boolean;
+  /** An unresolved Brief ↔ Build drift verdict — blocks step 1. */
+  briefDrifted: boolean;
+  provisioned: boolean;
+  /** The agent checked in (claude:seen beacon). */
+  agentStarted: boolean;
+  /** dist/variation.js exists at the branch HEAD. */
+  buildFound: boolean;
+  pages: number;
+  pagesPassing: number;
+}
+
+export interface SetupStep {
+  id: "brief" | "agent" | "build" | "pages";
+  n: number;
   label: string;
+  /** What this step is for — shown while pending. */
+  sub: string;
   done: boolean;
-  hint?: string;
-  tab: "build" | "pages" | "setup";
-  action: string;
+  /** One-line proof shown when done. */
+  summary: string;
+  /** WHY a step that was satisfied is blocked again — shown loud while active. */
+  blockedNote?: string;
 }
 
-export interface PrototypeSetupState {
-  steps: SetupStepState[];
-  doneCount: number;
-  total: number;
-  ready: boolean;
-  gitConnected: boolean;
-  repoRegistered: boolean;
-  repo?: { fullName: string; branch: string };
-  envsWithLoader: number;
-  totalEnvs: number;
+export interface SetupState {
+  steps: SetupStep[];
+  /** First not-done step (index into steps); steps.length when all done. */
+  activeIndex: number;
+  complete: boolean;
 }
 
-export async function getPrototypeSetup(proto: PrototypeRecord, orgId: string): Promise<PrototypeSetupState> {
-  const [gitClient, environments, protoRepoDefault] = await Promise.all([
-    orgId ? getGitClientForOrg(orgId) : Promise.resolve(null),
-    orgId ? listOrgEnvironments(orgId) : Promise.resolve([]),
-    orgId ? defaultOrgRepo(orgId, "prototypes") : Promise.resolve(null),
-  ]);
-  const gitConnected = Boolean(gitClient);
-  const repoRegistered = Boolean(protoRepoDefault);
-
-  const seenByEnvId = new Map(await Promise.all(environments.map(async (e) => [e.id, await envLoaderSeenAt(e)] as const)));
-  const envsWithLoader = [...seenByEnvId.values()].filter(Boolean).length;
-
-  // Which of the customer's environments do this prototype's target pages live on?
-  const targetOrigins = new Set(proto.targets.map((t) => { try { return new URL(t.url).origin; } catch { return ""; } }).filter(Boolean));
-  const targetEnvs = environments.filter((e) => { try { return targetOrigins.has(new URL(e.url).origin); } catch { return false; } });
-
-  // A repo whose branch is the shared `starter` template is NOT a valid code
-  // location — the prototype must build on its own branch.
-  const onStarter = proto.repo?.branch === "starter";
-  const hasRepo = Boolean(proto.repo?.fullName) && !onStarter;
-  const hasBrief = Boolean(proto.brief.problem?.trim() || proto.brief.change?.trim() || proto.brief.doneLooksLike?.trim());
-  const hasPages = proto.targets.length > 0;
-  // Injection is "live" only when a page THIS prototype targets is on an
-  // environment with a verified loader — not just any env in the org.
-  const hasInjection = targetEnvs.some((e) => Boolean(seenByEnvId.get(e.id)));
-
-  const steps: SetupStepState[] = [
+export function deriveSetup(inp: SetupInputs): SetupState {
+  const steps: SetupStep[] = [
     {
-      key: "code",
-      label: "Code location — repo & branch",
-      done: hasRepo,
-      tab: "build",
-      action: "Set repo",
-      hint: !gitConnected
-        ? "Connect GitHub for this customer first (Settings → Repositories)."
-        : !repoRegistered
-        ? "Register a prototypes repo first (Settings → Repositories)."
-        : onStarter
-        ? "Your branch is 'starter' (the shared template) — set a prototype/<key> branch on the Build tab."
-        : "Pick the repo + branch this prototype builds in.",
+      id: "brief", n: 1, label: "Write the brief",
+      sub: "What are we building, and how do we know it worked? The brief becomes the agent's instructions and the experiment's description — nothing proceeds without it.",
+      done: inp.briefComplete && !inp.briefDrifted,
+      summary: "change + decision metric saved",
+      blockedNote: inp.briefComplete && inp.briefDrifted
+        ? "The audit found the brief no longer matches the build — resolve the Brief ↔ Build card below (update the brief, or dismiss if the brief is right)."
+        : undefined,
     },
     {
-      key: "brief",
-      label: "Build brief — what to build",
-      done: hasBrief,
-      tab: "setup",
-      action: "Write brief",
-      hint: "One or two lines is enough — the agent reads this to know what to build.",
+      id: "agent", n: 2, label: "Branch & agent",
+      sub: "Provision the prototype's branch, point it at your local folder, and start Claude. This step completes itself when the agent checks in.",
+      done: inp.provisioned && (inp.agentStarted || inp.buildFound),
+      summary: inp.agentStarted ? "branch provisioned · agent checked in" : "branch provisioned · build landed",
     },
     {
-      key: "pages",
-      label: "Test pages — where to inject",
-      done: hasPages,
-      tab: "pages",
-      action: "Add pages",
-      hint: "The page(s) on the site the prototype changes and gets reviewed on.",
+      id: "build", n: 3, label: "First build",
+      sub: "Claude builds in your terminal and pushes; this ticks the moment dist/variation.js lands on the branch. Nothing to do in the console but watch.",
+      done: inp.buildFound,
+      summary: "built variation on the branch",
     },
     {
-      key: "injection",
-      label: "Injection script live on the environment",
-      done: hasInjection,
-      tab: "pages",
-      action: "Install tag",
-      hint: !hasPages
-        ? "Add a test page first — injection is checked on the page's environment."
-        : targetEnvs.length === 0
-        ? "Your test pages aren't on a known environment yet (Configuration → Environments)."
-        : "Place the loader tag on the site once — it self-verifies on first page view.",
+      id: "pages", n: 4, label: "See it on the page",
+      sub: "Verify the variation actually injects on the real review URL — the base isn't set until you've seen it live.",
+      done: inp.pages > 0 && inp.pagesPassing === inp.pages,
+      summary: `${inp.pagesPassing}/${inp.pages} page${inp.pages === 1 ? "" : "s"} inject`,
     },
   ];
-
-  const doneCount = steps.filter((s) => s.done).length;
+  const activeIndex = steps.findIndex((s) => !s.done);
   return {
     steps,
-    doneCount,
-    total: steps.length,
-    ready: doneCount === steps.length,
-    gitConnected,
-    repoRegistered,
-    repo: proto.repo ? { fullName: proto.repo.fullName, branch: proto.repo.branch } : undefined,
-    envsWithLoader,
-    totalEnvs: environments.length,
+    activeIndex: activeIndex === -1 ? steps.length : activeIndex,
+    complete: activeIndex === -1,
   };
 }

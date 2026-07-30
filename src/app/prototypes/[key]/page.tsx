@@ -13,7 +13,9 @@ import { getExperimentationConfig, getOptimizelyClientForOrg } from "@/lib/exper
 import { listAuditEvents } from "@/lib/audit";
 import { derivePipeline, stepSeverity, type Pipeline } from "@/lib/prototypes/pipeline";
 import { type StepSeverity } from "@/lib/prototypes/severity";
-import { isBriefComplete, normalizeStage } from "@/lib/prototypes/types";
+import { isBriefComplete, normalizeStage, injectionPasses } from "@/lib/prototypes/types";
+import { deriveSetup } from "@/lib/prototypes/setup";
+import { SetupRefresh, SkipSetup } from "@/components/SetupControls";
 import { resolveSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { listRecommendations } from "@/lib/ideas/ideas";
@@ -78,10 +80,12 @@ const ANCHOR_TO_TAB: Record<string, TabId> = {
 
 export default async function PrototypeWorkspace({ params, searchParams }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; step?: string }>;
 }) {
   const { key } = await params;
-  const rawTab = (await searchParams).tab ?? "";
+  const sp = await searchParams;
+  const rawTab = sp.tab ?? "";
+  const rawStep = Number(sp.step ?? "");
 
   const store = await getContentStore();
   const p = await store.getPrototype(key);
@@ -89,7 +93,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const orgId = await resolvePrototypeOrg(p);
   const repo = await resolvePrototypeRepo(p, orgId);
 
-  const [hdrs, source, provisionFlag, environments, versions, push, expCfg, claudeSeen, handoffRaw, auditEvents, recommendations, user] = await Promise.all([
+  const [hdrs, source, provisionFlag, environments, versions, push, expCfg, claudeSeen, handoffRaw, auditEvents, recommendations, user, setupDoneFlag, setupSkipFlag, firstBuildFlag] = await Promise.all([
     headers(),
     resolveRepoSource(key).catch(() => null),
     store.getFlag(`provision:${key}`).catch(() => null),
@@ -102,6 +106,9 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     orgId ? listAuditEvents(orgId, 200).catch(() => []) : Promise.resolve([]),
     listRecommendations(orgId, key).catch(() => []),
     currentUser().catch(() => null),
+    store.getFlag(`setupdone:${key}`).catch(() => null),
+    store.getFlag(`setupskip:${key}`).catch(() => null),
+    store.getFlag(`firstbuild:${key}`).catch(() => null),
   ]);
   const briefDrift = await getBriefDrift(key, p).catch(() => null);
   const coverage = await getCoverage(key).catch(() => null);
@@ -130,6 +137,37 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const auditTarget = auditTargetCode(source, versions[0]);
   if (!briefDrift && briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p))) {
     after(() => runBriefAudit(p, { actor: "console (auto-audit)" }).catch(() => {}));
+  }
+
+  // SET UP, THEN OPERATE: until the base is set (brief → branch/agent →
+  // first build → pages verified — a genuinely linear dependency chain) the
+  // workspace is a guided single-column flow. Once set, the flip to the
+  // command-rail working model is ONE-WAY (flag), so later regressions never
+  // bounce an operating prototype back into setup.
+  // "First build" LATCHES via a flag: a transient GitHub failure makes
+  // buildStatus.found null for one render, and a completed step regressing
+  // mid-poll (unmounting whatever the user is typing in) is worse than a
+  // momentarily stale tick. First-build is genuinely one-way anyway.
+  const buildFound = buildStatus.found === true || Boolean(firstBuildFlag);
+  if (buildStatus.found === true && !firstBuildFlag) {
+    after(async () => { await (await getContentStore()).setFlag(`firstbuild:${key}`, new Date().toISOString()).catch(() => {}); });
+  }
+  const setup = deriveSetup({
+    briefComplete: isBriefComplete(p.brief, p.metrics),
+    briefDrifted: Boolean(briefDrift),
+    provisioned: Boolean(provisionFlag),
+    agentStarted: Boolean(claudeSeen),
+    buildFound,
+    pages: p.targets.length,
+    pagesPassing: p.targets.filter(injectionPasses).length,
+  });
+  // Evidence of OPERATION also counts as base-set — a prototype with a cut,
+  // a push, a bound experiment, or an advanced stage predates this flow (or
+  // was driven by API) and must never regress into setup.
+  const operated = versions.length > 0 || Boolean(push) || Boolean(p.experiment) || normalizeStage(p.status) !== "draft";
+  const setupMode = !setupDoneFlag && !setupSkipFlag && !setup.complete && !operated;
+  if ((setup.complete || operated) && !setupDoneFlag) {
+    after(async () => { await (await getContentStore()).setFlag(`setupdone:${key}`, new Date().toISOString()).catch(() => {}); });
   }
 
   let experimentStatus: string | null = null;
@@ -207,6 +245,98 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const chip = chipClasses(pipeline);
   const ctaTab = anchorTab(pipeline.primaryAction.anchor);
   const gate = pipeline.stage.blocked ? pipeline.stage.status : pipeline.alerts[0]?.text ?? null;
+
+  // ── SETUP MODE: the guided linear flow until the base is set ──
+  if (setupMode) {
+    // ANY step opens via ?step=N — the numbering and auto-advance carry the
+    // linearity; hard locks made honest mistakes unfixable (a typo'd page
+    // URL is a step-4 input CONSUMED by step-2 provisioning).
+    const openIdx = Number.isInteger(rawStep) && rawStep >= 1 && rawStep <= setup.steps.length
+      ? rawStep - 1 : setup.activeIndex;
+    // Poll only while a step is waiting on EXTERNAL truth (agent check-in,
+    // first build) — the other steps are human work and don't need refreshes.
+    const waiting = openIdx === setup.activeIndex && (setup.activeIndex === 1 || setup.activeIndex === 2);
+
+    const stepBody = (id: string) => {
+      if (id === "brief") return (
+        <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} initialAudit={briefAudit ? { inSync: briefAudit.inSync, builtSha: briefAudit.builtSha, checkedAt: briefAudit.checkedAt, checkedBy: briefAudit.checkedBy, current: !briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p)) } : null} />
+      );
+      if (id === "agent") return (
+        <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={isBriefComplete(p.brief, p.metrics)} claudeSeenAt={claudeSeen} inSync={pipeline.truth.synced} />
+      );
+      if (id === "build") return (
+        <div className="rounded-xl border border-border bg-surface px-4 py-4">
+          {buildStatus.found ? (
+            <p className="text-[14px] text-ok font-semibold">✓ Built — {buildStatus.bytes?.toLocaleString()} bytes at <span className="font-mono font-normal">{buildStatus.headSha?.slice(0, 7)}</span></p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[14px] text-foreground flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-warn animate-pulse shrink-0" />
+                Waiting for the first build — this ticks the moment <span className="font-mono text-[13px]">dist/variation.js</span> lands on the branch.
+              </p>
+              <p className="text-[13px] text-muted-2 max-w-[70ch]">Nothing to click here: Claude builds in your terminal and pushes. This page checks by itself every few seconds. If the agent isn&apos;t building yet, reopen step 2.</p>
+            </div>
+          )}
+        </div>
+      );
+      return <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />;
+    };
+
+    return (
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <SetupRefresh enabled={waiting} />
+        <div className="max-w-3xl mx-auto px-6 py-8">
+          <Link href="/prototypes" className="text-[12.5px] text-muted-2 hover:text-foreground">← Prototypes</Link>
+          <div className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-2">Web experiment prototype · Setup</div>
+          <h1 className="text-[22px] font-bold tracking-tight mt-0.5">{p.name}</h1>
+          <p className="text-[13.5px] text-muted-2 mt-1.5 max-w-[70ch]">
+            Four steps, in order — each unlocks the next, and ground-truth steps tick themselves.
+            The full workspace opens when the base is set.
+          </p>
+
+          <div className="mt-6 space-y-2.5">
+            {setup.steps.map((s, i) => {
+              const isOpen = i === openIdx;
+              const ahead = !s.done && i > setup.activeIndex; // visual cue only — every step opens
+              return (
+                <div key={s.id} className={`rounded-xl border overflow-hidden border-border bg-surface ${isOpen ? "border-border-strong" : ahead ? "opacity-60" : ""}`}>
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <span className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[12.5px] font-bold ${s.done ? "bg-ok text-accent-fg" : isOpen ? "bg-accent text-accent-fg" : "bg-surface-2 text-muted-2"}`}>
+                      {s.done ? "✓" : s.n}
+                    </span>
+                    <span className={`text-[15px] font-semibold ${ahead && !isOpen ? "text-muted-2" : ""}`}>{s.label}</span>
+                    <span className="ml-auto text-[12.5px] text-muted-2 min-w-0 truncate">
+                      {s.done && !isOpen ? s.summary : ""}
+                    </span>
+                    {!isOpen && (
+                      <Link href={`?step=${s.n}`} className="text-[12.5px] text-accent hover:text-accent-hover font-medium shrink-0">open</Link>
+                    )}
+                    {isOpen && i !== setup.activeIndex && (
+                      <Link href="?" className="text-[12.5px] text-muted-2 hover:text-foreground shrink-0">close</Link>
+                    )}
+                  </div>
+                  {isOpen && (
+                    <div className="px-4 pb-4 border-t border-border/60 pt-4">
+                      {s.blockedNote && (
+                        <p className="text-[13.5px] text-warn mb-3 max-w-[70ch]">⚠ {s.blockedNote}</p>
+                      )}
+                      {!s.done && <p className="text-[13.5px] text-muted-2 mb-3 max-w-[70ch]">{s.sub}</p>}
+                      {stepBody(s.id)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 flex items-center justify-between">
+            <span className="text-[12.5px] text-muted-2">Step {Math.min(setup.activeIndex + 1, setup.steps.length)} of {setup.steps.length}</span>
+            <SkipSetup prototypeKey={key} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 grid grid-cols-[16.5rem_minmax(0,1fr)] xl:grid-cols-[16.5rem_minmax(0,1fr)_17.5rem]">

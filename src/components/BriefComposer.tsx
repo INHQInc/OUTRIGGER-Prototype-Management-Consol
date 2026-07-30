@@ -464,8 +464,11 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       </div>
       )}
 
-      {/* Brief ↔ Build — the drift audit. Only meaningful once something is built. */}
-      {buildAvailable && (
+      {/* Brief ↔ Build — the drift audit. Checking needs a build, but an
+          EXISTING drift verdict must always render: it blocks the pipeline,
+          and Dismiss/Update are the only way out — hiding them because the
+          artifact is momentarily unreadable would strand the user. */}
+      {(buildAvailable || drift) && (
         <div className={`rounded-xl border bg-surface overflow-hidden ${drift ? (drift.report.inSync ? "border-ok/40" : "border-warn/50") : "border-border"}`}>
           <div className="px-4 py-2.5 border-b border-border flex items-center gap-3">
             <span className="text-[14px] font-semibold shrink-0">Brief ↔ Build</span>

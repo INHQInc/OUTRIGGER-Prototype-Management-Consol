@@ -109,7 +109,10 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   }
 
   if (!repo) {
-    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[14px]">This prototype has no repo yet. <Link href={`/prototypes/${prototypeKey}?tab=repo`} className="text-accent hover:text-accent-hover font-medium">Choose one in Settings →</Link></div>;
+    // Link to the GLOBAL settings page — it works from every mode (the
+    // ?tab=repo room only exists in the working-model workspace, and this
+    // card also renders inside guided setup, where tab params are ignored).
+    return <div className="rounded-xl border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_5%,transparent)] px-4 py-3 text-[14px]">This prototype has no repo yet. <Link href="/settings/repositories" className="text-accent hover:text-accent-hover font-medium">Register one in Settings → Repositories</Link>, then come back — it attaches automatically.</div>;
   }
 
   const fullName = repo.fullName;

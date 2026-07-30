@@ -68,6 +68,21 @@ no lifecycle dot) so all item labels sit in one indented column under their
 header. A row whose label starts at the header's x reads as a header — never
 let dot-less rows collapse the indent.
 
+**Set up, then operate (user-driven 07-30):** rooms serve OPERATING a
+prototype; they are the wrong shape for SETTING ONE UP, because setup is
+genuinely linear (brief → branch/agent → first build → page verification —
+each step depends on the last). Until the base is set the workspace is a
+guided single-column flow: numbered steps embedding the rooms' own
+components, completion by ground truth (steps tick themselves), every step
+openable (numbering carries the linearity; hard locks make honest mistakes
+unfixable), one-way flip to the working model when the base is set. Never
+show a new prototype the command rail; never show an operating prototype
+the setup flow.
+
+*Origin: "the flow is so bad, it really is jumping from one section to
+another and back and forth… make each logical setup step that's required up
+front, then a working model after the base is set."*
+
 *Origin: "it's all super confusing… a prototype has a brief, source control
 setup, experimentation setup, skills setup, code handoff — not a list of steps."
 / "items that don't have the status dots look like they are at the same level

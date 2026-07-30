@@ -142,35 +142,38 @@ export async function runBriefAudit(
     const lockRaw = await store.getFlag(lockKey(proto.key));
     if (lockRaw && Date.now() - new Date(lockRaw).getTime() < LOCK_TTL_MS) return { ran: false, reason: "locked" };
   }
+  // A FAILED run KEEPS the lock (no finally-release): the TTL becomes the
+  // retry throttle. Setup mode re-arms the audit on a ~15s poll — a
+  // persistently failing LLM call (bad key, provider outage) must dampen to
+  // once per TTL, not be re-billed on every tick. Successful paths release
+  // explicitly below.
   await store.setFlag(lockKey(proto.key), new Date().toISOString());
 
-  try {
-    const orgId = await resolvePrototypeOrg(proto);
-    const actor = opts.actor ?? "console (auto-audit)";
-    const report = await checkBriefDrift({ orgId: orgId ?? "", proto, variationJs, builtSha });
+  const orgId = await resolvePrototypeOrg(proto);
+  const actor = opts.actor ?? "console (auto-audit)";
+  const report = await checkBriefDrift({ orgId: orgId ?? "", proto, variationJs, builtSha });
 
-    // Supersession check: if ANY marker landed while the LLM was thinking —
-    // a newer verdict, a dismissal, the cut gate's forced run — that
-    // conclusion is newer than this one and wins; drop this persist (the
-    // caller still gets the report). Pair-matching is not enough: a slow run
-    // judging sha A must also yield to a verdict about sha B. A sub-second
-    // window remains (no CAS on the flag store); the cut gate compensates by
-    // gating on its own returned verdict, not on what got persisted.
-    const now = await getBriefAuditMarker(proto.key);
-    if (JSON.stringify(now) !== JSON.stringify(before)) {
-      return { ran: true, report, builtSha };
-    }
-
-    if (report.inSync) {
-      await clearBriefDrift(proto.key);
-    } else {
-      await setBriefDrift(proto.key, { report, builtSha, codeHash, checkedAt: new Date().toISOString(), checkedBy: actor, briefFingerprint: fp });
-    }
-    await setBriefAuditMarker(proto.key, { codeHash, builtSha: builtSha ?? "", briefFingerprint: fp, inSync: report.inSync, checkedAt: new Date().toISOString(), checkedBy: actor });
-    await audit(orgId ?? "", actor, "brief.drift-check", proto.name,
-      `${report.inSync ? "IN SYNC" : `DRIFTED · ${report.mismatches.length} mismatch${report.mismatches.length === 1 ? "" : "es"} · blocks re-sync + cut until resolved`}${builtSha ? ` · vs ${builtSha.slice(0, 7)}` : ""}`);
-    return { ran: true, report, builtSha };
-  } finally {
+  // Supersession check: if ANY marker landed while the LLM was thinking —
+  // a newer verdict, a dismissal, the cut gate's forced run — that
+  // conclusion is newer than this one and wins; drop this persist (the
+  // caller still gets the report). Pair-matching is not enough: a slow run
+  // judging sha A must also yield to a verdict about sha B. A sub-second
+  // window remains (no CAS on the flag store); the cut gate compensates by
+  // gating on its own returned verdict, not on what got persisted.
+  const now = await getBriefAuditMarker(proto.key);
+  if (JSON.stringify(now) !== JSON.stringify(before)) {
     await store.setFlag(lockKey(proto.key), "");
+    return { ran: true, report, builtSha };
   }
+
+  if (report.inSync) {
+    await clearBriefDrift(proto.key);
+  } else {
+    await setBriefDrift(proto.key, { report, builtSha, codeHash, checkedAt: new Date().toISOString(), checkedBy: actor, briefFingerprint: fp });
+  }
+  await setBriefAuditMarker(proto.key, { codeHash, builtSha: builtSha ?? "", briefFingerprint: fp, inSync: report.inSync, checkedAt: new Date().toISOString(), checkedBy: actor });
+  await audit(orgId ?? "", actor, "brief.drift-check", proto.name,
+    `${report.inSync ? "IN SYNC" : `DRIFTED · ${report.mismatches.length} mismatch${report.mismatches.length === 1 ? "" : "es"} · blocks re-sync + cut until resolved`}${builtSha ? ` · vs ${builtSha.slice(0, 7)}` : ""}`);
+  await store.setFlag(lockKey(proto.key), "");
+  return { ran: true, report, builtSha };
 }
