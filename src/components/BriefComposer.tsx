@@ -205,7 +205,10 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const [drift, setDrift] = useState<{ report: BriefDriftReport; builtSha?: string } | null>(initialDrift);
   const [driftBusy, setDriftBusy] = useState(false);
   const [driftErr, setDriftErr] = useState<string | null>(null);
-  const [appliedDrift, setAppliedDrift] = useState(false);
+  // Snapshot of the exact post-apply state — `applied:true` is sent ONLY if
+  // the user saves precisely this (any hand-edit beyond the suggestion means
+  // the auto-audit must judge for real, not get stamped in-sync).
+  const [appliedSnapshot, setAppliedSnapshot] = useState<string | null>(null);
 
   /** Human override: the audit is wrong, the brief IS accurate. Audited server-side. */
   async function dismissDrift() {
@@ -297,18 +300,20 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   function applyDriftSuggestion() {
     const s = drift?.report.suggested;
     if (!s) return;
-    setBrief((b) => ({
-      ...b,
-      change: s.change || b.change,
-      where: s.where || b.where,
-      doneLooksLike: s.doneLooksLike.length ? s.doneLooksLike.join("\n") : b.doneLooksLike,
-    }));
+    const next = {
+      ...brief,
+      change: s.change || brief.change,
+      where: s.where || brief.where,
+      doneLooksLike: s.doneLooksLike.length ? s.doneLooksLike.join("\n") : brief.doneLooksLike,
+    };
+    setBrief(next);
     setMsg(null);
     setDrift(null);
-    // Remember: on save, the pair gets marked judged-in-sync WITHOUT another
-    // LLM pass — the saved brief IS the audit's own remedy; re-judging it
-    // invites verdict noise to reopen the loop (audit → fix → sync → audit…).
-    setAppliedDrift(true);
+    // If the user saves EXACTLY this, the pair gets marked judged-in-sync
+    // WITHOUT another LLM pass — the saved brief IS the audit's own remedy;
+    // re-judging it invites verdict noise to reopen the loop. Any further
+    // edit invalidates the snapshot and the auto-audit judges normally.
+    setAppliedSnapshot(JSON.stringify({ brief: next, hyp, metrics }));
   }
 
   async function runRefine(section: BriefSection) {
@@ -380,14 +385,19 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
       setSaved(JSON.stringify({ brief, hyp, metrics }));
       setSavedComplete(isBriefComplete(brief, metrics));
-      // Applied the audit's own suggestion? Close the loop deterministically:
-      // the pair is recorded judged-in-sync, no re-audit fires for it.
-      if (appliedDrift) {
-        setAppliedDrift(false);
-        await fetch("/api/prototypes/brief-drift", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: prototypeKey, applied: true }),
-        }).catch(() => { /* best-effort — the auto-audit remains the fallback */ });
+      // Saved EXACTLY the audit's applied suggestion? Close the loop
+      // deterministically: the pair is recorded judged-in-sync (the server
+      // re-verifies against the drift record before marking). Any edit
+      // beyond the suggestion → snapshot mismatch → the auto-audit judges.
+      if (appliedSnapshot) {
+        const savedExactly = appliedSnapshot === JSON.stringify({ brief, hyp, metrics });
+        setAppliedSnapshot(null);
+        if (savedExactly) {
+          await fetch("/api/prototypes/brief-drift", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: prototypeKey, applied: true }),
+          }).catch(() => { /* best-effort — the auto-audit remains the fallback */ });
+        }
       }
       setMsg({ ok: true, text: isBriefComplete(brief, metrics) ? "Brief saved — the gate is open." : "Saved — now add a success metric to open the gate." });
       router.refresh();

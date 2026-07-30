@@ -51,7 +51,16 @@ export async function POST(req: NextRequest) {
       // pair and silently reinstate the block the human just dismissed.
       const rec = await getBriefDrift(g.proto.key);
       if (rec) {
-        const codeHash = rec.codeHash ?? (await currentTarget(g.proto.key)).codeHash;
+        // Key the marker to the AUDITED build. Legacy records lack codeHash:
+        // use the current build's hash only when it IS the audited build
+        // (same sha); never inoculate newer code the record didn't judge. A
+        // codeHash-less marker still holds while the brief is unchanged
+        // (briefAuditNeeded's migration rule), so the dismissal stands.
+        let codeHash = rec.codeHash;
+        if (!codeHash && rec.builtSha) {
+          const target = await currentTarget(g.proto.key);
+          if (target.sha === rec.builtSha) codeHash = target.codeHash;
+        }
         await setBriefAuditMarker(g.proto.key, {
           codeHash, builtSha: rec.builtSha ?? "", briefFingerprint: rec.briefFingerprint,
           inSync: false, checkedAt: new Date().toISOString(), checkedBy: actor,
@@ -63,18 +72,32 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.applied) {
-      // The saved brief IS the audit's suggested remedy — the pair is
-      // in-sync by construction. Marker it so the auto-audit doesn't re-run
-      // (and possibly re-open the loop on LLM judgment noise).
-      const target = await currentTarget(g.proto.key);
-      await setBriefAuditMarker(g.proto.key, {
-        codeHash: target.codeHash, builtSha: target.sha ?? "",
-        briefFingerprint: briefFingerprint(g.proto),
-        inSync: true, checkedAt: new Date().toISOString(), checkedBy: `${actor} (applied audit suggestion)`,
-      });
-      await clearBriefDrift(g.proto.key);
-      await audit(g.orgId, actor, "brief.drift-resolved", g.proto.name, "brief updated to match the build (audit suggestion applied)");
-      return NextResponse.json({ ok: true });
+      // "The saved brief is the audit's remedy" is VERIFIED, never trusted:
+      // the marker is written only when the saved design fields actually
+      // equal the drift record's suggestion, and it is keyed to the AUDITED
+      // build (rec.codeHash), not whatever is at HEAD now. Anything else —
+      // record gone, hand-edits beyond the suggestion, build moved — skips
+      // the marker and lets the auto-audit judge for real. Skipping is the
+      // safe default; stamping in-sync unverified would blind the system.
+      const rec = await getBriefDrift(g.proto.key);
+      const s = rec?.report.suggested;
+      const b = g.proto.brief;
+      const matches = Boolean(s)
+        && (!s!.change || b.change === s!.change)
+        && (!s!.where || (b.where ?? "") === s!.where)
+        && (!s!.doneLooksLike.length || (b.doneLooksLike ?? "") === s!.doneLooksLike.join("\n"));
+      if (rec && matches && rec.codeHash) {
+        await setBriefAuditMarker(g.proto.key, {
+          codeHash: rec.codeHash, builtSha: rec.builtSha ?? "",
+          briefFingerprint: briefFingerprint(g.proto),
+          inSync: true, checkedAt: new Date().toISOString(), checkedBy: `${actor} (applied audit suggestion)`,
+        });
+        await clearBriefDrift(g.proto.key);
+        await audit(g.orgId, actor, "brief.drift-resolved", g.proto.name, "brief updated to match the build (audit suggestion applied, verified)");
+        return NextResponse.json({ ok: true, marked: true });
+      }
+      // Not verifiable — the auto-audit remains the judge.
+      return NextResponse.json({ ok: true, marked: false });
     }
 
     const outcome = await runBriefAudit(g.proto, { actor, force: true });

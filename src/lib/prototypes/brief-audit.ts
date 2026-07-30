@@ -75,7 +75,13 @@ export function auditTargetCode(
 /** TRUE when the current (code, brief) pair has no recorded verdict yet. */
 export function briefAuditNeeded(marker: BriefAuditMarker | null, codeHash: string | undefined, fingerprint: string): boolean {
   if (!codeHash) return false; // nothing built — nothing to judge
-  return !marker || marker.codeHash !== codeHash || marker.briefFingerprint !== fingerprint;
+  if (!marker) return true;
+  // Migration: markers written before code-hash keying lack codeHash. Treat
+  // them as valid while the BRIEF is unchanged — invalidating them wholesale
+  // would re-judge (and possibly overturn) every pre-deploy verdict and
+  // dismissal. The first real brief or code change re-keys naturally.
+  if (!marker.codeHash) return marker.briefFingerprint !== fingerprint;
+  return marker.codeHash !== codeHash || marker.briefFingerprint !== fingerprint;
 }
 
 export type BriefAuditOutcome =

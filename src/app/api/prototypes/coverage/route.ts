@@ -140,17 +140,37 @@ export async function POST(req: NextRequest) {
       // just in the prompt. LLM outside the write window, as above.
       const testable = current.scenarios.filter((s) => !s.gap);
       if (!testable.length) return NextResponse.json({ error: "Every scenario is a gap — nothing testable until the build handles them." }, { status: 400 });
+      // Content snapshot of what the LLM derived FROM — if the scenarios move
+      // while it runs, the new cases describe superseded parents.
+      const scenarioSnapshot = JSON.stringify(current.scenarios);
       const generated = await generateTestCases({ proto: g.proto, scenarios: testable, variationJs, builtSha });
       const now = new Date().toISOString();
       const spec = await mutateCoverage(g.proto.key, (s) => {
         // Validate against the FRESH spec — scenarios may have regenerated
-        // while the LLM ran; cases pointing at vanished parents drop.
-        const liveIds = new Set(s.scenarios.filter((sc) => !sc.gap).map((sc) => sc.id));
-        const testCases = generated.filter((t) => liveIds.has(t.scenarioId));
+        // while the LLM ran: cases pointing at vanished parents drop, device
+        // matrices intersect with the CURRENT parent's (an id can survive a
+        // regen while its devices shrink), and if the scenario CONTENT moved
+        // at all the cases are committed but flagged stale — they encode the
+        // superseded parents' meaning.
+        const byLiveScenario = new Map(s.scenarios.filter((sc) => !sc.gap).map((sc) => [sc.id, sc]));
+        const testCases = generated
+          .map((t) => {
+            const parent = byLiveScenario.get(t.scenarioId);
+            if (!parent) return null;
+            const devices = t.devices.filter((d) => parent.devices.includes(d));
+            return devices.length ? { ...t, devices } : null;
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+        // Runs carry forward ONLY when they're still evidence: same code AND
+        // identical steps. A run against old code or an old script relabeled
+        // as current would fake completeness.
+        const oldById = new Map((s.testCases ?? []).map((t) => [t.id, t]));
+        const sameCode = s.testsBuiltCodeHash === builtCodeHash;
         const testResults: CoverageSpec["testResults"] = {};
         for (const t of testCases) {
           const old = s.testResults?.[t.id];
-          if (!old) continue;
+          const oldCase = oldById.get(t.id);
+          if (!old || !sameCode || !oldCase || JSON.stringify(oldCase.steps) !== JSON.stringify(t.steps)) continue;
           const kept: Partial<Record<CoverageDevice, TestResult>> = {};
           for (const d of t.devices) { if (old[d]) kept[d] = old[d]; }
           if (Object.keys(kept).length) testResults[t.id] = kept;
@@ -160,7 +180,7 @@ export async function POST(req: NextRequest) {
         s.testsGeneratedAt = now;
         s.testsBuiltSha = builtSha;
         s.testsBuiltCodeHash = builtCodeHash;
-        s.testsStale = undefined;
+        s.testsStale = JSON.stringify(s.scenarios) !== scenarioSnapshot ? true : undefined;
       });
       if (!spec?.testCases?.length) return NextResponse.json({ error: "The scenarios changed while test cases were generating — regenerate them." }, { status: 409 });
       await audit(g.orgId, actor, "coverage.tests-generated", g.proto.name,
@@ -216,6 +236,8 @@ export async function POST(req: NextRequest) {
           s.testResults[tid] = s.testResults[tid] ?? {};
           for (const [dev, val] of Object.entries(byDevice)) {
             if (!tc.devices.includes(dev as CoverageDevice)) { dropped++; continue; }
+            // typeof null === "object" — guard before touching val.status.
+            if (val === null || val === undefined) { dropped++; continue; }
             if (val === "") {
               // Clearing a recorded run destroys QA evidence — humans only.
               // The agent token WRITES runs; it never erases them.
@@ -223,6 +245,12 @@ export async function POST(req: NextRequest) {
               delete s.testResults[tid][dev as CoverageDevice];
               continue;
             }
+            if (typeof val !== "object" && typeof val !== "string") { dropped++; continue; }
+            // An agent run never OVERWRITES a human verdict either — a human
+            // fail un-redded by an agent pass would defeat the one gate.
+            // Humans overrule agents; never the reverse.
+            const existing = s.testResults[tid][dev as CoverageDevice];
+            if (g.viaToken && existing?.mode === "human") { dropped++; continue; }
             const status = typeof val === "object" ? String(val.status ?? "") : String(val);
             if (!(TEST_STATUSES as string[]).includes(status)) { dropped++; continue; }
             const note = typeof val === "object" && typeof val.note === "string" ? val.note.trim().slice(0, 2000) : undefined;

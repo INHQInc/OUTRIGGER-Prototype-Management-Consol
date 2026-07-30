@@ -60,9 +60,24 @@ export async function listRecommendations(orgId: string | null | undefined, prot
   return (await listIdeas(orgId)).filter((i) => i.kind === "recommendation" && i.prototypeKey === prototypeKey);
 }
 
-async function write(orgId: string, list: Idea[]): Promise<void> {
-  // Keep the tail bounded — this is an inbox, not an archive.
-  await (await getContentStore()).setFlag(key(orgId), JSON.stringify(list.slice(0, 500)));
+/**
+ * Read-modify-write the org's ideas list under compare-and-set — automated
+ * QA runs auto-file Recommendations, so concurrent writers (two agent
+ * batches, or a batch landing while a human updates a status) are normal;
+ * a plain overwrite silently destroyed one side. `mutate` re-runs on a lost
+ * race against the freshest list. Keeps the tail bounded (inbox, not archive).
+ */
+async function mutateIdeas(orgId: string, mutate: (list: Idea[]) => Idea[]): Promise<Idea[]> {
+  const store = await getContentStore();
+  const k = key(orgId);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const raw = await store.getFlag(k);
+    let list: Idea[] = [];
+    if (raw) { try { const v = JSON.parse(raw); list = Array.isArray(v) ? (v as Idea[]).map(withKind) : []; } catch { list = []; } }
+    const next = mutate(list).slice(0, 500);
+    if (await store.compareAndSetFlag(k, raw ?? null, JSON.stringify(next))) return next;
+  }
+  throw new Error("The ideas list is being updated by someone else right now — try again.");
 }
 
 export async function addIdea(input: {
@@ -91,21 +106,17 @@ export async function addIdea(input: {
     source: input.source ?? "claude",
     createdAt: new Date().toISOString(),
   };
-  const list = await listIdeas(input.orgId);
-  await write(input.orgId, [idea, ...list]);
+  await mutateIdeas(input.orgId, (list) => [idea, ...list]);
   return idea;
 }
 
 export async function setIdeaStatus(orgId: string, id: string, status: string): Promise<Idea[]> {
   if (!(STATUSES as string[]).includes(status)) throw new Error("Unknown status.");
-  const list = await listIdeas(orgId);
-  const next = list.map((i) => (i.id === id ? { ...i, status: status as IdeaStatus } : i));
-  await write(orgId, next);
-  return next;
+  const next = await mutateIdeas(orgId, (list) => list.map((i) => (i.id === id ? { ...i, status: status as IdeaStatus } : i)));
+  return next.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function deleteIdea(orgId: string, id: string): Promise<Idea[]> {
-  const next = (await listIdeas(orgId)).filter((i) => i.id !== id);
-  await write(orgId, next);
-  return next;
+  const next = await mutateIdeas(orgId, (list) => list.filter((i) => i.id !== id));
+  return next.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
