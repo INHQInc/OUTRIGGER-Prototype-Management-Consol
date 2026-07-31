@@ -145,13 +145,16 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
 }
 
 export function contentHashOf(proto: PrototypeRecord): string {
+  // ONLY what the agent builds against: brief/pages/identity. The lifecycle
+  // stage is deliberately NOT here — advancing Review → live used to re-flag
+  // "the brief or pages changed since the last sync" when neither had, and
+  // the agent doesn't need stage freshness to build correctly.
   const canonical = JSON.stringify({
     name: proto.name,
     brief: proto.brief,
     hypothesis: proto.hypothesis,
     metrics: proto.metrics,
     targets: proto.targets.map((t) => t.url).sort(),
-    stage: proto.status,
   });
   return createHash("sha256").update(canonical).digest("hex").slice(0, 16);
 }
@@ -315,10 +318,16 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     files.push({ path: ".opmc/skills.json", content: Buffer.from(JSON.stringify({ managed, writtenAt: provisionedAt }, null, 2), "utf8") });
   } catch { /* skills are additive — never block provisioning on them */ }
 
-  // Idempotent: skip if nothing changed since the last provision.
+  // Idempotent: skip the commit if nothing changed since the last provision —
+  // but ALWAYS repair the console's sync record first. The rail's "Re-sync"
+  // warning compares this flag; if a past flag write failed (or another
+  // store wrote it), the branch is current while the record lags, and
+  // skipping the write here made the warning permanently un-clearable.
   const prevHash = await client.readFileAtRef(owner, repo, ".opmc/context.json", branch).then((c) => { try { return c ? (JSON.parse(c).contentHash as string) : null; } catch { return null; } }).catch(() => null);
   const snapshotsChanged = captures.some((c) => c.ok); // always re-commit if we captured fresh snapshots
   if (!branchCreated && prevHash === contentHash && !snapshotsChanged) {
+    const headSha = await client.getBranchSha(owner, repo, branch).catch(() => undefined);
+    await store.setFlag(`provision:${proto.key}`, JSON.stringify({ branchSha: headSha, contentHash, provisionedAt, captures: captures.map((c) => ({ url: c.url, ok: c.ok })) }));
     return { branch, branchCreated, committedPaths: files.map((f) => f.path), captures, contentHash, noChange: true };
   }
 
