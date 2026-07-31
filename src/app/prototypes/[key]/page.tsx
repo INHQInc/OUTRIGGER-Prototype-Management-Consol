@@ -21,6 +21,8 @@ import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { listRecommendations } from "@/lib/ideas/ideas";
 import { getBriefDrift, briefFingerprint } from "@/lib/prototypes/brief-drift-state";
 import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetCode } from "@/lib/prototypes/brief-audit";
+import { readIntegrationPackage } from "@/lib/prototypes/package";
+import { PackagePanel } from "@/components/PackagePanel";
 import { getCoverage, coverageGate, coverageStale, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
 import { CoveragePanel } from "@/components/CoveragePanel";
 import { TestCasesPanel } from "@/components/TestCasesPanel";
@@ -62,7 +64,7 @@ const GROUPS = [
   { label: "Target", items: [{ id: "pages", label: "Pages", step: "review" }] },
   { label: "QA", items: [{ id: "coverage", label: "Scenarios" }, { id: "tests", label: "Test cases" }] },
   { label: "Experiment", items: [{ id: "versions", label: "Versions" }, { id: "optimizely", label: "Optimizely", step: "experiment" }] },
-  { label: "Handoff", items: [{ id: "explorer", label: "Code explorer" }, { id: "ship", label: "Ship record", step: "handoff" }] },
+  { label: "Handoff", items: [{ id: "explorer", label: "Code explorer" }, { id: "package", label: "Integration package" }, { id: "ship", label: "Ship record", step: "handoff" }] },
   { label: "Settings", items: [{ id: "repo", label: "Repo & branch" }, { id: "details", label: "Details" }, { id: "history", label: "History" }] },
 ] as const;
 type TabId = (typeof GROUPS)[number]["items"][number]["id"];
@@ -93,7 +95,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const orgId = await resolvePrototypeOrg(p);
   const repo = await resolvePrototypeRepo(p, orgId);
 
-  const [hdrs, source, provisionFlag, environments, versions, push, expCfg, claudeSeen, handoffRaw, auditEvents, recommendations, user, setupDoneFlag, setupSkipFlag, firstBuildFlag] = await Promise.all([
+  const [hdrs, source, provisionFlag, environments, versions, push, expCfg, claudeSeen, handoffRaw, auditEvents, recommendations, user, setupDoneFlag, setupSkipFlag, firstBuildFlag, integrationPackage] = await Promise.all([
     headers(),
     resolveRepoSource(key).catch(() => null),
     store.getFlag(`provision:${key}`).catch(() => null),
@@ -109,6 +111,9 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     store.getFlag(`setupdone:${key}`).catch(() => null),
     store.getFlag(`setupskip:${key}`).catch(() => null),
     store.getFlag(`firstbuild:${key}`).catch(() => null),
+    // In the batch so it costs no serial latency; unused in setup mode (one
+    // parallel 404 per view there — bounded by the gated setup poll).
+    readIntegrationPackage(p, orgId).catch(() => ({ found: false as const, state: "unreadable" as const })),
   ]);
   const briefDrift = await getBriefDrift(key, p).catch(() => null);
   const coverage = await getCoverage(key).catch(() => null);
@@ -238,6 +243,11 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       if (anyFail) return "critical";
       if (testCasesStale(coverage, buildStatus.headSha, auditTarget.codeHash)) return "attention";
       return testCasesRun(coverage) ? "good" : "attention";
+    }
+    if (item.id === "package") {
+      if (integrationPackage.state === "found") return "good";
+      if (integrationPackage.state === "invalid" || integrationPackage.state === "unreadable") return "attention";
+      return "pending";
     }
     return null;
   };
@@ -455,6 +465,12 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
             <div className="mt-3">
               <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
             </div>
+          </Room>
+        )}
+
+        {tab === "package" && (
+          <Room title="Integration package" sub="The one-shot production handoff: the winning prototype rebuilt NATIVELY for the site's CMS — full Razor views, SCSS, JS, and C# backend/API code, plus diffs to existing files and an integration guide. Staged entirely in the prototype repo (handoff/ on the branch); the dev team applies it to their codebase on their terms." wide>
+            <PackagePanel prototypeKey={key} initial={integrationPackage} skillEnabled={skillRows.some((r) => r.skill.id === "opmc-integration-package" && r.enabled)} />
           </Room>
         )}
 

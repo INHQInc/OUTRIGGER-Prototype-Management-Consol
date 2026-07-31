@@ -207,6 +207,12 @@ Test BOTH paths before calling it done: the loader (\`?opmc=<key>\`, late) **and
   2. Execute each case ON THE REAL REVIEW URL (the target page with \`?opmc=<key>\`) using your browser tooling, at each listed device's viewport (desktop ≈1280px, tablet ≈768px, mobile ≈375px wide). Follow the steps VERBATIM — you are the test runner, not the author: if a step is wrong, report it failed/blocked with a note; never improvise a different path to green.
   3. Report in ONE batch: \`POST $OPMC_URL/api/prototypes/coverage\` + Bearer header with \`{"key":"<key>","testResults":{"<caseId>":{"<device>":{"status":"pass|fail|blocked|na","note":"observed vs expected — REQUIRED on fail/blocked"}}}}\`. Attribution is stamped server-side; your results appear in the console beside human runs (🤖 vs 👤). The response returns \`{saved, dropped}\` — if \`dropped > 0\` your case ids/devices were stale: re-fetch the spec and re-run those. You can WRITE runs, never clear them (clearing is a human act).
   4. Outcomes: failures turn the QA gate red and auto-file Recommendations — summarize fails to the user, and do NOT silently fix-and-rerun; the failing run is evidence. Fix, push, then re-run and report again.
+- **Produce the integration package** (production handoff): load the
+  \`opmc-integration-package\` skill and follow it — it writes the complete
+  native CMS implementation into \`handoff/\` on this branch. If
+  \`.claude/skills/opmc-integration-package/\` is NOT in this repo, do not
+  improvise the package format — ask the user to enable that skill in the
+  console (Build → Skills), Re-sync, and restart you.
 - Everything else (promote, review links, Optimizely) happens in the console UI at \`$OPMC_URL/prototypes/<key>\` — link the user there.
 
 ## 6. Definition of done
@@ -470,4 +476,64 @@ re-score readiness for the corrected brief.
   is always the deliverable and questions are at most a small side note on the
   first pass.
 - Write in the user's language if it isn't English.
+`;
+
+export const INTEGRATION_PACKAGE_SKILL = `---
+name: opmc-integration-package
+description: Produce the production integration package for a winning prototype — the complete native CMS implementation (Razor views, SCSS, JS, C# backend/API), written into handoff/ on the prototype branch as full files + diffs + an integration guide. Load when the user asks to "produce the integration package". Never writes to the customer's repo; everything stages in the prototype repo.
+---
+
+# The integration package — one-shot production handoff
+
+The experiment won as an INJECTED overlay. This skill turns it into what the
+site's dev team actually ships: the feature built NATIVELY in their CMS
+codebase. You are uniquely positioned — you built the prototype, and the real
+site source sits at \`source-site/\` (read-only clone). Use both. The entire
+package stages in THIS prototype repo under \`handoff/\`; you never write to
+the customer's repo — their team applies the package on their terms.
+
+## Process — evidence first, then write
+
+1. **Study \`source-site/\` before writing a line.** How existing features
+   are structured (blocks/components/view models), Razor view patterns, SCSS
+   organization + bundling entries, JS module wiring, C# controller/API
+   patterns, DI registration, naming. The package must read like the site's
+   own team wrote it — never impose the prototype's structure on the
+   production codebase.
+2. **Decide the integration shape** — a CMS block vs a template change vs a
+   shared partial vs a new content type — and say WHY in the README.
+3. **Write everything into \`handoff/\` on YOUR branch** (git is the
+   transport; the console's Handoff → Integration package room renders it):
+   - \`handoff/README.md\` — the integration guide: what/why (from the
+     brief), the shape decision, file-by-file walkthrough, wiring steps
+     (bundle entries, registrations), assumptions you could not verify, and
+     a test plan pointing at the QA scenarios.
+   - \`handoff/manifest.json\` — the index the console renders:
+     \`{"summary":"…","generatedAt":"<ISO>","forVersion":<cut number if known>,"files":[{"path":"<SITE-relative destination>","action":"add|modify","kind":"cshtml|cs|js|ts|scss|css|config|content-type|other","description":"…","source":"handoff/files/<path> or handoff/diffs/<name>.patch"}],"apis":[{"name":"…","method":"GET","route":"/api/…","description":"…"}],"notes":"…"}\`
+     Every \`source\` must live under \`handoff/\` — the console refuses
+     anything else.
+   - \`handoff/files/**\` — COMPLETE new files at paths mirroring their
+     site-relative destination. Full backend too: if the feature needs an
+     API, write the C# endpoint AND the front-end consumption — never stub,
+     never "left as an exercise for the reader".
+   - \`handoff/diffs/**.patch\` — unified diffs against the CURRENT
+     \`source-site\` state for every existing file that must change (bundle
+     registrations, partial includes). Small, surgical, apply-clean.
+4. **Commit + push.** The console picks it up automatically; tell the user
+   it's ready for review in Handoff → Integration package.
+
+## Quality bar
+
+- The built \`dist/variation.js\` IS the spec — it won the experiment. Ground
+  every selector, style token, interaction, and data access in what it
+  actually does.
+- Reuse the site's own SCSS variables/mixins over the prototype's namespaced
+  overrides wherever they exist.
+- Server-render what the overlay DOM-injected wherever the CMS makes that
+  natural; keep client JS for genuinely client-side behavior.
+- You cannot compile the site — say so in the README, state assumptions
+  explicitly, and keep changes pattern-faithful so human review is cheap.
+- Regenerating after further prototype iteration: overwrite \`handoff/\`
+  wholesale (it describes the CURRENT winner, not a history — git keeps the
+  history).
 `;
