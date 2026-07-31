@@ -51,6 +51,11 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [synced, setSynced] = useState<string | null>(null);
+  // The exact line to paste into the RUNNING agent after a re-sync — the
+  // console knows what changed (skills need pull + restart; content needs
+  // pull only), so it hands over the message instead of making you compose it.
+  const [pasteCmd, setPasteCmd] = useState<string | null>(null);
+  const [pasteCopied, setPasteCopied] = useState(false);
 
   // Local folders — per-machine, saved in the browser (not the DB).
   const [draftPath, setDraftPath] = useState("");
@@ -99,8 +104,17 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
       if (!res.ok) { setErr(data.error ?? (isResync ? "Re-sync failed" : "Couldn't prepare the branch")); return; }
       if (isResync) {
         const r = data.result ?? data;
-        setSynced(r?.noChange ? "Already up to date — nothing changed."
-          : `Synced${r?.commitSha ? ` · ${String(r.commitSha).slice(0, 7)}` : ""}. Run git pull, then restart the agent to load new skills.`);
+        const sha = r?.commitSha ? ` · ${String(r.commitSha).slice(0, 7)}` : "";
+        if (r?.noChange) {
+          setSynced("Already up to date — nothing changed.");
+          setPasteCmd(null);
+        } else if (r?.skillsChanged) {
+          setSynced(`Synced${sha} — skills changed, so the agent needs a pull AND a restart. Paste this to it:`);
+          setPasteCmd("The console re-synced the branch and the skill set changed. Run git pull, confirm the new skills under .claude/skills/, summarize what changed in one line, then stop — I'll restart you so the skills load.");
+        } else {
+          setSynced(`Synced${sha}. Paste this to your running agent:`);
+          setPasteCmd("The console re-synced the branch — run git pull and continue; the updated .opmc/ files are your current spec.");
+        }
       }
       router.refresh();
     } catch (e) {
@@ -229,6 +243,13 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
           <div className="text-[12.5px] text-muted-2 leading-relaxed">Writes the current brief, page snapshots and selected skills into the branch. Then <span className="font-mono">git pull</span> — and restart the agent so it picks up new skills.</div>
           {err && provisioned && <div className="text-[13px] text-danger mt-1">{err}</div>}
           {synced && <div className="text-[13px] text-ok mt-1">{synced}</div>}
+          {pasteCmd && (
+            <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2">
+              <code className="text-[12.5px] text-foreground/90 leading-relaxed min-w-0 flex-1 whitespace-pre-wrap">{pasteCmd}</code>
+              <button onClick={async () => { try { await navigator.clipboard.writeText(pasteCmd); setPasteCopied(true); setTimeout(() => setPasteCopied(false), 1500); } catch { /* clipboard blocked */ } }}
+                className="text-[13px] text-accent hover:text-accent-hover font-medium shrink-0">{pasteCopied ? "Copied" : "Copy"}</button>
+            </div>
+          )}
         </div>
       </div>
     </div>

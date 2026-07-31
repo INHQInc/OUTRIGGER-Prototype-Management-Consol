@@ -33,6 +33,9 @@ export interface ProvisionResult {
   captures: { url: string; ok: boolean; error?: string; bytes?: number }[];
   contentHash: string;
   noChange?: boolean;
+  /** The delivered skill set changed — the running agent must PULL AND
+   *  RESTART (skills don't hot-load); the UI shows the paste-to-Claude line. */
+  skillsChanged?: boolean;
 }
 
 /** Whitelist of attributes worth keeping in the structure skeleton. */
@@ -299,6 +302,7 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   // console wrote last time so a de-selected skill is REMOVED rather than
   // lingering; anything the console didn't write is left strictly alone.
   const deletions: string[] = [];
+  let skillsChanged = false;
   try {
     await ensureSkillsSeeded(orgId); // re-assert built-ins before delivering
     const skills = await enabledSkillsForPrototype(orgId, proto.key);
@@ -307,14 +311,21 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
       files.push({ path: `.claude/skills/${sk.id}/SKILL.md`, content: Buffer.from(sk.body, "utf8") });
     }
     const prevRaw = await client.readFileAtRef(owner, repo, ".opmc/skills.json", branch).catch(() => null);
+    let prevManaged: string[] | null = null;
     if (prevRaw) {
       try {
         const prev = JSON.parse(prevRaw) as { managed?: string[] };
+        prevManaged = [...(prev.managed ?? [])].sort();
         for (const id of prev.managed ?? []) {
           if (!managed.includes(id)) deletions.push(`.claude/skills/${id}/SKILL.md`);
         }
       } catch { /* unreadable manifest — write a fresh one, delete nothing */ }
     }
+    // The SKILL SET changing is a real change the idempotency check below
+    // must see — a skills-only re-sync (enable a new skill, brief untouched)
+    // used to be silently skipped whenever page captures failed, leaving the
+    // agent's branch without the skill it was just promised.
+    skillsChanged = JSON.stringify(prevManaged ?? []) !== JSON.stringify(managed);
     files.push({ path: ".opmc/skills.json", content: Buffer.from(JSON.stringify({ managed, writtenAt: provisionedAt }, null, 2), "utf8") });
   } catch { /* skills are additive — never block provisioning on them */ }
 
@@ -325,10 +336,10 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   // skipping the write here made the warning permanently un-clearable.
   const prevHash = await client.readFileAtRef(owner, repo, ".opmc/context.json", branch).then((c) => { try { return c ? (JSON.parse(c).contentHash as string) : null; } catch { return null; } }).catch(() => null);
   const snapshotsChanged = captures.some((c) => c.ok); // always re-commit if we captured fresh snapshots
-  if (!branchCreated && prevHash === contentHash && !snapshotsChanged) {
+  if (!branchCreated && prevHash === contentHash && !snapshotsChanged && !skillsChanged) {
     const headSha = await client.getBranchSha(owner, repo, branch).catch(() => undefined);
     await store.setFlag(`provision:${proto.key}`, JSON.stringify({ branchSha: headSha, contentHash, provisionedAt, captures: captures.map((c) => ({ url: c.url, ok: c.ok })) }));
-    return { branch, branchCreated, committedPaths: files.map((f) => f.path), captures, contentHash, noChange: true };
+    return { branch, branchCreated, committedPaths: files.map((f) => f.path), captures, contentHash, noChange: true, skillsChanged: false };
   }
 
   // Compare-and-swap commit of ONLY .opmc/** — re-read HEAD, force:false, one retry.
@@ -347,5 +358,5 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   await store.setFlag(`provision:${proto.key}`, JSON.stringify({ branchSha: commit?.sha, contentHash, provisionedAt, captures: captures.map((c) => ({ url: c.url, ok: c.ok })) }));
   await audit(orgId, actor ?? "system", branchCreated ? "prototype.provision" : "prototype.resync", proto.name, `${branch} · ${files.length} files · ${captures.filter((c) => c.ok).length}/${captures.length} snapshots`);
 
-  return { branch, branchCreated, commitSha: commit?.sha, commitUrl: commit?.url, committedPaths: files.map((f) => f.path), captures, contentHash };
+  return { branch, branchCreated, commitSha: commit?.sha, commitUrl: commit?.url, committedPaths: files.map((f) => f.path), captures, contentHash, skillsChanged };
 }
