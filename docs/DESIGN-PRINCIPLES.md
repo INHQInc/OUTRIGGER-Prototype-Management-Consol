@@ -48,8 +48,9 @@ don't align."*
 
 The workspace rail's rows are the prototype's PARTS — nouns a team recognizes,
 grouped Opti-style (Plan→Brief · Build→Agent/Skills/Recommendations ·
-Target→Pages · QA→Scenarios · Experiment→Versions/Optimizely ·
-Handoff→Explorer/Ship record · Settings) — never a restating of pipeline steps
+Target→Pages · QA→Scenarios/Test cases · Experiment→Versions/Optimizely ·
+Handoff→Explorer/Integration package/Ship record · Settings) — never a
+restating of pipeline steps
 as sections. The pipeline is status (the rail's status block + dots), not
 information architecture. Never render a vertical list of step-cards.
 Single-row groups are fine when the concern is distinct (Plan → Brief,
