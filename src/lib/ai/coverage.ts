@@ -110,7 +110,10 @@ Produce the coverage spec.`,
   return scenarios;
 }
 
-const TESTCASES_TOOL = {
+/** The tool schema is built PER CALL so scenarioId is an ENUM of the real
+ *  scenario ids — the API enforces membership, the model cannot invent one
+ *  (an invented id used to silently drop the case at normalization). */
+const testcasesTool = (scenarioIds: string[]) => ({
   name: "report_test_cases",
   description: "Return traditional test cases derived from the scenarios and the built code.",
   input_schema: {
@@ -122,7 +125,7 @@ const TESTCASES_TOOL = {
           type: "object" as const,
           properties: {
             id: { type: "string" as const, description: "stable slug: tc-<scenarioId>-<n>, e.g. tc-open-overlay-from-card-1" },
-            scenarioId: { type: "string" as const, description: "the parent scenario's id, verbatim" },
+            scenarioId: { type: "string" as const, enum: scenarioIds, description: "the parent scenario's id, verbatim" },
             title: { type: "string" as const },
             priority: { type: "string" as const, enum: ["core", "edge"] },
             preconditions: { type: "array" as const, items: { type: "string" as const }, description: "concrete starting state: the URL, viewport, data state" },
@@ -145,7 +148,7 @@ const TESTCASES_TOOL = {
     },
     required: ["testCases"],
   },
-};
+});
 
 /**
  * Expand the scenarios into TRADITIONAL test cases — numbered steps, each
@@ -164,7 +167,11 @@ export async function generateTestCases(opts: {
   const client = new Anthropic();
   const res = await client.messages.create({
     model: "claude-opus-4-8",
-    max_tokens: 8000,
+    // Test cases are VERBOSE structured output (per scenario: 1-3 cases ×
+    // numbered steps × expected results). 8000 truncated real specs
+    // mid-JSON — the tool input then parses to nothing and every case
+    // "vanished" with a useless error.
+    max_tokens: 16000,
     system: "You write TRADITIONAL test cases for client-side injected web experiments: per scenario, 1–3 concrete step-scripts a QA analyst executes verbatim. Each case: concrete preconditions (exact URL with the preview param, viewport, required data state), then numbered steps where every step is ONE mechanical action with ONE observable expected result. Ground every selector, label, and behavior in the BUILT code — never invent UI the code doesn't create. Steps must be executable by a human following the script OR a browser agent driving the page: no vague actions ('interact with the tray'), no compound steps, no unverifiable expectations. Include the scenario's edge/negative paths as their own cases where they need different steps. Keep ids stable: tc-<scenarioId>-<n>. Skip gap:true scenarios — untestable until built.",
     messages: [{
       role: "user",
@@ -183,10 +190,13 @@ ${trimCode(opts.variationJs)}
 
 Produce the test cases.`,
     }],
-    tools: [TESTCASES_TOOL],
+    tools: [testcasesTool(opts.scenarios.map((s) => s.id))],
     tool_choice: { type: "tool", name: "report_test_cases" },
   });
 
+  if (res.stop_reason === "max_tokens") {
+    throw new Error("Test-case generation ran out of output space mid-write. Try again — if it persists, trim the scenario list (fewer/lower-priority scenarios) and regenerate.");
+  }
   const tu = res.content.find((c) => c.type === "tool_use");
   if (!tu || tu.type !== "tool_use") throw new Error("Test-case generation returned nothing — try again.");
   const raw = ((tu.input ?? {}) as { testCases?: unknown }).testCases;
@@ -195,11 +205,12 @@ Produce the test cases.`,
   const byScenario = new Map(opts.scenarios.map((s) => [s.id, s]));
   const seen = new Set<string>();
   const cases: TestCase[] = [];
+  let droppedOrphan = 0, droppedNoSteps = 0;
   for (const r of list) {
     if (!r || typeof r !== "object") continue;
     const o = r as Record<string, unknown>;
     const scenarioId = String(o.scenarioId ?? "").trim();
-    if (!scenarioIds.has(scenarioId)) continue; // orphan — no parent use case
+    if (!scenarioIds.has(scenarioId)) { droppedOrphan++; continue; } // orphan — no parent use case (the enum should make this impossible)
     if (byScenario.get(scenarioId)?.gap) continue; // gap = untestable until built — enforced in code, not just the prompt
     let id = String(o.id ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     if (!id) id = `tc-${scenarioId}-${cases.length + 1}`;
@@ -209,7 +220,7 @@ Produce the test cases.`,
       .filter((s): s is { action?: unknown; expect?: unknown } => Boolean(s) && typeof s === "object")
       .map((s) => ({ action: String(s.action ?? "").trim(), expect: String(s.expect ?? "").trim() }))
       .filter((s) => s.action && s.expect);
-    if (!steps.length) continue;
+    if (!steps.length) { droppedNoSteps++; continue; }
     const parent = byScenario.get(scenarioId);
     const devices = (Array.isArray(o.devices) ? o.devices : []).filter((d): d is CoverageDevice => (DEVICES as string[]).includes(String(d)));
     cases.push({
@@ -222,6 +233,13 @@ Produce the test cases.`,
       devices: devices.length ? devices : (parent?.devices?.length ? [...parent.devices] : [...DEVICES]),
     });
   }
-  if (!cases.length) throw new Error("Test-case generation produced no runnable cases — try again.");
+  if (!cases.length) {
+    // Say WHY nothing survived — "try again" with zero diagnostics sent
+    // people into blind regenerate loops.
+    const why = list.length === 0
+      ? "the model returned an empty list"
+      : `all ${list.length} returned cases were dropped (${droppedOrphan} with unknown scenario ids, ${droppedNoSteps} without usable steps)`;
+    throw new Error(`Test-case generation produced no runnable cases — ${why}. Try again; if it persists, regenerate the QA scenarios first.`);
+  }
   return cases;
 }
