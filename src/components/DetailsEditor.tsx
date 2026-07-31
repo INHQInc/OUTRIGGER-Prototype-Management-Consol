@@ -19,6 +19,7 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  const [name, setName] = useState(p.name);
   const [hChange, setHChange] = useState(p.hypothesis.change);
   const [hAudience, setHAudience] = useState(p.hypothesis.audience);
   const [hOutcome, setHOutcome] = useState(p.hypothesis.outcome);
@@ -37,6 +38,7 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           key: p.key,
+          name: name.trim() || undefined,
           hypothesis: { change: hChange, audience: hAudience, outcome: hOutcome, rationale: hRationale },
           metrics: { primary, guardrails: guardrails.split(",").map((s) => s.trim()).filter(Boolean) },
           owner, ticketUrl,
@@ -80,6 +82,10 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
       {!editing ? (
         <div className="divide-y divide-border">
           <div className="px-4 py-3">
+            <div className={lbl}>Name</div>
+            <div className="text-[15px] font-medium">{p.name}</div>
+          </div>
+          <div className="px-4 py-3">
             <div className={lbl}>Hypothesis</div>
             {p.hypothesis.change || p.hypothesis.outcome ? (
               <div className="text-[15px] leading-relaxed">
@@ -99,6 +105,10 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
         </div>
       ) : (
         <div className="p-4 space-y-4">
+          <div>
+            <span className={lbl}>Name — the key ({p.key}) and branch stay the same; the next re-sync carries the new name to the agent</span>
+            <input className={inp} value={name} onChange={(e) => setName(e.target.value)} placeholder="Prototype name" />
+          </div>
           <div>
             <span className={lbl}>Hypothesis — we believe [change] for [audience] will cause [outcome] because [rationale]</span>
             <div className="grid grid-cols-2 gap-2">
