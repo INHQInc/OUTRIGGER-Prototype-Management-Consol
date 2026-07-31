@@ -66,7 +66,7 @@ export function FlowQueue({ prototypeKey, actions }: {
         else if (!r?.noChange) setNote({ text: "Synced. Paste to your running agent:", paste: "The console re-synced the branch — run git pull and continue; the updated .opmc/ files are your current spec." });
         else setNote({ text: "Already up to date — nothing changed." });
       } else if (a.id === "cut") {
-        setNote({ text: `v${data.version?.version ?? "?"} cut ✓ — certification ${data.version?.certification?.passed === false ? "FAILED (see Versions)" : "passed"}` });
+        setNote({ text: `v${data.version?.version ?? "?"} cut ✓ — certification ${data.version?.certification?.passed === false ? "FAILED (see Experiment)" : "passed"}` });
       } else if (a.id === "push") {
         const r = data.result ?? data;
         setNote({ text: `v${r.version ?? ""} pushed ✓ · read-back ${r.verified ? "verified" : "MISMATCH — do not start the experiment"}` });

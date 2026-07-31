@@ -98,6 +98,10 @@ export interface PipelineInputs {
   experimentStatus?: string | null;
   /** Unresolved Brief ↔ Build drift (persisted audit verdict) — blocks the Brief step + re-sync. */
   briefDrifted?: boolean;
+  /** QA state (coverage gate) — escalates the Review step via alerts so
+   *  EVERY surface (rail dot, table strip, board) agrees by construction. */
+  qaFailing?: boolean;
+  qaStale?: boolean;
 }
 
 export function derivePipeline(inp: PipelineInputs): Pipeline {
@@ -140,6 +144,8 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
   if (problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   if (latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
+  if (inp.qaFailing) alerts.push({ level: "danger", text: "QA has failing checks — fix and re-run the tests before shipping.", anchor: "review" });
+  else if (inp.qaStale) alerts.push({ level: "warn", text: "QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.", anchor: "review" });
   if (lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });
   if (lastPush && lastPush.verified === false) alerts.push({ level: "danger", text: "The last push did not read-back verify — inspect the variation in Optimizely before publishing.", anchor: "experiment" });
 

@@ -87,7 +87,7 @@ export async function pushToOptimizely(prototypeKey: string, opts: { version?: n
     : covGate === "failing" ? "QA has FAILING checks"
     : null;
   if (covProblem && !opts.coverageAck) {
-    throw new Error(`COVERAGE_ACK_REQUIRED: ${covProblem} — review the QA room, or acknowledge and push anyway (recorded in the audit log).`);
+    throw new Error(`COVERAGE_ACK_REQUIRED: ${covProblem} — review the scenarios in the Review room, or acknowledge and push anyway (recorded in the audit log).`);
   }
 
   const { experimentId, variationId } = proto.experiment;

@@ -44,30 +44,30 @@ pipeline. Normalize stored status with `normalizeStage()` like every reader.
 *Origin: "this is confusing which one is right and why the overlap" / "and they
 don't align."*
 
-## 3. Rooms, not steps
+## 3. The IA is the stage model
 
-The workspace rail's rows are the prototype's PARTS — nouns a team recognizes,
-grouped Opti-style (Plan→Brief · Build→Agent/Skills/Recommendations ·
-Target→Pages · QA→Scenarios/Test cases · Experiment→Versions/Optimizely ·
-Handoff→Explorer/Integration package/Ship record · Settings) — never a
-restating of pipeline steps
-as sections. The pipeline is status (the rail's status block + dots), not
-information architecture. Never render a vertical list of step-cards.
-Single-row groups are fine when the concern is distinct (Plan → Brief,
-QA → Scenarios); a room must live under the concern it serves — QA was briefly
-under Target and read as a mislabel (user: "Coverage? That does not feel like
-what this is").
+**First-principles law (user-driven 07-30; supersedes the grouped-rooms
+rail):** the human's job is five decisions — say what to build → get the
+agent going → judge it on the real page → run the experiment → hand it off —
+and the console has ONE canonical model for that: **Brief · Build · Review ·
+Experiment · Handoff**. Those ARE the rooms, plus a quiet Settings. Never
+let the nav mirror the machine's subsystems: subsystem-shaped IA (fourteen
+rooms under seven headers) generates clutter no trim can fix and forces
+conductors to be bolted on top just to navigate it. **New capability = a
+SECTION inside its stage** (anchor id, one card grammar) — never a new room
+or group. Status escalates INSIDE derivePipeline (anchored alerts: drift,
+cert, QA failing/stale) so every surface — rail dots, table strip, board —
+shares one derivation and can never disagree. **The global sidebar
+disappears inside a prototype** ("← Prototypes" is the exit): one nav
+column, total.
+
+*Origin: "think about our product from a first principles perspective, not
+patching."*
 
 **Opti-native grammar (user-locked 07-25):** the /prototypes front door is an
-Optimizations-style table; the workspace is a command rail; the app sidebar
-collapses to an icon rail inside a prototype. When adding a surface, ask "how
-does Optimizely say this?" first — familiarity to an Opti user is a feature.
-
-**Rail hierarchy is carried by ALIGNMENT (07-29):** the group label owns the
-outer edge; EVERY row reserves the same dot slot (transparent when the row has
-no lifecycle dot) so all item labels sit in one indented column under their
-header. A row whose label starts at the header's x reads as a header — never
-let dot-less rows collapse the indent.
+Optimizations-style table; the workspace is the five-stage rail. When adding
+a surface, ask "how does Optimizely say this?" first — familiarity to an
+Opti user is a feature.
 
 **Set up, then operate (user-driven 07-30):** rooms serve OPERATING a
 prototype; they are the wrong shape for SETTING ONE UP, because setup is

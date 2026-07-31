@@ -80,16 +80,16 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
 
   // ── Sync: the branch must exist and carry the current brief ──
   if (!t.provisioned) {
-    q.push({ id: "provision", kind: "post", tab: "agent", post: { url: "/api/prototypes/provision", body: {} }, label: "Prepare the branch", why: "creates the prototype's branch with the brief, snapshots, and skills" });
+    q.push({ id: "provision", kind: "post", tab: "build", post: { url: "/api/prototypes/provision", body: {} }, label: "Prepare the branch", why: "creates the prototype's branch with the brief, snapshots, and skills" });
   } else if (!t.synced) {
-    q.push({ id: "resync", kind: "post", tab: "agent", post: { url: "/api/prototypes/provision", body: {} }, label: "Re-sync the branch", why: "the brief or pages changed since the last sync" });
+    q.push({ id: "resync", kind: "post", tab: "build", post: { url: "/api/prototypes/provision", body: {} }, label: "Re-sync the branch", why: "the brief or pages changed since the last sync" });
   }
   if (t.buildFound && t.auditPending) {
     q.push({ id: "await-audit", kind: "wait", tab: "brief", label: "Self-audit running", why: "checking the current brief against the build — ticks itself" });
   }
   if (!t.buildFound) {
     if (t.provisioned) {
-      q.push({ id: "await-build", kind: "wait", tab: "agent", label: "Waiting for a build", why: "ticks the moment dist/variation.js lands on the branch" });
+      q.push({ id: "await-build", kind: "wait", tab: "build", label: "Waiting for a build", why: "ticks the moment dist/variation.js lands on the branch" });
     }
     // A frozen cut keeps bind/push (incl. rollback) actionable even when the
     // branch artifact is unreadable — don't starve them behind the wait.
@@ -98,64 +98,64 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
 
   // ── Target: seen working on the real page ──
   if (t.pages === 0) {
-    q.push({ id: "add-pages", kind: "link", tab: "pages", label: "Add the target page(s)", why: "nowhere to review or ship to yet" });
+    q.push({ id: "add-pages", kind: "link", tab: "review", label: "Add the target page(s)", why: "nowhere to review or ship to yet" });
   } else if (t.pagesPassing < t.pages) {
-    q.push({ id: "verify-pages", kind: "link", tab: "pages", label: `Verify the page${t.pages === 1 ? "" : "s"} (${t.pagesPassing}/${t.pages})`, why: "review happens on the real environment, not a mockup" });
+    q.push({ id: "verify-pages", kind: "link", tab: "review", label: `Verify the page${t.pages === 1 ? "" : "s"} (${t.pagesPassing}/${t.pages})`, why: "review happens on the real environment, not a mockup" });
   }
 
   // ── QA: failures first, then freshness, then coverage of the review ──
   if (t.qaFailing) {
     q.push({
-      id: "fix-qa", kind: "paste", tab: "tests", label: "QA has failures — send the agent to fix",
+      id: "fix-qa", kind: "paste", tab: "review", label: "QA has failures — send the agent to fix",
       why: "failing checks red the gate; the failing runs are the evidence",
       paste: "QA has failing checks — read the failing runs (console → QA), fix the build, push, then re-run the test cases and report results.",
     });
   }
   if (!t.hasScenarios) {
-    q.push({ id: "gen-scenarios", kind: "post", tab: "coverage", post: { url: "/api/prototypes/coverage", body: { generate: true } }, label: "Generate QA scenarios", why: "derived from the brief and the built code" });
+    q.push({ id: "gen-scenarios", kind: "post", tab: "review", post: { url: "/api/prototypes/coverage", body: { generate: true } }, label: "Generate QA scenarios", why: "derived from the brief and the built code" });
   } else if (t.scenariosStale) {
-    q.push({ id: "regen-scenarios", kind: "post", tab: "coverage", post: { url: "/api/prototypes/coverage", body: { generate: true } }, label: "Regenerate QA scenarios", why: "the build moved past the current spec" });
+    q.push({ id: "regen-scenarios", kind: "post", tab: "review", post: { url: "/api/prototypes/coverage", body: { generate: true } }, label: "Regenerate QA scenarios", why: "the build moved past the current spec" });
   }
   if (t.hasScenarios && !t.scenariosStale) {
     if (!t.hasTestCases) {
-      q.push({ id: "gen-tests", kind: "post", tab: "tests", post: { url: "/api/prototypes/coverage", body: { generateTests: true } }, label: "Generate test cases", why: "the step-scripts the agent (and humans) execute" });
+      q.push({ id: "gen-tests", kind: "post", tab: "review", post: { url: "/api/prototypes/coverage", body: { generateTests: true } }, label: "Generate test cases", why: "the step-scripts the agent (and humans) execute" });
     } else if (t.testsStale) {
-      q.push({ id: "regen-tests", kind: "post", tab: "tests", post: { url: "/api/prototypes/coverage", body: { generateTests: true } }, label: "Regenerate test cases", why: "the build or scenarios moved past them" });
+      q.push({ id: "regen-tests", kind: "post", tab: "review", post: { url: "/api/prototypes/coverage", body: { generateTests: true } }, label: "Regenerate test cases", why: "the build or scenarios moved past them" });
     } else if (!t.testsRun && !t.qaFailing) {
       q.push({
-        id: "run-tests", kind: "paste", tab: "tests", label: "Have the agent run the test cases",
+        id: "run-tests", kind: "paste", tab: "review", label: "Have the agent run the test cases",
         why: "results post back with 🤖 attribution; failures auto-file recommendations",
         paste: "Run the QA test cases and report results.",
       });
     }
     if (!t.scenariosReviewed && !t.qaFailing) {
-      q.push({ id: "review-scenarios", kind: "link", tab: "coverage", label: "Review the scenarios per device", why: "unreviewed core scenarios make the push demand an acknowledgement" });
+      q.push({ id: "review-scenarios", kind: "link", tab: "review", label: "Review the scenarios per device", why: "unreviewed core scenarios make the push demand an acknowledgement" });
     }
   }
 
   // ── Experiment: freeze, bind, push, start ──
   if (t.needsCut) {
     q.push({
-      id: "cut", kind: "post", tab: "versions", post: { url: "/api/prototypes/versions", body: { fromRepo: true } },
+      id: "cut", kind: "post", tab: "experiment", post: { url: "/api/prototypes/versions", body: { fromRepo: true } },
       label: `Cut v${(t.latestVersion ?? 0) + 1}`,
       why: t.certFailed ? `v${t.latestVersion} failed certification — fix landed? re-cut` : t.latestVersion ? `the build moved past v${t.latestVersion}` : "freeze the first immutable version",
     });
   }
   if (!t.bound) {
-    q.push({ id: "bind", kind: "link", tab: "optimizely", label: "Bind the experiment", why: "pick (or create) the Optimizely experiment this ships into" });
+    q.push({ id: "bind", kind: "link", tab: "experiment", label: "Bind the experiment", why: "pick (or create) the Optimizely experiment this ships into" });
   } else if (!t.pushCurrent && !t.needsCut) {
     if (t.experimentRunning) {
-      q.push({ id: "paused-push", kind: "wait", tab: "optimizely", label: "Experiment is RUNNING — push locked", why: "pause it in Optimizely first; changing a live variation corrupts results" });
+      q.push({ id: "paused-push", kind: "wait", tab: "experiment", label: "Experiment is RUNNING — push locked", why: "pause it in Optimizely first; changing a live variation corrupts results" });
     } else {
-      q.push({ id: "push", kind: "post", tab: "optimizely", post: { url: "/api/prototypes/ship", body: { push: true } }, label: `Push v${t.latestVersion} to Optimizely`, why: "replaces the variation code by API, read-back verified" });
+      q.push({ id: "push", kind: "post", tab: "experiment", post: { url: "/api/prototypes/ship", body: { push: true } }, label: `Push v${t.latestVersion} to Optimizely`, why: "replaces the variation code by API, read-back verified" });
     }
   }
   if (t.bound && t.pushCurrent && !t.needsCut && !t.experimentRunning) {
     // A human ACT, not a machine wait — it gets a link, not a pulse.
-    q.push({ id: "start-experiment", kind: "link", tab: "optimizely", label: "Start the experiment in Optimizely", why: "starting traffic is a human act — the console never does it" });
+    q.push({ id: "start-experiment", kind: "link", tab: "experiment", label: "Start the experiment in Optimizely", why: "starting traffic is a human act — the console never does it" });
   }
   if (t.experimentRunning && t.pushCurrent) {
-    q.push({ id: "running", kind: "wait", tab: "optimizely", label: "Experiment RUNNING · locked", why: "let it decide; ship the winner from Handoff when it's done" });
+    q.push({ id: "running", kind: "wait", tab: "experiment", label: "Experiment RUNNING · locked", why: "let it decide; ship the winner from Handoff when it's done" });
   }
 
   return q;

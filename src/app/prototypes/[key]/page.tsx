@@ -53,32 +53,34 @@ export const maxDuration = 60;
 interface ActivityItem { at: string; text: string; who?: string }
 
 /**
- * The command rail — Optimizely's experiment-detail anatomy with our ground
- * truth: identity + stage chip + stage strip + the one CTA + gate line at the
- * top, then grouped sections where every lifecycle row carries its live
- * severity dot. The rail IS the checklist, visible from every screen; there is
- * no Overview page.
+ * THE IA IS THE STAGE MODEL — first-principles restructure (07-30): the
+ * human's job is five decisions (say what to build → get the agent going →
+ * judge it on the real page → run the experiment → hand it off), and the
+ * console has exactly ONE canonical model for that: Brief · Build · Review ·
+ * Experiment · Handoff. So those ARE the rooms — five places plus Settings,
+ * no group headers, no subsystem-shaped nav. The old fourteen surfaces live
+ * on as SECTIONS inside their stage (progressive disclosure), each row's dot
+ * aggregates the worst of its sections, and the NEXT card conducts. A
+ * first-time user reads the rail and understands the product: it's the
+ * lifecycle.
  */
-const GROUPS = [
-  { label: "Plan", items: [{ id: "brief", label: "Brief", step: "brief" }] },
-  { label: "Build", items: [{ id: "agent", label: "Agent", step: "build" }, { id: "skills", label: "Skills" }, { id: "recs", label: "Recommendations" }] },
-  { label: "Target", items: [{ id: "pages", label: "Pages", step: "review" }] },
-  { label: "QA", items: [{ id: "coverage", label: "Scenarios" }, { id: "tests", label: "Test cases" }] },
-  { label: "Experiment", items: [{ id: "versions", label: "Versions" }, { id: "optimizely", label: "Optimizely", step: "experiment" }] },
-  { label: "Handoff", items: [{ id: "explorer", label: "Code explorer" }, { id: "package", label: "Integration package" }, { id: "ship", label: "Ship record", step: "handoff" }] },
-  { label: "Settings", items: [{ id: "repo", label: "Repo & branch" }, { id: "details", label: "Details" }, { id: "history", label: "History" }] },
+const STAGES = [
+  { id: "brief", label: "Brief", step: "brief" },
+  { id: "build", label: "Build", step: "build" },
+  { id: "review", label: "Review", step: "review" },
+  { id: "experiment", label: "Experiment", step: "experiment" },
+  { id: "handoff", label: "Handoff", step: "handoff" },
 ] as const;
-type TabId = (typeof GROUPS)[number]["items"][number]["id"];
-const ALL_TABS: string[] = GROUPS.flatMap((g) => g.items.map((i) => i.id));
+type TabId = (typeof STAGES)[number]["id"] | "settings";
+const ALL_TABS: string[] = [...STAGES.map((s) => s.id), "settings"];
 
-/** Old room ids living in links/bookmarks → their new rail rows. */
+/** Every historical room id living in links/bookmarks → its stage. */
 const TAB_ALIASES: Record<string, TabId> = {
-  build: "agent", review: "pages", experiment: "optimizely", handoff: "explorer",
-  source: "repo", pages: "pages", recommendations: "recs", settings: "details",
-};
-/** Pipeline anchors (canonical stage ids) → the rail row that does the work. */
-const ANCHOR_TO_TAB: Record<string, TabId> = {
-  brief: "brief", build: "agent", review: "pages", experiment: "optimizely", handoff: "explorer",
+  agent: "build", skills: "build", recs: "build", recommendations: "build",
+  pages: "review", coverage: "review", tests: "review",
+  versions: "experiment", optimizely: "experiment",
+  explorer: "handoff", package: "handoff", ship: "handoff",
+  repo: "settings", details: "settings", history: "settings", source: "settings",
 };
 
 export default async function PrototypeWorkspace({ params, searchParams }: {
@@ -185,15 +187,19 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     } catch { /* unreachable → no lock, no status */ }
   }
 
+  // QA escalates the Review stage INSIDE the pipeline (alerts) — the same
+  // inputs the board/table pass, so every status surface agrees by
+  // construction (the StageStrip's "can never disagree" invariant holds).
+  const qaStaleNow = coverageStale(coverage, buildStatus.headSha, auditTarget.codeHash)
+    || testCasesStale(coverage, buildStatus.headSha, auditTarget.codeHash);
   const pipeline = derivePipeline({
     proto: p, provisionFlagRaw: provisionFlag, source, versions,
     lastPush: push, claudeSeenAt: claudeSeen, experimentStatus,
     briefDrifted: Boolean(briefDrift),
+    qaFailing: coverageGate(coverage) === "failing",
+    qaStale: qaStaleNow,
   });
 
-  // The "experiment" anchor covers TWO rooms now: cutting lives on Versions,
-  // binding/pushing on Optimizely. Route cut-shaped states to the room that
-  // can actually perform them.
   const latest = versions[0];
   // Cut-staleness is keyed to CODE CONTENT, not branch SHA — a re-sync
   // commits .opmc/** and moves HEAD without touching dist/variation.js, and
@@ -201,8 +207,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const needsCut = !latest?.variationJs
     || Boolean(auditTarget.codeHash && codeHashOf(latest.variationJs) !== auditTarget.codeHash)
     || latest.certification?.passed === false;
-  const anchorTab = (anchor: string): TabId =>
-    anchor === "experiment" && needsCut ? "versions" : (ANCHOR_TO_TAB[anchor] ?? "brief");
+  // Pipeline anchors ARE stage ids now — the IA collapsed onto the model.
+  const anchorTab = (anchor: string): TabId => (ALL_TABS.includes(anchor) ? (anchor as TabId) : "brief");
 
   // Resolve the tab: explicit → alias → DEFAULT = wherever the next action is.
   const aliased = TAB_ALIASES[rawTab] ?? rawTab;
@@ -223,38 +229,23 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const handoff = handoffRaw ? (() => { try { return JSON.parse(handoffRaw); } catch { return null; } })() : null;
   const openRecs = recommendations.filter((r) => r.status === "new" || r.status === "planned").length;
 
-  // Severity per rail row — step-mapped rows use the shared derivation; Versions
-  // derives from the latest cut's certification.
-  const dotFor = (item: { id: string; step?: string }): StepSeverity | null => {
-    if (item.step) {
-      const st = pipeline.steps.find((s) => s.id === item.step);
-      return st ? stepSeverity(st, pipeline.alerts) : null;
-    }
-    if (item.id === "versions") {
-      const latest = versions[0];
-      if (!latest) return "pending";
-      return latest.certification ? (latest.certification.passed ? "good" : "critical") : "attention";
-    }
-    if (item.id === "coverage") {
-      const gate = coverageGate(coverage);
-      if (gate === "none") return "pending";
-      if (gate === "failing") return "critical";
-      if (coverageStale(coverage, buildStatus.headSha, auditTarget.codeHash)) return "attention";
-      return gate === "ok" ? "good" : "attention";
-    }
-    if (item.id === "tests") {
-      if (!coverage?.testCases?.length) return "pending";
-      const anyFail = coverage.testCases.some((t) => t.devices.some((d) => coverage.testResults?.[t.id]?.[d]?.status === "fail"));
-      if (anyFail) return "critical";
-      if (testCasesStale(coverage, buildStatus.headSha, auditTarget.codeHash)) return "attention";
-      return testCasesRun(coverage) ? "good" : "attention";
-    }
-    if (item.id === "package") {
-      if (integrationPackage.state === "found") return "good";
-      if (integrationPackage.state === "invalid" || integrationPackage.state === "unreadable") return "attention";
-      return "pending";
-    }
-    return null;
+  // Severity per STAGE row — the stage's own step severity, ESCALATED by
+  // section problems: a failing QA check must red the Review row; a failed
+  // cert must red Experiment. Sections escalate only on attention/critical —
+  // an untouched optional section (no package yet) must never demote a DONE
+  // stage back to "not started".
+  const RANK: Record<StepSeverity, number> = { critical: 3, attention: 2, pending: 1, good: 0 };
+  const dotFor = (stage: { id: string; step: string }): StepSeverity | null => {
+    const st = pipeline.steps.find((s) => s.id === stage.step);
+    const base = st ? stepSeverity(st, pipeline.alerts) : null;
+    // QA and cert already escalate INSIDE the pipeline (anchored alerts), so
+    // this is pure shared derivation — identical to the table strip and the
+    // board. One workspace-only exception: an invalid/unreadable integration
+    // package raises Handoff to attention (the table doesn't pay the GitHub
+    // read per row; problems still surface here, in the room, and the queue).
+    if (stage.id === "handoff" && base !== "critical"
+      && (integrationPackage.state === "invalid" || integrationPackage.state === "unreadable")) return "attention";
+    return base;
   };
 
   const chip = chipClasses(pipeline);
@@ -388,50 +379,49 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 
       {/* ── THE COMMAND RAIL ── */}
       <aside className="overflow-y-auto border-r border-border bg-surface px-3.5 py-4">
+        {/* Identity is THREE elements: exit, name+chip, the NEXT card. No
+            eyebrow (every prototype is a "web experiment prototype"), no
+            description (it lives in the Brief and on the table), no
+            wrapper box, no stage strip (the room dots carry per-stage
+            state). Boilerplate is clutter at rail widths. */}
         <Link href="/prototypes" className="text-[12.5px] text-muted-2 hover:text-foreground">← Prototypes</Link>
-        <div className="mt-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-2">Web experiment prototype</div>
-        <h1 className="text-[17px] font-bold tracking-tight mt-0.5">{p.name}</h1>
-        {p.brief.change?.trim() && <p className="text-[12.5px] text-muted-2 leading-snug mt-1 line-clamp-2">{p.brief.change}</p>}
-
-        {/* Status block — chip · strip · the one CTA · the gate line */}
-        <div className="mt-3.5 rounded-xl border border-border bg-background p-3">
-          <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[12.5px] font-semibold ${chip.cls}`}>
-            <span className={`w-2 h-2 rounded-full ${chip.dot} ${pipeline.stage.live ? "animate-pulse" : ""}`} />
-            {pipeline.stage.blocked ? `Blocked at ${pipeline.stage.label}` : pipeline.stage.live ? `${pipeline.stage.label} · LIVE 🔒` : pipeline.stage.label}
+        <div className="mt-2 flex items-center gap-2">
+          <h1 className="text-[16px] font-bold tracking-tight min-w-0 truncate" title={p.name}>{p.name}</h1>
+          <span className={`ml-auto shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${chip.cls}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${chip.dot} ${pipeline.stage.live ? "animate-pulse" : ""}`} />
+            {pipeline.stage.blocked ? `Blocked · ${pipeline.stage.label}` : pipeline.stage.live ? `${pipeline.stage.label} · LIVE` : pipeline.stage.label}
           </span>
-          {/* No stage strip here — the room dots below already carry
-              per-stage state; inside the workspace the strip was a third
-              status system. It lives on the /prototypes table, where it's
-              the only one. */}
-          <FlowQueue prototypeKey={key} actions={flow} />
         </div>
+        <FlowQueue prototypeKey={key} actions={flow} />
 
-        {/* Grouped sections. Hierarchy is carried by ALIGNMENT: the group
-            label owns the outer edge; every row reserves the same dot slot
-            (transparent when the row has no lifecycle dot) so all item labels
-            sit in one indented column under their header. */}
-        {GROUPS.map((g) => (
-          <div key={g.label} className="mt-5">
-            <div className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-2">{g.label}</div>
-            <div className="mt-1.5 space-y-0.5">
-              {g.items.map((item) => {
-                const sev = dotFor(item);
-                const active = tab === item.id;
-                return (
-                  <Link key={item.id} href={`?tab=${item.id}`}
-                    className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[13.5px] transition-colors ${
-                      active ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-foreground font-semibold" : "text-muted hover:text-foreground hover:bg-surface-2/60 font-medium"}`}>
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${sev ? SEVERITY_DOT[sev] : "bg-transparent"}`} />
-                    <span className="truncate">{item.label}</span>
-                    {item.id === "recs" && openRecs > 0 && (
-                      <span className="ml-auto text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-warn bg-[color-mix(in_srgb,var(--warn)_12%,transparent)]">{openRecs}</span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
+        {/* FIVE places — the lifecycle IS the nav. Each row's dot aggregates
+            everything its stage contains; no group headers, nothing to
+            decode. Settings sits apart: configuration, not workflow. */}
+        <nav className="mt-4 space-y-0.5">
+          {STAGES.map((stage) => {
+            const sev = dotFor(stage);
+            const active = tab === stage.id;
+            return (
+              <Link key={stage.id} href={`?tab=${stage.id}`}
+                className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[13.5px] transition-colors ${
+                  active ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-foreground font-semibold" : "text-muted hover:text-foreground hover:bg-surface-2/60 font-medium"}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${sev ? SEVERITY_DOT[sev] : "bg-transparent"}`} />
+                <span className="truncate">{stage.label}</span>
+                {stage.id === "build" && openRecs > 0 && (
+                  <span className="ml-auto text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-warn bg-[color-mix(in_srgb,var(--warn)_12%,transparent)]">{openRecs}</span>
+                )}
+              </Link>
+            );
+          })}
+          <div className="pt-2 mt-2 border-t border-border/60">
+            <Link href="?tab=settings"
+              className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[13px] transition-colors ${
+                tab === "settings" ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-foreground font-semibold" : "text-muted-2 hover:text-foreground hover:bg-surface-2/60"}`}>
+              <span className="w-2 h-2 shrink-0" aria-hidden />
+              <span>Settings</span>
+            </Link>
           </div>
-        ))}
+        </nav>
       </aside>
 
       {/* ── CONTENT ── */}
@@ -442,118 +432,91 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
           </Room>
         )}
 
-        {tab === "agent" && (
-          <Room title="Agent" sub="The develop loop: prepare the branch, start the agent, keep it in sync. The agent builds in the repo; the console pulls the result.">
+        {tab === "build" && (
+          <Room title="Build" sub="Get the agent building: prepare the branch, start Claude, keep it in sync. The agent builds in the repo; the console pulls the result.">
             <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={isBriefComplete(p.brief, p.metrics)} claudeSeenAt={claudeSeen} inSync={pipeline.truth.synced} />
+            <Section id="skills" title="Skills" sub="What the agent wakes up knowing for this prototype. Changes reach the branch on the next re-sync.">
+              <SkillSelector prototypeKey={key} initial={skillRows} />
+            </Section>
+            <Section id="recommendations" title="Recommendations" sub="Friction the agent hit building this prototype — sent back instead of lost. Act on them or decline.">
+              <Recommendations prototypeKey={key} initial={recommendations} canManage={Boolean(user)} />
+            </Section>
           </Room>
         )}
 
-        {tab === "skills" && (
-          <Room title="Skills" sub="What the agent wakes up knowing for this prototype. Changes reach the branch on the next re-sync (Agent).">
-            <SkillSelector prototypeKey={key} initial={skillRows} />
-          </Room>
-        )}
-
-        {tab === "recs" && (
-          <Room title="Recommendations" sub="Friction the agent hit building this prototype — sent back instead of lost. Act on them or decline.">
-            <Recommendations prototypeKey={key} initial={recommendations} canManage={Boolean(user)} />
-          </Room>
-        )}
-
-        {tab === "pages" && (
-          <Room title="Pages" sub="The page(s) this prototype runs on. Verify each page actually injects — review happens on the real environment, not a mockup.">
+        {tab === "review" && (
+          <Room title="Review" sub="Is it right? Verify it injects on the real page(s), then walk the QA — scenarios per device, and the test cases your agent runs and reports back. Review happens on the real environment, not a mockup.">
             <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
+            <Section id="scenarios" title="QA scenarios" sub="Use cases with checkable tests per device, derived from the brief AND the built code. Gaps are scenarios the build doesn't handle.">
+              <CoveragePanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} currentCodeHash={auditTarget.codeHash} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
+            </Section>
+            <Section id="tests" title="Test cases" sub="Step-scripts with an expected result per step. Your agent runs them on the review URL (🤖); humans walk the same scripts (👤). Failures gate the push and auto-file recommendations.">
+              <TestCasesPanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} currentCodeHash={auditTarget.codeHash} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
+            </Section>
           </Room>
         )}
 
-        {tab === "coverage" && (
-          <Room title="QA scenarios" sub="Validate the prototype before the experiment runs — and hand the record to the devs building the final product. Use cases with checkable tests per device, derived from the brief AND the built code; walk them on the real review URL and click the device cells. Gaps are scenarios the build doesn't handle.">
-            <CoveragePanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} currentCodeHash={auditTarget.codeHash} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
-          </Room>
-        )}
-
-        {tab === "tests" && (
-          <Room title="Test cases" sub="The traditional layer under the scenarios: step-scripts with preconditions and an expected result per step, grounded in the built code. Your agent runs them on the review URL and reports back; humans walk the same scripts. One record, attributed — failures feed the QA gate and auto-file Recommendations.">
-            <TestCasesPanel prototypeKey={key} initial={coverage} currentSha={buildStatus.headSha} currentCodeHash={auditTarget.codeHash} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} />
-          </Room>
-        )}
-
-        {tab === "versions" && (
-          <Room title="Versions" sub="Immutable, SHA-pinned cuts of the built variation. Certification runs at cut; the frozen cut is what ships.">
+        {tab === "experiment" && (
+          <Room title="Experiment" sub="The release: freeze an immutable cut (certification runs at cut), bind the Optimizely experiment, push by API (read-back verified), start it in Optimizely. Running locks everything.">
             <SourcePanel prototypeKey={key} versions={versions} compact />
-          </Room>
-        )}
-
-        {tab === "optimizely" && (
-          <Room title="Optimizely" sub="Bind or create the experiment, push the cut version by API (read-back verified), then start it in Optimizely. A running experiment locks everything.">
-            <ShipPanel
-              prototypeKey={key}
-              versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, hasCode: Boolean(v.variationJs), certification: v.certification ?? null }))}
-              initialBinding={p.experiment ?? null}
-              initialLastPush={push}
-              optiProjectId={expCfg?.optimizely?.defaultProjectId ?? null}
-              targetCount={p.targets.length}
-              prototypeName={p.name}
-            />
-            <div className="mt-3">
-              <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
-            </div>
-          </Room>
-        )}
-
-        {tab === "package" && (
-          <Room title="Integration package" sub="The one-shot production handoff: the winning prototype rebuilt NATIVELY for the site's CMS — full Razor views, SCSS, JS, and C# backend/API code, plus diffs to existing files and an integration guide. Staged entirely in the prototype repo (handoff/ on the branch); the dev team applies it to their codebase on their terms." wide>
-            <PackagePanel prototypeKey={key} initial={integrationPackage} skillEnabled={skillRows.some((r) => r.skill.id === "opmc-integration-package" && r.enabled)} />
-          </Room>
-        )}
-
-        {tab === "explorer" && (
-          <Room title="Code explorer" sub="The winning version, frozen at its exact git SHA — byte-for-byte what ran. This is what the dev team receives." wide>
-            <HandoffExplorer prototypeKey={key} versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, createdAt: v.createdAt, certPassed: v.certification ? v.certification.passed : null }))} />
-          </Room>
-        )}
-
-        {tab === "ship" && (
-          <Room title="Ship record" sub="When the experiment wins, the winner graduates into the site's production code — a reviewed PR, not client-side JavaScript forever.">
-            <HandoffPanel prototypeKey={key} repoFullName={repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
-          </Room>
-        )}
-
-        {tab === "repo" && (
-          <Room title="Repo & branch" sub="Which registered repo + branch this prototype builds in. Touched once.">
-            <RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} />
-          </Room>
-        )}
-
-        {tab === "details" && (
-          <Room title="Details" sub="The experiment definition and housekeeping.">
-            <div className="space-y-5">
-              <DetailsEditor p={p} />
-              <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[14px] font-semibold">Lifecycle stage</div>
-                  <div className="text-[13px] text-muted-2">Manual override — normally the stage derives itself. Use for archiving.</div>
-                </div>
-                <StageSelect prototypeKey={key} initialStage={normalizeStage(p.status)} />
+            <Section id="ship" title="Ship to Optimizely" sub="Bind or create the experiment, then push the frozen cut. Starting traffic stays a human act.">
+              <ShipPanel
+                prototypeKey={key}
+                versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, hasCode: Boolean(v.variationJs), certification: v.certification ?? null }))}
+                initialBinding={p.experiment ?? null}
+                initialLastPush={push}
+                optiProjectId={expCfg?.optimizely?.defaultProjectId ?? null}
+                targetCount={p.targets.length}
+                prototypeName={p.name}
+              />
+              <div className="mt-3">
+                <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
               </div>
-              <DeletePrototype prototypeKey={key} name={p.name} />
-            </div>
+            </Section>
           </Room>
         )}
 
-        {tab === "history" && (
-          <Room title="History" sub="Everything that happened to this prototype — audited, append-only.">
-            <div className="rounded-xl border border-border bg-surface px-4 py-3 space-y-3">
-              {activity.length === 0 ? <p className="text-[14px] text-muted-2">Nothing yet.</p> : activity.slice(0, 30).map((a, i) => (
-                <div key={i} className="flex gap-2.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-border-strong mt-2 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-[14px] leading-snug">{a.text}</div>
-                    <div className="text-[12.5px] text-muted-2"><TimeAgo iso={a.at} />{a.who ? ` · ${a.who}` : ""}</div>
+        {tab === "handoff" && (
+          <Room title="Handoff" sub="What the dev team receives: the winning code frozen at its exact SHA, the native CMS integration package, and the ship record." wide>
+            <HandoffExplorer prototypeKey={key} versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, createdAt: v.createdAt, certPassed: v.certification ? v.certification.passed : null }))} />
+            <Section id="package" title="Integration package" sub="The one-shot production handoff: the winner rebuilt NATIVELY for the site's CMS — Razor views, SCSS, JS, C# backend/API, diffs, and an integration guide. Staged entirely in the prototype repo; their team applies it on their terms.">
+              <PackagePanel prototypeKey={key} initial={integrationPackage} skillEnabled={skillRows.some((r) => r.skill.id === "opmc-integration-package" && r.enabled)} />
+            </Section>
+            <Section id="record" title="Ship record" sub="When the experiment wins, the winner graduates into the site's production code — a reviewed PR, not client-side JavaScript forever.">
+              <HandoffPanel prototypeKey={key} repoFullName={repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
+            </Section>
+          </Room>
+        )}
+
+        {tab === "settings" && (
+          <Room title="Settings" sub="Configuration and the record — none of this is workflow.">
+            <RepoBranchSettings prototypeKey={key} initialRepo={repo ?? null} />
+            <Section id="details" title="Details" sub="The experiment definition and housekeeping.">
+              <div className="space-y-5">
+                <DetailsEditor p={p} />
+                <div className="rounded-xl border border-border bg-surface px-4 py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[14px] font-semibold">Lifecycle stage</div>
+                    <div className="text-[13px] text-muted-2">Manual override — normally the stage derives itself. Use for archiving.</div>
                   </div>
+                  <StageSelect prototypeKey={key} initialStage={normalizeStage(p.status)} />
                 </div>
-              ))}
-            </div>
+                <DeletePrototype prototypeKey={key} name={p.name} />
+              </div>
+            </Section>
+            <Section id="history" title="History" sub="Everything that happened to this prototype — audited, append-only.">
+              <div className="rounded-xl border border-border bg-surface px-4 py-3 space-y-3">
+                {activity.length === 0 ? <p className="text-[14px] text-muted-2">Nothing yet.</p> : activity.slice(0, 30).map((a, i) => (
+                  <div key={i} className="flex gap-2.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-border-strong mt-2 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[14px] leading-snug">{a.text}</div>
+                      <div className="text-[12.5px] text-muted-2"><TimeAgo iso={a.at} />{a.who ? ` · ${a.who}` : ""}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
           </Room>
         )}
       </main>
@@ -574,14 +537,14 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
                 </div>
               </div>
             ))}
-            <Link href="?tab=history" className="block text-[12.5px] text-accent hover:text-accent-hover font-medium">Full history →</Link>
+            <Link href="?tab=settings#history" className="block text-[12.5px] text-accent hover:text-accent-hover font-medium">Full history →</Link>
           </div>
         )}
         <div className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-2 mt-6 mb-2">Recommendations</div>
         {openRecs === 0 ? (
           <p className="text-[13px] text-muted-2">None open — the agent raises them as it builds.</p>
         ) : (
-          <Link href="?tab=recs" className="text-[13px] text-warn hover:opacity-80 font-medium">{openRecs} open — review →</Link>
+          <Link href="?tab=build#recommendations" className="text-[13px] text-warn hover:opacity-80 font-medium">{openRecs} open — review →</Link>
         )}
       </aside>
     </div>
@@ -596,6 +559,17 @@ function Room({ title, sub, wide = false, children }: { title: string; sub: stri
       <p className="text-[13px] text-muted-2 mt-0.5 mb-4 max-w-[80ch]">{sub}</p>
       {children}
     </div>
+  );
+}
+
+/** A section WITHIN a stage room — the old sub-rooms, one card grammar. */
+function Section({ id, title, sub, children }: { id: string; title: string; sub: string; children: React.ReactNode }) {
+  return (
+    <section id={id} className="mt-8 pt-6 border-t border-border/60">
+      <h3 className="text-[14.5px] font-semibold tracking-tight">{title}</h3>
+      <p className="text-[12.5px] text-muted-2 mt-0.5 mb-3 max-w-[80ch]">{sub}</p>
+      {children}
+    </section>
   );
 }
 

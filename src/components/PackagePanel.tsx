@@ -78,7 +78,7 @@ export function PackagePanel({ prototypeKey, initial, skillEnabled }: {
           </div>
         ) : (
           <div className="rounded-lg border border-warn/50 bg-[color-mix(in_srgb,var(--warn)_6%,transparent)] px-3.5 py-2.5 text-[13px] text-muted">
-            <span className="font-semibold text-warn">First, enable the skill:</span> this prototype&apos;s skill selection doesn&apos;t include <span className="font-mono">opmc-integration-package</span>, so the agent doesn&apos;t know the package contract. Turn it on in <span className="font-semibold">Build → Skills</span>, hit <span className="font-semibold">Re-sync</span> in the Agent room, restart your agent, then ask it to <span className="font-mono text-foreground/80">&ldquo;produce the integration package&rdquo;</span>.
+            <span className="font-semibold text-warn">First, enable the skill:</span> this prototype&apos;s skill selection doesn&apos;t include <span className="font-mono">opmc-integration-package</span>, so the agent doesn&apos;t know the package contract. Turn it on in <span className="font-semibold">Build → Skills</span>, hit <span className="font-semibold">Re-sync</span> in the Build room, restart your agent, then ask it to <span className="font-mono text-foreground/80">&ldquo;produce the integration package&rdquo;</span>.
           </div>
         )}
       </div>
