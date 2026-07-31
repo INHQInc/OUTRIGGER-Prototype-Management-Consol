@@ -80,6 +80,21 @@ unfixable), one-way flip to the working model when the base is set. Never
 show a new prototype the command rail; never show an operating prototype
 the setup flow.
 
+**The queue is the conductor (user-driven 07-30):** in the working model,
+the human must never be the workflow engine. The rail's status block carries
+"Up next" — the iteration loop derived from ground truth as an ORDERED,
+EXECUTABLE queue (deriveFlow): one-button server actions run INLINE from the
+queue (re-sync, QA generation, cut, push — gates still apply and deliberate
+friction like the QA ack stays in its room); agent steps hand over the exact
+paste line; machine waits genuinely tick (a poll runs only while one shows);
+human acts are links, never pulses. Rooms are for depth and judgment; the
+loop runs from one place. The queue replaced the single CTA + gate line —
+its first item IS the gate, with its why.
+
+*Origin: "making changes to brief, resync, cut new version — it's a mess of
+jumping around… the order to execute is impossible to know if you're not
+using it daily."*
+
 *Origin: "the flow is so bad, it really is jumping from one section to
 another and back and forth… make each logical setup step that's required up
 front, then a working model after the base is set."*

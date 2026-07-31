@@ -20,10 +20,12 @@ import { resolveSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 import { listRecommendations } from "@/lib/ideas/ideas";
 import { getBriefDrift, briefFingerprint } from "@/lib/prototypes/brief-drift-state";
-import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetCode } from "@/lib/prototypes/brief-audit";
+import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetCode, codeHashOf } from "@/lib/prototypes/brief-audit";
 import { readIntegrationPackage } from "@/lib/prototypes/package";
 import { PackagePanel } from "@/components/PackagePanel";
-import { getCoverage, coverageGate, coverageStale, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
+import { getCoverage, coverageGate, coverageStale, coverageReviewed, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
+import { deriveFlow } from "@/lib/prototypes/flow";
+import { FlowQueue } from "@/components/FlowQueue";
 import { CoveragePanel } from "@/components/CoveragePanel";
 import { TestCasesPanel } from "@/components/TestCasesPanel";
 import { currentUser } from "@/lib/auth/current";
@@ -140,7 +142,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   // must agree on the key or this trigger re-queues forever.
   const briefAudit = await getBriefAuditMarker(key).catch(() => null);
   const auditTarget = auditTargetCode(source, versions[0]);
-  if (!briefDrift && briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p))) {
+  const auditNeeded = briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p));
+  if (!briefDrift && auditNeeded) {
     after(() => runBriefAudit(p, { actor: "console (auto-audit)" }).catch(() => {}));
   }
 
@@ -193,8 +196,11 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   // binding/pushing on Optimizely. Route cut-shaped states to the room that
   // can actually perform them.
   const latest = versions[0];
+  // Cut-staleness is keyed to CODE CONTENT, not branch SHA — a re-sync
+  // commits .opmc/** and moves HEAD without touching dist/variation.js, and
+  // must never manufacture a phantom "the build moved, cut again".
   const needsCut = !latest?.variationJs
-    || Boolean(source?.headSha && latest.gitSha !== source.headSha)
+    || Boolean(auditTarget.codeHash && codeHashOf(latest.variationJs) !== auditTarget.codeHash)
     || latest.certification?.passed === false;
   const anchorTab = (anchor: string): TabId =>
     anchor === "experiment" && needsCut ? "versions" : (ANCHOR_TO_TAB[anchor] ?? "brief");
@@ -253,8 +259,38 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   };
 
   const chip = chipClasses(pipeline);
-  const ctaTab = anchorTab(pipeline.primaryAction.anchor);
-  const gate = pipeline.stage.blocked ? pipeline.stage.status : pipeline.alerts[0]?.text ?? null;
+
+  // THE CONDUCTOR: the iteration loop as an ordered, executable queue —
+  // derived from the same ground truth as the dots, replacing the single
+  // CTA + gate line (the queue's first item IS the gate, with its why).
+  const flow = deriveFlow({
+    briefComplete: isBriefComplete(p.brief, p.metrics),
+    briefDrifted: Boolean(briefDrift),
+    auditPending: !briefDrift && auditNeeded,
+    provisioned: Boolean(provisionFlag),
+    synced: pipeline.truth.synced,
+    buildFound,
+    hasCutWithCode: Boolean(latest?.variationJs),
+    pages: p.targets.length,
+    pagesPassing: p.targets.filter(injectionPasses).length,
+    hasScenarios: Boolean(coverage?.scenarios.length),
+    scenariosStale: coverageStale(coverage, buildStatus.headSha, auditTarget.codeHash),
+    scenariosReviewed: coverage ? coverageReviewed(coverage) : false,
+    qaFailing: coverageGate(coverage) === "failing",
+    hasTestCases: Boolean(coverage?.testCases?.length),
+    testsStale: testCasesStale(coverage, buildStatus.headSha, auditTarget.codeHash),
+    testsRun: coverage ? testCasesRun(coverage) : false,
+    latestVersion: latest?.version,
+    needsCut,
+    certFailed: latest?.certification?.passed === false,
+    bound: Boolean(p.experiment),
+    // verified is NON-NEGOTIABLE: a read-back MISMATCH is persisted before
+    // the throw — without it the queue would green-light starting traffic
+    // on code known not to byte-match what Optimizely stored.
+    pushCurrent: Boolean(push && latest && push.verified && push.version === latest.version && push.gitSha === latest.gitSha),
+    experimentRunning: experimentStatus === "running",
+    shipped: normalizeStage(p.status) === "shipped",
+  });
 
   // ── SETUP MODE: the guided linear flow until the base is set ──
   if (setupMode) {
@@ -365,12 +401,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
             {pipeline.stage.blocked ? `Blocked at ${pipeline.stage.label}` : pipeline.stage.live ? `${pipeline.stage.label} · LIVE 🔒` : pipeline.stage.label}
           </span>
           <StageStrip pipeline={pipeline} labels className="mt-2.5" />
-          {ctaTab !== tab && (
-            <Link href={`?tab=${ctaTab}`} className="block w-full text-center mt-3 rounded-lg bg-accent text-accent-fg text-[13.5px] font-semibold py-2 hover:bg-accent-hover transition-colors">
-              {pipeline.primaryAction.label}
-            </Link>
-          )}
-          {gate && <div className="mt-2.5 text-[12px] leading-snug text-warn">⚠ {gate}</div>}
+          <FlowQueue prototypeKey={key} actions={flow} />
         </div>
 
         {/* Grouped sections. Hierarchy is carried by ALIGNMENT: the group
