@@ -30,7 +30,6 @@ import { CoveragePanel } from "@/components/CoveragePanel";
 import { TestCasesPanel } from "@/components/TestCasesPanel";
 import { currentUser } from "@/lib/auth/current";
 import { SEVERITY_DOT, TimeAgo } from "@/components/ui";
-import { StageStrip } from "@/components/StageStrip";
 import { StageSelect } from "@/components/StageSelect";
 import { BriefComposer } from "@/components/BriefComposer";
 import { TargetPages } from "@/components/TargetPages";
@@ -400,7 +399,10 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
             <span className={`w-2 h-2 rounded-full ${chip.dot} ${pipeline.stage.live ? "animate-pulse" : ""}`} />
             {pipeline.stage.blocked ? `Blocked at ${pipeline.stage.label}` : pipeline.stage.live ? `${pipeline.stage.label} · LIVE 🔒` : pipeline.stage.label}
           </span>
-          <StageStrip pipeline={pipeline} labels className="mt-2.5" />
+          {/* No stage strip here — the room dots below already carry
+              per-stage state; inside the workspace the strip was a third
+              status system. It lives on the /prototypes table, where it's
+              the only one. */}
           <FlowQueue prototypeKey={key} actions={flow} />
         </div>
 

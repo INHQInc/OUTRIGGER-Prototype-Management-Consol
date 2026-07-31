@@ -83,12 +83,15 @@ export function FlowQueue({ prototypeKey, actions }: {
     try { await navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 1500); } catch { /* clipboard blocked */ }
   }
 
-  const shown = expanded ? actions : actions.slice(0, 3);
+  // ONE action visible; the rest is a preview line. The rail carries one
+  // nav (rooms), one status (chip + dots), ONE action surface — stacking a
+  // second numbered list next to the room list was a hierarchy mess.
+  const shown = expanded ? actions : actions.slice(0, 1);
   const hidden = actions.length - shown.length;
+  const preview = expanded ? [] : actions.slice(1, 4);
 
   return (
     <div className="mt-2.5 space-y-1.5">
-      <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-2">Up next</div>
 
       {note && (
         <div className="rounded-lg border border-ok/40 bg-[color-mix(in_srgb,var(--ok)_5%,transparent)] px-2.5 py-2">
@@ -113,9 +116,9 @@ export function FlowQueue({ prototypeKey, actions }: {
         return (
           <div key={a.id} className={`rounded-lg border px-2.5 py-2 ${first ? "border-border-strong bg-surface" : "border-border/70 bg-surface/60"}`}>
             <div className="flex items-center gap-2">
-              <span className={`w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[10.5px] font-bold ${first ? "bg-accent text-accent-fg" : "bg-surface-2 text-muted-2"}`}>{i + 1}</span>
+              <span className={`text-[9.5px] font-bold uppercase tracking-[0.08em] shrink-0 ${first ? "text-accent" : "text-muted-2"}`}>{first ? "Next" : i + 1}</span>
               {machineWait && <span className="w-1.5 h-1.5 rounded-full bg-warn animate-pulse shrink-0" />}
-              <span className={`text-[12.5px] font-semibold min-w-0 truncate ${first ? "" : "text-muted"}`}>{a.label}</span>
+              <span className={`text-[12.5px] font-semibold min-w-0 ${expanded ? "truncate" : ""} ${first ? "" : "text-muted"}`}>{a.label}</span>
               <span className="ml-auto shrink-0">
                 {a.kind === "post" && (
                   <button onClick={() => run(a)} disabled={busy}
@@ -134,19 +137,23 @@ export function FlowQueue({ prototypeKey, actions }: {
                 )}
               </span>
             </div>
-            <div className="text-[11.5px] text-muted-2 leading-snug mt-1 pl-[26px]">{a.why}</div>
+            <div className="text-[11.5px] text-muted-2 leading-snug mt-1">{a.why}</div>
             {errFor?.id === a.id && (
-              <div className="text-[11.5px] text-danger leading-snug mt-1 pl-[26px]">
+              <div className="text-[11.5px] text-danger leading-snug mt-1">
                 {errFor.text}{errFor.tab ? <> · <Link href={`?tab=${errFor.tab}`} className="underline underline-offset-2">open the room</Link></> : null}
               </div>
             )}
           </div>
         );
       })}
-      {hidden > 0 && (
-        <button onClick={() => setExpanded(true)} className="text-[11.5px] text-muted-2 hover:text-foreground underline underline-offset-2">+{hidden} more</button>
+      {/* The rest of the loop as a PREVIEW LINE, not more cards — order at a
+          glance without a second list competing with the rooms below. */}
+      {preview.length > 0 && (
+        <button onClick={() => setExpanded(true)} className="block text-left text-[11px] text-muted-2 hover:text-foreground leading-snug">
+          then: {preview.map((a) => a.label).join(" → ")}{hidden > preview.length ? " → …" : ""}
+        </button>
       )}
-      {expanded && actions.length > 3 && (
+      {expanded && actions.length > 1 && (
         <button onClick={() => setExpanded(false)} className="text-[11.5px] text-muted-2 hover:text-foreground underline underline-offset-2">show less</button>
       )}
     </div>

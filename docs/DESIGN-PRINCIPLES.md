@@ -82,7 +82,7 @@ the setup flow.
 
 **The queue is the conductor (user-driven 07-30):** in the working model,
 the human must never be the workflow engine. The rail's status block carries
-"Up next" — the iteration loop derived from ground truth as an ORDERED,
+"Next" — the iteration loop derived from ground truth as an ORDERED,
 EXECUTABLE queue (deriveFlow): one-button server actions run INLINE from the
 queue (re-sync, QA generation, cut, push — gates still apply and deliberate
 friction like the QA ack stays in its room); agent steps hand over the exact
@@ -90,6 +90,17 @@ paste line; machine waits genuinely tick (a poll runs only while one shows);
 human acts are links, never pulses. Rooms are for depth and judgment; the
 loop runs from one place. The queue replaced the single CTA + gate line —
 its first item IS the gate, with its why.
+
+**ONE of each in the rail (user-enforced 07-30, the second time):** the rail
+carries exactly one nav (the rooms), one status (chip + the rooms' dots),
+one action surface (the NEXT card — a single card; the rest of the loop is
+a "then: A → B → C" preview LINE, expandable). Never stack a second
+numbered list beside the room list. The in-workspace stage strip died of
+redundancy — the dots already say per-stage state; the strip lives only on
+the /prototypes table, where it's the sole status system.
+
+*Origin: "look how many navigation management areas we have now — we got
+worse not better."*
 
 *Origin: "making changes to brief, resync, cut new version — it's a mess of
 jumping around… the order to execute is impossible to know if you're not
