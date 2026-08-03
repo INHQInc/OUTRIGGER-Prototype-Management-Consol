@@ -222,7 +222,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
               <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">Discoveries — exploratory, never confirmation; each is a candidate NEXT experiment</div>
               {verdict.discoveries.map((d) => (
                 <div key={d.id} className="flex items-center gap-2 text-[12.5px]">
-                  <span className="min-w-0">{d.label} <span className={liftClass(d.lift)}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2">(q={(d.q * 100).toFixed(0)}%)</span></span>
+                  <span className="min-w-0">{d.label} <span className={liftClass(d.lift)}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
                   {d.promotedIdeaId
                     ? <span className="ml-auto text-[11.5px] text-ok shrink-0">✓ in the backlog</span>
                     : <button onClick={() => post(`promote:${d.id}`, { promote: d.id })} disabled={busy !== null}
@@ -312,12 +312,23 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
             <span className="text-[11px] text-muted-2 ml-auto">exploratory — FDR-corrected; ~{statsEff.expectedFalsePositives} false mover(s) expected among {statsEff.exploratory.length} at raw α=.05</span>
           )}
         </div>
-        {(live?.metrics ?? []).map((m) => (
-          <div key={m.name} className="px-4 py-2 border-t border-border/50 first:border-t-0">
-            <div className="text-[13px] font-semibold mb-1">{m.name}{m.aggregator ? <span className="text-muted-2 font-normal"> · {m.aggregator}</span> : null}</div>
-            {rows(m.perVariation, `metric:${m.name}`, true)}
-          </div>
-        ))}
+        {(live?.metrics ?? []).map((m) => {
+          const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
+          return (
+            <div key={m.name} className="px-4 py-2 border-t border-border/50 first:border-t-0">
+              <div className="text-[13px] font-semibold mb-1 flex items-center gap-2 flex-wrap">
+                <span>{m.name}{m.aggregator ? <span className="text-muted-2 font-normal"> · {m.aggregator}</span> : null}</span>
+                {ms?.featureOnly && (
+                  <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 border border-border rounded px-1"
+                    title={`This event fires only in the ${ms.featureOnly === "variation" ? "variation — the control has no such element" : "control — the variation removed it"}. Comparing against a structural zero is meaningless, so no lift/significance is computed; read the rate as feature ADOPTION. Its comparative impact lives in the composite that pairs it with the other arm's equivalent action.`}>
+                    {ms.featureOnly === "variation" ? "variation-only · adoption view" : "control-only · adoption view"}
+                  </span>
+                )}
+              </div>
+              {rows(m.perVariation, `metric:${m.name}`, true)}
+            </div>
+          );
+        })}
         {!live && <div className="px-4 py-2 text-[12.5px] text-muted-2">No raw metrics to show — the live fetch failed and no snapshot is frozen.</div>}
       </div>
 

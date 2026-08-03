@@ -327,6 +327,11 @@ export interface MetricStats {
   kind: "composite" | "metric";
   test: "proportion" | "actions" | "none";
   role?: CompositeMetric["role"];
+  /** The event fires in only ONE arm (e.g. a CTA that exists only in the
+   *  variation). Comparative inference is meaningless — the other arm
+   *  structurally cannot convert — so lift/p are stripped and the metric is
+   *  an ADOPTION view, excluded from the discovery sweep. */
+  featureOnly?: "variation" | "baseline";
   cells: CellStats[];
 }
 
@@ -342,7 +347,7 @@ export interface ExploratoryRow {
 }
 
 export interface StatsFlag {
-  code: "SRM_FAIL" | "SRM_WARN" | "SRM_ASSUMED_EQUAL" | "CANNIBALIZATION" | "UNDERPOWERED" | "NOVELTY_DECAY" | "VALUE_METRIC_NO_INFERENCE" | "ACTION_OVERDISPERSION" | "SHORT_OBSERVATION";
+  code: "SRM_FAIL" | "SRM_WARN" | "SRM_ASSUMED_EQUAL" | "CANNIBALIZATION" | "UNDERPOWERED" | "NOVELTY_DECAY" | "VALUE_METRIC_NO_INFERENCE" | "ACTION_OVERDISPERSION" | "SHORT_OBSERVATION" | "FEATURE_ONLY_METRIC";
   text: string;
 }
 
@@ -588,10 +593,47 @@ export function computeStatsReport(opts: {
     if (isValue) flags.push({ code: "VALUE_METRIC_NO_INFERENCE", text: `“${m.name}” is a value-style metric (${m.aggregator}); per-visitor variance isn't available from aggregates, so no significance is computed for it.` });
   }
 
+  // ── feature-only reclassification ──
+  // A CTA that exists only in the variation reports ZERO on control forever —
+  // "lift vs baseline" against a structural zero is meaningless (and explodes
+  // to +20,000% via the zero-cell correction), and calling it a "discovery"
+  // is dishonest: nobody discovered that guests click a button the control
+  // doesn't have. Such metrics become ADOPTION views: rates stay, comparative
+  // inference is stripped, discovery eligibility revoked. (Inside composites
+  // they remain legitimate members — total intent across arms is the point.)
+  const featureOnlyNames: string[] = [];
+  if (focusId && baselineId) {
+    for (const ms of metrics) {
+      if (ms.test === "none") continue;
+      const base = ms.cells.find((c) => c.variationId === baselineId);
+      const focus = ms.cells.find((c) => c.variationId === focusId);
+      if (!base || !focus || base.n < 50 || focus.n < 50) continue;
+      const oneSided =
+        base.count <= 2 && focus.count >= 50 ? "variation" :
+        focus.count <= 2 && base.count >= 50 ? "baseline" : undefined;
+      if (!oneSided) continue;
+      ms.featureOnly = oneSided;
+      for (const c of ms.cells) {
+        c.lift = undefined;
+        c.liftCi = undefined;
+        c.p = undefined;
+        c.pBeat = undefined;
+        c.expectedLossRel = undefined;
+      }
+      if (ms.kind === "metric") featureOnlyNames.push(ms.label);
+    }
+    if (featureOnlyNames.length) {
+      flags.push({
+        code: "FEATURE_ONLY_METRIC",
+        text: `${featureOnlyNames.map((n) => `“${n}”`).join(", ")} fire${featureOnlyNames.length === 1 ? "s" : ""} in only one arm (the other structurally can't — e.g. a CTA that exists only in the variation). Shown as ADOPTION rates, not lift, and excluded from discoveries. Their comparative impact lives in the composite decision metric that pairs them with the control's equivalent action.`,
+      });
+    }
+  }
+
   // Bayesian layer on the PRIMARY composite's focus-vs-baseline pair only —
   // the decision pair gets the decision numbers.
   const primaryStats = primary ? metrics.find((ms) => ms.key === `composite:${primary.id}`) : undefined;
-  if (primary && primaryStats && focusId && baselineId) {
+  if (primary && primaryStats && !primaryStats.featureOnly && focusId && baselineId) {
     const counts = compositeCounts(primary, results);
     const x1 = counts.get(focusId) ?? 0;
     const n1 = visitorsOf(results, focusId);
@@ -624,6 +666,7 @@ export function computeStatsReport(opts: {
     if (primary && ms.key === `composite:${primary.id}`) continue;
     if (ms.kind === "composite" && ms.role === "guardrail") continue;
     if (ms.kind === "metric" && memberEvents.has(ms.label)) continue;
+    if (ms.featureOnly) continue; // one-arm events can't "discover" anything
     for (const cell of ms.cells) {
       if (cell.isBaseline || cell.p === undefined) continue;
       pool.push({ key: ms.key, label: ms.label, variationId: cell.variationId, variationName: cell.name, lift: cell.lift, p: cell.p });

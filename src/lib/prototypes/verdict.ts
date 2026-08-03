@@ -248,7 +248,7 @@ export function deriveVerdict(opts: {
       variationName: r.variationName,
       lift: r.lift,
       q: r.q,
-      note: `Exploratory (FDR q=${(r.q * 100).toFixed(0)}%): not pre-registered, so it can never be "confirmed" here — it's a hypothesis for the NEXT experiment.`,
+      note: `Exploratory (FDR q${r.q * 100 < 0.5 ? "<1" : `=${(r.q * 100).toFixed(0)}`}%): not pre-registered, so it can never be "confirmed" here — it's a hypothesis for the NEXT experiment.`,
     }));
 
   // Gate 1: an adjudicable mapping — confirmed primary composite.
@@ -342,6 +342,10 @@ export function deriveVerdict(opts: {
   const breached = guardrails.filter((g) => g.state === "breach");
 
   // Gate 5+6: direction + significance on the pre-registered primary.
+  if (primaryStats?.featureOnly) {
+    gates.push({ id: "significance", title: "Primary metric measurable", pass: false, detail: `“${primary.label}” fires in only one arm — the ${primaryStats.featureOnly === "variation" ? "control" : "variation"} structurally can't convert on it, so a comparison is meaningless. Remap the primary to pair the new surface with the control's equivalent action (e.g. main CTA + overlay CTA = total intent both arms can express).` });
+    return finish("not_adjudicable", "Not adjudicable — the primary only fires in one arm. Remap it to a composite both arms can convert on.", guardrails, discoveries);
+  }
   if (!cell || cell.lift === undefined || cell.p === undefined) {
     gates.push({ id: "significance", title: "Primary metric measurable", pass: false, detail: "The primary composite has no computable lift yet (missing events or zero baseline)." });
     return finish("not_adjudicable", "Not adjudicable — the primary composite isn't computing (check that its events are reporting).", guardrails, discoveries);
