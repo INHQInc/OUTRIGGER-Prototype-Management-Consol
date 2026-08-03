@@ -133,7 +133,7 @@ export function FlowQueue({ prototypeKey, actions }: {
                   </button>
                 )}
                 {(a.kind === "link" || (a.kind === "wait" && !machineWait)) && a.tab && (
-                  <Link href={`?tab=${a.tab}`} className={`inline-flex items-center h-6 px-2.5 rounded-md text-[12px] font-semibold ${first && a.kind === "link" ? "bg-accent text-accent-fg hover:bg-accent-hover" : "border border-border text-muted hover:text-foreground"}`}>Open</Link>
+                  <Link href={`?tab=${a.tab}${a.anchor ? `#${a.anchor}` : ""}`} className={`inline-flex items-center h-6 px-2.5 rounded-md text-[12px] font-semibold ${first && a.kind === "link" ? "bg-accent text-accent-fg hover:bg-accent-hover" : "border border-border text-muted hover:text-foreground"}`}>Open</Link>
                 )}
               </span>
             </div>

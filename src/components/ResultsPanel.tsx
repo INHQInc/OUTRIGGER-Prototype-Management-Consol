@@ -40,6 +40,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
   const [stats, setStats] = useState<StatsReport | null>(null);
   const [verdict, setVerdict] = useState<VerdictRecord | null>(null);
   const [expStatus, setExpStatus] = useState<string | null>(running ? "running" : null);
+  const [planDrift, setPlanDrift] = useState<string[]>([]);
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
       setMap(data.metricMap ?? null);
       setStats(data.stats ?? null);
       setVerdict(data.verdict ?? null);
+      setPlanDrift(data.planDrift ?? []);
       if (data.experimentStatus) setExpStatus(data.experimentStatus);
     } catch {
       setResultsError("Couldn't load results — check the connection.");
@@ -214,6 +216,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
               Power: with {statsEff.power.perArmN.toLocaleString()}/arm this experiment can reliably detect ±{statsEff.power.mdeNow !== undefined ? (statsEff.power.mdeNow * 100).toFixed(1) : "?"}% on the primary
               {statsEff.power.observedLift !== undefined ? ` (observed ${pctS(statsEff.power.observedLift)})` : ""}
               {statsEff.power.daysToObserved !== undefined && statsEff.power.daysToObserved > 0 ? ` · ~${statsEff.power.daysToObserved} more day(s) of traffic to confirm the observed effect` : ""}
+              {statsEff.power.targetLift !== undefined ? ` · your ship-worthy lift (${pctS(statsEff.power.targetLift)})${statsEff.power.daysToTarget !== undefined ? ` needs ~${statsEff.power.daysToTarget} more day(s)` : ""}` : ""}
               {statsEff.power.observationDays !== undefined ? ` · ${statsEff.power.observationDays} day(s) observed` : ""}.
             </p>
           )}
@@ -280,6 +283,14 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
       </div>
       {resultsError && <div className="text-[13px] text-warn">{resultsError}</div>}
       {err && <div className="text-[13px] text-danger">{err}</div>}
+      {planDrift.length > 0 && (
+        <div className="rounded-lg border border-warn/50 bg-surface px-3.5 py-2.5 text-[13px]">
+          <span className="text-warn font-semibold">⚠ Results report events the measurement plan never reviewed:</span>{" "}
+          <span className="font-mono text-[12px]">{planDrift.join(" · ")}</span>
+          <span className="text-muted-2"> — the build moved past the plan. </span>
+          <a href="?tab=experiment#measurement" className="text-accent hover:text-accent-hover font-medium">Re-plan to classify them →</a>
+        </div>
+      )}
 
       {/* The verdict — adjudication of the pre-registered hypothesis. */}
       {verdictCard()}

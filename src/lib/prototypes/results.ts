@@ -31,6 +31,10 @@ export interface VariationResult {
 export interface MetricResult {
   /** Metric name as Optimizely reports it — the join key for composites. */
   name: string;
+  /** The PRE-disambiguation name (= the registry event name). The measurement
+   *  plan binds to registry names before traffic exists, so joins must accept
+   *  either namespace — set whenever disambiguation renamed this row. */
+  baseName?: string;
   aggregator?: string;
   perVariation: VariationResult[];
 }
@@ -96,14 +100,20 @@ export function normalizeResults(raw: unknown): ExperimentResults | null {
   const nameCounts = new Map<string, number>();
   for (const m of metrics) nameCounts.set(m.name, (nameCounts.get(m.name) ?? 0) + 1);
   for (const m of metrics) {
-    if ((nameCounts.get(m.name) ?? 0) > 1) m.name = `${m.name} (${m.aggregator ?? "metric"})`.slice(0, 200);
+    if ((nameCounts.get(m.name) ?? 0) > 1) {
+      m.baseName = m.name; // the registry name the measurement plan knows
+      m.name = `${m.name} (${m.aggregator ?? "metric"})`.slice(0, 200);
+    }
   }
   // Still-colliding names (same event, same aggregator, twice) → numbered.
   const seenNames = new Map<string, number>();
   for (const m of metrics) {
     const n = seenNames.get(m.name) ?? 0;
     seenNames.set(m.name, n + 1);
-    if (n > 0) m.name = `${m.name} #${n + 1}`.slice(0, 200);
+    if (n > 0) {
+      m.baseName = m.baseName ?? m.name;
+      m.name = `${m.name} #${n + 1}`.slice(0, 200);
+    }
   }
 
   if (!variations.length && !metrics.length) return null;
@@ -122,6 +132,18 @@ export interface CompositeMetric {
    *  guesses polarity from prose. Defaults to "increase". */
   direction?: "increase" | "decrease";
   note?: string;
+  // ── measurement-plan understanding (authored at the interview) ──
+  /** What this measures, in the team's own words. */
+  definition?: string;
+  /** Which UI surfaces express it, and in which arm each exists. */
+  surfaces?: { arm: "both" | "variation" | "baseline"; description: string }[];
+  /** DECLARED one-arm expectation (e.g. an overlay CTA that exists only in
+   *  the variation) — makes the stats engine's data-driven feature-only
+   *  detection a confirmation instead of a surprise. */
+  expectedOneArm?: "variation" | "baseline";
+  /** Pre-registered smallest relative lift worth shipping — powers
+   *  "days until YOUR effect is detectable", not a generic one. */
+  mdeRel?: number;
 }
 
 export interface MetricMap {
@@ -130,6 +152,26 @@ export interface MetricMap {
   confirmed: boolean;
   confirmedBy?: string;
   confirmedAt?: string;
+  // ── the measurement PLAN layer (one artifact — the plan compiles here) ──
+  /** The interview trail: what the AI asked and what the human answered. */
+  interview?: { question: string; answer: string }[];
+  /** Planner's honest 0-100 confidence it understands what's being measured. */
+  understanding?: number;
+  /** Things the team wants measured that NOTHING currently fires an event
+   *  for — detected instrumentation gaps, surfaced before start. */
+  gaps?: string[];
+  /** EVERY event name reviewed at planning time (bound, adoption-only, or
+   *  noise) — the drift audit's baseline: a results/registry name not in
+   *  here means the build moved past the plan. */
+  known?: string[];
+  /** Unanswered interview questions — persisted so navigating away doesn't
+   *  lose them; emptied on the terminal answers pass. */
+  pendingQuestions?: string[];
+  plannedAt?: string;
+  /** Confirmation stamps a Re-plan replaced — the EARLIEST pre-observation
+   *  stamp is what the verdict's pre-registration disclosure keys off, so a
+   *  mid-run re-plan can't silently erase "this was declared before traffic". */
+  priorConfirmations?: { confirmedBy: string; confirmedAt: string }[];
 }
 
 const mapKey = (k: string) => `metricmap:${k}`;
@@ -148,6 +190,31 @@ export async function setMetricMap(prototypeKey: string, map: MetricMap): Promis
   await (await getContentStore()).setFlag(mapKey(prototypeKey), JSON.stringify(map));
 }
 
+/** CAS mutation over the plan/map flag — TWO routes write it (measurement
+ *  authoring + results binding), and the planner holds a stale read across a
+ *  long LLM call. `fn` gets the FRESH record and returns the next one, or
+ *  null to keep the current (no write). */
+export async function mutateMetricMap(
+  prototypeKey: string,
+  fn: (current: MetricMap | null) => MetricMap | null,
+): Promise<MetricMap | null> {
+  const store = await getContentStore();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const raw = await store.getFlag(mapKey(prototypeKey));
+    let current: MetricMap | null = null;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as MetricMap;
+        if (Array.isArray(parsed.composites)) current = parsed;
+      } catch { /* treat as absent */ }
+    }
+    const next = fn(current);
+    if (next === null) return current;
+    if (await store.compareAndSetFlag(mapKey(prototypeKey), raw, JSON.stringify(next))) return next;
+  }
+  return getMetricMap(prototypeKey);
+}
+
 /** Compute a composite's per-variation row by SUMMING its member events.
  *  Semantics are ACTION TOTALS, not unique visitors: a guest clicking both
  *  CTAs counts twice, so the derived "rate" (summed conversions / visitors)
@@ -156,17 +223,36 @@ export async function setMetricMap(prototypeKey: string, map: MetricMap): Promis
  *  and doesn't compose (member rows keep it). Members with value-style
  *  aggregators (sum/revenue) are excluded — cents added to clicks is
  *  garbage, not a metric. */
+/** Resolve ONE plan event name to ONE results row. Exact (disambiguated)
+ *  name wins; else the registry baseName — and when several rows share the
+ *  baseName (the same event attached under two aggregators), exactly one is
+ *  chosen (unique > count/total > first) so a composite can never silently
+ *  double-count the same event. This is THE join rule — plan, stats, and
+ *  drift must all go through it or the namespaces diverge again. */
+export function resolveMetricRow(eventName: string, results: ExperimentResults): MetricResult | undefined {
+  const exact = results.metrics.find((m) => m.name === eventName);
+  if (exact) return exact;
+  const candidates = results.metrics.filter((m) => m.baseName === eventName);
+  if (!candidates.length) return undefined;
+  const pref = (m: MetricResult) => (m.aggregator === "unique" ? 0 : m.aggregator === "count" || m.aggregator === "total" ? 1 : 2);
+  return [...candidates].sort((a, b) => pref(a) - pref(b))[0];
+}
+
 export function compositeMembers(c: CompositeMetric, results: ExperimentResults): { members: MetricResult[]; missing: string[]; excluded: string[] } {
   const members: MetricResult[] = [];
   const excluded: string[] = [];
-  const present = new Set<string>();
-  for (const m of results.metrics) {
-    if (!c.events.includes(m.name)) continue;
-    present.add(m.name);
-    if (m.aggregator && !["unique", "count"].includes(m.aggregator)) excluded.push(m.name);
-    else members.push(m);
+  const missing: string[] = [];
+  const used = new Set<MetricResult>();
+  for (const e of c.events) {
+    const row = resolveMetricRow(e, results);
+    if (!row || used.has(row)) {
+      if (!row) missing.push(e);
+      continue;
+    }
+    used.add(row);
+    if (row.aggregator && !["unique", "count"].includes(row.aggregator)) excluded.push(row.name);
+    else members.push(row);
   }
-  const missing = c.events.filter((e) => !present.has(e));
   return { members, missing, excluded };
 }
 

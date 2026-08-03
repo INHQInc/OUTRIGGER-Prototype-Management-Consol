@@ -44,6 +44,17 @@ export interface OptiExperiment {
   variations: OptiVariation[];
   page_ids?: number[];
   project_id?: number;
+  /** Metrics attached to the experiment DEFINITION — readable with zero
+   *  traffic (unlike results), which is what lets the measurement plan be
+   *  authored and stamped BEFORE the experiment starts. */
+  metrics?: { event_id?: number; aggregator?: string; field?: string; scope?: string }[];
+}
+
+export interface OptiEvent {
+  id: number;
+  name: string;
+  event_type?: string;
+  archived?: boolean;
 }
 
 /**
@@ -100,6 +111,23 @@ export class OptimizelyClient {
       if (batch.length < 100) break;
     }
     return all;
+  }
+
+  /** Read-only: the project's EVENT registry (paginated) — the names the
+   *  measurement plan binds to, available with zero traffic. Returns ALL
+   *  events including archived (an attached metric can point at an archived
+   *  event — the caller decides which subset to offer for new bindings);
+   *  `truncated` reports a hit page cap so silence never reads as coverage. */
+  async listEvents(): Promise<{ events: OptiEvent[]; truncated: boolean }> {
+    const all: OptiEvent[] = [];
+    let truncated = false;
+    for (let page = 1; page <= 5; page++) {
+      const batch = await this.req<OptiEvent[]>(`/events?project_id=${this.pid()}&per_page=100&page=${page}`);
+      all.push(...batch);
+      if (batch.length < 100) break;
+      if (page === 5) truncated = true;
+    }
+    return { events: all, truncated };
   }
 
   /** Read-only: LIVE experiment results (visitors, conversions, lift,

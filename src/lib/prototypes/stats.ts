@@ -12,7 +12,7 @@
  * (same data → same numbers, always), and power/MDE projection.
  */
 import type { ExperimentResults, MetricMap, CompositeMetric, MetricResult } from "./results";
-import { compositeMembers } from "./results";
+import { compositeMembers, resolveMetricRow } from "./results";
 
 // ── numeric primitives ─────────────────────────────────────────────────────
 
@@ -357,6 +357,10 @@ export interface PowerBlock {
   mdeNow?: number;
   observedLift?: number;
   daysToObserved?: number;
+  /** The plan's PRE-REGISTERED smallest-lift-worth-shipping (mdeRel). */
+  targetLift?: number;
+  /** Days of traffic until the pre-registered target effect is detectable. */
+  daysToTarget?: number;
   accrualPerArmPerDay?: number;
   observationDays?: number;
 }
@@ -450,17 +454,18 @@ function metricCells(opts: {
 /** Windowed novelty-decay check from daily snapshots: compare the primary
  *  composite's absolute rate difference in the first ≥7-day window against
  *  the latest ≥7-day window. Needs ≥14 days of history to say anything. */
-function noveltyCheck(history: DailySnapshot[], primary: CompositeMetric, focusId: string, baselineId: string): NoveltyBlock | undefined {
+function noveltyCheck(history: DailySnapshot[], memberNames: string[], focusId: string, baselineId: string): NoveltyBlock | undefined {
   const days = [...history].sort((a, b) => a.date.localeCompare(b.date));
   if (days.length < 3) return undefined;
   const span = (Date.parse(days[days.length - 1].date) - Date.parse(days[0].date)) / 86400000;
   if (!(span >= 14)) return undefined;
 
+  const wanted = new Set(memberNames);
   const at = (snap: DailySnapshot, variationId: string) => {
     const visitors = snap.variations.find((v) => v.variationId === variationId)?.visitors ?? 0;
     let conv = 0;
     for (const m of snap.metrics) {
-      if (!primary.events.includes(m.name)) continue;
+      if (!wanted.has(m.name)) continue;
       conv += m.perVariation.find((r) => r.variationId === variationId)?.conversions ?? 0;
     }
     return { visitors, conv };
@@ -659,7 +664,14 @@ export function computeStatsReport(opts: {
   // guardrail gate (excluded — no double jeopardy), and raw metrics that are
   // MEMBERS of any composite are excluded (the composite already carries
   // them; member-vs-composite divergence is the cannibalization flag's job).
-  const memberEvents = new Set(composites.flatMap((c) => c.events));
+  // Member exclusion must speak the RESULTS namespace: plan events are
+  // registry names, metric rows may carry disambiguated names — resolve.
+  const memberEvents = new Set(
+    composites.flatMap((c) => c.events.flatMap((e) => {
+      const row = resolveMetricRow(e, results);
+      return row ? [e, row.name] : [e];
+    })),
+  );
   const exploratory: ExploratoryRow[] = [];
   const pool: { key: string; label: string; variationId: string; variationName: string; lift?: number; p: number }[] = [];
   for (const ms of metrics) {
@@ -706,6 +718,15 @@ export function computeStatsReport(opts: {
             const need = requiredPerArm(p0, Math.abs(observedLift));
             if (need !== undefined) power.daysToObserved = need <= perArmN ? 0 : Math.ceil((need - perArmN) / accrual);
           }
+          // The plan's pre-registered "smallest lift worth shipping" turns
+          // power math into the team's own question, not a generic one.
+          if (primary.mdeRel !== undefined && primary.mdeRel > 0 && accrual > 0) {
+            const needT = requiredPerArm(p0, primary.mdeRel);
+            if (needT !== undefined) {
+              power.targetLift = primary.mdeRel;
+              power.daysToTarget = needT <= perArmN ? 0 : Math.ceil((needT - perArmN) / accrual);
+            }
+          }
         }
       }
       if (power.mdeNow !== undefined && observedLift !== undefined && Math.abs(observedLift) < power.mdeNow && cell?.p !== undefined && cell.p >= 0.05) {
@@ -725,7 +746,8 @@ export function computeStatsReport(opts: {
     if (!cell?.liftCi || !(cell.liftCi.lo < 0 && cell.liftCi.hi > 0)) continue;
     const movers: string[] = [];
     for (const ev of c.events) {
-      const raw = metrics.find((x) => x.key === `metric:${ev}`);
+      const rowName = resolveMetricRow(ev, results)?.name ?? ev;
+      const raw = metrics.find((x) => x.key === `metric:${rowName}`);
       const rc = raw?.cells.find((x) => x.variationId === focusId);
       if (rc?.liftCi && (rc.liftCi.lo > 0 || rc.liftCi.hi < 0)) movers.push(`${ev} ${rc.lift !== undefined ? `${rc.lift > 0 ? "+" : ""}${(rc.lift * 100).toFixed(1)}%` : ""}`);
     }
@@ -740,7 +762,10 @@ export function computeStatsReport(opts: {
   // ── novelty decay ──
   let novelty: NoveltyBlock | undefined;
   if (primary && focusId && baselineId && opts.history?.length) {
-    novelty = noveltyCheck(opts.history, primary, focusId, baselineId);
+    // Snapshots store RESULTS-namespace names — resolve the plan's member
+    // events (and the members actually summed, honoring exclusions).
+    const memberNames = compositeMembers(primary, results).members.map((m) => m.name);
+    novelty = noveltyCheck(opts.history, memberNames, focusId, baselineId);
     if (novelty?.decayed) {
       flags.push({
         code: "NOVELTY_DECAY",

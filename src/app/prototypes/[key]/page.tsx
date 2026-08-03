@@ -24,6 +24,8 @@ import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetCode, 
 import { readIntegrationPackage } from "@/lib/prototypes/package";
 import { PackagePanel } from "@/components/PackagePanel";
 import { ResultsPanel } from "@/components/ResultsPanel";
+import { MeasurementPanel } from "@/components/MeasurementPanel";
+import { getMetricMap } from "@/lib/prototypes/results";
 import { getCoverage, coverageGate, coverageStale, coverageReviewed, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
 import { getVerdict, adjudicationPending } from "@/lib/prototypes/verdict";
 import { deriveFlow } from "@/lib/prototypes/flow";
@@ -123,6 +125,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const briefDrift = await getBriefDrift(key, p).catch(() => null);
   const coverage = await getCoverage(key).catch(() => null);
   const verdict = await getVerdict(key).catch(() => null);
+  const metricMap = await getMetricMap(key).catch(() => null);
   await ensureSkillsSeeded(orgId);
   const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
 
@@ -284,6 +287,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     // on code known not to byte-match what Optimizely stored.
     pushCurrent: Boolean(push && latest && push.verified && push.version === latest.version && push.gitSha === latest.gitSha),
     experimentRunning: experimentStatus === "running",
+    measurementPlanned: Boolean(metricMap?.confirmed),
     adjudicationPending: adjPending,
     shipped: normalizeStage(p.status) === "shipped",
   });
@@ -479,7 +483,10 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
                 <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
               </div>
             </Section>
-            <Section id="results" title="Results" sub="Live from Optimizely — with the business view on top: your decision metric is usually a COMPOSITE of raw events (the same intent, reachable in more than one place). Claude proposes the mapping, you confirm it, and the analyst answers questions with honest significance.">
+            <Section id="measurement" title="Measurement plan" sub="Declare how you'll judge the experiment BEFORE traffic runs. Claude decomposes the brief's outcome onto the experiment's real events — which surfaces express it, in which arm, what's decision vs adoption — asks the few questions that matter, and you confirm. Stamped pre-start, the verdict is defensible; the plan also flags anything you want measured that nothing instruments yet.">
+              <MeasurementPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
+            </Section>
+            <Section id="results" title="Results" sub="Live from Optimizely — adjudicated against the pre-registered plan: the verdict card on top, real confidence intervals beneath, and the analyst for questions.">
               <ResultsPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
             </Section>
           </Room>

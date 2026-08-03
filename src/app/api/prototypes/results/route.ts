@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
 import {
-  normalizeResults, getMetricMap, setMetricMap, recordDailySnapshot,
-  type ExperimentResults, type CompositeMetric, type ResultsHistory,
+  normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot,
+  type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory,
 } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
@@ -94,7 +94,10 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
     pushedVersion,
     experimentStatus: bundle.experimentStatus,
     firstObservedDate: history.days[0]?.date,
-    mapConfirmedAt: map?.confirmedAt,
+    // The EARLIEST stamp is the pre-registration disclosure's anchor — a
+    // mid-run Re-plan replacing the stamp must not erase "this was declared
+    // before traffic".
+    mapConfirmedAt: [...(map?.priorConfirmations?.map((p) => p.confirmedAt) ?? []), ...(map?.confirmedAt ? [map.confirmedAt] : [])].sort()[0],
   });
   const saved = await saveDraftVerdict(proto.key, draft);
   return { stats, verdict: saved, history };
@@ -108,6 +111,15 @@ export async function GET(req: NextRequest) {
     getMetricMap(g.proto.key),
   ]);
   const { stats, verdict } = await analyze(g.proto, bundle);
+  // Measurement drift: results reporting EVENTS the stamped plan never
+  // reviewed = the build (or Opti config) moved past the plan. Compared in
+  // ONE namespace: a row's baseName (registry name) counts as known — the
+  // trust boundary's disambiguation suffix must never read as drift.
+  const planDrift = metricMap?.plannedAt && metricMap.known && bundle.results
+    ? bundle.results.metrics
+        .filter((m) => !metricMap.known!.includes(m.name) && !(m.baseName && metricMap.known!.includes(m.baseName)))
+        .map((m) => m.name)
+    : [];
   return NextResponse.json({
     results: bundle.results,
     resultsError: bundle.error,
@@ -115,6 +127,7 @@ export async function GET(req: NextRequest) {
     metricMap,
     stats,
     verdict,
+    planDrift,
   });
 }
 
@@ -144,8 +157,23 @@ export async function POST(req: NextRequest) {
       const source = await resolveRepoSource(g.proto.key).catch(() => null);
       const variationJs = source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
       const composites = await proposeMetricMap({ proto: g.proto, variationJs, eventNames: bundle.results.metrics.map((m) => m.name) });
-      const map = { composites, proposedBy: "claude (analyst)", confirmed: false };
-      await setMetricMap(g.proto.key, map);
+      // Preserve the measurement-plan layer (interview, known, gaps) — a
+      // results-side re-propose replaces the BINDING, not the understanding.
+      // pendingQuestions/understanding described the REPLACED composites, so
+      // they're cleared; a replaced confirmation stamp is archived.
+      const map = (await mutateMetricMap(g.proto.key, (prior) => ({
+        ...(prior ?? {}),
+        composites,
+        proposedBy: "claude (analyst)",
+        confirmed: false,
+        confirmedBy: undefined,
+        confirmedAt: undefined,
+        pendingQuestions: undefined,
+        understanding: undefined,
+        priorConfirmations: prior?.confirmed && prior.confirmedAt
+          ? [...(prior.priorConfirmations ?? []), { confirmedBy: prior.confirmedBy ?? "?", confirmedAt: prior.confirmedAt }]
+          : prior?.priorConfirmations,
+      })))!;
       await audit(g.orgId, actor, "results.map-proposed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
       const { stats, verdict } = await analyze(g.proto, bundle);
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict });
@@ -153,6 +181,7 @@ export async function POST(req: NextRequest) {
 
     if (body.confirm) {
       const raw = Array.isArray(body.confirm.composites) ? body.confirm.composites : [];
+      const priorMap = await getMetricMap(g.proto.key);
       const composites: CompositeMetric[] = [];
       const seen = new Set<string>();
       for (const r of raw) {
@@ -165,18 +194,45 @@ export async function POST(req: NextRequest) {
         const events = (Array.isArray(o.events) ? o.events : []).filter((e): e is string => typeof e === "string" && e.trim().length > 0).map((e) => e.slice(0, 200));
         const label = String(o.label ?? "").trim().slice(0, 120);
         if (!label || !events.length) continue;
+        // Ratifying must not strip the plan layer: fields the payload omits
+        // fall back to the prior composite with the same id.
+        const prior = priorMap?.composites.find((c) => c.id === id);
         composites.push({
           id,
           label,
           events: [...new Set(events)].slice(0, 10),
           role: o.role === "guardrail" ? "guardrail" : o.role === "info" ? "info" : "primary",
           direction: o.direction === "decrease" ? "decrease" : "increase",
-          note: typeof o.note === "string" ? o.note.trim().slice(0, 300) || undefined : undefined,
+          note: typeof o.note === "string" ? o.note.trim().slice(0, 300) || undefined : prior?.note,
+          definition: typeof o.definition === "string" ? o.definition.trim().slice(0, 300) || undefined : prior?.definition,
+          surfaces: Array.isArray(o.surfaces)
+            ? o.surfaces
+                .filter((s): s is { arm: string; description: string } => Boolean(s && typeof s === "object" && typeof (s as Record<string, unknown>).description === "string"))
+                .map((s) => ({ arm: s.arm === "variation" ? "variation" as const : s.arm === "baseline" ? "baseline" as const : "both" as const, description: s.description.slice(0, 160) }))
+                .slice(0, 8)
+            : prior?.surfaces,
+          expectedOneArm: o.expectedOneArm === "variation" ? "variation" : o.expectedOneArm === "baseline" ? "baseline" : prior?.expectedOneArm,
+          mdeRel: typeof o.mdeRel === "number" && o.mdeRel > 0 && o.mdeRel < 5 ? o.mdeRel : prior?.mdeRel,
         });
       }
       if (!composites.length) return NextResponse.json({ error: "Nothing to confirm — a composite needs a label and at least one event." }, { status: 400 });
-      const map = { composites: composites.slice(0, 12), confirmed: true, confirmedBy: actor, confirmedAt: new Date().toISOString() };
-      await setMetricMap(g.proto.key, map);
+      // One primary — same enforcement as the planner (extras demote to info).
+      let sawPrimary = false;
+      for (const c of composites) {
+        if (c.role !== "primary") continue;
+        if (sawPrimary) c.role = "info";
+        else sawPrimary = true;
+      }
+      // Confirming from the Results panel must not wipe the measurement-plan
+      // layer (interview, drift baseline, gaps) the Measurement room authored.
+      const map = (await mutateMetricMap(g.proto.key, (cur) => ({
+        ...(cur ?? {}),
+        composites: composites.slice(0, 12),
+        confirmed: true,
+        confirmedBy: actor,
+        confirmedAt: new Date().toISOString(),
+        pendingQuestions: undefined,
+      })))!;
       await audit(g.orgId, actor, "results.map-confirmed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       const { stats, verdict } = bundle.results
