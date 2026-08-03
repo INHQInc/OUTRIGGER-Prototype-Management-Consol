@@ -303,6 +303,13 @@ export async function recordDailySnapshot(prototypeKey: string, results: Experim
         perVariation: m.perVariation.map((r) => ({ variationId: r.variationId, conversions: r.conversions })),
       })),
     };
+    // A concluded/paused experiment's numbers stop moving — recording an
+    // identical day would only churn the reading's staleness basis (a daily
+    // LLM regeneration for zero new information).
+    const last = history.days[history.days.length - 1];
+    if (last && JSON.stringify({ v: last.variations, m: last.metrics }) === JSON.stringify({ v: snap.variations, m: snap.metrics })) {
+      return history;
+    }
     const next: ResultsHistory = { days: [...history.days, snap].sort((a, b) => a.date.localeCompare(b.date)).slice(-180) };
     if (await store.compareAndSetFlag(historyKey(prototypeKey), raw, JSON.stringify(next))) return next;
   }

@@ -7,13 +7,18 @@ import {
 } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
-import { proposeMetricMap, analyzeResults, analystSkill } from "@/lib/ai/results";
+import {
+  getOrgNotebook, getProtoNotebook, addOrgPreference, removeOrgPreference, appendNotebook,
+  getReading, saveReading, readingBasisKey,
+} from "@/lib/prototypes/notebook";
+import { proposeMetricMap, analyzeResults, analystSkill, generateReading } from "@/lib/ai/results";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { lastPush } from "@/lib/prototypes/ship";
 import { addIdea } from "@/lib/ideas/ideas";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
+import { getContentStore } from "@/lib/content/store";
 import type { PrototypeRecord } from "@/lib/prototypes/types";
 
 export const maxDuration = 60;
@@ -103,14 +108,28 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
   return { stats, verdict: saved, history };
 }
 
+/** The reading's staleness basis, derived from the current truth. */
+function basisFor(opts: { history: ResultsHistory; verdict: VerdictRecord | null; map: MetricMap | null; orgNb: { updatedAt?: string }; protoNb: { updatedAt?: string } }): string {
+  return readingBasisKey({
+    latestSnapshotDate: opts.history.days[opts.history.days.length - 1]?.date,
+    verdict: opts.verdict?.verdict,
+    mapConfirmedAt: opts.map?.confirmedAt,
+    orgNotebookUpdatedAt: opts.orgNb.updatedAt,
+    protoNotebookUpdatedAt: opts.protoNb.updatedAt,
+  });
+}
+
 export async function GET(req: NextRequest) {
   const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
-  const [bundle, metricMap] = await Promise.all([
+  const [bundle, metricMap, orgNb, protoNb, reading] = await Promise.all([
     fetchResults(g.orgId, g.proto.experiment?.experimentId),
     getMetricMap(g.proto.key),
+    getOrgNotebook(g.orgId),
+    getProtoNotebook(g.proto.key),
+    getReading(g.proto.key),
   ]);
-  const { stats, verdict } = await analyze(g.proto, bundle);
+  const { stats, verdict, history } = await analyze(g.proto, bundle);
   // Measurement drift: results reporting EVENTS the stamped plan never
   // reviewed = the build (or Opti config) moved past the plan. Compared in
   // ONE namespace: a row's baseName (registry name) counts as known — the
@@ -120,6 +139,7 @@ export async function GET(req: NextRequest) {
         .filter((m) => !metricMap.known!.includes(m.name) && !(m.baseName && metricMap.known!.includes(m.baseName)))
         .map((m) => m.name)
     : [];
+  const basis = basisFor({ history, verdict, map: metricMap, orgNb, protoNb });
   return NextResponse.json({
     results: bundle.results,
     resultsError: bundle.error,
@@ -128,6 +148,12 @@ export async function GET(req: NextRequest) {
     stats,
     verdict,
     planDrift,
+    reading,
+    readingStale: !reading || reading.basisKey !== basis,
+    /** The regeneration TARGET — the client keys its retry guard to this,
+     *  so a failed attempt in one episode never suppresses the next. */
+    readingBasis: basis,
+    notebook: { org: orgNb, proto: protoNb },
   });
 }
 
@@ -143,6 +169,11 @@ export async function POST(req: NextRequest) {
     promote?: string;
     ask?: string;
     explain?: boolean;
+    reading?: boolean;
+    /** Manual "Refresh the reading" — bypasses the current-basis short-circuit. */
+    force?: boolean;
+    tune?: { question?: string; answer?: string; durable?: boolean };
+    forgetPreference?: string;
   };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const g = await guardPrototypeAccess(body.key ?? null, req.headers.get("authorization"), { tokenAllowed: false });
@@ -329,11 +360,83 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
     }
 
+    if (body.reading) {
+      // The standing narrative. The cost boundary is enforced HERE, not by
+      // client trust: an already-current reading short-circuits (no LLM),
+      // and a short-lived lock stops N concurrent stale viewers from paying
+      // for N generations of the same basis.
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
+      const map = await getMetricMap(g.proto.key);
+      const { stats, verdict, history } = await analyze(g.proto, bundle);
+      const [orgNb, protoNb, cached] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key), getReading(g.proto.key)]);
+      const basis = basisFor({ history, verdict, map, orgNb, protoNb });
+      if (!body.force && cached?.basisKey === basis) {
+        return NextResponse.json({ reading: cached, readingStale: false, readingBasis: basis, notebook: { org: orgNb, proto: protoNb } });
+      }
+      const store = await getContentStore();
+      const lockKey = `readinglock:${g.proto.key}`;
+      const lockRaw = await store.getFlag(lockKey);
+      const now = Date.now();
+      if (lockRaw && Number(lockRaw) > now - 90_000) {
+        return NextResponse.json({ reading: cached, readingStale: true, readingBasis: basis, readingPending: true, notebook: { org: orgNb, proto: protoNb } });
+      }
+      await store.compareAndSetFlag(lockKey, lockRaw, String(now)).catch(() => {});
+      try {
+        const { reading, dataWishes } = await generateReading({
+          orgId: g.orgId, proto: g.proto, results: bundle.results, map, stats, verdict,
+          orgNotebook: orgNb, protoNotebook: protoNb, basisKey: basis,
+        });
+        // Wishes the reading surfaced land in the notebook FIRST, then the
+        // basis is recomputed so the just-saved reading isn't instantly
+        // stale — but ONLY when nothing foreign landed meanwhile: the wish
+        // append adds no ENTRIES, so an entry-count change means a
+        // concurrent tune/ask that must keep the new reading stale.
+        const protoNb2 = dataWishes.length ? await appendNotebook(g.proto.key, [], dataWishes) : protoNb;
+        const foreignWrite = protoNb2.entries.length !== protoNb.entries.length;
+        reading.basisKey = foreignWrite ? basis : basisFor({ history, verdict, map, orgNb, protoNb: protoNb2 });
+        await saveReading(g.proto.key, reading);
+        return NextResponse.json({ reading, readingStale: foreignWrite, readingBasis: reading.basisKey, notebook: { org: orgNb, proto: protoNb2 } });
+      } finally {
+        await store.setFlag(lockKey, "").catch(() => {});
+      }
+    }
+
+    if (body.tune) {
+      const question = String(body.tune.question ?? "").trim().slice(0, 300);
+      const answer = String(body.tune.answer ?? "").trim().slice(0, 600);
+      if (!question || !answer) return NextResponse.json({ error: "A tune needs the question and your answer." }, { status: 400 });
+      const protoNb = await appendNotebook(g.proto.key, [
+        { kind: "ai-question", text: question },
+        { kind: "answer", text: answer },
+      ]);
+      // "Remember for all experiments" → a durable, visible, removable
+      // org-level preference (voice/emphasis only — never thresholds). The
+      // question is ALWAYS attached so every chip is self-contained, and a
+      // re-answer to the same question REPLACES the old preference instead
+      // of accumulating a contradiction.
+      const qBase = question.replace(/\?+$/, "");
+      const orgNb = body.tune.durable
+        ? await addOrgPreference(g.orgId, `${qBase} → ${answer}`, `${qBase} → `)
+        : await getOrgNotebook(g.orgId);
+      await audit(g.orgId, actor, "results.analyst-tuned", g.proto.name, `${question.slice(0, 160)} → ${answer.slice(0, 160)}${body.tune.durable ? " · org-wide" : ""}`);
+      return NextResponse.json({ notebook: { org: orgNb, proto: protoNb }, readingStale: true });
+    }
+
+    if (body.forgetPreference) {
+      const orgNb = await removeOrgPreference(g.orgId, String(body.forgetPreference));
+      const protoNb = await getProtoNotebook(g.proto.key);
+      await audit(g.orgId, actor, "results.preference-forgotten", g.proto.name, String(body.forgetPreference).slice(0, 160));
+      return NextResponse.json({ notebook: { org: orgNb, proto: protoNb }, readingStale: true });
+    }
+
     if (body.ask !== undefined || body.explain) {
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results yet." }, { status: 400 });
       const map = await getMetricMap(g.proto.key);
       const { stats, verdict } = await analyze(g.proto, bundle);
+      const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
+      const question = body.explain ? undefined : String(body.ask ?? "");
       const answer = await analyzeResults({
         orgId: g.orgId,
         proto: g.proto,
@@ -341,9 +444,23 @@ export async function POST(req: NextRequest) {
         map,
         stats,
         verdict,
-        question: body.explain ? undefined : String(body.ask ?? ""),
+        orgNotebook: orgNb,
+        protoNotebook: protoNb,
+        question,
       });
-      return NextResponse.json({ answer, results: bundle.results, stats, verdict });
+      // The ask box IS the tuner: what they asked (and what they were told)
+      // becomes analyst memory, so future readings lean toward it.
+      let protoNb2 = protoNb;
+      if (question?.trim()) {
+        // "answer" is reserved for HUMAN answers — the analyst's own reply
+        // is "analyst-answer", or a later reading would treat its old words
+        // (and stale numbers) as the team's stated position.
+        protoNb2 = await appendNotebook(g.proto.key, [
+          { kind: "user-question", text: question.trim() },
+          { kind: "analyst-answer", text: answer },
+        ]);
+      }
+      return NextResponse.json({ answer, results: bundle.results, stats, verdict, notebook: { org: orgNb, proto: protoNb2 } });
     }
 
     return NextResponse.json({ error: "Nothing to do — pass propose, confirm, stamp, promote, ask, or explain." }, { status: 400 });

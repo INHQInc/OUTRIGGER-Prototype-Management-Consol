@@ -365,6 +365,14 @@ export interface PowerBlock {
   observationDays?: number;
 }
 
+export interface TrendPoint {
+  date: string;
+  /** Cumulative lift on the primary composite as of this day. */
+  lift?: number;
+  focusRate?: number;
+  baselineRate?: number;
+}
+
 export interface NoveltyBlock {
   earlyLift: number;
   lateLift: number;
@@ -382,6 +390,8 @@ export interface StatsReport {
   expectedFalsePositives: number;
   power?: PowerBlock;
   novelty?: NoveltyBlock;
+  /** Cumulative primary-lift by snapshot day — the sparkline's data. */
+  trend?: TrendPoint[];
   flags: StatsFlag[];
   /** ids: primary composite + the variation adjudicated against baseline. */
   primaryKey?: string;
@@ -761,11 +771,40 @@ export function computeStatsReport(opts: {
 
   // ── novelty decay ──
   let novelty: NoveltyBlock | undefined;
+  let trend: TrendPoint[] | undefined;
   if (primary && focusId && baselineId && opts.history?.length) {
     // Snapshots store RESULTS-namespace names — resolve the plan's member
     // events (and the members actually summed, honoring exclusions).
     const memberNames = compositeMembers(primary, results).members.map((m) => m.name);
     novelty = noveltyCheck(opts.history, memberNames, focusId, baselineId);
+
+    // The sparkline: cumulative primary lift as of each snapshot day —
+    // deterministic, from the same member resolution as everything else.
+    const wanted = new Set(memberNames);
+    trend = [...opts.history]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((day) => {
+        const armOf = (id: string) => {
+          const visitors = day.variations.find((v) => v.variationId === id)?.visitors ?? 0;
+          let conv = 0;
+          for (const m of day.metrics) {
+            if (!wanted.has(m.name)) continue;
+            conv += m.perVariation.find((r) => r.variationId === id)?.conversions ?? 0;
+          }
+          return { visitors, conv };
+        };
+        const f = armOf(focusId);
+        const b = armOf(baselineId);
+        const focusRate = f.visitors > 0 ? f.conv / f.visitors : undefined;
+        const baselineRate = b.visitors > 0 ? b.conv / b.visitors : undefined;
+        return {
+          date: day.date,
+          focusRate,
+          baselineRate,
+          lift: focusRate !== undefined && baselineRate !== undefined && baselineRate > 0 ? focusRate / baselineRate - 1 : undefined,
+        };
+      });
+    if (!trend.some((t) => t.lift !== undefined)) trend = undefined;
     if (novelty?.decayed) {
       flags.push({
         code: "NOVELTY_DECAY",
@@ -786,6 +825,7 @@ export function computeStatsReport(opts: {
     expectedFalsePositives,
     power,
     novelty,
+    trend,
     flags,
     primaryKey: primary ? `composite:${primary.id}` : undefined,
     focusVariationId: focusId,

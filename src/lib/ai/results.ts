@@ -20,6 +20,7 @@ import type { PrototypeRecord } from "../prototypes/types";
 import type { ExperimentResults, MetricMap, CompositeMetric } from "../prototypes/results";
 import type { StatsReport } from "../prototypes/stats";
 import type { VerdictRecord } from "../prototypes/verdict";
+import type { OrgNotebook, ProtoNotebook, Reading } from "../prototypes/notebook";
 import { computeComposite, compositeMembers } from "../prototypes/results";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
@@ -31,7 +32,7 @@ const requireKey = () => {
 };
 
 const FALLBACK_SYSTEM =
-  "You are the experiment analyst for a hospitality A/B testing program. Answer ONLY from the computed facts provided — never derive or adjust a number, never contradict the computed verdict or a validity flag. The pre-registered primary metric alone can confirm/refute the hypothesis; everything else is exploratory and must be labeled so. Below significance say 'too early to call' (running) or 'unproven, not refuted' (ended). Lead with the verdict, then the two or three numbers that matter, then flags, then the recommendation. Plain prose.";
+  "You are the experiment analyst for a hospitality A/B testing program. Answer ONLY from the computed facts provided — never derive or adjust a number, never contradict the computed verdict or a validity flag. Notebook entries are history: never quote a number from them, only from the computed blocks. The pre-registered primary metric alone can confirm/refute the hypothesis; everything else is exploratory and must be labeled so. Below significance say 'too early to call' (running) or 'unproven, not refuted' (ended). Lead with the verdict, then the two or three numbers that matter, then flags, then the recommendation. Plain prose.";
 
 export async function analystSkill(orgId: string): Promise<{ system: string; ref?: { id: string; updatedAt?: string } }> {
   try {
@@ -214,6 +215,114 @@ function renderContext(results: ExperimentResults, map: MetricMap | null): strin
   return lines.join("\n");
 }
 
+function renderNotebook(org: OrgNotebook | null, proto: ProtoNotebook | null): string {
+  if (!org && !proto) return "";
+  const lines: string[] = [];
+  lines.push(`\nANALYST NOTEBOOK (tunes EMPHASIS and VOICE only — never the verdict, never thresholds. Entries are HISTORY: any NUMBER inside them was computed earlier and may be stale — never quote a figure from the notebook, only from the COMPUTED blocks):`);
+  lines.push(`Audience: ${org?.audience || "leadership"}`);
+  for (const p of org?.preferences ?? []) lines.push(`Preference: ${p}`);
+  for (const e of (proto?.entries ?? []).slice(-14)) {
+    const who =
+      e.kind === "user-question" ? "They asked" :
+      e.kind === "ai-question" ? "You asked" :
+      e.kind === "answer" ? "They answered" :
+      e.kind === "analyst-answer" ? "You previously answered (YOUR words, not theirs; numbers may be stale)" : "Note";
+    lines.push(`${who}: ${e.text}`);
+  }
+  for (const w of proto?.dataWishes ?? []) lines.push(`Data wish (NOT measurable today — acknowledge, never improvise): ${w}`);
+  return lines.join("\n");
+}
+
+const readingTool = {
+  name: "give_reading",
+  description: "The standing leadership reading over the computed facts.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      story: { type: "array" as const, items: { type: "string" as const }, description: "2-4 short paragraphs: the goal, what the data is doing, what it means" },
+      trendLine: { type: "string" as const, description: "one sentence: the direction of travel" },
+      watchItems: { type: "array" as const, items: { type: "string" as const }, description: "0-3 one-sentence things that could change the story" },
+      questionsForYou: { type: "array" as const, items: { type: "string" as const }, description: "0-2 PREFERENCE questions (what does this team care about) — never statistics questions" },
+      nextStep: { type: "string" as const, description: "one sentence: keep running / ship / iterate / adjudicate, tied to the verdict" },
+      dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data the notebook or questions surfaced (device mix, segments) — recorded honestly" },
+    },
+    required: ["story", "watchItems", "questionsForYou", "nextStep"],
+  },
+};
+
+/** The standing narrative — exec voice, structured, cache-friendly. */
+export async function generateReading(opts: {
+  orgId: string;
+  proto: PrototypeRecord;
+  results: ExperimentResults;
+  map: MetricMap | null;
+  stats: StatsReport | null;
+  verdict: VerdictRecord | null;
+  orgNotebook: OrgNotebook | null;
+  protoNotebook: ProtoNotebook | null;
+  basisKey: string;
+}): Promise<{ reading: Reading; dataWishes: string[] }> {
+  requireKey();
+  const client = new Anthropic();
+  const { system } = await analystSkill(opts.orgId);
+  const res = await client.messages.create({
+    model: "claude-opus-4-8",
+    max_tokens: 2000,
+    system,
+    messages: [{
+      role: "user",
+      content: `EXPERIMENT: ${opts.proto.name}
+${renderNotebook(opts.orgNotebook, opts.protoNotebook)}
+${renderVerdict(opts.verdict)}
+${renderStats(opts.stats)}
+
+RAW NUMBERS:
+${renderContext(opts.results, opts.map)}
+
+Give the READING (per the standing-reading structure in your instructions).`,
+    }],
+    tools: [readingTool],
+    tool_choice: { type: "tool", name: "give_reading" },
+  });
+  const tu = res.content.find((c) => c.type === "tool_use");
+  if (!tu || tu.type !== "tool_use") throw new Error("The reading returned nothing — try again.");
+  const raw = (tu.input ?? {}) as Record<string, unknown>;
+  const strArr = (v: unknown, cap: number, len: number) =>
+    (Array.isArray(v) ? v : []).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => s.trim().slice(0, len)).slice(0, cap);
+  const story = strArr(raw.story, 4, 700);
+  if (!story.length) throw new Error("The reading came back empty — try again.");
+
+  // DETECT-AND-REPAIR (enforce-LLM-behavior-in-code): nextStep is the one
+  // verdict-adjacent sentence with no code tether — a voice preference must
+  // never make it recommend shipping past a non-confirmed verdict.
+  let nextStep = typeof raw.nextStep === "string" ? raw.nextStep.trim().slice(0, 300) : "";
+  const v = opts.verdict?.verdict;
+  if (v && v !== "confirmed" && /\b(ship( it)?|roll( it)? out|launch|go live)\b/i.test(nextStep)) {
+    const SAFE: Record<string, string> = {
+      keep_running: "Keep running — the pre-registered primary is still too early to call.",
+      underpowered: "Don't ship on this — the run is underpowered; decide whether to keep chasing or redesign for a bigger effect.",
+      refuted: "Don't ship — the hypothesis was refuted; document the learning and iterate.",
+      guardrail_breach: "Don't ship — a guardrail broke its pre-set tolerance; iterate before rollout.",
+      invalid: "No decision until the data validity issue is fixed — the numbers can't be trusted.",
+      not_adjudicable: "Make the experiment adjudicable first (confirm the measurement plan), then decide.",
+    };
+    nextStep = SAFE[v] ?? "Hold the decision — the verdict doesn't support shipping yet.";
+  }
+
+  return {
+    reading: {
+      story,
+      trendLine: typeof raw.trendLine === "string" && raw.trendLine.trim() ? raw.trendLine.trim().slice(0, 300) : undefined,
+      watchItems: strArr(raw.watchItems, 3, 300),
+      questionsForYou: [...new Set(strArr(raw.questionsForYou, 2, 300))],
+      nextStep,
+      generatedAt: new Date().toISOString(),
+      basisKey: opts.basisKey,
+    },
+    dataWishes: strArr(raw.dataWishes, 4, 200),
+  };
+}
+
 export async function analyzeResults(opts: {
   orgId: string;
   proto: PrototypeRecord;
@@ -221,6 +330,8 @@ export async function analyzeResults(opts: {
   map: MetricMap | null;
   stats?: StatsReport | null;
   verdict?: VerdictRecord | null;
+  orgNotebook?: OrgNotebook | null;
+  protoNotebook?: ProtoNotebook | null;
   question?: string;
 }): Promise<string> {
   requireKey();
@@ -234,6 +345,7 @@ export async function analyzeResults(opts: {
       role: "user",
       content: `EXPERIMENT: ${opts.proto.name}
 LIVE BRIEF HYPOTHESIS (may have evolved since the push — the PRE-REGISTERED one in the verdict block is the adjudication contract): We believe ${opts.proto.hypothesis.change || "…"} for ${opts.proto.hypothesis.audience || "…"} will cause ${opts.proto.hypothesis.outcome || "…"}.
+${renderNotebook(opts.orgNotebook ?? null, opts.protoNotebook ?? null)}
 ${renderVerdict(opts.verdict ?? null)}
 ${renderStats(opts.stats ?? null)}
 
