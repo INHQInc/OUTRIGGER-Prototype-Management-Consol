@@ -45,6 +45,9 @@ export interface FlowInputs {
   bound: boolean;
   pushCurrent: boolean;
   experimentRunning: boolean;
+  /** The run ended with an unstamped verdict — adjudication outranks
+   *  everything (close the record before iterating). */
+  adjudicationPending: boolean;
   shipped: boolean;
 }
 
@@ -67,6 +70,14 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
   const q: FlowAction[] = [];
 
   if (t.shipped) return q; // handed off — the loop is over
+
+  // ── Adjudicate: a finished run outranks EVERYTHING — close the record
+  // (stamp the verdict against the pre-registered brief) before iterating.
+  // Adjudication reads the FROZEN briefSnapshot, so even live brief drift
+  // doesn't block it.
+  if (t.adjudicationPending) {
+    q.push({ id: "adjudicate", kind: "link", tab: "experiment", label: "Adjudicate the experiment", why: "the run ended — review the verdict against the pre-registered brief and stamp it" });
+  }
 
   // ── Plan: the brief must be true before anything downstream matters ──
   if (!t.briefComplete) {

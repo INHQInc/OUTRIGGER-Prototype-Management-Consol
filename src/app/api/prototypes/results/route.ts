@@ -1,53 +1,136 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
-import { normalizeResults, getMetricMap, setMetricMap, type ExperimentResults, type CompositeMetric } from "@/lib/prototypes/results";
-import { proposeMetricMap, analyzeResults } from "@/lib/ai/results";
+import {
+  normalizeResults, getMetricMap, setMetricMap, recordDailySnapshot,
+  type ExperimentResults, type CompositeMetric, type ResultsHistory,
+} from "@/lib/prototypes/results";
+import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
+import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
+import { proposeMetricMap, analyzeResults, analystSkill } from "@/lib/ai/results";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
+import { lastPush } from "@/lib/prototypes/ship";
+import { addIdea } from "@/lib/ideas/ideas";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
+import type { PrototypeRecord } from "@/lib/prototypes/types";
 
 export const maxDuration = 60;
 
 /**
- * Experiment results + the metric-semantics layer. Session-only (the
+ * Experiment results + the statistics/verdict layer. Session-only (the
  * analyst spends console API credit; results are org analytics).
  *
- * GET  ?key=                     → { results | null, resultsError?, metricMap }
- * POST { key, propose: true }    → Claude proposes the composite mapping
- *                                  (grounded in brief + built code + the
- *                                  ACTUAL event names) — stored unconfirmed
- * POST { key, confirm: {composites} } → human confirms/edits the mapping
- * POST { key, ask: "…" }         → the analyst answers a question
- * POST { key, explain: true }    → the honest readout
+ * GET  ?key=  → { results, resultsError?, metricMap, stats, verdict }
+ *   Every GET: normalizes the Optimizely payload, records today's snapshot
+ *   (first viewer of the day), computes the deterministic StatsReport, and
+ *   re-derives the DRAFT verdict against the PUSHED version's frozen
+ *   briefSnapshot. A stamped verdict is never overwritten — it is returned
+ *   as-is (frozen question → frozen answer).
+ *
+ * POST { key, propose: true }        → Claude proposes the composite mapping
+ * POST { key, confirm: {composites} }→ human confirms/edits the mapping
+ * POST { key, stamp: true }          → human stamps the verdict (immutable;
+ *                                      refused while the experiment runs)
+ * POST { key, unstamp: true }        → reopen to draft (audited, keeps history)
+ * POST { key, promote: discoveryId } → discovery → Backlog idea (the flywheel)
+ * POST { key, ask / explain }        → the analyst, over computed facts
  */
-async function fetchResults(orgId: string, experimentId?: string): Promise<{ results: ExperimentResults | null; error?: string }> {
+
+interface Bundle {
+  results: ExperimentResults | null;
+  error?: string;
+  experimentStatus?: string;
+  weights?: Record<string, number>;
+}
+
+async function fetchResults(orgId: string, experimentId?: string): Promise<Bundle> {
   if (!experimentId) return { results: null, error: "No experiment bound yet — bind it in Experiment → Ship." };
   const client = await getOptimizelyClientForOrg(orgId);
   if (!client) return { results: null, error: "Optimizely isn't connected for this customer." };
   try {
-    const raw = await client.getExperimentResults(experimentId);
+    const [raw, exp] = await Promise.all([
+      client.getExperimentResults(experimentId),
+      client.getExperiment(experimentId).catch(() => null),
+    ]);
     const results = normalizeResults(raw);
-    if (!results) return { results: null, error: "Optimizely returned no readable results yet — usually means no traffic so far." };
-    return { results };
+    const weights: Record<string, number> = {};
+    for (const v of exp?.variations ?? []) if (typeof v.weight === "number" && v.weight > 0) weights[String(v.variation_id)] = v.weight;
+    if (!results) return { results: null, error: "Optimizely returned no readable results yet — usually means no traffic so far.", experimentStatus: exp?.status };
+    return { results, experimentStatus: exp?.status, weights: Object.keys(weights).length ? weights : undefined };
   } catch (e) {
     return { results: null, error: e instanceof Error ? e.message : "Couldn't reach Optimizely results." };
   }
 }
 
+/** stats + draft verdict, derived fresh from a results bundle. */
+async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats: StatsReport | null; verdict: VerdictRecord | null; history: ResultsHistory }> {
+  const existing = await getVerdict(proto.key);
+  if (!bundle.results) return { stats: null, verdict: existing, history: { days: [] } };
+
+  const history = await recordDailySnapshot(proto.key, bundle.results);
+  const map = await getMetricMap(proto.key);
+  const stats = computeStatsReport({
+    results: bundle.results,
+    map,
+    focusVariationId: proto.experiment?.variationId,
+    weights: bundle.weights,
+    history: history.days,
+  });
+
+  if (existing?.state === "stamped") return { stats, verdict: existing, history };
+
+  // The pre-registration = the briefSnapshot of the version that is LIVE in
+  // the experiment (the push record knows which), never the evolving brief.
+  const push = await lastPush(proto.key).catch(() => null);
+  const versions = await listArtifactVersions(proto.key).catch(() => []);
+  const pushedVersion = push ? versions.find((v) => v.version === push.version) ?? null : null;
+
+  const draft = deriveVerdict({
+    results: bundle.results,
+    map,
+    stats,
+    pushedVersion,
+    experimentStatus: bundle.experimentStatus,
+    firstObservedDate: history.days[0]?.date,
+    mapConfirmedAt: map?.confirmedAt,
+  });
+  const saved = await saveDraftVerdict(proto.key, draft);
+  return { stats, verdict: saved, history };
+}
+
 export async function GET(req: NextRequest) {
   const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
-  const [{ results, error }, metricMap] = await Promise.all([
+  const [bundle, metricMap] = await Promise.all([
     fetchResults(g.orgId, g.proto.experiment?.experimentId),
     getMetricMap(g.proto.key),
   ]);
-  return NextResponse.json({ results, resultsError: error, metricMap });
+  const { stats, verdict } = await analyze(g.proto, bundle);
+  return NextResponse.json({
+    results: bundle.results,
+    resultsError: bundle.error,
+    experimentStatus: bundle.experimentStatus,
+    metricMap,
+    stats,
+    verdict,
+  });
 }
 
 export async function POST(req: NextRequest) {
-  let body: { key?: string; propose?: boolean; confirm?: { composites?: unknown }; ask?: string; explain?: boolean };
+  let body: {
+    key?: string;
+    propose?: boolean;
+    confirm?: { composites?: unknown };
+    stamp?: boolean;
+    /** The verdict enum the human REVIEWED — stamp 409s if it moved. */
+    expectVerdict?: string;
+    unstamp?: boolean;
+    promote?: string;
+    ask?: string;
+    explain?: boolean;
+  };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const g = await guardPrototypeAccess(body.key ?? null, req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
@@ -56,16 +139,16 @@ export async function POST(req: NextRequest) {
 
   try {
     if (body.propose) {
-      const { results, error } = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      if (!results) return NextResponse.json({ error: error ?? "No results to map yet." }, { status: 400 });
-      // Grounding evidence: the built code shows which elements fire what.
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to map yet." }, { status: 400 });
       const source = await resolveRepoSource(g.proto.key).catch(() => null);
       const variationJs = source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
-      const composites = await proposeMetricMap({ proto: g.proto, variationJs, eventNames: results.metrics.map((m) => m.name) });
+      const composites = await proposeMetricMap({ proto: g.proto, variationJs, eventNames: bundle.results.metrics.map((m) => m.name) });
       const map = { composites, proposedBy: "claude (analyst)", confirmed: false };
       await setMetricMap(g.proto.key, map);
       await audit(g.orgId, actor, "results.map-proposed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
-      return NextResponse.json({ metricMap: map, results });
+      const { stats, verdict } = await analyze(g.proto, bundle);
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict });
     }
 
     if (body.confirm) {
@@ -82,24 +165,132 @@ export async function POST(req: NextRequest) {
         const events = (Array.isArray(o.events) ? o.events : []).filter((e): e is string => typeof e === "string" && e.trim().length > 0).map((e) => e.slice(0, 200));
         const label = String(o.label ?? "").trim().slice(0, 120);
         if (!label || !events.length) continue;
-        composites.push({ id, label, events: [...new Set(events)].slice(0, 10), role: o.role === "guardrail" ? "guardrail" : o.role === "info" ? "info" : "primary", note: typeof o.note === "string" ? o.note.trim().slice(0, 300) || undefined : undefined });
+        composites.push({
+          id,
+          label,
+          events: [...new Set(events)].slice(0, 10),
+          role: o.role === "guardrail" ? "guardrail" : o.role === "info" ? "info" : "primary",
+          direction: o.direction === "decrease" ? "decrease" : "increase",
+          note: typeof o.note === "string" ? o.note.trim().slice(0, 300) || undefined : undefined,
+        });
       }
       if (!composites.length) return NextResponse.json({ error: "Nothing to confirm — a composite needs a label and at least one event." }, { status: 400 });
       const map = { composites: composites.slice(0, 12), confirmed: true, confirmedBy: actor, confirmedAt: new Date().toISOString() };
       await setMetricMap(g.proto.key, map);
       await audit(g.orgId, actor, "results.map-confirmed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
-      return NextResponse.json({ metricMap: map });
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      const { stats, verdict } = bundle.results
+        ? await analyze(g.proto, bundle)
+        : { stats: null, verdict: await getVerdict(g.proto.key) };
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict });
+    }
+
+    if (body.stamp) {
+      // The finalization ritual: human-only, refused mid-run, frozen forever.
+      const existing = await getVerdict(g.proto.key);
+      if (existing?.state === "stamped") return NextResponse.json({ error: "Already stamped — the verdict is the record." }, { status: 400 });
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to stamp." }, { status: 400 });
+      // FAIL CLOSED on both status checks: an unreadable status must never
+      // let a mid-run peek become the permanent record.
+      if (bundle.experimentStatus === "running") {
+        return NextResponse.json({ error: "The experiment is still RUNNING — pause or conclude it in Optimizely before stamping the verdict. A verdict stamped mid-run is a peek, not a record." }, { status: 400 });
+      }
+      if (!bundle.experimentStatus) {
+        return NextResponse.json({ error: "Couldn't verify the experiment has stopped (Optimizely didn't return its status) — try again in a moment." }, { status: 400 });
+      }
+      const { stats, verdict } = await analyze(g.proto, bundle);
+      if (!stats || !verdict) return NextResponse.json({ error: "Couldn't derive a verdict to stamp." }, { status: 400 });
+      // Approve-what-you-see: the stamp freezes a FRESH derivation, so if the
+      // numbers moved it since the human read the draft, force a re-review
+      // instead of silently stamping a different verdict than they approved.
+      if (body.expectVerdict && verdict.verdict !== body.expectVerdict) {
+        return NextResponse.json({ error: `The verdict changed while you were reviewing — it now reads ${verdict.verdict.toUpperCase()} (you reviewed ${String(body.expectVerdict).toUpperCase()}). Re-review the updated card, then stamp.`, verdict, stats, results: bundle.results }, { status: 409 });
+      }
+      const { ref } = await analystSkill(g.orgId).catch(() => ({ system: "", ref: undefined }));
+      const stamped = await mutateVerdict(g.proto.key, (cur) => {
+        if (cur?.state === "stamped") return null; // lost the race — theirs stands
+        return {
+          ...verdict,
+          state: "stamped" as const,
+          frozenResults: bundle.results!,
+          frozenStats: stats,
+          skillRef: ref,
+          stampedBy: actor,
+          stampedAt: new Date().toISOString(),
+        };
+      });
+      if (!stamped || stamped.stampedBy !== actor) {
+        return NextResponse.json({ error: "Someone else stamped the verdict first — refresh to see the record.", verdict: stamped }, { status: 409 });
+      }
+      await audit(g.orgId, actor, "verdict.stamped", g.proto.name, `${stamped.verdict.toUpperCase()} — ${stamped.headline}`.slice(0, 400));
+      return NextResponse.json({ verdict: stamped, results: bundle.results, stats });
+    }
+
+    if (body.unstamp) {
+      let was: VerdictRecord | null = null;
+      const reopened = await mutateVerdict(g.proto.key, (cur) => {
+        if (cur?.state !== "stamped") return null;
+        was = cur;
+        return { ...cur, state: "draft" as const, frozenResults: undefined, frozenStats: undefined, stampedBy: undefined, stampedAt: undefined };
+      });
+      if (!was) return NextResponse.json({ error: "Nothing stamped to reopen." }, { status: 400 });
+      const prev = was as VerdictRecord;
+      await audit(g.orgId, actor, "verdict.reopened", g.proto.name, `was: ${prev.verdict.toUpperCase()} stamped by ${prev.stampedBy ?? "?"}`);
+      return NextResponse.json({ verdict: reopened });
+    }
+
+    if (body.promote) {
+      const verdict = await getVerdict(g.proto.key);
+      const disc = verdict?.discoveries.find((d) => d.id === body.promote);
+      if (!verdict || !disc) return NextResponse.json({ error: "Unknown discovery — refresh and try again." }, { status: 400 });
+      if (disc.promotedIdeaId) return NextResponse.json({ error: "Already promoted to the backlog." }, { status: 400 });
+      const idea = await addIdea({
+        orgId: g.orgId,
+        kind: "backlog",
+        title: `Discovery: ${disc.label} moved ${disc.lift !== undefined ? `${disc.lift > 0 ? "+" : ""}${(disc.lift * 100).toFixed(1)}%` : "significantly"} in "${g.proto.name}"`.slice(0, 200),
+        body: [
+          `EXPLORATORY DISCOVERY from experiment "${g.proto.name}" (prototype ${g.proto.key}) — NOT pre-registered there, so it needs its own experiment before anyone calls it real.`,
+          ``,
+          `Evidence: ${disc.label} on ${disc.variationName}: lift ${disc.lift !== undefined ? `${disc.lift > 0 ? "+" : ""}${(disc.lift * 100).toFixed(1)}%` : "n/a"}, FDR q=${(disc.q * 100).toFixed(0)}% (survived multiple-comparison correction in the exploratory sweep).`,
+          verdict.preRegistration ? `Source experiment's pre-registered hypothesis: ${verdict.preRegistration.hypothesis}` : ``,
+          ``,
+          `Suggested next step: promote this to a prototype whose brief pre-registers "${disc.label}" as the PRIMARY metric, with the observed effect as the prior.`,
+        ].filter(Boolean).join("\n"),
+        category: "other",
+        source: "claude",
+      });
+      // CAS: a concurrent GET re-deriving the draft must not clobber the
+      // promoted marker (or vice versa) — mark inside the mutation.
+      const updated = await mutateVerdict(g.proto.key, (cur) => {
+        if (!cur) return null;
+        const d = cur.discoveries.find((x) => x.id === body.promote);
+        if (!d || d.promotedIdeaId) return null;
+        d.promotedIdeaId = idea.id;
+        return cur;
+      });
+      await audit(g.orgId, actor, "verdict.discovery-promoted", g.proto.name, `${disc.label} → backlog ${idea.id}`);
+      return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
     }
 
     if (body.ask !== undefined || body.explain) {
-      const { results, error } = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      if (!results) return NextResponse.json({ error: error ?? "No results yet." }, { status: 400 });
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results yet." }, { status: 400 });
       const map = await getMetricMap(g.proto.key);
-      const answer = await analyzeResults({ proto: g.proto, results, map, question: body.explain ? undefined : String(body.ask ?? "") });
-      return NextResponse.json({ answer, results });
+      const { stats, verdict } = await analyze(g.proto, bundle);
+      const answer = await analyzeResults({
+        orgId: g.orgId,
+        proto: g.proto,
+        results: bundle.results,
+        map,
+        stats,
+        verdict,
+        question: body.explain ? undefined : String(body.ask ?? ""),
+      });
+      return NextResponse.json({ answer, results: bundle.results, stats, verdict });
     }
 
-    return NextResponse.json({ error: "Nothing to do — pass propose, confirm, ask, or explain." }, { status: 400 });
+    return NextResponse.json({ error: "Nothing to do — pass propose, confirm, stamp, promote, ask, or explain." }, { status: 400 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

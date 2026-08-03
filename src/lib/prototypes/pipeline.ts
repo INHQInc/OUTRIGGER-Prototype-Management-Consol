@@ -101,6 +101,8 @@ export interface PipelineInputs {
   /** QA state (coverage gate) — escalates the Review step via alerts so
    *  EVERY surface (rail dot, table strip, board) agrees by construction. */
   qaFailing?: boolean;
+  /** Stopped experiment + unstamped verdict → the Experiment stage nags. */
+  adjudicationPending?: boolean;
   qaStale?: boolean;
 }
 
@@ -144,6 +146,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
   if (problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   if (latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
+  if (inp.adjudicationPending) alerts.push({ level: "warn", text: "The experiment run ended but its verdict isn't stamped — adjudicate the results against the pre-registered brief.", anchor: "experiment" });
   if (inp.qaFailing) alerts.push({ level: "danger", text: "QA has failing checks — fix and re-run the tests before shipping.", anchor: "review" });
   else if (inp.qaStale) alerts.push({ level: "warn", text: "QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.", anchor: "review" });
   if (lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });

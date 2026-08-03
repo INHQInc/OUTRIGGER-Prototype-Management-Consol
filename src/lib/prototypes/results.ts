@@ -118,6 +118,9 @@ export interface CompositeMetric {
   /** Optimizely metric NAMES (exactly as reported) summed into this composite. */
   events: string[];
   role: "primary" | "guardrail" | "info";
+  /** Which way is GOOD. Data, not inference — the verdict engine never
+   *  guesses polarity from prose. Defaults to "increase". */
+  direction?: "increase" | "decrease";
   note?: string;
 }
 
@@ -165,6 +168,59 @@ export function compositeMembers(c: CompositeMetric, results: ExperimentResults)
   }
   const missing = c.events.filter((e) => !present.has(e));
   return { members, missing, excluded };
+}
+
+// ── daily snapshot history (trend · accrual · novelty decay) ────────────────
+//
+// One flag (`resultshistory:<key>`) holding an append-only array of trimmed
+// daily observations — written lazily the first time results are viewed each
+// day (UTC). Whole-blob flag + compareAndSetFlag = safe under concurrent
+// viewers, same grammar as the coverage store. Capped at 180 days.
+
+export interface ResultsHistory {
+  days: import("./stats").DailySnapshot[];
+}
+
+const historyKey = (k: string) => `resultshistory:${k}`;
+
+export async function getResultsHistory(prototypeKey: string): Promise<ResultsHistory> {
+  const raw = await (await getContentStore()).getFlag(historyKey(prototypeKey));
+  if (!raw) return { days: [] };
+  try {
+    const h = JSON.parse(raw) as ResultsHistory;
+    return Array.isArray(h.days) ? h : { days: [] };
+  } catch {
+    return { days: [] };
+  }
+}
+
+/** Record today's cumulative numbers if today isn't recorded yet. Lost CAS
+ *  races and already-recorded days are both fine — first writer wins. */
+export async function recordDailySnapshot(prototypeKey: string, results: ExperimentResults): Promise<ResultsHistory> {
+  const store = await getContentStore();
+  const today = new Date().toISOString().slice(0, 10);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const raw = await store.getFlag(historyKey(prototypeKey));
+    let history: ResultsHistory = { days: [] };
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as ResultsHistory;
+        if (Array.isArray(parsed.days)) history = parsed;
+      } catch { /* rebuild from empty */ }
+    }
+    if (history.days.some((d) => d.date === today)) return history;
+    const snap = {
+      date: today,
+      variations: results.variations.map((v) => ({ variationId: v.variationId, visitors: v.visitors })),
+      metrics: results.metrics.map((m) => ({
+        name: m.name,
+        perVariation: m.perVariation.map((r) => ({ variationId: r.variationId, conversions: r.conversions })),
+      })),
+    };
+    const next: ResultsHistory = { days: [...history.days, snap].sort((a, b) => a.date.localeCompare(b.date)).slice(-180) };
+    if (await store.compareAndSetFlag(historyKey(prototypeKey), raw, JSON.stringify(next))) return next;
+  }
+  return getResultsHistory(prototypeKey);
 }
 
 export function computeComposite(c: CompositeMetric, results: ExperimentResults): VariationResult[] {

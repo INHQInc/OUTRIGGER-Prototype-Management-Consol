@@ -25,6 +25,7 @@ import { readIntegrationPackage } from "@/lib/prototypes/package";
 import { PackagePanel } from "@/components/PackagePanel";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { getCoverage, coverageGate, coverageStale, coverageReviewed, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
+import { getVerdict, adjudicationPending } from "@/lib/prototypes/verdict";
 import { deriveFlow } from "@/lib/prototypes/flow";
 import { FlowQueue } from "@/components/FlowQueue";
 import { CoveragePanel } from "@/components/CoveragePanel";
@@ -121,6 +122,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   ]);
   const briefDrift = await getBriefDrift(key, p).catch(() => null);
   const coverage = await getCoverage(key).catch(() => null);
+  const verdict = await getVerdict(key).catch(() => null);
   await ensureSkillsSeeded(orgId);
   const skillRows = await resolveSkillsForPrototype(orgId, key).catch(() => []);
 
@@ -193,12 +195,14 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   // construction (the StageStrip's "can never disagree" invariant holds).
   const qaStaleNow = coverageStale(coverage, buildStatus.headSha, auditTarget.codeHash)
     || testCasesStale(coverage, buildStatus.headSha, auditTarget.codeHash);
+  const adjPending = adjudicationPending(verdict, experimentStatus);
   const pipeline = derivePipeline({
     proto: p, provisionFlagRaw: provisionFlag, source, versions,
     lastPush: push, claudeSeenAt: claudeSeen, experimentStatus,
     briefDrifted: Boolean(briefDrift),
     qaFailing: coverageGate(coverage) === "failing",
     qaStale: qaStaleNow,
+    adjudicationPending: adjPending,
   });
 
   const latest = versions[0];
@@ -280,6 +284,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     // on code known not to byte-match what Optimizely stored.
     pushCurrent: Boolean(push && latest && push.verified && push.version === latest.version && push.gitSha === latest.gitSha),
     experimentRunning: experimentStatus === "running",
+    adjudicationPending: adjPending,
     shipped: normalizeStage(p.status) === "shipped",
   });
 
@@ -487,6 +492,13 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
               <PackagePanel prototypeKey={key} initial={integrationPackage} skillEnabled={skillRows.some((r) => r.skill.id === "opmc-integration-package" && r.enabled)} />
             </Section>
             <Section id="record" title="Ship record" sub="When the experiment wins, the winner graduates into the site's production code — a reviewed PR, not client-side JavaScript forever.">
+              {verdict?.state === "stamped" && (
+                <div className={`mb-4 rounded-lg border px-3.5 py-2.5 text-[13px] ${verdict.verdict === "confirmed" ? "border-ok/40" : verdict.verdict === "refuted" || verdict.verdict === "invalid" ? "border-danger/40" : "border-border"}`}>
+                  <span className={`font-bold uppercase text-[11px] tracking-wide mr-2 ${verdict.verdict === "confirmed" ? "text-ok" : verdict.verdict === "refuted" || verdict.verdict === "invalid" ? "text-danger" : "text-warn"}`}>Verdict: {verdict.verdict.replace(/_/g, " ")}</span>
+                  <span className="text-muted">{verdict.headline}</span>
+                  <span className="text-muted-2"> — stamped by {verdict.stampedBy} on {verdict.stampedAt?.slice(0, 10)}{verdict.preRegistration ? `, adjudicated against v${verdict.preRegistration.version}'s pre-registered brief` : ""}. The integration package below carries the WHY, not just the what.</span>
+                </div>
+              )}
               <HandoffPanel prototypeKey={key} repoFullName={repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
             </Section>
           </Room>

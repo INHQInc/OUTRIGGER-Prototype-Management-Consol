@@ -6,7 +6,7 @@
  * only POSTs) the library rendered empty forever.
  */
 import { listGlobalSkills, upsertSkill, deleteSkill, parseFrontmatter, slugify } from "./skills";
-import { SYSTEM_SKILL, IDEAS_SKILL, PROTOTYPE_SKILL, BRIEF_AUTHOR_SKILL, INTEGRATION_PACKAGE_SKILL } from "./builtins";
+import { SYSTEM_SKILL, IDEAS_SKILL, PROTOTYPE_SKILL, BRIEF_AUTHOR_SKILL, INTEGRATION_PACKAGE_SKILL, EXPERIMENT_ANALYST_SKILL } from "./builtins";
 
 /** Built-in skill ids that were renamed/removed — pruned on seed so they don't linger. */
 const RETIRED_BUILTIN_IDS = ["opmc-ideas"]; // → opmc-recommendations
@@ -22,14 +22,14 @@ async function seedBuiltins(): Promise<void> {
   // A human editing a built-in in the UI flips it to builtIn:false ("forks" it),
   // and we leave those alone. Unchanged bodies are skipped so we don't churn.
   const byId = new Map((await listGlobalSkills()).map((sk) => [sk.id, sk]));
-  for (const md of [PROTOTYPE_SKILL, SYSTEM_SKILL, IDEAS_SKILL, BRIEF_AUTHOR_SKILL, INTEGRATION_PACKAGE_SKILL]) {
+  for (const md of [PROTOTYPE_SKILL, SYSTEM_SKILL, IDEAS_SKILL, BRIEF_AUTHOR_SKILL, INTEGRATION_PACKAGE_SKILL, EXPERIMENT_ANALYST_SKILL]) {
     const fm = parseFrontmatter(md);
     const id = slugify(fm.name ?? "");
     if (!id) continue;
     const prev = byId.get(id);
     if (prev && prev.builtIn === false) continue; // human-forked — don't clobber
     if (prev && prev.body === md) continue;         // already current
-    await upsertSkill({ id, name: fm.name ?? id, scope: "global", description: fm.description ?? "", body: md, builtIn: true, delivery: id === "opmc-brief-author" ? "console" : "branch" });
+    await upsertSkill({ id, name: fm.name ?? id, scope: "global", description: fm.description ?? "", body: md, builtIn: true, delivery: id === "opmc-brief-author" || id === "opmc-experiment-analyst" ? "console" : "branch" });
   }
   // Prune renamed/removed built-ins (only if still a built-in — never a fork).
   for (const id of RETIRED_BUILTIN_IDS) {

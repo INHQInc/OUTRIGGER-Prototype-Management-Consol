@@ -14,6 +14,7 @@ import { lastPush } from "./ship";
 import { derivePipeline, type Pipeline } from "./pipeline";
 import { getBriefDrift } from "./brief-drift-state";
 import { getCoverage, coverageGate, coverageStale, testCasesStale } from "./coverage";
+import { getVerdict, adjudicationPending } from "./verdict";
 import { auditTargetCode } from "./brief-audit";
 import { getOptimizelyClientForOrg } from "../experimentation";
 import { normalizeStage, type PrototypeRecord } from "./types";
@@ -34,7 +35,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     const stage = normalizeStage(p.status);
     if (stage === "archived") return null;
 
-    const [source, versions, push, provisionFlagRaw, claudeSeenAt, briefDrift, coverage] = await Promise.all([
+    const [source, versions, push, provisionFlagRaw, claudeSeenAt, briefDrift, coverage, verdict] = await Promise.all([
       resolveRepoSource(p.key).catch(() => null),
       listArtifactVersions(p.key).catch(() => []),
       lastPush(p.key).catch(() => null),
@@ -42,6 +43,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       store.getFlag(`claude:seen:${p.key}`).catch(() => null),
       getBriefDrift(p.key, p).catch(() => null),
       getCoverage(p.key).catch(() => null),
+      getVerdict(p.key).catch(() => null),
     ]);
     // Live experiment status — the Testing lock's source of truth.
     let experimentStatus: string | undefined;
@@ -56,6 +58,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       proto: p, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt, experimentStatus, briefDrifted: Boolean(briefDrift),
       qaFailing: coverageGate(coverage) === "failing",
       qaStale: coverageStale(coverage, source?.headSha, qaCodeHash) || testCasesStale(coverage, source?.headSha, qaCodeHash),
+      adjudicationPending: adjudicationPending(verdict, experimentStatus),
     });
 
     // The column IS the canonical stage — shipped → handoff, running → experiment
