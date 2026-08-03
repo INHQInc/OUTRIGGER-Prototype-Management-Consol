@@ -83,3 +83,28 @@ body {
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+
+/* ── Print: the readout card IS the report ──────────────────────────────
+   Print/PDF from the Results panel emits ONLY the readout, in print-safe
+   colors (the app is dark-themed; browsers strip backgrounds, which would
+   leave near-white text on white paper). */
+@media print {
+  body { background: #fff !important; }
+  body * { visibility: hidden; }
+  .print-report, .print-report * { visibility: visible; }
+  .print-report {
+    position: absolute; left: 0; top: 0; width: 100%;
+    border: none !important;
+  }
+  .print-report, .print-report * {
+    color: #16202a !important;
+    background: transparent !important;
+    border-color: #d5dbe2 !important;
+    text-shadow: none !important;
+  }
+  /* keep the semantic colors that carry meaning on paper */
+  .print-report .text-ok { color: #157347 !important; }
+  .print-report .text-danger { color: #b02a37 !important; }
+  .print-report .text-warn { color: #997404 !important; }
+  .print-report .text-muted-2, .print-report .text-muted { color: #5c6771 !important; }
+}

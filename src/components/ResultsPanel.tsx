@@ -22,15 +22,38 @@ import type { AnalystAnswer } from "@/lib/ai/results";
 const pctS = (v: number | undefined, digits = 1, signed = true) =>
   v === undefined ? "—" : `${signed && v > 0 ? "+" : ""}${(v * 100).toFixed(digits)}%`;
 
-const VERDICT_LOOK: Record<VerdictState, { label: string; cls: string; border: string }> = {
-  confirmed: { label: "HYPOTHESIS CONFIRMED", cls: "text-ok", border: "border-ok/50" },
-  refuted: { label: "HYPOTHESIS DISPROVEN", cls: "text-danger", border: "border-danger/50" },
-  guardrail_breach: { label: "WON, BUT BROKE A GUARDRAIL", cls: "text-warn", border: "border-warn/60" },
-  keep_running: { label: "TOO EARLY — KEEP RUNNING", cls: "text-muted", border: "border-border" },
-  underpowered: { label: "INCONCLUSIVE — NOT ENOUGH TRAFFIC", cls: "text-warn", border: "border-border" },
-  invalid: { label: "DATA CAN'T BE TRUSTED", cls: "text-danger", border: "border-danger/60" },
-  not_adjudicable: { label: "NOT READY TO JUDGE YET", cls: "text-muted-2", border: "border-border" },
+const VERDICT_LOOK: Record<VerdictState, { label: string; cls: string; border: string; bg: string }> = {
+  confirmed: { label: "HYPOTHESIS CONFIRMED", cls: "text-ok", border: "border-ok/50", bg: "bg-[color-mix(in_srgb,var(--ok)_9%,transparent)]" },
+  refuted: { label: "HYPOTHESIS DISPROVEN", cls: "text-danger", border: "border-danger/50", bg: "bg-[color-mix(in_srgb,var(--danger)_8%,transparent)]" },
+  guardrail_breach: { label: "WON, BUT BROKE A GUARDRAIL", cls: "text-warn", border: "border-warn/60", bg: "bg-[color-mix(in_srgb,var(--warn)_8%,transparent)]" },
+  keep_running: { label: "TOO EARLY — KEEP RUNNING", cls: "text-muted", border: "border-border", bg: "bg-surface-2/40" },
+  underpowered: { label: "INCONCLUSIVE — NOT ENOUGH TRAFFIC", cls: "text-warn", border: "border-border", bg: "bg-[color-mix(in_srgb,var(--warn)_6%,transparent)]" },
+  invalid: { label: "DATA CAN'T BE TRUSTED", cls: "text-danger", border: "border-danger/60", bg: "bg-[color-mix(in_srgb,var(--danger)_8%,transparent)]" },
+  not_adjudicable: { label: "NOT READY TO JUDGE YET", cls: "text-muted-2", border: "border-border", bg: "bg-surface-2/40" },
 };
+
+/** The primary result as a PICTURE — two bars, rates labeled. The story
+ *  lands before anyone reads a word. */
+function ComparisonBars({ focusName, focusRate, baseName, baseRate, good }: {
+  focusName: string; focusRate: number; baseName: string; baseRate: number; good: boolean;
+}) {
+  const max = Math.max(focusRate, baseRate) || 1;
+  const row = (name: string, rate: number, cls: string) => (
+    <div className="flex items-center gap-2">
+      <span className="w-36 shrink-0 text-[11.5px] text-muted-2 truncate text-right" title={name}>{name}</span>
+      <div className="flex-1 h-4 rounded-sm bg-surface-2/40 overflow-hidden">
+        <div className={`h-full rounded-sm ${cls}`} style={{ width: `${Math.max(2, (rate / max) * 100)}%` }} />
+      </div>
+      <span className="w-14 shrink-0 text-[12.5px] font-semibold tabular-nums">{(rate * 100).toFixed(2)}%</span>
+    </div>
+  );
+  return (
+    <div className="space-y-1.5">
+      {row(focusName, focusRate, good ? "bg-ok/80" : "bg-danger/80")}
+      {row(baseName, baseRate, "bg-border-strong")}
+    </div>
+  );
+}
 
 function Sparkline({ trend }: { trend: TrendPoint[] }) {
   const pts = trend.filter((t) => t.lift !== undefined);
@@ -216,10 +239,11 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
   if (statsEff?.power) {
     const p = statsEff.power;
     const eta = p.daysToTarget ?? p.daysToObserved;
+    // NEVER a "?" in front of a leader: day one reads "Day 1".
     tiles.push({
       label: "Timeline",
-      value: `${p.observationDays ?? "?"} day(s) in`,
-      sub: eta !== undefined ? (eta <= 0 ? "decision-ready sample reached" : `~${eta} day(s) to a decision`) : undefined,
+      value: p.observationDays !== undefined && p.observationDays > 0 ? `Day ${p.observationDays + 1}` : "Day 1",
+      sub: eta !== undefined ? (eta <= 0 ? "decision-ready sample reached" : `~${eta} day(s) to a decision`) : "trend unlocks as daily snapshots accumulate",
     });
   }
 
@@ -296,14 +320,14 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
         <>
           {/* The SAME sections, every experiment — leaders learn where to look. */}
           {reading.summary && (
-            <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Summary</div>
-              <p className="text-[14px] leading-relaxed font-medium text-foreground">{reading.summary}</p>
+            <div className="border-t border-border/50 pt-3">
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Summary</div>
+              <p className="text-[15px] leading-relaxed font-medium text-foreground max-w-3xl">{reading.summary}</p>
             </div>
           )}
           {(reading.keyPoints?.length || reading.dataRead?.length || reading.story?.length) ? (
-            <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">What the data shows</div>
+            <div className="border-t border-border/50 pt-3">
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">What the data shows</div>
               {reading.keyPoints?.length ? (
                 <ul className="space-y-1">
                   {reading.keyPoints.map((k) => (
@@ -319,25 +343,29 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
             </div>
           ) : null}
           {reading.trendLine && (
-            <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Trend</div>
-              <p className="text-[13px] text-muted">{reading.trendLine}</p>
+            <div className="border-t border-border/50 pt-3">
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Trend</div>
+              <p className="text-[13px] text-muted max-w-3xl">{reading.trendLine}</p>
             </div>
           )}
           {reading.watchItems.length > 0 && (
-            <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Watching</div>
-              {reading.watchItems.map((w) => <p key={w} className="text-[12.5px] text-warn">▸ {w}</p>)}
+            <div className="border-t border-border/50 pt-3">
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Watching</div>
+              <ul className="space-y-1">
+                {reading.watchItems.map((w) => (
+                  <li key={w} className="flex gap-2 text-[12.5px] text-warn leading-snug"><span className="shrink-0">▸</span><span>{w}</span></li>
+                ))}
+              </ul>
             </div>
           )}
           {reading.nextStep && (
-            <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Next step</div>
-              <p className="text-[13px] font-medium">{reading.nextStep}</p>
+            <div className="border-l-2 border-accent bg-[color-mix(in_srgb,var(--accent)_6%,transparent)] rounded-r-lg pl-3 pr-3 py-2">
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-accent mb-0.5">Next step</div>
+              <p className="text-[13.5px] font-medium">{reading.nextStep}</p>
             </div>
           )}
           {reading.questionsForYou.length > 0 && (
-            <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-2">
+            <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-2 print:hidden">
               <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">The analyst wants to know what you care about</div>
               {reading.questionsForYou.map((q) => (
                 <div key={q} className="space-y-1">
@@ -360,11 +388,13 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
               ))}
             </div>
           )}
-          <div className="text-[11px] text-muted-2">
+          <div className="text-[11px] text-muted-2 print:hidden">
             Reading from {reading.generatedAt.slice(0, 16).replace("T", " ")} · regenerates when the data moves ·{" "}
             <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
               {busy === "reading" ? "Re-reading the data…" : "Refresh the reading"}
             </button>
+            {" · "}
+            <button onClick={() => window.print()} className="text-accent hover:text-accent-hover font-medium">Print / PDF</button>
           </div>
         </>
       ) : (
@@ -389,14 +419,22 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
       )}
 
       {/* ═══ THE READOUT — the leadership view ═══ */}
-      <div className={`rounded-xl border ${look?.border ?? "border-border"} bg-surface overflow-hidden`}>
-        <div className="px-4 py-2.5 border-b border-border flex items-center gap-2.5 flex-wrap">
-          {look && <span className={`text-[11px] font-bold uppercase tracking-wide ${look.cls}`}>{look.label}</span>}
-          {verdict && (stamped
-            ? <span className="text-[11px] text-muted-2">STAMPED by {verdict.stampedBy} · {verdict.stampedAt?.slice(0, 10)} — the official record</span>
-            : <span className="text-[11px] text-muted-2">draft — re-derives with the numbers</span>)}
-          {expStatus && <span className="text-[11px] text-muted-2">· {expStatus.toUpperCase()}</span>}
-          <span className="ml-auto flex items-center gap-2">
+      <div className={`print-report rounded-xl border ${look?.border ?? "border-border"} bg-surface overflow-hidden`}>
+        <div className={`px-5 py-3.5 border-b border-border ${look?.bg ?? ""} flex items-start gap-3 flex-wrap`}>
+          <div className="min-w-0 flex-1">
+            {look && <div className={`text-[17px] font-extrabold tracking-tight ${look.cls}`}>{look.label}</div>}
+            {verdict && (
+              <p className="text-[13px] text-muted mt-0.5 leading-snug max-w-3xl">
+                {verdict.headline}
+                {verdict.verdict === "not_adjudicable" && <> <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium print:hidden">Set it up in the Measurement section →</a></>}
+              </p>
+            )}
+            <div className="text-[11px] text-muted-2 mt-1">
+              {stamped ? `Official record — stamped by ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}` : "Live view — updates with the numbers"}
+              {expStatus ? ` · ${expStatus.toUpperCase()}` : ""}
+            </div>
+          </div>
+          <span className="flex items-center gap-2 shrink-0 print:hidden">
             {statsEff && (
               <span className={`text-[11px] ${statsEff.validity.status === "ok" ? "text-ok" : statsEff.validity.status === "unknown" ? "text-muted-2" : statsEff.validity.status === "warn" ? "text-warn font-semibold" : "text-danger font-semibold"}`} title={statsEff.validity.detail}>
                 {statsEff.validity.status === "ok" ? "✓ traffic split healthy" : statsEff.validity.status === "unknown" ? "traffic split: too early to check" : statsEff.validity.status === "warn" ? "⚠ traffic split looks off" : "⚠ traffic split broken"}
@@ -418,29 +456,39 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
           </span>
         </div>
 
-        <div className="px-4 py-3 space-y-3">
-          {verdict && (
-            <p className="text-[13.5px] leading-relaxed">
-              {verdict.headline}
-              {verdict.verdict === "not_adjudicable" && <> <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium">Set it up in the Measurement section →</a></>}
-            </p>
-          )}
+        <div className="px-5 py-4 space-y-4">
           {pr && (
-            <p className="text-[13px] text-muted">
-              <span className="font-semibold text-foreground/90">The goal ({pr.anchor === "cut" ? `pre-registered at v${pr.version}` : "frozen with the measurement plan"}{pr.cutAt ? `, ${pr.cutAt.slice(0, 10)}` : ""}):</span> {pr.hypothesis} <span className="text-muted-2">Primary: {pr.primaryMetric}.</span>
-              {pr.mapConfirmedAfterObservation && <span className="text-warn"> Metric mapping operationalized after observation began (disclosed).</span>}
-            </p>
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">The hypothesis · {pr.anchor === "cut" ? `frozen at v${pr.version}` : "frozen with the measurement plan"}{pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""}</div>
+              <p className="text-[13px] text-muted leading-snug max-w-3xl">
+                {pr.hypothesis} <span className="text-muted-2">Primary metric: {pr.primaryMetric}.</span>
+                {pr.mapConfirmedAfterObservation && <span className="text-warn"> Metric mapping set after observation began (disclosed).</span>}
+              </p>
+            </div>
           )}
 
           {tiles.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {tiles.map((t) => (
-                <div key={t.label} className="rounded-lg border border-border bg-background/50 px-3 py-2">
+                <div key={t.label} className="rounded-lg border border-border bg-background/50 px-3.5 py-2.5">
                   <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 truncate" title={t.label}>{t.label}</div>
-                  <div className={`text-[16px] font-semibold tabular-nums ${t.cls ?? ""}`}>{t.value}</div>
+                  <div className={`text-[20px] font-bold tabular-nums leading-tight ${t.cls ?? ""}`}>{t.value}</div>
                   {t.sub && <div className="text-[11px] text-muted-2 truncate" title={t.sub}>{t.sub}</div>}
                 </div>
               ))}
+            </div>
+          )}
+
+          {primaryStats && primaryFocus?.rate !== undefined && primaryBase?.rate !== undefined && (
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">{primaryStats.label} — per-visitor rate</div>
+              <ComparisonBars
+                focusName={primaryFocus.name}
+                focusRate={primaryFocus.rate}
+                baseName={primaryBase.name}
+                baseRate={primaryBase.rate}
+                good={(primaryFocus.lift ?? 0) >= 0}
+              />
             </div>
           )}
 
@@ -487,7 +535,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
           )}
 
           {/* the analyst's ask box — every question becomes analyst memory */}
-          <div className="space-y-2 border-t border-border/60 pt-2.5">
+          <div className="space-y-2 border-t border-border/60 pt-2.5 print:hidden">
             <div className="flex items-center gap-2">
               <input value={question} onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && question.trim()) post("ask", { ask: question }); }}
@@ -520,7 +568,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
           </div>
 
           {(Boolean(notebook?.org.preferences.length) || Boolean(notebook?.proto.dataWishes.length)) && (
-            <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-muted-2 border-t border-border/60 pt-2">
+            <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-muted-2 border-t border-border/60 pt-2 print:hidden">
               <span className="font-bold uppercase tracking-wide">Analyst memory</span>
               {notebook!.org.preferences.map((p) => (
                 <span key={p} className="border border-border rounded px-1.5 py-0.5 inline-flex items-center gap-1">
