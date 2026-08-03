@@ -26,6 +26,8 @@ export interface OptiExperimentSummary {
   id: number;
   name: string;
   status: string;
+  created?: string;
+  last_modified?: string;
 }
 export interface OptiPage {
   id: number;
@@ -87,9 +89,17 @@ export class OptimizelyClient {
     return this.req<OptiProject>(`/projects/${projectId ?? this.pid()}`);
   }
 
-  /** Read-only: list experiments in the project (sanity check + dedupe). */
-  listExperiments(): Promise<OptiExperimentSummary[]> {
-    return this.req<OptiExperimentSummary[]>(`/experiments?project_id=${this.pid()}&per_page=100`);
+  /** Read-only: list experiments in the project (sanity check + dedupe).
+   *  Paginated — a mature project easily exceeds one page of 100, and a
+   *  truncated list silently hides bindable experiments. */
+  async listExperiments(): Promise<OptiExperimentSummary[]> {
+    const all: OptiExperimentSummary[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const batch = await this.req<OptiExperimentSummary[]>(`/experiments?project_id=${this.pid()}&per_page=100&page=${page}`);
+      all.push(...batch);
+      if (batch.length < 100) break;
+    }
+    return all;
   }
 
   /** Read-only: LIVE experiment results (visitors, conversions, lift,

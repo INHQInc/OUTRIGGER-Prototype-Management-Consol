@@ -33,8 +33,17 @@ export async function GET(req: NextRequest) {
     }
     const experimentId = req.nextUrl.searchParams.get("experimentId");
     if (!experimentId) {
-      const experiments = await client.listExperiments();
-      return NextResponse.json({ experiments: experiments.map((e) => ({ id: String(e.id), name: e.name, status: e.status })) });
+      // The bind picker: archived experiments are noise (nothing there is
+      // bindable-to), so they're dropped here at the boundary; sorted by
+      // name (numeric-aware) with newest-first as the tiebreak.
+      const experiments = (await client.listExperiments())
+        .filter((e) => e.status !== "archived")
+        .sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true })
+          || (b.last_modified ?? b.created ?? "").localeCompare(a.last_modified ?? a.created ?? ""));
+      return NextResponse.json({
+        experiments: experiments.map((e) => ({ id: String(e.id), name: e.name, status: e.status, lastModified: e.last_modified ?? e.created })),
+      });
     }
     const exp = await client.getExperiment(experimentId);
     return NextResponse.json({

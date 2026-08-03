@@ -9,6 +9,12 @@ import type { PushResult } from "@/lib/prototypes/ship";
 
 const sel = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[14px] font-mono text-foreground focus:border-accent focus:outline-none";
 
+const expDate = (iso?: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : ` · ${d.toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
+};
+
 export interface ShipVersion { version: number; gitSha: string; hasCode: boolean; certification: CertificationReport | null }
 
 /**
@@ -40,7 +46,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
   const [mode, setMode] = useState<"existing" | "create">("existing");
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [projectId, setProjectId] = useState(optiProjectId ?? "");
-  const [experiments, setExperiments] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [experiments, setExperiments] = useState<{ id: string; name: string; status: string; lastModified?: string }[]>([]);
   const [variations, setVariations] = useState<{ id: string; name: string; hasCustomCode: boolean }[]>([]);
   const [expSel, setExpSel] = useState(initialBinding?.experimentId ?? "");
   const [varSel, setVarSel] = useState(initialBinding?.variationId ?? "");
@@ -272,7 +278,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
                 <div className="grid grid-cols-2 gap-2">
                   <select value={expSel} onChange={(e) => { setExpSel(e.target.value); setVarSel(""); }} className={sel}>
                     <option value="">— experiment —</option>
-                    {experiments.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.status})</option>)}
+                    {experiments.map((e) => <option key={e.id} value={e.id}>{e.name} ({e.status}{expDate(e.lastModified)})</option>)}
                   </select>
                   <select value={varSel} onChange={(e) => setVarSel(e.target.value)} disabled={!expSel} className={sel}>
                     <option value="">— variation —</option>
