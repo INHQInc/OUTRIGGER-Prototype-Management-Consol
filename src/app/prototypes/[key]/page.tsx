@@ -23,6 +23,7 @@ import { getBriefDrift, briefFingerprint } from "@/lib/prototypes/brief-drift-st
 import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetCode, codeHashOf } from "@/lib/prototypes/brief-audit";
 import { readIntegrationPackage } from "@/lib/prototypes/package";
 import { PackagePanel } from "@/components/PackagePanel";
+import { ResultsPanel } from "@/components/ResultsPanel";
 import { getCoverage, coverageGate, coverageStale, coverageReviewed, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
 import { deriveFlow } from "@/lib/prototypes/flow";
 import { FlowQueue } from "@/components/FlowQueue";
@@ -472,6 +473,9 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
               <div className="mt-3">
                 <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
               </div>
+            </Section>
+            <Section id="results" title="Results" sub="Live from Optimizely — with the business view on top: your decision metric is usually a COMPOSITE of raw events (the same intent, reachable in more than one place). Claude proposes the mapping, you confirm it, and the analyst answers questions with honest significance.">
+              <ResultsPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
             </Section>
           </Room>
         )}

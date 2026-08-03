@@ -92,6 +92,13 @@ export class OptimizelyClient {
     return this.req<OptiExperimentSummary[]>(`/experiments?project_id=${this.pid()}&per_page=100`);
   }
 
+  /** Read-only: LIVE experiment results (visitors, conversions, lift,
+   *  significance per variation × metric). Raw — normalized at the caller's
+   *  trust boundary (lib/prototypes/results.ts). */
+  getExperimentResults(experimentId: string | number): Promise<unknown> {
+    return this.req<unknown>(`/experiments/${experimentId}/results`);
+  }
+
   /**
    * Create (or return existing) a Page for URL targeting. Substring path match so
    * it works on either prep or prod host.
