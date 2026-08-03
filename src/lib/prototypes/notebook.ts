@@ -46,7 +46,9 @@ export interface ProtoNotebook {
 export interface Reading {
   /** The TLDR — one or two sentences a leader reads first. */
   summary?: string;
-  /** "What the data shows" — 1-3 short plain-language paragraphs. */
+  /** "What the data shows" — BULLETS, each one fact leading with its number. */
+  keyPoints?: string[];
+  /** Legacy paragraph format. */
   dataRead?: string[];
   /** Legacy cached readings (pre-sectioned format). */
   story?: string[];
@@ -166,7 +168,9 @@ export function readingBasisKey(parts: {
   orgNotebookUpdatedAt?: string;
   protoNotebookUpdatedAt?: string;
 }): string {
-  return [parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
+  // READING_FORMAT bumps retire every cached reading on deploy — a format
+  // change must never leave old walls of text rendering until data moves.
+  return ["fmt3", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
 }
 
 export async function getReading(prototypeKey: string): Promise<Reading | null> {

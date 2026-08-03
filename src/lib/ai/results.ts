@@ -138,11 +138,24 @@ Propose the metric map.`,
 
 const fmtPct = (v: number | undefined, d = 1) => (v === undefined ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(d)}%`);
 
+/** The UI renders plain text — markdown syntax must never leak into it. */
+const stripMd = (s: string) => s.replace(/\*\*|__|^#+\s*/g, "").replace(/^\s*[-•▸*]\s*/, "").trim();
+
+const PLAIN_VERDICT: Record<string, string> = {
+  confirmed: "HYPOTHESIS CONFIRMED",
+  refuted: "HYPOTHESIS DISPROVEN",
+  guardrail_breach: "WON, BUT BROKE A GUARDRAIL",
+  keep_running: "TOO EARLY — KEEP RUNNING",
+  underpowered: "INCONCLUSIVE — NOT ENOUGH TRAFFIC",
+  invalid: "DATA CAN'T BE TRUSTED",
+  not_adjudicable: "NOT READY TO JUDGE YET",
+};
+
 function renderVerdict(v: VerdictRecord | null): string {
   if (!v) return "";
   const lines: string[] = [];
-  lines.push(`\nCOMPUTED VERDICT (${v.state === "stamped" ? `STAMPED by ${v.stampedBy ?? "a human"} at ${v.stampedAt ?? "?"} — the official record` : "draft — re-derives while the experiment runs"}; decided by the console's code, NOT by you — narrate it, never override it):`);
-  lines.push(`VERDICT: ${v.verdict.toUpperCase()} — ${v.headline}`);
+  lines.push(`\nCOMPUTED VERDICT (${v.state === "stamped" ? `STAMPED by ${v.stampedBy ?? "a human"} at ${v.stampedAt ?? "?"} — the official record` : "draft — re-derives while the experiment runs"}; decided by the console's code, NOT by you — narrate it, never override it. Use the plain phrase below verbatim if you name the verdict — NEVER an underscored code):`);
+  lines.push(`VERDICT: ${PLAIN_VERDICT[v.verdict] ?? v.verdict} — ${v.headline}`);
   if (v.preRegistration) {
     const pr = v.preRegistration;
     lines.push(`PRE-REGISTERED ${pr.anchor === "cut" ? `at v${pr.version} cut ${pr.cutAt?.slice(0, 10) ?? "?"}` : `with the measurement plan's confirmation ${pr.cutAt?.slice(0, 10) ?? "?"}`}: ${pr.hypothesis} Primary metric (in words): ${pr.primaryMetric}. Guardrails: ${pr.guardrails.join(" · ") || "(none)"}.`);
@@ -240,14 +253,14 @@ const readingTool = {
     type: "object" as const,
     properties: {
       summary: { type: "string" as const, description: "the TLDR: one or two sentences a leader reads first — where this experiment stands, in plain business words" },
-      dataRead: { type: "array" as const, items: { type: "string" as const }, description: "1-3 SHORT plain-language paragraphs: what the data shows so far and what it means. Any statistic gets a plain-words gloss; numbers support the sentence, never replace it" },
+      keyPoints: { type: "array" as const, items: { type: "string" as const }, description: "3-6 BULLETS, one fact each, LEADING with the number: 'Hero clicks: 4.14% control vs 1.47% variant — the variant is losing the main metric'. Plain words, statistic glossed, NEVER a paragraph. No markdown syntax — plain text only" },
       trendLine: { type: "string" as const, description: "one sentence: the direction of travel (stabilizing, growing, fading, flat)" },
       watchItems: { type: "array" as const, items: { type: "string" as const }, description: "0-3 one-sentence things that could change the story — in plain words (e.g. 'the traffic split looks uneven', never bare 'SRM p=0.03')" },
       questionsForYou: { type: "array" as const, items: { type: "string" as const }, description: "0-2 PREFERENCE questions (what does this team care about) — never statistics questions" },
       nextStep: { type: "string" as const, description: "one sentence: keep running / ship / iterate / close it out, tied to the verdict" },
       dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data the notebook or questions surfaced (device mix, segments) — recorded honestly" },
     },
-    required: ["summary", "dataRead", "watchItems", "questionsForYou", "nextStep"],
+    required: ["summary", "keyPoints", "watchItems", "questionsForYou", "nextStep"],
   },
 };
 
@@ -289,10 +302,10 @@ Give the READING (per the standing-reading structure in your instructions).`,
   if (!tu || tu.type !== "tool_use") throw new Error("The reading returned nothing — try again.");
   const raw = (tu.input ?? {}) as Record<string, unknown>;
   const strArr = (v: unknown, cap: number, len: number) =>
-    (Array.isArray(v) ? v : []).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => s.trim().slice(0, len)).slice(0, cap);
-  const summary = typeof raw.summary === "string" ? raw.summary.trim().slice(0, 400) : "";
-  const dataRead = strArr(raw.dataRead, 3, 700);
-  if (!summary && !dataRead.length) throw new Error("The reading came back empty — try again.");
+    (Array.isArray(v) ? v : []).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => stripMd(s).slice(0, len)).filter(Boolean).slice(0, cap);
+  const summary = typeof raw.summary === "string" ? stripMd(raw.summary).slice(0, 400) : "";
+  const keyPoints = strArr(raw.keyPoints, 6, 400);
+  if (!summary && !keyPoints.length) throw new Error("The reading came back empty — try again.");
 
   // DETECT-AND-REPAIR (enforce-LLM-behavior-in-code): nextStep is the one
   // verdict-adjacent sentence with no code tether — a voice preference must
@@ -314,7 +327,7 @@ Give the READING (per the standing-reading structure in your instructions).`,
   return {
     reading: {
       summary: summary || undefined,
-      dataRead,
+      keyPoints,
       trendLine: typeof raw.trendLine === "string" && raw.trendLine.trim() ? raw.trendLine.trim().slice(0, 300) : undefined,
       watchItems: strArr(raw.watchItems, 3, 300),
       questionsForYou: [...new Set(strArr(raw.questionsForYou, 2, 300))],
@@ -326,6 +339,28 @@ Give the READING (per the standing-reading structure in your instructions).`,
   };
 }
 
+export interface AnalystAnswer {
+  headline: string;
+  bullets: string[];
+  caveat?: string;
+  nextStep?: string;
+}
+
+const answerTool = {
+  name: "give_answer",
+  description: "The analyst's answer — executive format, enforced: a one-sentence direct answer, then bullets that each LEAD with a data point.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      headline: { type: "string" as const, description: "ONE sentence answering the question directly, plain business words" },
+      bullets: { type: "array" as const, items: { type: "string" as const }, description: "2-6 bullets, ONE fact each, LEADING with the number ('Hero clicks: 4.14% vs 1.47% — the variant is losing'). Plain text, no markdown" },
+      caveat: { type: "string" as const, description: "one sentence when honesty demands it (too early, exploratory, data gap)" },
+      nextStep: { type: "string" as const, description: "one sentence recommendation tied to the verdict" },
+    },
+    required: ["headline", "bullets"],
+  },
+};
+
 export async function analyzeResults(opts: {
   orgId: string;
   proto: PrototypeRecord;
@@ -336,7 +371,7 @@ export async function analyzeResults(opts: {
   orgNotebook?: OrgNotebook | null;
   protoNotebook?: ProtoNotebook | null;
   question?: string;
-}): Promise<string> {
+}): Promise<AnalystAnswer> {
   requireKey();
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
@@ -357,10 +392,21 @@ ${renderContext(opts.results, opts.map)}
 
 ${opts.question?.trim()
   ? `QUESTION: ${opts.question.trim().slice(0, 1000)}`
-  : "Give the readout per your structure: verdict first, the numbers that matter, flags honestly, discoveries as next experiments, then the recommendation."}`,
+  : "Give the readout: the verdict as the headline, then the numbers that matter as bullets, a caveat if honesty demands one, and the recommendation."}`,
     }],
+    tools: [answerTool],
+    tool_choice: { type: "tool", name: "give_answer" },
   });
-  const text = res.content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text).join("\n").trim();
-  if (!text) throw new Error("The analyst returned nothing — try again.");
-  return text;
+  const tu = res.content.find((c) => c.type === "tool_use");
+  if (!tu || tu.type !== "tool_use") throw new Error("The analyst returned nothing — try again.");
+  const raw = (tu.input ?? {}) as Record<string, unknown>;
+  const bullets = (Array.isArray(raw.bullets) ? raw.bullets : []).filter((b): b is string => typeof b === "string" && b.trim().length > 0).map((b) => stripMd(b).slice(0, 400)).filter(Boolean).slice(0, 6);
+  const headline = typeof raw.headline === "string" ? stripMd(raw.headline).slice(0, 300) : "";
+  if (!headline && !bullets.length) throw new Error("The analyst returned nothing — try again.");
+  return {
+    headline,
+    bullets,
+    caveat: typeof raw.caveat === "string" && raw.caveat.trim() ? stripMd(raw.caveat).slice(0, 300) : undefined,
+    nextStep: typeof raw.nextStep === "string" && raw.nextStep.trim() ? stripMd(raw.nextStep).slice(0, 300) : undefined,
+  };
 }

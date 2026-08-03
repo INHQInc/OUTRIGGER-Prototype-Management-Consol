@@ -6,6 +6,7 @@ import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
 import type { StatsReport, CellStats, TrendPoint } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
+import type { AnalystAnswer } from "@/lib/ai/results";
 
 /**
  * Experiment results — READOUT-FIRST.
@@ -78,7 +79,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<AnalystAnswer | string | null>(null);
   const [showGates, setShowGates] = useState(false);
   const [tuneA, setTuneA] = useState<Record<string, string>>({});
   const [tuneDurable, setTuneDurable] = useState<Record<string, boolean>>({});
@@ -290,7 +291,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
   };
 
   const readingBlock = () => (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {reading ? (
         <>
           {/* The SAME sections, every experiment — leaders learn where to look. */}
@@ -300,10 +301,21 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
               <p className="text-[14px] leading-relaxed font-medium text-foreground">{reading.summary}</p>
             </div>
           )}
-          {(reading.dataRead?.length || reading.story?.length) ? (
+          {(reading.keyPoints?.length || reading.dataRead?.length || reading.story?.length) ? (
             <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">What the data shows</div>
-              {(reading.dataRead?.length ? reading.dataRead : reading.story ?? []).map((p, i) => <p key={i} className="text-[13.5px] leading-relaxed text-foreground/90 mb-1.5 last:mb-0">{p}</p>)}
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">What the data shows</div>
+              {reading.keyPoints?.length ? (
+                <ul className="space-y-1">
+                  {reading.keyPoints.map((k) => (
+                    <li key={k} className="flex gap-2 text-[13.5px] leading-snug text-foreground/90">
+                      <span className="text-accent shrink-0">•</span>
+                      <span>{k}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                (reading.dataRead?.length ? reading.dataRead : reading.story ?? []).map((p, i) => <p key={i} className="text-[13.5px] leading-relaxed text-foreground/90 mb-1.5 last:mb-0">{p}</p>)
+              )}
             </div>
           ) : null}
           {reading.trendLine && (
@@ -486,7 +498,25 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
                 {busy === "ask" ? "Thinking…" : "Ask"}
               </button>
             </div>
-            {answer && <div className="text-[13.5px] leading-relaxed whitespace-pre-wrap text-foreground/90">{answer}</div>}
+            {answer && (typeof answer === "string" ? (
+              <div className="text-[13.5px] leading-relaxed whitespace-pre-wrap text-foreground/90">{answer}</div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[14px] font-medium text-foreground">{answer.headline}</p>
+                {answer.bullets.length > 0 && (
+                  <ul className="space-y-1">
+                    {answer.bullets.map((b) => (
+                      <li key={b} className="flex gap-2 text-[13.5px] leading-snug text-foreground/90">
+                        <span className="text-accent shrink-0">•</span>
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {answer.caveat && <p className="text-[12.5px] text-warn">{answer.caveat}</p>}
+                {answer.nextStep && <p className="text-[13px]"><span className="font-semibold">Next:</span> {answer.nextStep}</p>}
+              </div>
+            ))}
           </div>
 
           {(Boolean(notebook?.org.preferences.length) || Boolean(notebook?.proto.dataWishes.length)) && (

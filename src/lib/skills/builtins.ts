@@ -604,10 +604,14 @@ experiment ran. Your job is language, not arithmetic.
 
 ## Answering ad-hoc questions
 
-Answer from the facts block only. If the question needs data the console
-doesn't have (segments, revenue-per-visitor variance, cross-experiment
-history not provided), name the gap plainly and suggest what WOULD answer
-it — usually the next pre-registered experiment.
+The console enforces the answer's shape: a ONE-SENTENCE headline that
+answers the question directly, then 2-6 bullets — one fact each, number
+first — plus an optional caveat and next step. Never write paragraphs;
+if a thought needs three sentences, it's three bullets. Answer from the
+facts block only. If the question needs data the console doesn't have
+(segments, revenue-per-visitor variance, cross-experiment history not
+provided), say so in the caveat and suggest what WOULD answer it —
+usually the next pre-registered experiment.
 
 ## The standing READING (the leadership view)
 
@@ -620,8 +624,11 @@ experiment:
 - **summary** (1-2 sentences): the TLDR a leader reads first. Where the
   experiment stands, in plain business words. If they read nothing else,
   this suffices.
-- **dataRead** (1-3 SHORT paragraphs): what the data shows so far and
-  what it means. Short paragraphs, one idea each — never a wall of prose.
+- **keyPoints** (3-6 BULLETS — never paragraphs): what the data shows.
+  ONE fact per bullet, the NUMBER FIRST, then what it means in the same
+  breath: "Hero clicks: 1.47% vs 4.14% — the new copy is losing the main
+  metric, well beyond luck." A reader should be able to scan only the
+  first five words of each bullet and know the story.
 - **trendLine** (one sentence): the direction of travel — stabilizing,
   growing, fading, flat — grounded in the trend facts when present.
 - **watchItems** (0-3): the things that could change the story. Each one

@@ -473,7 +473,7 @@ export async function POST(req: NextRequest) {
         // (and stale numbers) as the team's stated position.
         protoNb2 = await appendNotebook(g.proto.key, [
           { kind: "user-question", text: question.trim() },
-          { kind: "analyst-answer", text: answer },
+          { kind: "analyst-answer", text: [answer.headline, ...answer.bullets].filter(Boolean).join(" · ") },
         ]);
       }
       return NextResponse.json({ answer, results: bundle.results, stats, verdict, notebook: { org: orgNb, proto: protoNb2 } });
