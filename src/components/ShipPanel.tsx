@@ -47,6 +47,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
   const [last, setLast] = useState(initialLastPush);
   const [editing, setEditing] = useState(!initialBinding);
   const [mode, setMode] = useState<"existing" | "create">("existing");
+  const effectiveMode = external ? "existing" : mode;
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [projectId, setProjectId] = useState(optiProjectId ?? "");
   const [experiments, setExperiments] = useState<{ id: string; name: string; status: string; lastModified?: string }[]>([]);
@@ -196,8 +197,10 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
       </div>
       <div className="p-4 space-y-3 text-[14px]">
 
-        {/* Which frozen cut ships — any version, so rollback is just picking an older one */}
-        {cut && (
+        {/* Which frozen cut ships — any version, so rollback is just picking an older one.
+            External prototypes have no cuts to pick and no certification to
+            show — the card is ONLY the experiment picker. */}
+        {!external && cut && (
           <div className={`rounded-lg border px-3 py-2.5 ${certification ? (certification.passed ? "border-ok/40 bg-[color-mix(in_srgb,var(--ok)_5%,transparent)]" : "border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)]") : "border-border bg-surface-2/20"}`}>
             <div className="flex items-center gap-3 flex-wrap">
               <label className="flex items-center gap-2 shrink-0">
@@ -266,6 +269,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
               </div>
             )}
 
+            {!external && (
             <div className="flex items-center gap-1 text-[13px]">
               {(["existing", "create"] as const).map((m) => (
                 <button key={m} onClick={() => { setMode(m); setMsg(null); }}
@@ -274,9 +278,10 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
                 </button>
               ))}
             </div>
+            )}
             {loadErr && <div className="text-[14px] text-danger">{loadErr} {loadErr.includes("connected") && <Link href="/settings/experimentation" className="text-accent hover:text-accent-hover">Connect →</Link>}</div>}
 
-            {mode === "existing" ? (
+            {effectiveMode === "existing" ? (
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <select value={expSel} onChange={(e) => { setExpSel(e.target.value); setVarSel(""); }} className={sel}>
@@ -319,7 +324,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
 
         {/* Push + state — externals have nothing to push, by design */}
         {external ? (
-          <p className="text-[13.5px] text-muted-2">{msg ? msg.text : binding ? "Bound ✓ — the variation code lives in Optimizely's editor; there is nothing to cut or push. Plan measurement below, then start it in Optimizely." : "Bind the experiment above — measurement, results, and the verdict all read from it."}</p>
+          <p className="text-[13.5px] text-muted-2">{msg ? msg.text : binding ? <>Bound ✓ — the variation lives in Optimizely&apos;s editor. <a href="?tab=analytics" className="text-accent hover:text-accent-hover font-medium">Plan measurement &amp; read results in Analytics →</a></> : "Bind the experiment above — measurement, results, and the verdict all read from it."}</p>
         ) : (
         <div className="flex items-center justify-between gap-3">
           <span className={`text-[14px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : stale ? "text-warn" : "text-muted-2"}`}>

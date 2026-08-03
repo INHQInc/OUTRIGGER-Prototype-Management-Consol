@@ -73,6 +73,10 @@ const STAGES = [
   { id: "build", label: "Build", step: "build" },
   { id: "review", label: "Review", step: "review" },
   { id: "experiment", label: "Experiment", step: "experiment" },
+  // Analytics is a LENS over the experiment stage, not a gate — its own
+  // room (measurement plan + results + verdict) because the Experiment
+  // room outgrew one scroll; no dot (the Experiment row carries status).
+  { id: "analytics", label: "Analytics", step: "experiment" },
   { id: "handoff", label: "Handoff", step: "handoff" },
 ] as const;
 type TabId = (typeof STAGES)[number]["id"] | "settings";
@@ -82,7 +86,7 @@ const ALL_TABS: string[] = [...STAGES.map((s) => s.id), "settings"];
 const TAB_ALIASES: Record<string, TabId> = {
   agent: "build", skills: "build", recs: "build", recommendations: "build",
   pages: "review", coverage: "review", tests: "review",
-  versions: "experiment", optimizely: "experiment",
+  versions: "experiment", optimizely: "experiment", results: "analytics", measurement: "analytics",
   explorer: "handoff", package: "handoff", ship: "handoff",
   repo: "settings", details: "settings", history: "settings", source: "settings",
 };
@@ -247,6 +251,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   // stage back to "not started".
   const RANK: Record<StepSeverity, number> = { critical: 3, attention: 2, pending: 1, good: 0, na: -1 };
   const dotFor = (stage: { id: string; step: string }): StepSeverity | null => {
+    if (stage.id === "analytics") return null; // a lens, not a gate — Experiment's dot carries the status
     const st = pipeline.steps.find((s) => s.id === stage.step);
     const base = st ? stepSeverity(st, pipeline.alerts) : null;
     // QA and cert already escalate INSIDE the pipeline (anchored alerts), so
@@ -473,7 +478,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         )}
 
         {tab === "experiment" && (
-          <Room title="Experiment" sub={external ? "Built in Optimizely: bind the experiment, declare the measurement plan before traffic, then read the verdict here." : "The release: freeze an immutable cut (certification runs at cut), bind the Optimizely experiment, push by API (read-back verified), start it in Optimizely. Running locks everything."}>
+          <Room title="Experiment" sub={external ? "Built in Optimizely: attach this prototype to its Optimizely experiment — everything else lives in Analytics." : "The release: freeze an immutable cut (certification runs at cut), bind the Optimizely experiment, push by API (read-back verified), start it in Optimizely. Running locks everything. Measurement and results live in Analytics."}>
             {!external && <SourcePanel prototypeKey={key} versions={versions} compact />}
             <Section id="ship" title={external ? "Bind the experiment" : "Ship to Optimizely"} sub={external ? "Pick the experiment built in Optimizely — measurement, results, and the verdict read from it." : "Bind or create the experiment, then push the frozen cut. Starting traffic stays a human act."}>
               <ShipPanel
@@ -490,10 +495,15 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
                 <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
               </div>}
             </Section>
-            <Section id="measurement" title="Measurement plan" sub="Declare how you'll judge the experiment BEFORE traffic runs. Claude decomposes the brief's outcome onto the experiment's real events — which surfaces express it, in which arm, what's decision vs adoption — asks the few questions that matter, and you confirm. Stamped pre-start, the verdict is defensible; the plan also flags anything you want measured that nothing instruments yet.">
+          </Room>
+        )}
+
+        {tab === "analytics" && (
+          <Room title="Analytics" sub={external ? "The whole point of an Opti-built prototype in this console: declare the measurement plan, then read the results and the verdict." : "Declare how you'll judge it before traffic, then read the results — the verdict card, the analyst's reading, and the numbers beneath."}>
+            <Section id="measurement" title="Measurement plan" sub="Declare how you'll judge the experiment BEFORE traffic runs. Claude decomposes the brief's outcome onto the experiment's real events, asks the few questions that matter, and you confirm — stamped pre-start, the verdict is defensible.">
               <MeasurementPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
             </Section>
-            <Section id="results" title="Results" sub="Live from Optimizely — adjudicated against the pre-registered plan: the verdict card on top, real confidence intervals beneath, and the analyst for questions.">
+            <Section id="results" title="Results" sub="Live from Optimizely — judged against the pre-registered plan: the readout on top, the numbers folded beneath.">
               <ResultsPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
             </Section>
           </Room>

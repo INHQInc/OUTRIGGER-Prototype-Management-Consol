@@ -372,7 +372,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
           <span className="text-warn font-semibold">⚠ Results report events the measurement plan never reviewed:</span>{" "}
           <span className="font-mono text-[12px]">{planDrift.join(" · ")}</span>
           <span className="text-muted-2"> — the build moved past the plan. </span>
-          <a href="?tab=experiment#measurement" className="text-accent hover:text-accent-hover font-medium">Re-plan to classify them →</a>
+          <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium">Re-plan to classify them →</a>
         </div>
       )}
 
@@ -410,7 +410,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
           {verdict && (
             <p className="text-[13.5px] leading-relaxed">
               {verdict.headline}
-              {verdict.verdict === "not_adjudicable" && <> <a href="?tab=experiment#measurement" className="text-accent hover:text-accent-hover font-medium">Set it up in the Measurement section →</a></>}
+              {verdict.verdict === "not_adjudicable" && <> <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium">Set it up in the Measurement section →</a></>}
             </p>
           )}
           {pr && (
