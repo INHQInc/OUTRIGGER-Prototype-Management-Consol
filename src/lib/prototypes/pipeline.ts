@@ -152,7 +152,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   if (!external && !synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
   if (!external && problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   if (!external && latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
-  if (inp.adjudicationPending) alerts.push({ level: "warn", text: "The experiment run ended but its verdict isn't stamped — adjudicate the results against the pre-registered brief.", anchor: "experiment" });
+  if (inp.adjudicationPending) alerts.push({ level: "warn", text: "The experiment run ended but its final verdict isn't stamped — close it out in the Results section.", anchor: "experiment" });
   if (!external && inp.qaFailing) alerts.push({ level: "danger", text: "QA has failing checks — fix and re-run the tests before shipping.", anchor: "review" });
   else if (!external && inp.qaStale) alerts.push({ level: "warn", text: "QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.", anchor: "review" });
   if (!external && lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });
@@ -225,7 +225,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     ? (!bound ? "no experiment bound"
       : running ? "live — running in Optimizely"
       : stageShipped ? "concluded"
-      : ended ? "concluded — adjudicate the results"
+      : ended ? "concluded — close out the results"
       : "bound · plan measurement, then start it in Optimizely")
     : !latest ? "no version cut"
     : !cutFresh ? `v${latest.version} · HEAD moved — cut a new version`
@@ -283,7 +283,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
       : !bound ? { label: "Bind the Optimizely experiment", anchor: "experiment" }
       : running ? { label: "Running — watch results", anchor: "experiment" }
       : stageShipped ? { label: "Concluded", anchor: "experiment" }
-      : ended || inp.adjudicationPending ? { label: "Adjudicate the results", anchor: "experiment" }
+      : ended || inp.adjudicationPending ? { label: "Close out the results", anchor: "experiment" }
       : { label: "Plan measurement, then start it", anchor: "experiment" };
   }
   else if (drifted) primaryAction = { label: "Resolve brief ↔ build drift", anchor: "brief" };

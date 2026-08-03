@@ -145,7 +145,7 @@ function renderVerdict(v: VerdictRecord | null): string {
   lines.push(`VERDICT: ${v.verdict.toUpperCase()} — ${v.headline}`);
   if (v.preRegistration) {
     const pr = v.preRegistration;
-    lines.push(`PRE-REGISTERED at v${pr.version} cut ${pr.cutAt?.slice(0, 10) ?? "?"} (BEFORE traffic): ${pr.hypothesis} Primary metric (in words): ${pr.primaryMetric}. Guardrails: ${pr.guardrails.join(" · ") || "(none)"}.`);
+    lines.push(`PRE-REGISTERED ${pr.anchor === "cut" ? `at v${pr.version} cut ${pr.cutAt?.slice(0, 10) ?? "?"}` : `with the measurement plan's confirmation ${pr.cutAt?.slice(0, 10) ?? "?"}`}: ${pr.hypothesis} Primary metric (in words): ${pr.primaryMetric}. Guardrails: ${pr.guardrails.join(" · ") || "(none)"}.`);
     if (pr.mapConfirmedAfterObservation) lines.push(`DISCLOSURE: the metric mapping was confirmed AFTER results observation began — the metric WORDS are pre-registered; their operationalization is not.`);
   }
   lines.push(`Gate trace: ${v.gates.map((g) => `${g.title}=${g.pass === null ? "n/a" : g.pass ? "PASS" : "FAIL"}`).join(" · ")}`);
@@ -235,18 +235,19 @@ function renderNotebook(org: OrgNotebook | null, proto: ProtoNotebook | null): s
 
 const readingTool = {
   name: "give_reading",
-  description: "The standing leadership reading over the computed facts.",
+  description: "The standing leadership reading over the computed facts — fixed sections, plain language, no unexplained statistics.",
   input_schema: {
     type: "object" as const,
     properties: {
-      story: { type: "array" as const, items: { type: "string" as const }, description: "2-4 short paragraphs: the goal, what the data is doing, what it means" },
-      trendLine: { type: "string" as const, description: "one sentence: the direction of travel" },
-      watchItems: { type: "array" as const, items: { type: "string" as const }, description: "0-3 one-sentence things that could change the story" },
+      summary: { type: "string" as const, description: "the TLDR: one or two sentences a leader reads first — where this experiment stands, in plain business words" },
+      dataRead: { type: "array" as const, items: { type: "string" as const }, description: "1-3 SHORT plain-language paragraphs: what the data shows so far and what it means. Any statistic gets a plain-words gloss; numbers support the sentence, never replace it" },
+      trendLine: { type: "string" as const, description: "one sentence: the direction of travel (stabilizing, growing, fading, flat)" },
+      watchItems: { type: "array" as const, items: { type: "string" as const }, description: "0-3 one-sentence things that could change the story — in plain words (e.g. 'the traffic split looks uneven', never bare 'SRM p=0.03')" },
       questionsForYou: { type: "array" as const, items: { type: "string" as const }, description: "0-2 PREFERENCE questions (what does this team care about) — never statistics questions" },
-      nextStep: { type: "string" as const, description: "one sentence: keep running / ship / iterate / adjudicate, tied to the verdict" },
+      nextStep: { type: "string" as const, description: "one sentence: keep running / ship / iterate / close it out, tied to the verdict" },
       dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data the notebook or questions surfaced (device mix, segments) — recorded honestly" },
     },
-    required: ["story", "watchItems", "questionsForYou", "nextStep"],
+    required: ["summary", "dataRead", "watchItems", "questionsForYou", "nextStep"],
   },
 };
 
@@ -289,8 +290,9 @@ Give the READING (per the standing-reading structure in your instructions).`,
   const raw = (tu.input ?? {}) as Record<string, unknown>;
   const strArr = (v: unknown, cap: number, len: number) =>
     (Array.isArray(v) ? v : []).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => s.trim().slice(0, len)).slice(0, cap);
-  const story = strArr(raw.story, 4, 700);
-  if (!story.length) throw new Error("The reading came back empty — try again.");
+  const summary = typeof raw.summary === "string" ? raw.summary.trim().slice(0, 400) : "";
+  const dataRead = strArr(raw.dataRead, 3, 700);
+  if (!summary && !dataRead.length) throw new Error("The reading came back empty — try again.");
 
   // DETECT-AND-REPAIR (enforce-LLM-behavior-in-code): nextStep is the one
   // verdict-adjacent sentence with no code tether — a voice preference must
@@ -304,14 +306,15 @@ Give the READING (per the standing-reading structure in your instructions).`,
       refuted: "Don't ship — the hypothesis was refuted; document the learning and iterate.",
       guardrail_breach: "Don't ship — a guardrail broke its pre-set tolerance; iterate before rollout.",
       invalid: "No decision until the data validity issue is fixed — the numbers can't be trusted.",
-      not_adjudicable: "Make the experiment adjudicable first (confirm the measurement plan), then decide.",
+      not_adjudicable: "Confirm the measurement plan first — then the experiment can be judged.",
     };
     nextStep = SAFE[v] ?? "Hold the decision — the verdict doesn't support shipping yet.";
   }
 
   return {
     reading: {
-      story,
+      summary: summary || undefined,
+      dataRead,
       trendLine: typeof raw.trendLine === "string" && raw.trendLine.trim() ? raw.trendLine.trim().slice(0, 300) : undefined,
       watchItems: strArr(raw.watchItems, 3, 300),
       questionsForYou: [...new Set(strArr(raw.questionsForYou, 2, 300))],

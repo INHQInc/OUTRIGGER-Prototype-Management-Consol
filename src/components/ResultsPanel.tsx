@@ -23,12 +23,12 @@ const pctS = (v: number | undefined, digits = 1, signed = true) =>
 
 const VERDICT_LOOK: Record<VerdictState, { label: string; cls: string; border: string }> = {
   confirmed: { label: "HYPOTHESIS CONFIRMED", cls: "text-ok", border: "border-ok/50" },
-  refuted: { label: "HYPOTHESIS REFUTED", cls: "text-danger", border: "border-danger/50" },
-  guardrail_breach: { label: "GUARDRAIL BREACH", cls: "text-warn", border: "border-warn/60" },
+  refuted: { label: "HYPOTHESIS DISPROVEN", cls: "text-danger", border: "border-danger/50" },
+  guardrail_breach: { label: "WON, BUT BROKE A GUARDRAIL", cls: "text-warn", border: "border-warn/60" },
   keep_running: { label: "TOO EARLY — KEEP RUNNING", cls: "text-muted", border: "border-border" },
-  underpowered: { label: "INCONCLUSIVE · UNDERPOWERED", cls: "text-warn", border: "border-border" },
-  invalid: { label: "INVALID — DATA UNTRUSTWORTHY", cls: "text-danger", border: "border-danger/60" },
-  not_adjudicable: { label: "NOT ADJUDICABLE YET", cls: "text-muted-2", border: "border-border" },
+  underpowered: { label: "INCONCLUSIVE — NOT ENOUGH TRAFFIC", cls: "text-warn", border: "border-border" },
+  invalid: { label: "DATA CAN'T BE TRUSTED", cls: "text-danger", border: "border-danger/60" },
+  not_adjudicable: { label: "NOT READY TO JUDGE YET", cls: "text-muted-2", border: "border-border" },
 };
 
 function Sparkline({ trend }: { trend: TrendPoint[] }) {
@@ -293,14 +293,37 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
     <div className="space-y-2">
       {reading ? (
         <>
-          {reading.story.map((p, i) => <p key={i} className="text-[13.5px] leading-relaxed text-foreground/90">{p}</p>)}
-          {reading.trendLine && <p className="text-[13px] text-muted italic">{reading.trendLine}</p>}
+          {/* The SAME sections, every experiment — leaders learn where to look. */}
+          {reading.summary && (
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Summary</div>
+              <p className="text-[14px] leading-relaxed font-medium text-foreground">{reading.summary}</p>
+            </div>
+          )}
+          {(reading.dataRead?.length || reading.story?.length) ? (
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">What the data shows</div>
+              {(reading.dataRead?.length ? reading.dataRead : reading.story ?? []).map((p, i) => <p key={i} className="text-[13.5px] leading-relaxed text-foreground/90 mb-1.5 last:mb-0">{p}</p>)}
+            </div>
+          ) : null}
+          {reading.trendLine && (
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Trend</div>
+              <p className="text-[13px] text-muted">{reading.trendLine}</p>
+            </div>
+          )}
           {reading.watchItems.length > 0 && (
-            <div className="space-y-0.5">
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Watching</div>
               {reading.watchItems.map((w) => <p key={w} className="text-[12.5px] text-warn">▸ {w}</p>)}
             </div>
           )}
-          {reading.nextStep && <p className="text-[13px]"><span className="font-semibold">Next:</span> {reading.nextStep}</p>}
+          {reading.nextStep && (
+            <div>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">Next step</div>
+              <p className="text-[13px] font-medium">{reading.nextStep}</p>
+            </div>
+          )}
           {reading.questionsForYou.length > 0 && (
             <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-2">
               <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">The analyst wants to know what you care about</div>
@@ -364,7 +387,7 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
           <span className="ml-auto flex items-center gap-2">
             {statsEff && (
               <span className={`text-[11px] ${statsEff.validity.status === "ok" ? "text-ok" : statsEff.validity.status === "unknown" ? "text-muted-2" : statsEff.validity.status === "warn" ? "text-warn font-semibold" : "text-danger font-semibold"}`} title={statsEff.validity.detail}>
-                {statsEff.validity.status === "ok" ? "✓ SRM ok" : statsEff.validity.status === "unknown" ? "SRM: n/a" : "⚠ SRM " + statsEff.validity.status}
+                {statsEff.validity.status === "ok" ? "✓ traffic split healthy" : statsEff.validity.status === "unknown" ? "traffic split: too early to check" : statsEff.validity.status === "warn" ? "⚠ traffic split looks off" : "⚠ traffic split broken"}
               </span>
             )}
             {verdict && !stamped && stoppable && (
@@ -387,12 +410,12 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
           {verdict && (
             <p className="text-[13.5px] leading-relaxed">
               {verdict.headline}
-              {verdict.verdict === "not_adjudicable" && <> <a href="?tab=experiment#measurement" className="text-accent hover:text-accent-hover font-medium">Fix it in the Measurement section →</a></>}
+              {verdict.verdict === "not_adjudicable" && <> <a href="?tab=experiment#measurement" className="text-accent hover:text-accent-hover font-medium">Set it up in the Measurement section →</a></>}
             </p>
           )}
           {pr && (
             <p className="text-[13px] text-muted">
-              <span className="font-semibold text-foreground/90">The goal (pre-registered at v{pr.version}{pr.cutAt ? `, ${pr.cutAt.slice(0, 10)}` : ""}, before traffic):</span> {pr.hypothesis} <span className="text-muted-2">Primary: {pr.primaryMetric}.</span>
+              <span className="font-semibold text-foreground/90">The goal ({pr.anchor === "cut" ? `pre-registered at v${pr.version}` : "frozen with the measurement plan"}{pr.cutAt ? `, ${pr.cutAt.slice(0, 10)}` : ""}):</span> {pr.hypothesis} <span className="text-muted-2">Primary: {pr.primaryMetric}.</span>
               {pr.mapConfirmedAfterObservation && <span className="text-warn"> Metric mapping operationalized after observation began (disclosed).</span>}
             </p>
           )}

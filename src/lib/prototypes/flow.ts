@@ -84,7 +84,7 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
   // Adjudication reads the FROZEN briefSnapshot, so even live brief drift
   // doesn't block it.
   if (t.adjudicationPending) {
-    q.push({ id: "adjudicate", kind: "link", tab: "experiment", anchor: "results", label: "Adjudicate the experiment", why: "the run ended — review the verdict against the pre-registered brief and stamp it" });
+    q.push({ id: "adjudicate", kind: "link", tab: "experiment", anchor: "results", label: "Close out the experiment", why: "the run ended — review the final verdict against what was predicted, then stamp it as the record" });
   }
 
   // ── Plan: the brief must be true before anything downstream matters ──

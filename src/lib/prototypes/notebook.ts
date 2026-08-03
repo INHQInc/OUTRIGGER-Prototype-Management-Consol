@@ -44,7 +44,12 @@ export interface ProtoNotebook {
 }
 
 export interface Reading {
-  story: string[];
+  /** The TLDR — one or two sentences a leader reads first. */
+  summary?: string;
+  /** "What the data shows" — 1-3 short plain-language paragraphs. */
+  dataRead?: string[];
+  /** Legacy cached readings (pre-sectioned format). */
+  story?: string[];
   trendLine?: string;
   watchItems: string[];
   questionsForYou: string[];
