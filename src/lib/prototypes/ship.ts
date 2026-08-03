@@ -17,7 +17,7 @@ import { getOptimizelyClientForOrg } from "../experimentation";
 import { OptimizelyClient } from "../optimizely/api";
 import { resolvePrototypeOrg } from "./org";
 import { listArtifactVersions } from "./versions";
-import { isBriefComplete } from "./types";
+import { isExternalBuild, isBriefComplete } from "./types";
 import { getCoverage, coverageGate } from "./coverage";
 import { audit } from "../audit";
 
@@ -46,6 +46,9 @@ export async function pushToOptimizely(prototypeKey: string, opts: { version?: n
   const store = await getContentStore();
   const proto = await store.getPrototype(prototypeKey);
   if (!proto) throw new Error("Unknown prototype");
+  if (isExternalBuild(proto)) {
+    throw new Error("This prototype is built externally in Optimizely — its variation code is authored there, and a console push would overwrite it. Flip 'Built externally' off in Settings → Details if that changed.");
+  }
   const orgId = await resolvePrototypeOrg(proto);
   if (!orgId) throw new Error("This prototype has no owning customer.");
   if (!proto.experiment?.experimentId || !proto.experiment?.variationId) {

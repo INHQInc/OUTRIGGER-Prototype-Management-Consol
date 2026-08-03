@@ -28,6 +28,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [builtHere, setBuiltHere] = useState(true);
   const [targets, setTargets] = useState<Target[]>([{ url: "", source: "live" }]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,8 +76,12 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
 
   const cleanTargets = targets.filter((t) => t.url.trim()).map((t) => ({ url: t.url.trim(), source: t.source }));
   const branchChoice = branch || newBranch;
-  const blocked = !loadingRepos && (!gitConnected || repos.length === 0);
-  const valid = name.trim().length > 0 && description.trim().length > 0 && !!repo && hasStarter && cleanTargets.length > 0 && targets.every((t) => !t.url.trim() || isUrl(t.url));
+  // Externally-built experiments need no repo/branch — the console provides
+  // Brief + Experiment (bind, measurement plan, results) and nothing else.
+  const blocked = builtHere && !loadingRepos && (!gitConnected || repos.length === 0);
+  const valid = name.trim().length > 0 && description.trim().length > 0
+    && (!builtHere || (!!repo && hasStarter))
+    && cleanTargets.length > 0 && targets.every((t) => !t.url.trim() || isUrl(t.url));
 
   function setTarget(i: number, patch: Partial<Target>) { setTargets((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t))); }
 
@@ -87,7 +92,13 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
       const res = await fetch("/api/prototypes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), brief: { change: description.trim() }, targets: cleanTargets, repo: { fullName: repo, branch: branchChoice } }),
+        body: JSON.stringify({
+          name: name.trim(),
+          brief: { change: description.trim() },
+          targets: cleanTargets,
+          buildMode: builtHere ? "console" : "external",
+          ...(builtHere ? { repo: { fullName: repo, branch: branchChoice } } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data.error ?? "Could not create prototype"); setBusy(false); return; }
@@ -104,7 +115,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
         <div>
           <label className={lbl}>Name</label>
           <input className={inp} value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="e.g. a short name for this experiment" />
-          {name.trim() && <div className={hint}>Branch: <span className="font-mono">{newBranch}</span></div>}
+          {name.trim() && builtHere && <div className={hint}>Branch: <span className="font-mono">{newBranch}</span></div>}
         </div>
 
         <div>
@@ -113,6 +124,22 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
         </div>
 
         <div>
+          <label className={lbl}>Will this prototype be built in this app?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { v: true, title: "Yes — full pipeline", sub: "Branch, Claude agent, QA, versions, API push" },
+              { v: false, title: "No — built in Optimizely", sub: "Brief + experiment analytics only (bind, measurement plan, results, verdict)" },
+            ].map((o) => (
+              <button key={String(o.v)} type="button" onClick={() => setBuiltHere(o.v)}
+                className={`rounded-lg border px-3 py-2 text-left transition-colors ${builtHere === o.v ? "border-accent bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : "border-border hover:border-border-strong"}`}>
+                <div className="text-[13.5px] font-semibold">{o.title}</div>
+                <div className="text-[12px] text-muted-2">{o.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {builtHere && <div>
           <label className={lbl}>Repository &amp; branch</label>
           {loadingRepos ? (
             <div className="text-[14px] text-muted-2">Loading repositories…</div>
@@ -135,7 +162,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
           {!loadingRepos && !blocked && repo && !branchesLoading && !hasStarter && (
             <div className="text-[13px] text-danger mt-1">This repo has no <span className="font-mono">starter</span> template branch — prototypes can&apos;t fork from it. Pick your prototypes repo.</div>
           )}
-        </div>
+        </div>}
 
         <div>
           <div className="flex items-center justify-between mb-1">

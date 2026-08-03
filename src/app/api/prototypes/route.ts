@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
     siteKey: b.siteKey ?? existing?.siteKey ?? "",
     name: b.name.trim(),
     status: normalizeStage(b.status),
+    buildMode: b.buildMode === "external" ? "external" : b.buildMode === "console" ? "console" : existing?.buildMode,
     repo: b.repo?.fullName?.trim()
       ? { fullName: b.repo.fullName.trim(), branch: prototypeBranch(b.repo.branch, key), ...(b.repo.artifactPath?.trim() ? { artifactPath: b.repo.artifactPath.trim() } : {}) }
       : undefined,
@@ -161,6 +162,10 @@ export async function PATCH(req: NextRequest) {
     changes.push(updated.repo ? `repo ${updated.repo.fullName}@${updated.repo.branch}` : "repo cleared");
   }
   if (body.name !== undefined && body.name.trim()) { updated.name = body.name.trim(); changes.push("name"); }
+  if (body.buildMode !== undefined) {
+    updated.buildMode = body.buildMode === "external" ? "external" : "console";
+    changes.push(updated.buildMode === "external" ? "built externally (Optimizely) — brief + experiment only" : "built in this app (full pipeline)");
+  }
   if (body.targets !== undefined) {
     const prevInj = new Map(proto.targets.map((t) => [t.url, t.injection]));
     updated.targets = (body.targets ?? []).filter((t) => t.url?.trim()).map((t) => {

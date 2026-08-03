@@ -6,9 +6,10 @@ const SEG: Record<StepSeverity, string> = {
   attention: "bg-warn opacity-100",
   good: "bg-ok opacity-100",
   pending: "bg-border-strong opacity-40",
+  na: "bg-border opacity-25",
 };
 const WORD: Record<StepSeverity, string> = {
-  critical: "blocked", attention: "needs attention", good: "done", pending: "not started",
+  critical: "blocked", attention: "needs attention", good: "done", pending: "not started", na: "n/a — built in Optimizely",
 };
 
 /**

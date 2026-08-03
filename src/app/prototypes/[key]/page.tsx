@@ -13,7 +13,7 @@ import { getExperimentationConfig, getOptimizelyClientForOrg } from "@/lib/exper
 import { listAuditEvents } from "@/lib/audit";
 import { derivePipeline, stepSeverity, type Pipeline } from "@/lib/prototypes/pipeline";
 import { type StepSeverity } from "@/lib/prototypes/severity";
-import { isBriefComplete, normalizeStage, injectionPasses } from "@/lib/prototypes/types";
+import { isBriefComplete, normalizeStage, injectionPasses, isExternalBuild } from "@/lib/prototypes/types";
 import { deriveSetup } from "@/lib/prototypes/setup";
 import { SetupRefresh, SkipSetup } from "@/components/SetupControls";
 import { resolveSkillsForPrototype } from "@/lib/skills/skills";
@@ -150,7 +150,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const briefAudit = await getBriefAuditMarker(key).catch(() => null);
   const auditTarget = auditTargetCode(source, versions[0]);
   const auditNeeded = briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p));
-  if (!briefDrift && auditNeeded) {
+  if (!isExternalBuild(p) && !briefDrift && auditNeeded) {
     after(() => runBriefAudit(p, { actor: "console (auto-audit)" }).catch(() => {}));
   }
 
@@ -179,8 +179,11 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   // Evidence of OPERATION also counts as base-set — a prototype with a cut,
   // a push, a bound experiment, or an advanced stage predates this flow (or
   // was driven by API) and must never regress into setup.
+  const external = isExternalBuild(p);
   const operated = versions.length > 0 || Boolean(push) || Boolean(p.experiment) || normalizeStage(p.status) !== "draft";
-  const setupMode = !setupDoneFlag && !setupSkipFlag && !setup.complete && !operated;
+  // Externally-built prototypes have no branch/agent/build steps — the
+  // guided setup doesn't apply; the brief + bind flow is the onboarding.
+  const setupMode = !external && !setupDoneFlag && !setupSkipFlag && !setup.complete && !operated;
   if ((setup.complete || operated) && !setupDoneFlag) {
     after(async () => { await (await getContentStore()).setFlag(`setupdone:${key}`, new Date().toISOString()).catch(() => {}); });
   }
@@ -242,7 +245,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   // cert must red Experiment. Sections escalate only on attention/critical —
   // an untouched optional section (no package yet) must never demote a DONE
   // stage back to "not started".
-  const RANK: Record<StepSeverity, number> = { critical: 3, attention: 2, pending: 1, good: 0 };
+  const RANK: Record<StepSeverity, number> = { critical: 3, attention: 2, pending: 1, good: 0, na: -1 };
   const dotFor = (stage: { id: string; step: string }): StepSeverity | null => {
     const st = pipeline.steps.find((s) => s.id === stage.step);
     const base = st ? stepSeverity(st, pipeline.alerts) : null;
@@ -251,7 +254,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     // board. One workspace-only exception: an invalid/unreadable integration
     // package raises Handoff to attention (the table doesn't pay the GitHub
     // read per row; problems still surface here, in the room, and the queue).
-    if (stage.id === "handoff" && base !== "critical"
+    if (!external && stage.id === "handoff" && base !== "critical"
       && (integrationPackage.state === "invalid" || integrationPackage.state === "unreadable")) return "attention";
     return base;
   };
@@ -288,6 +291,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     pushCurrent: Boolean(push && latest && push.verified && push.version === latest.version && push.gitSha === latest.gitSha),
     experimentRunning: experimentStatus === "running",
     measurementPlanned: Boolean(metricMap?.confirmed),
+    externalBuild: external,
     adjudicationPending: adjPending,
     shipped: normalizeStage(p.status) === "shipped",
   });
@@ -442,7 +446,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
           </Room>
         )}
 
-        {tab === "build" && (
+        {tab === "build" && external && <NaRoom title="Build" toggleHint />}
+        {tab === "build" && !external && (
           <Room title="Build" sub="Get the agent building: prepare the branch, start Claude, keep it in sync. The agent builds in the repo; the console pulls the result.">
             <InitScript prototypeKey={key} repo={repo} provisioned={Boolean(provisionFlag)} previewUrl={p.targets[0]?.url} buildStatus={buildStatus} briefDone={isBriefComplete(p.brief, p.metrics)} claudeSeenAt={claudeSeen} inSync={pipeline.truth.synced} />
             <Section id="skills" title="Skills" sub="What the agent wakes up knowing for this prototype. Changes reach the branch on the next re-sync.">
@@ -454,7 +459,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
           </Room>
         )}
 
-        {tab === "review" && (
+        {tab === "review" && external && <NaRoom title="Review" />}
+        {tab === "review" && !external && (
           <Room title="Review" sub="Is it right? Verify it injects on the real page(s), then walk the QA — scenarios per device, and the test cases your agent runs and reports back. Review happens on the real environment, not a mockup.">
             <TargetPages prototypeKey={key} initialTargets={p.targets} environments={envs} consoleUrl={consoleUrl} />
             <Section id="scenarios" title="QA scenarios" sub="Use cases with checkable tests per device, derived from the brief AND the built code. Gaps are scenarios the build doesn't handle.">
@@ -467,9 +473,9 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         )}
 
         {tab === "experiment" && (
-          <Room title="Experiment" sub="The release: freeze an immutable cut (certification runs at cut), bind the Optimizely experiment, push by API (read-back verified), start it in Optimizely. Running locks everything.">
-            <SourcePanel prototypeKey={key} versions={versions} compact />
-            <Section id="ship" title="Ship to Optimizely" sub="Bind or create the experiment, then push the frozen cut. Starting traffic stays a human act.">
+          <Room title="Experiment" sub={external ? "Built in Optimizely: bind the experiment, declare the measurement plan before traffic, then read the verdict here." : "The release: freeze an immutable cut (certification runs at cut), bind the Optimizely experiment, push by API (read-back verified), start it in Optimizely. Running locks everything."}>
+            {!external && <SourcePanel prototypeKey={key} versions={versions} compact />}
+            <Section id="ship" title={external ? "Bind the experiment" : "Ship to Optimizely"} sub={external ? "Pick the experiment built in Optimizely — measurement, results, and the verdict read from it." : "Bind or create the experiment, then push the frozen cut. Starting traffic stays a human act."}>
               <ShipPanel
                 prototypeKey={key}
                 versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, hasCode: Boolean(v.variationJs), certification: v.certification ?? null }))}
@@ -478,10 +484,11 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
                 optiProjectId={expCfg?.optimizely?.defaultProjectId ?? null}
                 targetCount={p.targets.length}
                 prototypeName={p.name}
+                external={external}
               />
-              <div className="mt-3">
+              {!external && <div className="mt-3">
                 <OptimizelyBundle prototypeKey={key} name={p.name} metric={p.metrics.primary} targetUrls={p.targets.map((t) => t.url)} version={versions[0]?.version} variationJs={versions[0]?.variationJs} />
-              </div>
+              </div>}
             </Section>
             <Section id="measurement" title="Measurement plan" sub="Declare how you'll judge the experiment BEFORE traffic runs. Claude decomposes the brief's outcome onto the experiment's real events — which surfaces express it, in which arm, what's decision vs adoption — asks the few questions that matter, and you confirm. Stamped pre-start, the verdict is defensible; the plan also flags anything you want measured that nothing instruments yet.">
               <MeasurementPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
@@ -492,7 +499,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
           </Room>
         )}
 
-        {tab === "handoff" && (
+        {tab === "handoff" && external && <NaRoom title="Handoff" />}
+        {tab === "handoff" && !external && (
           <Room title="Handoff" sub="What the dev team receives: the winning code frozen at its exact SHA, the native CMS integration package, and the ship record." wide>
             <HandoffExplorer prototypeKey={key} versions={versions.map((v) => ({ version: v.version, gitSha: v.gitSha, createdAt: v.createdAt, certPassed: v.certification ? v.certification.passed : null }))} />
             <Section id="package" title="Integration package" sub="The one-shot production handoff: the winner rebuilt NATIVELY for the site's CMS — Razor views, SCSS, JS, C# backend/API, diffs, and an integration guide. Staged entirely in the prototype repo; their team applies it on their terms.">
@@ -503,7 +511,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
                 <div className={`mb-4 rounded-lg border px-3.5 py-2.5 text-[13px] ${verdict.verdict === "confirmed" ? "border-ok/40" : verdict.verdict === "refuted" || verdict.verdict === "invalid" ? "border-danger/40" : "border-border"}`}>
                   <span className={`font-bold uppercase text-[11px] tracking-wide mr-2 ${verdict.verdict === "confirmed" ? "text-ok" : verdict.verdict === "refuted" || verdict.verdict === "invalid" ? "text-danger" : "text-warn"}`}>Verdict: {verdict.verdict.replace(/_/g, " ")}</span>
                   <span className="text-muted">{verdict.headline}</span>
-                  <span className="text-muted-2"> — stamped by {verdict.stampedBy} on {verdict.stampedAt?.slice(0, 10)}{verdict.preRegistration ? `, adjudicated against v${verdict.preRegistration.version}'s pre-registered brief` : ""}. The integration package below carries the WHY, not just the what.</span>
+                  <span className="text-muted-2"> — stamped by {verdict.stampedBy} on {verdict.stampedAt?.slice(0, 10)}{verdict.preRegistration ? (verdict.preRegistration.anchor === "cut" ? `, adjudicated against v${verdict.preRegistration.version}'s pre-registered brief` : ", adjudicated against the brief frozen with the measurement plan") : ""}. The integration package below carries the WHY, not just the what.</span>
                 </div>
               )}
               <HandoffPanel prototypeKey={key} repoFullName={repo?.fullName} latestVersion={versions[0]?.version} handoff={handoff} />
@@ -575,6 +583,19 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
 }
 
 /** One room: title + one-line purpose + content, at a comfortable measure. */
+/** A stage that doesn't exist for this prototype — externally built. */
+function NaRoom({ title, toggleHint }: { title: string; toggleHint?: boolean }) {
+  return (
+    <div className="rounded-xl border border-border bg-surface px-5 py-6 max-w-2xl">
+      <div className="text-[15px] font-semibold text-muted-2">{title} — not applicable</div>
+      <p className="text-[13.5px] text-muted-2 mt-1.5 leading-relaxed">
+        This prototype is <span className="font-medium text-muted">built externally in Optimizely&apos;s editor</span> — the console provides the brief and the experiment analytics (bind, measurement plan, results, verdict); the repo pipeline stages don&apos;t exist for it.
+        {toggleHint && <> If that changes, flip <Link href="?tab=settings#details" className="text-accent hover:text-accent-hover font-medium">Built externally</Link> off in Settings → Details and the full pipeline lights up.</>}
+      </p>
+    </div>
+  );
+}
+
 function Room({ title, sub, wide = false, children }: { title: string; sub: string; wide?: boolean; children: React.ReactNode }) {
   return (
     <div className={wide ? "" : "max-w-4xl"}>

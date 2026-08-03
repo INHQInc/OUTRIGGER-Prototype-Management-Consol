@@ -201,6 +201,15 @@ export function MeasurementPanel({ prototypeKey, bound, running }: {
                   {busy === "confirm" ? "Stamping…" : firstObservedAt ? "Confirm the plan" : "Confirm — freeze it before traffic"}
                 </button>
               )}
+              {plan.confirmed && !plan.briefAtConfirm && (
+                // One-time upgrade: plans confirmed before brief-freezing
+                // existed re-confirm to freeze the contract (old stamp archived).
+                <button onClick={() => post("confirm", { confirm: true })} disabled={busy !== null}
+                  className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40"
+                  title="This plan was confirmed before the console froze the brief with it — re-confirm once to freeze the contract for the verdict.">
+                  {busy === "confirm" ? "Freezing…" : "Re-confirm — freeze the brief"}
+                </button>
+              )}
             </span>
           </div>
         </div>

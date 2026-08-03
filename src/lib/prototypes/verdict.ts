@@ -60,7 +60,11 @@ export interface Discovery {
 }
 
 export interface PreRegistration {
-  version: number;
+  /** What froze the contract: a version cut (console-built) or the
+   *  measurement plan's confirmation (externally-built — no cuts exist). */
+  anchor: "cut" | "plan";
+  /** Present only for anchor "cut". */
+  version?: number;
   cutAt?: string;
   hypothesis: string;
   primaryMetric: string;
@@ -68,6 +72,9 @@ export interface PreRegistration {
   /** Mapping operationalized after traffic started — disclosed, not hidden. */
   mapConfirmedAt?: string;
   mapConfirmedAfterObservation?: boolean;
+  /** A post-observation re-confirm changed the frozen brief — the verdict
+   *  adjudicates the EARLIEST stamp; the edit is disclosed, never laundered. */
+  briefRefrozenAfterObservation?: boolean;
 }
 
 export interface VerdictRecord {
@@ -106,7 +113,13 @@ export async function getVerdict(prototypeKey: string): Promise<VerdictRecord | 
   if (!raw) return null;
   try {
     const v = JSON.parse(raw) as VerdictRecord;
-    return v && typeof v.verdict === "string" ? v : null;
+    if (!v || typeof v.verdict !== "string") return null;
+    // Pre-S8 records lack the anchor field; every one of them was
+    // cut-anchored by construction (version was required then).
+    if (v.preRegistration && !v.preRegistration.anchor) {
+      v.preRegistration.anchor = v.preRegistration.version !== undefined ? "cut" : "plan";
+    }
+    return v;
   } catch {
     return null;
   }
@@ -210,9 +223,33 @@ export function deriveVerdict(opts: {
   const T = VERDICT_THRESHOLDS;
   const gates: VerdictGate[] = [];
   const snap = opts.pushedVersion?.briefSnapshot;
+  const mapDisclosure = {
+    mapConfirmedAt: opts.mapConfirmedAt,
+    mapConfirmedAfterObservation:
+      Boolean(opts.mapConfirmedAt && opts.firstObservedDate && opts.mapConfirmedAt.slice(0, 10) > opts.firstObservedDate),
+  };
 
+  // The pre-registration anchor: console-built prototypes freeze the brief
+  // at CUT (and the push record proves which cut is live); externally-built
+  // prototypes never cut, so the brief frozen at the measurement plan's
+  // CONFIRMATION is the contract. The EARLIEST frozen brief wins — a post-
+  // observation re-confirm must never launder an edited hypothesis into
+  // "what was declared before traffic" (re-freezes are disclosed).
+  const briefStamps = [
+    ...(map?.priorConfirmations ?? []).filter((p) => p.briefAtConfirm).map((p) => ({ at: p.confirmedAt, brief: p.briefAtConfirm! })),
+    ...(map?.confirmedAt && map.briefAtConfirm ? [{ at: map.confirmedAt, brief: map.briefAtConfirm }] : []),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+  const earliestStamp = briefStamps[0];
+  const latestStamp = briefStamps[briefStamps.length - 1];
+  const briefRefrozen = Boolean(
+    earliestStamp && latestStamp && earliestStamp.at !== latestStamp.at
+    && JSON.stringify(earliestStamp.brief) !== JSON.stringify(latestStamp.brief)
+    && opts.firstObservedDate && latestStamp.at.slice(0, 10) > opts.firstObservedDate,
+  );
+  const planBrief = earliestStamp?.brief;
   const preRegistration: PreRegistration | undefined = opts.pushedVersion
     ? {
+        anchor: "cut",
         version: opts.pushedVersion.version,
         cutAt: opts.pushedVersion.createdAt,
         hypothesis: snap
@@ -220,11 +257,19 @@ export function deriveVerdict(opts: {
           : "(no brief snapshot on this cut)",
         primaryMetric: snap?.metrics.primary || "(unset)",
         guardrails: snap?.metrics.guardrails ?? [],
-        mapConfirmedAt: opts.mapConfirmedAt,
-        mapConfirmedAfterObservation:
-          Boolean(opts.mapConfirmedAt && opts.firstObservedDate && opts.mapConfirmedAt.slice(0, 10) > opts.firstObservedDate),
+        ...mapDisclosure,
       }
-    : undefined;
+    : planBrief && map?.confirmed
+      ? {
+          anchor: "plan",
+          cutAt: earliestStamp?.at,
+          hypothesis: `We believe ${planBrief.change || "…"} for ${planBrief.audience || "…"} will cause ${planBrief.outcome || "…"}.`,
+          primaryMetric: planBrief.primary || "(unset)",
+          guardrails: planBrief.guardrails ?? [],
+          briefRefrozenAfterObservation: briefRefrozen || undefined,
+          ...mapDisclosure,
+        }
+      : undefined;
 
   const finish = (verdict: VerdictState, headline: string, guardrails: GuardrailVerdict[] = [], discoveries: Discovery[] = []): VerdictRecord => ({
     state: "draft",
@@ -272,8 +317,13 @@ export function deriveVerdict(opts: {
   }
 
   if (!preRegistration) {
-    gates.push({ id: "validity", title: "Pre-registration resolved", pass: false, detail: "No pushed version found — the console can't prove what was predicted before traffic." });
-    return finish("not_adjudicable", "Not adjudicable — no pushed version to adjudicate against.", [], discoveries);
+    const legacyPlan = Boolean(map?.confirmed && !map.briefAtConfirm);
+    gates.push({ id: "validity", title: "Pre-registration resolved", pass: false, detail: legacyPlan
+      ? "The plan was confirmed before the console froze the brief with it — open the Measurement section and Re-confirm once to freeze the contract."
+      : "No pre-registration anchor — console-built prototypes freeze the brief at cut/push; externally-built ones freeze it when the measurement plan is CONFIRMED. Confirm the plan to make this adjudicable." });
+    return finish("not_adjudicable", legacyPlan
+      ? "Not adjudicable — re-confirm the measurement plan once to freeze the brief (a one-time upgrade)."
+      : "Not adjudicable — nothing frozen to adjudicate against yet. Confirm the measurement plan.", [], discoveries);
   }
 
   // Gate 2: validity (SRM). Compromised → nothing downstream matters.

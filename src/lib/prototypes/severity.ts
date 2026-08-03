@@ -12,10 +12,13 @@ import type { PipelineStep, PipelineAlert } from "./pipeline";
  *   attention 🟠  needs you now — the active step, or a warning on a done one
  *   good      🟢  done and verified
  *   pending   ⚪  not started yet
+ *   na        ◌   not applicable — the stage doesn't exist for this prototype
+ *                 (externally-built experiments have no Build/Review/Handoff)
  */
-export type StepSeverity = "critical" | "attention" | "good" | "pending";
+export type StepSeverity = "critical" | "attention" | "good" | "pending" | "na";
 
 export function stepSeverity(step: PipelineStep, alerts: PipelineAlert[]): StepSeverity {
+  if (step.na) return "na"; // n/a beats everything — an alert can't target a stage that doesn't exist
   if (step.state === "blocked") return "critical";
   const targeting = alerts.filter((a) => a.anchor === step.anchor);
   if (targeting.some((a) => a.level === "danger")) return "critical";

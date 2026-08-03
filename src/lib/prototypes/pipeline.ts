@@ -14,7 +14,7 @@
 import type { PrototypeRecord, ArtifactVersion } from "./types";
 import type { RepoSource } from "./source";
 import type { PushResult } from "./ship";
-import { injectionPasses, normalizeStage, isBriefComplete } from "./types";
+import { injectionPasses, normalizeStage, isBriefComplete, isExternalBuild } from "./types";
 import { contentHashOf } from "./provision";
 import { artifactProblem } from "./served";
 
@@ -28,6 +28,8 @@ export interface PipelineStep {
   status: string;
   /** The workspace ROOM this step deep-links to (?tab=…). */
   anchor: string;
+  /** Not applicable for this prototype (externally-built: no repo stages). */
+  na?: boolean;
 }
 
 export interface PipelineAlert {
@@ -108,6 +110,10 @@ export interface PipelineInputs {
 
 export function derivePipeline(inp: PipelineInputs): Pipeline {
   const { proto, source, versions, lastPush } = inp;
+  // Externally-built (in Optimizely's editor): the repo stages don't exist.
+  // Brief + Experiment carry everything; Build/Review/Handoff read n/a and
+  // no repo-shaped alert may fire.
+  const external = isExternalBuild(proto);
   const latest = versions[0];
   const alerts: PipelineAlert[] = [];
 
@@ -143,14 +149,14 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   };
 
   // ── alerts (operational; each links to its fix) ───────────────
-  if (!synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
-  if (problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
-  if (latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
+  if (!external && !synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
+  if (!external && problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
+  if (!external && latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
   if (inp.adjudicationPending) alerts.push({ level: "warn", text: "The experiment run ended but its verdict isn't stamped — adjudicate the results against the pre-registered brief.", anchor: "experiment" });
-  if (inp.qaFailing) alerts.push({ level: "danger", text: "QA has failing checks — fix and re-run the tests before shipping.", anchor: "review" });
-  else if (inp.qaStale) alerts.push({ level: "warn", text: "QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.", anchor: "review" });
-  if (lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });
-  if (lastPush && lastPush.verified === false) alerts.push({ level: "danger", text: "The last push did not read-back verify — inspect the variation in Optimizely before publishing.", anchor: "experiment" });
+  if (!external && inp.qaFailing) alerts.push({ level: "danger", text: "QA has failing checks — fix and re-run the tests before shipping.", anchor: "review" });
+  else if (!external && inp.qaStale) alerts.push({ level: "warn", text: "QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.", anchor: "review" });
+  if (!external && lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });
+  if (!external && lastPush && lastPush.verified === false) alerts.push({ level: "danger", text: "The last push did not read-back verify — inspect the variation in Optimizely before publishing.", anchor: "experiment" });
 
   // ── steps ─────────────────────────────────────────────────────
   const steps: PipelineStep[] = [];
@@ -160,8 +166,10 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // change is in-progress, not done.
   const hasChange = Boolean(proto.brief.change?.trim());
   const briefDone = isBriefComplete(proto.brief, proto.metrics);
-  const drifted = Boolean(inp.briefDrifted);
-  const workStarted = provisioned || built;
+  // Repo drift is meaningless without a repo build — a record left over from
+  // before a flip to external must never block the Brief step.
+  const drifted = !external && Boolean(inp.briefDrifted);
+  const workStarted = !external && (provisioned || built);
   steps.push({
     id: "brief", title: "Brief", anchor: "brief",
     state: drifted ? "blocked"         // the audit proved the brief wrong — resolve before anything syncs
@@ -181,24 +189,28 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
 
   // 2 · Build
   const buildDone = provisioned && built && !problem;
-  steps.push({
-    id: "build", title: "Build", anchor: "build",
-    state: buildDone ? "done" : "todo",
-    status: !provisioned ? (briefDone ? "prepare the branch, then build" : "waiting on the brief")
-      : problem === "placeholder" || !built ? (inp.claudeSeenAt ? "Agent engaged · no build pushed yet" : "provisioned · waiting on the first build")
-      : problem === "starter-build" ? "serving the starter build"
-      : `built · ${source?.headSha?.slice(0, 7) ?? ""}`,
-  });
+  steps.push(external
+    ? { id: "build", title: "Build", anchor: "build", state: "done", na: true, status: "n/a — built in Optimizely" }
+    : {
+        id: "build", title: "Build", anchor: "build",
+        state: buildDone ? "done" : "todo",
+        status: !provisioned ? (briefDone ? "prepare the branch, then build" : "waiting on the brief")
+          : problem === "placeholder" || !built ? (inp.claudeSeenAt ? "Agent engaged · no build pushed yet" : "provisioned · waiting on the first build")
+          : problem === "starter-build" ? "serving the starter build"
+          : `built · ${source?.headSha?.slice(0, 7) ?? ""}`,
+      });
 
   // 3 · Review
   const pages = proto.targets.length;
   const passing = proto.targets.filter(injectionPasses).length;
   const reviewDone = pages > 0 && passing === pages;
-  steps.push({
-    id: "review", title: "Review", anchor: "review",
-    state: reviewDone ? "done" : "todo",
-    status: pages === 0 ? "add the page(s) it runs on" : `${passing}/${pages} page${pages === 1 ? "" : "s"} inject${reviewDone ? " ✓" : ""}`,
-  });
+  steps.push(external
+    ? { id: "review", title: "Review", anchor: "review", state: "done", na: true, status: "n/a — built in Optimizely" }
+    : {
+        id: "review", title: "Review", anchor: "review",
+        state: reviewDone ? "done" : "todo",
+        status: pages === 0 ? "add the page(s) it runs on" : `${passing}/${pages} page${pages === 1 ? "" : "s"} inject${reviewDone ? " ✓" : ""}`,
+      });
 
   // 4 · Experimentation — cut → certify → bind → push → start → live, ONE stage.
   // The running/locked state is a badge (stage.live), not a separate stage.
@@ -206,9 +218,16 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // not-started version is still IN this stage (you must click Start), so it is
   // NOT done. (Marking it done here promoted Handoff to current and stranded
   // the card in the Handoff column, un-shippable.)
-  const certBlocked = Boolean(latest && cert && !cert.passed);
+  const certBlocked = !external && Boolean(latest && cert && !cert.passed);
   const expDone = Boolean(running || stageShipped);
-  const expStatus = !latest ? "no version cut"
+  const ended = inp.experimentStatus === "concluded" || inp.experimentStatus === "archived";
+  const expStatus = external
+    ? (!bound ? "no experiment bound"
+      : running ? "live — running in Optimizely"
+      : stageShipped ? "concluded"
+      : ended ? "concluded — adjudicate the results"
+      : "bound · plan measurement, then start it in Optimizely")
+    : !latest ? "no version cut"
     : !cutFresh ? `v${latest.version} · HEAD moved — cut a new version`
     : certBlocked ? `v${latest.version} · certification FAILED`
     : !bound ? `v${latest.version}${certified ? " certified ✓" : ""} · no experiment bound`
@@ -223,11 +242,13 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   });
 
   // 5 · Handoff — the winner graduates into production code.
-  steps.push({
-    id: "handoff", title: "Handoff", anchor: "handoff",
-    state: stageShipped ? "done" : "todo",
-    status: stageShipped ? "winner in production code" : "when the experiment wins",
-  });
+  steps.push(external
+    ? { id: "handoff", title: "Handoff", anchor: "handoff", state: "done", na: true, status: "n/a — built in Optimizely" }
+    : {
+        id: "handoff", title: "Handoff", anchor: "handoff",
+        state: stageShipped ? "done" : "todo",
+        status: stageShipped ? "winner in production code" : "when the experiment wins",
+      });
 
   // THE RULE: the pipeline holds at the FIRST gate that needs you. A blocked
   // step (missing brief, failed certification) is that gate — no later step
@@ -237,13 +258,13 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     const gate = steps.find((s) => s.state === "blocked");
     if (!gate) {
       // Handoff is terminal — reached only by shipping, never auto-promoted.
-      const firstOpen = steps.find((s) => s.id !== "handoff" && s.state !== "done");
+      const firstOpen = steps.find((s) => s.id !== "handoff" && !s.na && s.state !== "done");
       if (firstOpen && firstOpen.state === "todo") firstOpen.state = "current";
     }
   }
 
   // ── the one stage word (shared verbatim with the board column) ──
-  const stageId: PipelineStep["id"] = stageShipped ? "handoff"
+  const stageId: PipelineStep["id"] = stageShipped ? (external ? "experiment" : "handoff")
     : running ? "experiment"
     : (steps.find((s) => s.state === "blocked" || s.state === "current")?.id ?? "experiment");
   const stageStep = steps.find((s) => s.id === stageId)!;
@@ -257,7 +278,15 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
 
   // ── the one next action ───────────────────────────────────────
   let primaryAction: Pipeline["primaryAction"];
-  if (drifted) primaryAction = { label: "Resolve brief ↔ build drift", anchor: "brief" };
+  if (external) {
+    primaryAction = !briefDone ? { label: hasChange ? "Add a success metric" : "Write the brief", anchor: "brief" }
+      : !bound ? { label: "Bind the Optimizely experiment", anchor: "experiment" }
+      : running ? { label: "Running — watch results", anchor: "experiment" }
+      : stageShipped ? { label: "Concluded", anchor: "experiment" }
+      : ended || inp.adjudicationPending ? { label: "Adjudicate the results", anchor: "experiment" }
+      : { label: "Plan measurement, then start it", anchor: "experiment" };
+  }
+  else if (drifted) primaryAction = { label: "Resolve brief ↔ build drift", anchor: "brief" };
   else if (!briefDone) primaryAction = { label: hasChange ? "Add a success metric" : "Write the brief", anchor: "brief" };
   else if (!provisioned) primaryAction = { label: "Prepare the branch", anchor: "build" };
   else if (!built || problem) primaryAction = { label: "Build with the agent", anchor: "build" };

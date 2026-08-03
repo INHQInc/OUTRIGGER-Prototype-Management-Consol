@@ -5,6 +5,7 @@ import { getMetricMap, mutateMetricMap, getResultsHistory, type MetricMap } from
 import { planMeasurement } from "@/lib/ai/measurement";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
+import { isExternalBuild } from "@/lib/prototypes/types";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 
@@ -121,8 +122,10 @@ export async function POST(req: NextRequest) {
         if (!answers.length) answers = undefined;
       }
 
-      const source = await resolveRepoSource(g.proto.key).catch(() => null);
-      const variationJs = source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
+      // Externally-built: the repo holds no evidence (a flipped prototype's
+      // stale cut describes code that is NOT what runs in Optimizely).
+      const source = isExternalBuild(g.proto) ? null : await resolveRepoSource(g.proto.key).catch(() => null);
+      const variationJs = isExternalBuild(g.proto) ? null : source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
 
       const draft = await planMeasurement({
         orgId: g.orgId,
@@ -151,7 +154,7 @@ export async function POST(req: NextRequest) {
         pendingQuestions: draft.questions.length ? draft.questions : undefined,
         plannedAt: new Date().toISOString(),
         priorConfirmations: cur?.confirmed && cur.confirmedAt
-          ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt }]
+          ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt, briefAtConfirm: cur.briefAtConfirm }]
           : cur?.priorConfirmations,
       })))!;
       await audit(g.orgId, actor, "measurement.planned", g.proto.name,
@@ -162,7 +165,7 @@ export async function POST(req: NextRequest) {
     if (body.confirm) {
       const plan = await getMetricMap(g.proto.key);
       if (!plan?.composites.length) return NextResponse.json({ error: "Nothing to confirm — run the planner first." }, { status: 400 });
-      if (plan.confirmed) return NextResponse.json({ error: "The plan is already confirmed.", plan }, { status: 400 });
+      if (plan.confirmed && plan.briefAtConfirm) return NextResponse.json({ error: "The plan is already confirmed.", plan }, { status: 400 });
       if (plan.pendingQuestions?.length) {
         return NextResponse.json({ error: "The interview isn't finished — answer the open question(s) (or Re-plan) before confirming. A stamped plan with unresolved questions isn't a contract.", plan }, { status: 400 });
       }
@@ -175,8 +178,31 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "The plan changed while you were reviewing (re-planned elsewhere) — review the current draft, then confirm.", plan }, { status: 409 });
       }
       const confirmed = await mutateMetricMap(g.proto.key, (cur) => {
-        if (!cur || cur.confirmed) return null; // lost the race — theirs stands
-        return { ...cur, confirmed: true, confirmedBy: actor, confirmedAt: new Date().toISOString(), pendingQuestions: undefined };
+        // Legacy upgrade: a plan confirmed before brief-freezing existed may
+        // re-confirm once to freeze the contract (archiving the old stamp —
+        // the new confirmedAt is honest about WHEN the brief was frozen).
+        if (!cur || (cur.confirmed && cur.briefAtConfirm)) return null; // lost the race — theirs stands
+        return {
+          ...cur,
+          confirmed: true,
+          confirmedBy: actor,
+          confirmedAt: new Date().toISOString(),
+          pendingQuestions: undefined,
+          // Legacy-upgrade re-confirm: the original stamp is archived, never erased.
+          priorConfirmations: cur.confirmed && cur.confirmedAt
+            ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt, briefAtConfirm: cur.briefAtConfirm }]
+            : cur.priorConfirmations,
+          // The brief AS IT READS NOW freezes into the plan — the
+          // pre-registration anchor for externally-built prototypes (which
+          // never cut/push a version to anchor to).
+          briefAtConfirm: {
+            change: g.proto.hypothesis.change ?? "",
+            audience: g.proto.hypothesis.audience ?? "",
+            outcome: g.proto.hypothesis.outcome ?? "",
+            primary: g.proto.metrics.primary ?? "",
+            guardrails: g.proto.metrics.guardrails ?? [],
+          },
+        };
       });
       if (!confirmed || confirmed.confirmedBy !== actor) {
         return NextResponse.json({ error: "Someone else confirmed the plan first — refresh to see it.", plan: confirmed }, { status: 409 });

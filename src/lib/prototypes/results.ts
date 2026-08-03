@@ -171,7 +171,12 @@ export interface MetricMap {
   /** Confirmation stamps a Re-plan replaced — the EARLIEST pre-observation
    *  stamp is what the verdict's pre-registration disclosure keys off, so a
    *  mid-run re-plan can't silently erase "this was declared before traffic". */
-  priorConfirmations?: { confirmedBy: string; confirmedAt: string }[];
+  priorConfirmations?: { confirmedBy: string; confirmedAt: string; briefAtConfirm?: MetricMap["briefAtConfirm"] }[];
+  /** The BRIEF as it read when the plan was confirmed — the pre-registration
+   *  anchor for EXTERNALLY-built prototypes, which never cut or push a
+   *  version (console-built prototypes anchor to the pushed version's
+   *  briefSnapshot instead). */
+  briefAtConfirm?: { change: string; audience: string; outcome: string; primary: string; guardrails: string[] };
 }
 
 const mapKey = (k: string) => `metricmap:${k}`;

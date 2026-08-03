@@ -22,6 +22,11 @@ const LEGACY_STAGE: Record<string, PrototypeStage> = {
   "handed-off": "shipped",
 };
 
+/** Built directly in Optimizely — Brief + Experiment only; repo stages n/a. */
+export function isExternalBuild(p: { buildMode?: "console" | "external" } | null | undefined): boolean {
+  return p?.buildMode === "external";
+}
+
 export function normalizeStage(value: string | undefined): PrototypeStage {
   if (!value) return "draft";
   if ((PROTOTYPE_STAGES as string[]).includes(value)) return value as PrototypeStage;
@@ -207,6 +212,11 @@ export interface PrototypeRecord {
   name: string;
   /** Code location (brand registry pick). Absent on legacy records → site-binding fallback. */
   repo?: PrototypeRepoRef;
+  /** WHERE the experiment is built. "console" (default) = the full repo
+   *  pipeline (branch → agent → cut → push). "external" = built directly in
+   *  Optimizely; the console provides Brief + Experiment (bind, measurement
+   *  plan, results/verdict/reading) and the repo stages disable. */
+  buildMode?: "console" | "external";
   /** The Optimizely experiment/variation this prototype ships into (API push target). */
   experiment?: PrototypeExperimentBinding;
   /** Lifecycle stage (see PrototypeStage). Normalize on read with normalizeStage(). */

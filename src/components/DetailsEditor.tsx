@@ -28,6 +28,7 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
   const [guardrails, setGuardrails] = useState(p.metrics.guardrails.join(", "));
   const [owner, setOwner] = useState(p.owner ?? "");
   const [ticketUrl, setTicketUrl] = useState(p.ticketUrl ?? "");
+  const [external, setExternal] = useState(p.buildMode === "external");
 
   async function save() {
     if (busy) return;
@@ -42,6 +43,7 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
           hypothesis: { change: hChange, audience: hAudience, outcome: hOutcome, rationale: hRationale },
           metrics: { primary, guardrails: guardrails.split(",").map((s) => s.trim()).filter(Boolean) },
           owner, ticketUrl,
+          buildMode: external ? "external" : "console",
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -101,6 +103,7 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
             <div><div className={lbl}>Guardrails</div><div className="text-[15px]">{p.metrics.guardrails.join(", ") || empty}</div></div>
             <div><div className={lbl}>Owner</div><div className="text-[15px]">{p.owner || empty}</div></div>
             <div><div className={lbl}>Ticket</div><div className="text-[15px]">{p.ticketUrl ? <a href={p.ticketUrl} target="_blank" rel="noreferrer" className="text-accent hover:text-accent-hover font-mono break-all">{p.ticketUrl}</a> : empty}</div></div>
+            <div className="col-span-2"><div className={lbl}>Built where</div><div className="text-[15px]">{p.buildMode === "external" ? "In Optimizely — this console provides the brief + experiment analytics only (Build/Review/Handoff are n/a)" : "In this app — full pipeline (branch, agent, QA, versions, push)"}</div></div>
           </div>
         </div>
       ) : (
@@ -124,6 +127,13 @@ export function DetailsEditor({ p }: { p: PrototypeRecord }) {
             <div><span className={lbl}>Owner</span><input className={inp} value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="name / squad" /></div>
             <div><span className={lbl}>Ticket URL</span><input className={`${inp} font-mono`} value={ticketUrl} onChange={(e) => setTicketUrl(e.target.value)} spellCheck={false} placeholder="jira / linear" /></div>
           </div>
+          <label className="flex items-start gap-2 text-[14px] cursor-pointer">
+            <input type="checkbox" checked={external} onChange={(e) => setExternal(e.target.checked)} className="mt-0.5" />
+            <span>
+              <span className="font-medium">Built externally in Optimizely</span>
+              <span className="block text-[13px] text-muted-2">The variation is authored in Optimizely's editor, not this console. Brief + Experiment (bind, measurement plan, results, verdict) stay active; Build, Review, and Handoff gray out. Flip it back any time — nothing is deleted.</span>
+            </span>
+          </label>
         </div>
       )}
     </div>

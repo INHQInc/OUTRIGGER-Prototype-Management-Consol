@@ -48,6 +48,9 @@ export interface FlowInputs {
   /** The measurement plan is confirmed — declared-before-traffic. The
    *  conductor orders "Confirm the measurement plan" BEFORE "Start". */
   measurementPlanned: boolean;
+  /** Built in Optimizely's editor — the queue is brief → bind → plan →
+   *  start → adjudicate; no repo items ever appear. */
+  externalBuild: boolean;
   /** The run ended with an unstamped verdict — adjudication outranks
    *  everything (close the record before iterating). */
   adjudicationPending: boolean;
@@ -88,6 +91,28 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
   if (!t.briefComplete) {
     q.push({ id: "finish-brief", kind: "link", tab: "brief", label: "Finish the brief", why: "no change or no decision metric — the gate is closed" });
     return q; // everything else is noise until the gate opens
+  }
+
+  // ── EXTERNAL build (made in Optimizely's editor): no repo items, ever.
+  // brief → bind → measurement plan → start → running → adjudicate.
+  if (t.externalBuild) {
+    if (!t.bound) {
+      q.push({ id: "bind", kind: "link", tab: "experiment", anchor: "ship", label: "Bind the Optimizely experiment", why: "pick the experiment built in Optimizely — everything downstream reads from it" });
+    } else if (!t.experimentRunning) {
+      if (!t.measurementPlanned) {
+        q.push({ id: "measurement-plan", kind: "link", tab: "experiment", anchor: "measurement", label: "Confirm the measurement plan", why: "declare the decision metric over real events before traffic — a plan stamped pre-start makes the verdict defensible" });
+      }
+      // A run that ENDED wants adjudication (queued above), not a restart.
+      if (!t.adjudicationPending) {
+        q.push({ id: "start-experiment", kind: "link", tab: "experiment", label: "Start the experiment in Optimizely", why: "starting traffic is a human act — the console never does it" });
+      }
+    } else {
+      if (!t.measurementPlanned) {
+        q.push({ id: "measurement-plan-late", kind: "link", tab: "experiment", anchor: "measurement", label: "Confirm the measurement plan (post-start)", why: "traffic started without a confirmed plan — confirming now is disclosed in the verdict; not confirming leaves nothing to adjudicate" });
+      }
+      q.push({ id: "running", kind: "wait", tab: "experiment", label: "Experiment RUNNING", why: "let it decide — the readout adjudicates when it ends" });
+    }
+    return q;
   }
   if (t.briefDrifted) {
     q.push({ id: "resolve-drift", kind: "link", tab: "brief", label: "Resolve brief ↔ build drift", why: "the audit found the brief no longer matches the build — update it or dismiss" });
@@ -166,7 +191,7 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
       q.push({ id: "push", kind: "post", tab: "experiment", post: { url: "/api/prototypes/ship", body: { push: true } }, label: `Push v${t.latestVersion} to Optimizely`, why: "replaces the variation code by API, read-back verified" });
     }
   }
-  if (t.bound && t.pushCurrent && !t.needsCut && !t.experimentRunning) {
+  if (t.bound && t.pushCurrent && !t.needsCut && !t.experimentRunning && !t.adjudicationPending) {
     if (!t.measurementPlanned) {
       // Declare how you'll judge it BEFORE the first visitor — this ordering
       // is what makes the eventual verdict's pre-registration claim hold.

@@ -19,7 +19,7 @@ import { addIdea } from "@/lib/ideas/ideas";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 import { getContentStore } from "@/lib/content/store";
-import type { PrototypeRecord } from "@/lib/prototypes/types";
+import { isExternalBuild, type PrototypeRecord } from "@/lib/prototypes/types";
 
 export const maxDuration = 60;
 
@@ -86,10 +86,13 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
 
   if (existing?.state === "stamped") return { stats, verdict: existing, history };
 
-  // The pre-registration = the briefSnapshot of the version that is LIVE in
-  // the experiment (the push record knows which), never the evolving brief.
-  const push = await lastPush(proto.key).catch(() => null);
-  const versions = await listArtifactVersions(proto.key).catch(() => []);
+  // The pre-registration anchor follows the BUILD MODE, never push-presence:
+  // console-built → the pushed version's briefSnapshot; externally-built →
+  // the plan-anchored contract (a flipped prototype's stale legacy cut must
+  // never adjudicate Optimizely-authored code).
+  const external = isExternalBuild(proto);
+  const push = external ? null : await lastPush(proto.key).catch(() => null);
+  const versions = external ? [] : await listArtifactVersions(proto.key).catch(() => []);
   const pushedVersion = push ? versions.find((v) => v.version === push.version) ?? null : null;
 
   const draft = deriveVerdict({
@@ -185,8 +188,8 @@ export async function POST(req: NextRequest) {
     if (body.propose) {
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to map yet." }, { status: 400 });
-      const source = await resolveRepoSource(g.proto.key).catch(() => null);
-      const variationJs = source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
+      const source = isExternalBuild(g.proto) ? null : await resolveRepoSource(g.proto.key).catch(() => null);
+      const variationJs = isExternalBuild(g.proto) ? null : source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
       const composites = await proposeMetricMap({ proto: g.proto, variationJs, eventNames: bundle.results.metrics.map((m) => m.name) });
       // Preserve the measurement-plan layer (interview, known, gaps) — a
       // results-side re-propose replaces the BINDING, not the understanding.
@@ -263,6 +266,19 @@ export async function POST(req: NextRequest) {
         confirmedBy: actor,
         confirmedAt: new Date().toISOString(),
         pendingQuestions: undefined,
+        // A re-confirm ARCHIVES the earlier stamp + its frozen brief — the
+        // earliest pre-observation confirmation stays the contract's anchor.
+        priorConfirmations: cur?.confirmed && cur.confirmedAt
+          ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt, briefAtConfirm: cur.briefAtConfirm }]
+          : cur?.priorConfirmations,
+        // Same pre-registration anchor as the measurement route's confirm.
+        briefAtConfirm: {
+          change: g.proto.hypothesis.change ?? "",
+          audience: g.proto.hypothesis.audience ?? "",
+          outcome: g.proto.hypothesis.outcome ?? "",
+          primary: g.proto.metrics.primary ?? "",
+          guardrails: g.proto.metrics.guardrails ?? [],
+        },
       })))!;
       await audit(g.orgId, actor, "results.map-confirmed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);

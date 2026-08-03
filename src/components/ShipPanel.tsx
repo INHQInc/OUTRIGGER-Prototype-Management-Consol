@@ -26,7 +26,7 @@ export interface ShipVersion { version: number; gitSha: string; hasCode: boolean
  * verifies it; the SELECTED version's certification gates the button (a
  * failed cert requires an explicit override).
  */
-export function ShipPanel({ prototypeKey, versions = [], initialBinding, initialLastPush, optiProjectId, targetCount = 0, prototypeName }: {
+export function ShipPanel({ prototypeKey, versions = [], initialBinding, initialLastPush, optiProjectId, targetCount = 0, prototypeName, external = false }: {
   prototypeKey: string;
   versions?: ShipVersion[];
   initialBinding: PrototypeExperimentBinding | null;
@@ -34,6 +34,9 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
   optiProjectId?: string | null;
   targetCount?: number;
   prototypeName?: string;
+  /** Externally-built: bind-only — the variation code is authored in
+   *  Optimizely, so there is nothing to cut or push. */
+  external?: boolean;
 }) {
   const router = useRouter();
   const latest = versions[0];
@@ -151,7 +154,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
 
   const certFails = certification?.checks.filter((c) => c.level === "fail") ?? [];
   const certWarns = certification?.checks.filter((c) => c.level === "warn") ?? [];
-  const canPush = Boolean(binding && cut?.hasCode && (certification ? certification.passed || override : true));
+  const canPush = !external && Boolean(binding && cut?.hasCode && (certification ? certification.passed || override : true));
   const stale = last && latest && last.version < latest.version;
   const rollback = cut && latest && cut.version < latest.version;
   const expUrl = binding && (projectId || optiProjectId) ? `https://app.optimizely.com/v2/projects/${projectId || optiProjectId}/experiments/${binding.experimentId}/variations` : null;
@@ -186,8 +189,8 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
     <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)] overflow-hidden">
       <div className="px-4 py-2.5 border-b border-accent/30 flex items-center justify-between">
         <div>
-          <span className="text-[14px] font-semibold">Ship to Optimizely</span>
-          <span className="text-[13px] text-muted-2 ml-2">Push the cut version into the experiment by API — no paste, read-back verified.</span>
+          <span className="text-[14px] font-semibold">{external ? "Bind the Optimizely experiment" : "Ship to Optimizely"}</span>
+          <span className="text-[13px] text-muted-2 ml-2">{external ? "The variation is authored in Optimizely — the console binds to it for measurement, results, and the verdict." : "Push the cut version into the experiment by API — no paste, read-back verified."}</span>
         </div>
         {expUrl && <a href={expUrl} target="_blank" rel="noreferrer" className="text-[14px] text-accent hover:text-accent-hover font-medium shrink-0">Open in Optimizely ↗</a>}
       </div>
@@ -314,7 +317,10 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
           </label>
         )}
 
-        {/* Push + state */}
+        {/* Push + state — externals have nothing to push, by design */}
+        {external ? (
+          <p className="text-[13.5px] text-muted-2">{msg ? msg.text : binding ? "Bound ✓ — the variation code lives in Optimizely's editor; there is nothing to cut or push. Plan measurement below, then start it in Optimizely." : "Bind the experiment above — measurement, results, and the verdict all read from it."}</p>
+        ) : (
         <div className="flex items-center justify-between gap-3">
           <span className={`text-[14px] min-w-0 ${msg ? (msg.ok ? "text-ok" : "text-danger") : stale ? "text-warn" : "text-muted-2"}`}>
             {msg ? msg.text
@@ -329,6 +335,7 @@ export function ShipPanel({ prototypeKey, versions = [], initialBinding, initial
             {busy ? "Pushing…" : cut ? `Push v${cut.version} to Optimizely${rollback ? " ↩" : ""}` : "Push"}
           </button>
         </div>
+        )}
       </div>
     </div>
   );

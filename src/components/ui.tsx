@@ -8,6 +8,7 @@ export const SEVERITY_DOT: Record<StepSeverity, string> = {
   attention: "bg-warn",
   good: "bg-ok",
   pending: "bg-border-strong",
+  na: "bg-border opacity-50",
 };
 /** Matching text/border tone for a checklist row. */
 export const SEVERITY_TEXT: Record<StepSeverity, string> = {
@@ -15,6 +16,7 @@ export const SEVERITY_TEXT: Record<StepSeverity, string> = {
   attention: "text-warn",
   good: "text-ok",
   pending: "text-muted-2",
+  na: "text-muted-2 opacity-60",
 };
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
