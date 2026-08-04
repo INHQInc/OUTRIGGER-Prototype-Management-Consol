@@ -54,6 +54,12 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
     if (bound) void load();
   }, [bound, load]);
 
+  // Report the open-question count up so the Analytics tab can badge it.
+  // MUST stay above the early returns below — a hook after a conditional
+  // return changes the hook count between renders (React #310).
+  const pendingCount = plan?.confirmed ? 0 : (plan?.pendingQuestions?.length ?? 0);
+  useEffect(() => { onPending?.(pendingCount); }, [pendingCount, onPending]);
+
   async function post(action: string, body: Record<string, unknown>) {
     if (busy) return;
     setBusy(action); setErr(null);
@@ -80,8 +86,6 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
   if (loading && !plan) return <p className="text-[13.5px] text-muted-2">Loading the plan and the experiment&apos;s events…</p>;
 
   const pending = plan?.pendingQuestions ?? [];
-  const pendingCount = plan?.confirmed ? 0 : pending.length;
-  useEffect(() => { onPending?.(pendingCount); }, [pendingCount, onPending]);
   const allAnswered = pending.length > 0 && pending.every((q) => (answers[q] ?? "").trim().length > 0);
   const gapPaste = plan?.gaps?.length
     ? `The measurement plan needs events that nothing currently fires. Instrument these in the variation (and where they describe shared behavior, note that the control equivalent must be measurable too), then tell me the event names you registered in Optimizely: ${plan.gaps.join(" · ")}`
