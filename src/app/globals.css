@@ -108,3 +108,14 @@ body {
   .print-report .text-warn { color: #997404 !important; }
   .print-report .text-muted-2, .print-report .text-muted { color: #5c6771 !important; }
 }
+
+/* Print-safe data-viz: backgrounds are stripped in print, so tracks/fills
+   are re-expressed; SVG marks recolor themselves via currentColor + the
+   text-* mappings above. */
+@media print {
+  .print-report [data-viz-track] { background: #eef1f4 !important; }
+  .print-report [data-viz-fill] { background: #9aa4b0 !important; }
+  .print-report [data-viz-fill="ok"] { background: #157347 !important; }
+  .print-report [data-viz-fill="danger"] { background: #b02a37 !important; }
+  .print-report svg .text-surface { color: #ffffff !important; }
+}

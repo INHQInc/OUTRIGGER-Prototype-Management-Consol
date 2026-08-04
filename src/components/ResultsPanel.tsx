@@ -34,50 +34,148 @@ const VERDICT_LOOK: Record<VerdictState, { label: string; cls: string; border: s
 
 /** The primary result as a PICTURE — two bars, rates labeled. The story
  *  lands before anyone reads a word. */
-function ComparisonBars({ focusName, focusRate, baseName, baseRate, good }: {
-  focusName: string; focusRate: number; baseName: string; baseRate: number; good: boolean;
+function ComparisonBars({ focusName, focusRate, focusCount, focusN, baseName, baseRate, baseCount, baseN, significant, positive }: {
+  focusName: string; focusRate: number; focusCount: number; focusN: number;
+  baseName: string; baseRate: number; baseCount: number; baseN: number;
+  significant: boolean; positive: boolean;
 }) {
   const max = Math.max(focusRate, baseRate) || 1;
-  const row = (name: string, rate: number, cls: string) => (
-    <div className="flex items-center gap-2">
+  // Chroma is earned: gray until the CI clears zero; the full-chroma END CAP
+  // is the datum, the fill stays a wash (solid blocks vibrate on dark).
+  const focusFill = !significant ? "bg-foreground/25" : positive ? "bg-ok/30" : "bg-danger/30";
+  const focusCap = !significant ? "bg-foreground/90" : positive ? "bg-ok" : "bg-danger";
+  const focusText = !significant ? "text-muted-2" : positive ? "text-ok" : "text-danger";
+  const row = (name: string, rate: number, count: number, n: number, fill: string, cap: string, txt: string) => (
+    <div className="flex items-center gap-2" title={`${name}: ${(rate * 100).toFixed(2)}% · ${count.toLocaleString()} / ${n.toLocaleString()}`}>
       <span className="w-36 shrink-0 text-[11.5px] text-muted-2 truncate text-right" title={name}>{name}</span>
-      <div className="flex-1 h-4 rounded-sm bg-surface-2/40 overflow-hidden">
-        <div className={`h-full rounded-sm ${cls}`} style={{ width: `${Math.max(2, (rate / max) * 100)}%` }} />
+      <div className="flex-1 h-4 bg-surface-2/40 rounded-r relative" data-viz-track>
+        <div className={`h-full rounded-r ${fill}`} style={{ width: `${Math.max(2, (rate / max) * 100)}%` }} data-viz-fill={!significant ? undefined : positive ? "ok" : "danger"} />
+        <div className={`absolute top-0 h-full w-0.5 ${cap}`} style={{ left: `calc(${Math.max(2, (rate / max) * 100)}% - 2px)` }} data-viz-fill={!significant ? undefined : positive ? "ok" : "danger"} />
       </div>
-      <span className="w-14 shrink-0 text-[12.5px] font-semibold tabular-nums">{(rate * 100).toFixed(2)}%</span>
+      <span className={`w-12 shrink-0 text-[12.5px] font-semibold tabular-nums ${txt}`}>{(rate * 100).toFixed(1)}%</span>
     </div>
   );
   return (
     <div className="space-y-1.5">
-      {row(focusName, focusRate, good ? "bg-ok/80" : "bg-danger/80")}
-      {row(baseName, baseRate, "bg-border-strong")}
+      {row(focusName, focusRate, focusCount, focusN, focusFill, focusCap, focusText)}
+      {row(baseName, baseRate, baseCount, baseN, "bg-muted-2/40", "bg-muted-2", "text-muted-2")}
     </div>
+  );
+}
+
+/** Chroma is earned: color only when the CI excludes zero. */
+const sigOf = (c?: CellStats) => Boolean(c?.liftCi && (c.liftCi.lo > 0 || c.liftCi.hi < 0));
+const toneOf = (c?: CellStats) => (!sigOf(c) ? "text-muted-2" : (c!.lift ?? 0) >= 0 ? "text-ok" : "text-danger");
+
+const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
+
+const relTime = (iso?: string) => {
+  if (!iso) return "";
+  const ms = Date.now() - Date.parse(iso);
+  if (ms < 60_000) return "just now";
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min ago`;
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
+/** The CI gauge — significance as a picture: the band clearing zero IS the verdict. */
+function CiGauge({ lo, hi, lift, significant, positive }: { lo: number; hi: number; lift: number; significant: boolean; positive: boolean }) {
+  const dLo = Math.min(lo, 0) * 1.15;
+  const dHi = Math.max(hi, 0) * 1.15;
+  const span = dHi - dLo || 1;
+  const X = (v: number) => ((v - dLo) / span) * 100;
+  const tone = !significant ? "text-muted-2" : positive ? "text-ok" : "text-danger";
+  return (
+    <svg viewBox="0 0 100 10" preserveAspectRatio="none" className="w-full h-2.5 mt-1" role="img" aria-label="Plausible range for the lift">
+      <rect x={X(lo)} y={3} width={Math.max(0.5, X(hi) - X(lo))} height={4} className={tone} fill="currentColor" fillOpacity={0.22} />
+      <rect x={Math.min(98, Math.max(0, X(lift) - 1))} y={0} width={2} height={10} className={tone} fill="currentColor" />
+      <rect x={Math.min(99, Math.max(0, X(0) - 0.5))} y={0} width={1} height={10} className="text-foreground" fill="currentColor" fillOpacity={0.4} />
+    </svg>
+  );
+}
+
+/** Progress-to-decision meter — time expressed as a fill, not a formula. */
+function ProgressMeter({ daysIn, daysLeft }: { daysIn: number; daysLeft: number }) {
+  const ready = daysLeft <= 0;
+  const pct = ready ? 100 : Math.min(100, Math.max(4, (daysIn / (daysIn + daysLeft)) * 100));
+  return (
+    <div className="h-1.5 rounded-full bg-surface-2 overflow-hidden mt-1" data-viz-track>
+      <div className={`h-full rounded-full ${ready ? "bg-ok" : "bg-accent"}`} style={{ width: `${pct}%` }} data-viz-fill={ready ? "ok" : undefined} />
+    </div>
+  );
+}
+
+/** One glyph set — inline SVG, currentColor. The ⚠ character risks
+ *  rendering as a color emoji outside the palette, so it's banned here. */
+function Glyph({ kind }: { kind: "warn" | "check" }) {
+  if (kind === "check") {
+    return <svg viewBox="0 0 12 12" className="inline-block w-3 h-3 -mt-0.5 mr-0.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 6.5 5 9.5 10 3" /></svg>;
+  }
+  return (
+    <svg viewBox="0 0 12 12" className="inline-block w-3 h-3 -mt-0.5 mr-0.5" fill="currentColor">
+      <path d="M6 1.2 11.3 10.4 H0.7 Z" fillOpacity={0.9} />
+      <rect x={5.4} y={4.6} width={1.2} height={2.8} fill="var(--surface)" />
+      <rect x={5.4} y={8.2} width={1.2} height={1.2} fill="var(--surface)" />
+    </svg>
   );
 }
 
 function Sparkline({ trend }: { trend: TrendPoint[] }) {
   const pts = trend.filter((t) => t.lift !== undefined);
   if (pts.length < 2) return null;
-  const w = 220;
-  const h = 44;
+  const W = 240;
+  const H = 56;
+  const PAD_R = 38; // reserved for the endpoint label
   const lifts = pts.map((p) => p.lift!);
   const lo = Math.min(...lifts, 0);
   const hi = Math.max(...lifts, 0);
   const span = hi - lo || 1;
-  const x = (i: number) => (i / (pts.length - 1)) * (w - 4) + 2;
-  const y = (v: number) => h - 4 - ((v - lo) / span) * (h - 8);
+  const x = (i: number) => (i / (pts.length - 1)) * (W - 12 - PAD_R) + 6;
+  const y = (v: number) => H - 6 - ((v - lo) / span) * (H - 12);
   const zeroY = y(0);
+  const last = lifts[lifts.length - 1];
+  const lastSig = pts.length >= 2; // display tone comes from the caller-computed cell; endpoint uses lift sign only when meaningful
+  const endTone = last >= 0 ? "text-ok" : "text-danger";
+  // Honest ending: a partial (today's) final point must not read as a cliff.
+  const today = new Date().toISOString().slice(0, 10);
+  const partial = pts[pts.length - 1].date === today;
+  const lineTo = partial ? pts.length - 2 : pts.length - 1;
+  const label = `${last > 0 ? "+" : ""}${(last * 100).toFixed(1)}%`;
   return (
-    <svg width={w} height={h} className="shrink-0" role="img" aria-label="Primary lift by day">
-      <line x1={2} x2={w - 2} y1={zeroY} y2={zeroY} stroke="currentColor" strokeOpacity={0.15} strokeDasharray="3 3" />
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-14" role="img" aria-label="Primary lift by day">
+      {/* zero reference: recessive solid hairline */}
+      <line x1={6} x2={W - PAD_R} y1={zeroY} y2={zeroY} stroke="currentColor" strokeOpacity={0.14} strokeWidth={1} />
+      {/* history is NEUTRAL — never repainted by the current sign */}
+      <polygon
+        className="text-muted-2"
+        fill="currentColor"
+        fillOpacity={0.08}
+        points={`${x(0)},${zeroY} ${pts.map((p, i) => `${x(i)},${y(p.lift!)}`).join(" ")} ${x(pts.length - 1)},${zeroY}`}
+      />
       <polyline
         fill="none"
         stroke="currentColor"
-        className={lifts[lifts.length - 1] >= 0 ? "text-ok" : "text-danger"}
-        strokeWidth={1.5}
-        points={pts.map((p, i) => `${x(i)},${y(p.lift!)}`).join(" ")}
+        className="text-muted-2"
+        strokeWidth={2}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        points={pts.slice(0, lineTo + 1).map((p, i) => `${x(i)},${y(p.lift!)}`).join(" ")}
       />
-      <circle cx={x(pts.length - 1)} cy={y(lifts[lifts.length - 1])} r={2.5} className={lifts[lifts.length - 1] >= 0 ? "text-ok" : "text-danger"} fill="currentColor" />
+      {partial && (
+        <polyline
+          fill="none"
+          stroke="currentColor"
+          className="text-muted-2"
+          strokeWidth={2}
+          strokeOpacity={0.5}
+          strokeDasharray="2 3"
+          strokeLinecap="round"
+          points={pts.slice(lineTo).map((p, i) => `${x(lineTo + i)},${y(p.lift!)}`).join(" ")}
+        />
+      )}
+      {/* endpoint: ≥8px marker, 2px surface ring, direct-labeled */}
+      <circle cx={x(pts.length - 1)} cy={y(last)} r={6} className="text-surface" fill="currentColor" />
+      <circle cx={x(pts.length - 1)} cy={y(last)} r={4} className={endTone} fill="currentColor" fillOpacity={partial ? 0.5 : 1} />
+      <text x={x(pts.length - 1) + 9} y={y(last) + 4} className={`${endTone} text-[11px] font-semibold tabular-nums`} fill="currentColor">{lastSig ? label : ""}</text>
     </svg>
   );
 }
@@ -111,6 +209,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [tuneA, setTuneA] = useState<Record<string, string>>({});
   const [tuneDurable, setTuneDurable] = useState<Record<string, boolean>>({});
   const autoReadRef = useRef<string | null>(null);
+  // Inline two-step confirm (native window.confirm breaks the shell at the
+  // most ceremonial action); auto-reverts after 5s.
+  const [confirmAction, setConfirmAction] = useState<"stamp" | "reopen" | null>(null);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armConfirm = (a: "stamp" | "reopen") => {
+    setConfirmAction(a);
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    confirmTimer.current = setTimeout(() => setConfirmAction(null), 5000);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,7 +296,20 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   if (!bound) {
     return <p className="text-[13.5px] text-muted-2">Results appear once an experiment is bound (Experiment room) and has traffic.</p>;
   }
-  if (loading && !results && !verdict) return <p className="text-[13.5px] text-muted-2">Loading live results from Optimizely…</p>;
+  if (loading && !results && !verdict) {
+    return (
+      <div className="space-y-3" aria-busy="true" aria-label="Loading results">
+        <div className="h-[88px] rounded-xl bg-surface-2/60 animate-pulse" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-[92px] rounded-lg bg-surface-2/60 animate-pulse" />)}
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="h-[104px] rounded-lg bg-surface-2/60 animate-pulse" />
+          <div className="h-[104px] rounded-lg bg-surface-2/60 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
   if (!results && !verdict) {
     return <div className="rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[13.5px] text-muted-2">{resultsError ?? "No results yet."}</div>;
   }
@@ -207,48 +327,68 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const pr = verdict?.preRegistration;
 
   // ── tiles: the numbers a deck leads with, computed not narrated ──
+  // FOUR TILES IS A HARD CAP, FOREVER. Fact routing (say-it-once): visitors →
+  // tile 1 · conversion counts → tile 2 · relative effect + certainty →
+  // tile 3 · time → tile 4 · RATES live in the comparison bars only.
   const primaryStats = statsEff?.metrics.find((m) => m.key === statsEff.primaryKey);
   const primaryFocus = primaryStats?.cells.find((c) => c.variationId === statsEff?.focusVariationId);
   const primaryBase = primaryStats?.cells.find((c) => c.variationId === statsEff?.baselineVariationId);
-  const tiles: { label: string; value: string; sub?: string; cls?: string }[] = [];
-  if (live) {
-    // Canonical arm order everywhere: FOCUS first, baseline second — the
-    // same pair the lift/primary tiles use; extra arms are counted, not
-    // silently mixed into an ambiguous list.
-    const focusVar = live.variations.find((v) => v.variationId === statsEff?.focusVariationId);
-    const baseVar = live.variations.find((v) => v.variationId === statsEff?.baselineVariationId);
-    const others = live.variations.length - (focusVar ? 1 : 0) - (baseVar ? 1 : 0);
-    tiles.push(focusVar && baseVar ? {
+  const focusVar = live?.variations.find((v) => v.variationId === statsEff?.focusVariationId);
+  const baseVar = live?.variations.find((v) => v.variationId === statsEff?.baselineVariationId);
+  const liftSig = sigOf(primaryFocus);
+  const liftTone = toneOf(primaryFocus);
+  const ciWide = Boolean(primaryFocus?.liftCi && primaryFocus.liftCi.hi - primaryFocus.liftCi.lo > 0.2);
+  const fmtLift = (v: number) => `${v >= 0 ? "▲ +" : "▼ "}${(v * 100).toFixed(ciWide ? 0 : 1)}%`;
+
+  const tiles: { label: string; value: React.ReactNode; sub?: React.ReactNode; cls?: string; viz?: React.ReactNode; wrapSub?: boolean }[] = [];
+  if (live && focusVar && baseVar) {
+    const others = live.variations.length - 2;
+    tiles.push({
       label: "Visitors",
-      value: `${focusVar.visitors.toLocaleString()} vs ${baseVar.visitors.toLocaleString()}`,
-      sub: `${focusVar.name} vs ${baseVar.name}${others > 0 ? ` (+${others} more arm${others > 1 ? "s" : ""} below)` : ""}`,
-    } : {
-      label: "Visitors",
-      value: live.variations.map((v) => v.visitors.toLocaleString()).join(" vs "),
-      sub: live.variations.map((v) => v.name).join(" vs "),
+      value: (focusVar.visitors + baseVar.visitors).toLocaleString(),
+      sub: `${focusVar.visitors.toLocaleString()} ${focusVar.name} · ${baseVar.visitors.toLocaleString()} ${baseVar.name}${others > 0 ? ` · +${plural(others, "more arm")} below` : ""}`,
     });
   }
   if (primaryStats && primaryFocus && primaryBase) {
     tiles.push({
       label: primaryStats.label,
-      value: `${primaryFocus.count.toLocaleString()} vs ${primaryBase.count.toLocaleString()}`,
-      sub: `${primaryFocus.rate !== undefined ? (primaryFocus.rate * 100).toFixed(2) : "—"}% vs ${primaryBase.rate !== undefined ? (primaryBase.rate * 100).toFixed(2) : "—"}% per visitor`,
+      value: primaryFocus.count.toLocaleString(),
+      sub: `vs ${primaryBase.count.toLocaleString()} control`,
     });
-    tiles.push({
-      label: "Lift",
-      value: pctS(primaryFocus.lift),
-      sub: primaryFocus.liftCi ? `plausible range ${pctS(primaryFocus.liftCi.lo)} to ${pctS(primaryFocus.liftCi.hi)}` : undefined,
-      cls: liftClass(primaryFocus.lift),
-    });
+    if (primaryFocus.lift !== undefined) {
+      tiles.push({
+        label: "Lift",
+        value: (
+          <span className="inline-flex items-center gap-2">
+            <span>{fmtLift(primaryFocus.lift)}</span>
+            {primaryFocus.pBeat !== undefined && (primaryFocus.pBeat >= 0.95 || primaryFocus.pBeat <= 0.05) && (
+              <span className={`text-[11px] px-1.5 py-0.5 rounded border font-medium ${primaryFocus.pBeat >= 0.95 ? "border-ok/40 text-ok" : "border-danger/40 text-danger"}`}>
+                {(primaryFocus.pBeat * 100).toFixed(0)}% to beat control
+              </span>
+            )}
+          </span>
+        ),
+        cls: liftTone,
+        viz: primaryFocus.liftCi ? (
+          <CiGauge lo={primaryFocus.liftCi.lo} hi={primaryFocus.liftCi.hi} lift={primaryFocus.lift} significant={liftSig} positive={(primaryFocus.lift ?? 0) >= 0} />
+        ) : undefined,
+        sub: primaryFocus.liftCi ? `plausible range ${pctS(primaryFocus.liftCi.lo)} to ${pctS(primaryFocus.liftCi.hi)}` : undefined,
+        wrapSub: true, // NEVER truncate an uncertainty statement
+      });
+    }
   }
   if (statsEff?.power) {
     const p = statsEff.power;
     const eta = p.daysToTarget ?? p.daysToObserved;
-    // NEVER a "?" in front of a leader: day one reads "Day 1".
+    const dayN = (p.observationDays ?? 0) + 1;
+    const ready = eta !== undefined && eta <= 0;
     tiles.push({
       label: "Timeline",
-      value: p.observationDays !== undefined && p.observationDays > 0 ? `Day ${p.observationDays + 1}` : "Day 1",
-      sub: eta !== undefined ? (eta <= 0 ? "decision-ready sample reached" : `~${eta} day(s) to a decision`) : "trend unlocks as daily snapshots accumulate",
+      value: ready ? "Ready to call" : (
+        <span>Day {dayN}{eta !== undefined && eta > 0 ? <span className="text-[14px] font-normal text-muted-2"> of ~{dayN + eta}</span> : null}</span>
+      ),
+      viz: eta !== undefined ? <ProgressMeter daysIn={dayN} daysLeft={eta} /> : undefined,
+      sub: ready ? "decision-ready sample reached" : eta !== undefined ? `~${plural(eta, "more day")} to a decision` : "trend unlocks as daily snapshots accumulate",
     });
   }
 
@@ -325,8 +465,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
         <>
           {/* The SAME sections, every experiment — leaders learn where to look. */}
           {part === "main" && reading.summary && (
-            <div className="border-t border-border/50 pt-3">
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Summary</div>
+            <div className={`border-t border-border/50 pt-3 ${busy === "reading" ? "opacity-60" : ""}`}>
+              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Summary{busy === "reading" && <span className="ml-2 normal-case font-normal tracking-normal text-muted-2">Updating the reading…</span>}</div>
               <p className="text-[15px] leading-relaxed font-medium text-foreground max-w-3xl">{reading.summary}</p>
             </div>
           )}
@@ -367,30 +507,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             <div className="border-l-2 border-accent bg-[color-mix(in_srgb,var(--accent)_6%,transparent)] rounded-r-lg pl-3 pr-3 py-2">
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-accent mb-0.5">Next step</div>
               <p className="text-[13.5px] font-medium">{reading.nextStep}</p>
-            </div>
-          )}
-          {part === "main" && reading.questionsForYou.length > 0 && (
-            <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-2 print:hidden">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">The analyst wants to know what you care about</div>
-              {reading.questionsForYou.map((q) => (
-                <div key={q} className="space-y-1">
-                  <div className="text-[13px] text-muted">{q}</div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <input value={tuneA[q] ?? ""} onChange={(e) => setTuneA((a) => ({ ...a, [q]: e.target.value }))}
-                      placeholder="Your answer…"
-                      className="flex-1 min-w-40 h-8 px-2.5 rounded-lg border border-border bg-background text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-                    <label className="flex items-center gap-1 text-[11.5px] text-muted-2 shrink-0">
-                      <input type="checkbox" checked={tuneDurable[q] ?? false} onChange={(e) => setTuneDurable((d) => ({ ...d, [q]: e.target.checked }))} />
-                      all experiments
-                    </label>
-                    <button onClick={() => (tuneA[q] ?? "").trim() && post(`tune:${q}`, { tune: { question: q, answer: tuneA[q], durable: tuneDurable[q] ?? false } })}
-                      disabled={busy !== null || !(tuneA[q] ?? "").trim()}
-                      className="h-8 px-2.5 rounded-lg border border-border text-[12.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
-                      {busy === `tune:${q}` ? "Saving…" : "Tell the analyst"}
-                    </button>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
           {part === "main" && <div className="text-[11px] text-muted-2 print:hidden">
@@ -492,55 +608,65 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
   return (
     <div className="space-y-3">
-      {err && <div className="text-[13px] text-danger">{err}</div>}
-      {resultsError && <div className="text-[13px] text-warn">{resultsError}</div>}
-      {planDrift.length > 0 && (
-        <div className="rounded-lg border border-warn/50 bg-surface px-3.5 py-2.5 text-[13px]">
-          <span className="text-warn font-semibold">⚠ Results report events the measurement plan never reviewed:</span>{" "}
-          <span className="font-mono text-[12px]">{planDrift.join(" · ")}</span>
-          <span className="text-muted-2"> — the build moved past the plan. </span>
-          <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium">Re-plan to classify them →</a>
-        </div>
-      )}
+      {err && <div className="text-[13px] text-danger print:hidden">{err}</div>}
 
       {/* ═══ THE READOUT — the leadership view ═══ */}
       <div className={`print-report rounded-xl border ${look?.border ?? "border-border"} bg-surface overflow-hidden`}>
         <div className={`px-5 py-3.5 border-b border-border ${look?.bg ?? ""} flex items-start gap-3 flex-wrap`}>
           <div className="min-w-0 flex-1">
-            {look && <div className={`text-[17px] font-extrabold tracking-tight ${look.cls}`}>{look.label}</div>}
+            {/* SUPREMACY RULE: the verdict is the biggest thing on the page — 
+                KPI values reach 26px, nothing exceeds the verdict word. */}
+            {look && <div className={`text-[24px] md:text-[26px] font-extrabold tracking-tight ${look.cls}`}>{look.label}</div>}
             {verdict && (
               <p className="text-[13px] text-muted mt-0.5 leading-snug max-w-3xl">
                 {verdict.headline}
                 {verdict.verdict === "not_adjudicable" && <> <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium print:hidden">Set it up in the Measurement section →</a></>}
               </p>
             )}
-            <div className="text-[11px] text-muted-2 mt-1">
-              {stamped ? `Official record — stamped by ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}` : "Live view — updates with the numbers"}
+            <div className="text-[11px] text-muted-2 mt-1 tabular-nums">
+              {stamped
+                ? `Official record — stamped by ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}`
+                : `Live · computed ${relTime(statsEff?.computedAt) || "—"}`}
               {expStatus ? ` · ${expStatus.toUpperCase()}` : ""}
             </div>
           </div>
-          <span className="flex items-center gap-2 shrink-0 print:hidden">
+          <span className="flex items-center gap-2 shrink-0">
             {statsEff && (
               <span className={`text-[11px] ${statsEff.validity.status === "ok" ? "text-ok" : statsEff.validity.status === "unknown" ? "text-muted-2" : statsEff.validity.status === "warn" ? "text-warn font-semibold" : "text-danger font-semibold"}`} title={statsEff.validity.detail}>
-                {statsEff.validity.status === "ok" ? "✓ traffic split healthy" : statsEff.validity.status === "unknown" ? "traffic split: too early to check" : statsEff.validity.status === "warn" ? "⚠ traffic split looks off" : "⚠ traffic split broken"}
+                {statsEff.validity.status === "ok" ? "✓ data health OK" : statsEff.validity.status === "unknown" ? "data health: too early to check" : statsEff.validity.status === "warn" ? "data health: traffic split off" : "data health: broken"}
               </span>
             )}
-            {verdict && !stamped && stoppable && (
-              <button onClick={() => { if (window.confirm("Stamp this verdict as the experiment's official, immutable record?")) post("stamp", { stamp: true, expectVerdict: verdict.verdict }); }} disabled={busy !== null}
+            <span className="flex items-center gap-2 print:hidden">
+            {verdict && !stamped && stoppable && (confirmAction === "stamp" ? (
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11.5px] text-muted-2">Make it the immutable record?</span>
+                <button onClick={() => { setConfirmAction(null); post("stamp", { stamp: true, expectVerdict: verdict.verdict }); }} className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover">Yes, stamp</button>
+                <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12px] text-muted hover:text-foreground">Cancel</button>
+              </span>
+            ) : (
+              <button onClick={() => armConfirm("stamp")} disabled={busy !== null}
                 className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">
                 {busy === "stamp" ? "Stamping…" : "Stamp the verdict"}
               </button>
-            )}
-            {stamped && (
-              <button onClick={() => { if (window.confirm("Reopen the stamped verdict? The stamp is the record — reopening is audited.")) post("unstamp", { unstamp: true }); }} disabled={busy !== null}
+            ))}
+            {stamped && (confirmAction === "reopen" ? (
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11.5px] text-muted-2">Reopen the record? (audited)</span>
+                <button onClick={() => { setConfirmAction(null); post("unstamp", { unstamp: true }); }} className="h-7 px-2 rounded-md border border-danger/50 text-[12px] text-danger hover:bg-danger/10">Yes, reopen</button>
+                <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12px] text-muted hover:text-foreground">Cancel</button>
+              </span>
+            ) : (
+              <button onClick={() => armConfirm("reopen")} disabled={busy !== null}
                 className="text-[11.5px] text-muted-2 hover:text-foreground underline underline-offset-2 disabled:opacity-40">
                 {busy === "unstamp" ? "Reopening…" : "Reopen"}
               </button>
-            )}
+            ))}
             <button onClick={() => void load()} disabled={loading || busy !== null} className="text-[11.5px] text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
+            </span>
           </span>
         </div>
 
+        {resultsError && <div className="px-5 py-1.5 text-[12px] text-warn border-b border-border/50">{resultsError}</div>}
         <div className="px-5 py-4 space-y-4">
           {pr && (
             <div>
@@ -555,10 +681,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           {tiles.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {tiles.map((t) => (
-                <div key={t.label} className="rounded-lg border border-border bg-background/50 px-3.5 py-2.5">
+                <div key={t.label} className="rounded-lg border border-border bg-background/50 px-3.5 py-2.5 min-h-[92px] flex flex-col">
                   <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 truncate" title={t.label}>{t.label}</div>
-                  <div className={`text-[20px] font-bold tabular-nums leading-tight ${t.cls ?? ""}`}>{t.value}</div>
-                  {t.sub && <div className="text-[11px] text-muted-2 truncate" title={t.sub}>{t.sub}</div>}
+                  <div className={`text-[26px] font-semibold leading-tight tracking-tight tabular-nums ${t.cls ?? ""}`}>{t.value}</div>
+                  {t.viz}
+                  {t.sub && <div className={`text-[11px] text-muted-2 tabular-nums mt-auto ${t.wrapSub ? "leading-snug" : "truncate"}`}>{t.sub}</div>}
                 </div>
               ))}
             </div>
@@ -576,9 +703,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     <ComparisonBars
                       focusName={primaryFocus!.name}
                       focusRate={primaryFocus!.rate!}
+                      focusCount={primaryFocus!.count}
+                      focusN={primaryFocus!.n}
                       baseName={primaryBase!.name}
                       baseRate={primaryBase!.rate!}
-                      good={(primaryFocus!.lift ?? 0) >= 0}
+                      baseCount={primaryBase!.count}
+                      baseN={primaryBase!.n}
+                      significant={liftSig}
+                      positive={(primaryFocus!.lift ?? 0) >= 0}
                     />
                   </div>
                 )}
@@ -599,6 +731,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             <div>{readingBlock("main")}</div>
             <div className="space-y-3 lg:border-l lg:border-border/40 lg:pl-5">
               {readingBlock("side")}
+              {planDrift.length > 0 && (
+                <div className="text-[12px] text-warn leading-snug">
+                  <Glyph kind="warn" /> The plan doesn&apos;t know {plural(planDrift.length, "reported event")} ({planDrift.slice(0, 3).join(", ")}{planDrift.length > 3 ? "…" : ""}) — <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium print:hidden">re-plan to classify →</a>
+                </div>
+              )}
           {verdict && verdict.guardrails.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap text-[12px]">
                   {verdict.guardrails.map((gr) => (
@@ -609,15 +746,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 </div>
               )}
               {statsEff?.flags.filter((f) => f.code === "SRM_FAIL" || f.code === "CANNIBALIZATION" || f.code === "NOVELTY_DECAY").map((f) => (
-                <p key={f.code} className={`text-[12px] ${f.code === "SRM_FAIL" ? "text-danger" : "text-warn"}`}>⚠ {f.text}</p>
+                <p key={f.code} className={`text-[12px] ${f.code === "SRM_FAIL" ? "text-danger" : "text-warn"}`} leading-snug><Glyph kind="warn" /> {f.text}</p>
               ))}
 
               {verdict && verdict.discoveries.length > 0 && (
                 <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-1.5">
                   <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">Discoveries — exploratory, never confirmation; each is a candidate NEXT experiment</div>
-                  {verdict.discoveries.map((d) => (
+                  {verdict.discoveries.slice(0, 3).map((d) => (
                     <div key={d.id} className="flex items-center gap-2 text-[12.5px]">
-                      <span className="min-w-0">{d.label} <span className={liftClass(d.lift)}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
+                      <span className="min-w-0">{d.label} <span className={`tabular-nums ${liftClass(d.lift)}`}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2 tabular-nums">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
                       {d.promotedIdeaId
                         ? <span className="ml-auto text-[11.5px] text-ok shrink-0">✓ in the backlog</span>
                         : <button onClick={() => post(`promote:${d.id}`, { promote: d.id })} disabled={busy !== null}
@@ -626,6 +763,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           </button>}
                     </div>
                   ))}
+                  {verdict.discoveries.length > 3 && (
+                    <div className="text-[11.5px] text-muted-2">+{verdict.discoveries.length - 3} more in The numbers</div>
+                  )}
                 </div>
               )}
 
@@ -665,6 +805,35 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             ))}
           </div>
 
+          {/* workflow, not readout: tuning folds away and never prints */}
+          {(Boolean(reading?.questionsForYou.length) || Boolean(notebook?.org.preferences.length) || Boolean(notebook?.proto.dataWishes.length)) && (
+            <details className="print:hidden">
+              <summary className="text-[11.5px] text-muted-2 hover:text-foreground cursor-pointer select-none">Tune the analyst</summary>
+              <div className="mt-2 space-y-2.5">
+          {Boolean(reading?.questionsForYou.length) && reading && (
+            <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-2 print:hidden">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">The analyst wants to know what you care about</div>
+              {reading.questionsForYou.map((q) => (
+                <div key={q} className="space-y-1">
+                  <div className="text-[13px] text-muted">{q}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input value={tuneA[q] ?? ""} onChange={(e) => setTuneA((a) => ({ ...a, [q]: e.target.value }))}
+                      placeholder="Your answer…"
+                      className="flex-1 min-w-40 h-8 px-2.5 rounded-lg border border-border bg-background text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
+                    <label className="flex items-center gap-1 text-[11.5px] text-muted-2 shrink-0">
+                      <input type="checkbox" checked={tuneDurable[q] ?? false} onChange={(e) => setTuneDurable((d) => ({ ...d, [q]: e.target.checked }))} />
+                      all experiments
+                    </label>
+                    <button onClick={() => (tuneA[q] ?? "").trim() && post(`tune:${q}`, { tune: { question: q, answer: tuneA[q], durable: tuneDurable[q] ?? false } })}
+                      disabled={busy !== null || !(tuneA[q] ?? "").trim()}
+                      className="h-8 px-2.5 rounded-lg border border-border text-[12.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
+                      {busy === `tune:${q}` ? "Saving…" : "Tell the analyst"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {(Boolean(notebook?.org.preferences.length) || Boolean(notebook?.proto.dataWishes.length)) && (
             <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-muted-2 border-t border-border/60 pt-2 print:hidden">
               <span className="font-bold uppercase tracking-wide">Analyst memory</span>
@@ -679,6 +848,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               ))}
             </div>
           )}
+              </div>
+            </details>
+          )}
+
         </div>
       </div>
 
