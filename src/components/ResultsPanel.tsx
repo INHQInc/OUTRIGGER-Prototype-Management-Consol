@@ -841,6 +841,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const actionChip = (): { label: string; href?: string } | null => {
     const failing = verdict?.gates.find((g) => g.pass === false);
     if (!failing) return stamped ? null : { label: verdict ? "Keep running" : "Waiting for data" };
+    // The `validity` id is emitted by TWO gates (pre-registration resolved,
+    // traffic split) and `significance` by the measurability check — key off
+    // the title so the one action we offer is never confidently wrong.
+    if (/pre-registration/i.test(failing.title)) return { label: "Re-confirm the plan →", href: "?tab=analytics#measurement" };
+    if (/measurable/i.test(failing.title)) return { label: "Remap the primary →", href: "?tab=analytics#measurement" };
     const byGate: Record<string, { label: string; href?: string }> = {
       mapping: { label: "Confirm the measurement plan →", href: "?tab=analytics#measurement" },
       focus: { label: "Rebind the experiment →", href: "?tab=experiment#ship" },
@@ -870,7 +875,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const fallbackFindings = (): { figure?: string; claim: string }[] => {
     const lift = primaryFocus?.lift;
     const ci = primaryFocus?.liftCi;
-    const total = live?.variations.reduce((a, v) => a + (v.visitors ?? 0), 0) ?? 0;
+    const fv = live?.variations.find((v) => v.variationId === statsEff?.focusVariationId);
+    const bv = live?.variations.find((v) => v.variationId === statsEff?.baselineVariationId);
+    const total = (fv?.visitors ?? 0) + (bv?.visitors ?? 0);
     return [
       verdict?.verdict === "not_adjudicable"
         ? { claim: "the decision measure isn’t bound to a confirmed event yet, so there’s no result to read" }
@@ -884,6 +891,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     ];
   };
   const findings = reading?.findings?.length ? reading.findings : fallbackFindings();
+  // CHROMA IS EARNED — by the FIGURE, not by the row. Row 0 only takes the
+  // lift's colour when the figure printed there IS the primary lift.
+  const primaryLiftStrings = new Set([pctS(primaryFocus?.lift), primaryFocus?.lift !== undefined ? `${primaryFocus.lift >= 0 ? "+" : ""}${(primaryFocus.lift * 100).toFixed(0)}%` : undefined].filter(Boolean) as string[]);
   const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
 
   // ── THE ANALYST THREAD — one conversation, hydrated from the notebook so it
@@ -1054,7 +1064,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             <div className={`grid grid-cols-[104px_minmax(0,1fr)] gap-x-4 gap-y-3 ${busy === "reading" ? "opacity-60" : ""}`}>
               {findings.slice(0, 3).map((f, i) => (
                 <React.Fragment key={i}>
-                  <div className={`text-[15px] font-semibold tabular-nums text-right ${i === 0 && liftSig ? liftClass(primaryFocus?.lift) : ""}`}>{f.figure ?? ""}</div>
+                  <div className={`text-[15px] font-semibold tabular-nums text-right ${liftSig && f.figure && primaryLiftStrings.has(f.figure) ? liftClass(primaryFocus?.lift) : ""}`}>{f.figure ?? ""}</div>
                   <div className="text-[15px] leading-snug text-foreground/90 max-w-[76ch]">{f.claim}</div>
                 </React.Fragment>
               ))}
@@ -1337,7 +1347,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   ))}
                 </ul>
               )}
-              {statsEff?.flags.map((f) => <p key={f.code} className="text-muted-2">{f.text}</p>)}
+              {statsEff?.flags
+                // the SRM flags ARE validity.detail — the line below owns it
+                .filter((f) => f.code !== "SRM_FAIL" && f.code !== "SRM_WARN" && f.code !== "SRM_ASSUMED_EQUAL")
+                .map((f, i) => <p key={`${f.code}:${i}`} className="text-muted-2">{f.text}</p>)}
               {statsEff && <p className="text-muted-2">Validity: {statsEff.validity.detail} · expected false movers among the exploratory sweep: {statsEff.expectedFalsePositives.toFixed(1)}.</p>}
             </div>
           </details>

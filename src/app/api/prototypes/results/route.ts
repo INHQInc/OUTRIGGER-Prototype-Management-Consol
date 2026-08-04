@@ -113,6 +113,21 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
   return { stats, verdict: saved, history };
 }
 
+/** Attention rows for a freshly-analyzed bundle — POST responses carry them
+ *  so the triage zone can never describe pre-change numbers. */
+function attentionFor(opts: {
+  results: ExperimentResults | null; map: MetricMap | null; stats: StatsReport | null;
+  verdict: VerdictRecord | null; resultsError?: string; experimentStatus?: string;
+}) {
+  const planDrift = opts.map?.plannedAt && opts.map.known && opts.results
+    ? opts.results.metrics.filter((m) => !opts.map!.known!.includes(m.name) && !(m.baseName && opts.map!.known!.includes(m.baseName))).map((m) => m.name)
+    : [];
+  return deriveAttention({
+    verdict: opts.verdict, stats: opts.stats, map: opts.map, planDrift,
+    resultsError: opts.resultsError, experimentStatus: opts.experimentStatus,
+  });
+}
+
 /** The reading's staleness basis, derived from the current truth. */
 function basisFor(opts: { history: ResultsHistory; verdict: VerdictRecord | null; map: MetricMap | null; orgNb: { updatedAt?: string }; protoNb: { updatedAt?: string } }): string {
   return readingBasisKey({
@@ -254,7 +269,7 @@ export async function POST(req: NextRequest) {
       })))!;
       await audit(g.orgId, actor, "results.map-proposed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
       const { stats, verdict } = await analyze(g.proto, bundle);
-      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict });
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.confirm) {
@@ -329,7 +344,7 @@ export async function POST(req: NextRequest) {
       const { stats, verdict } = bundle.results
         ? await analyze(g.proto, bundle)
         : { stats: null, verdict: await getVerdict(g.proto.key) };
-      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict });
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.stamp) {
@@ -483,7 +498,7 @@ export async function POST(req: NextRequest) {
       await audit(g.orgId, actor, "results.primary-changed", g.proto.name, `${fromLabel} → ${toLabel}`);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
-      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict });
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.removeMetric) {
@@ -542,7 +557,7 @@ export async function POST(req: NextRequest) {
       ]);
       const orgNbNow = await getOrgNotebook(g.orgId);
       const { stats, verdict } = await analyze(g.proto, bundle);
-      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, explanation, notebook: { org: orgNbNow, proto: protoNbAfter } });
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, explanation, notebook: { org: orgNbNow, proto: protoNbAfter }, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.reading) {
@@ -649,7 +664,7 @@ export async function POST(req: NextRequest) {
           { kind: "analyst-answer", text: [answer.headline, ...answer.bullets].filter(Boolean).join(" · ") },
         ]);
       }
-      return NextResponse.json({ answer, results: bundle.results, stats, verdict, notebook: { org: orgNb, proto: protoNb2 } });
+      return NextResponse.json({ answer, results: bundle.results, stats, verdict, notebook: { org: orgNb, proto: protoNb2 }, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     return NextResponse.json({ error: "Nothing to do — pass propose, confirm, stamp, promote, ask, or explain." }, { status: 400 });

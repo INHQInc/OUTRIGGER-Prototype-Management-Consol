@@ -22,7 +22,7 @@ import type { StatsReport } from "../prototypes/stats";
 import type { VerdictRecord } from "../prototypes/verdict";
 import type { OrgNotebook, ProtoNotebook, Reading } from "../prototypes/notebook";
 import { computeComposite, compositeMembers } from "../prototypes/results";
-import { STAT_NOISE } from "../prototypes/attention";
+import { STAT_NOISE, type AttentionItem } from "../prototypes/attention";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
 
@@ -325,17 +325,38 @@ function renderNotebook(org: OrgNotebook | null, proto: ProtoNotebook | null): s
   return lines.join("\n");
 }
 
+/** The ordinal day the UI shows. observationDays is ELAPSED (0 on day one)
+ *  and every surface renders it +1 — Timeline tile, action chip, findings.
+ *  One derivation, or the page prints two different day numbers. */
+export function dayNumber(stats: StatsReport | null): number | undefined {
+  const d = stats?.power?.observationDays;
+  return d === undefined ? undefined : d + 1;
+}
+
 /** Every value the readout actually renders, at DISPLAY precision. A figure
  *  the analyst cites must be byte-identical to one of these — a narrated
- *  number can then never drift from a rendered one after a refresh. */
-function allowedFigures(results: ExperimentResults, stats: StatsReport | null): Set<string> {
-  const out = new Set<string>();
-  const add = (v: string | undefined | null) => { if (v) out.add(normFigure(v)); };
+ *  number can then never drift from a rendered one after a refresh.
+ *  Returns the DISPLAY forms (what the model is shown and what gets stored)
+ *  alongside the normalised lookup — showing the model a normalised string
+ *  makes it copy "day5" onto the board page. */
+function allowedFigures(results: ExperimentResults, stats: StatsReport | null): { display: string[]; lookup: Map<string, string> } {
+  const lookup = new Map<string, string>();
+  const display: string[] = [];
+  const add = (v: string | undefined | null) => {
+    if (!v) return;
+    const k = normFigure(v);
+    if (lookup.has(k)) return;
+    lookup.set(k, v);
+    display.push(v);
+  };
   const pct = (v?: number, dp = 1) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(dp)}%`);
 
   for (const v of results.variations) add(v.visitors?.toLocaleString());
-  const total = results.variations.reduce((a, v) => a + (v.visitors ?? 0), 0);
-  add(total.toLocaleString());
+  // The Visitors tile shows focus + control only; a whole-experiment total
+  // would contradict the number printed directly above the findings.
+  const focusV = results.variations.find((v) => v.variationId === stats?.focusVariationId);
+  const baseV = results.variations.find((v) => v.variationId === stats?.baselineVariationId);
+  if (focusV && baseV) add(((focusV.visitors ?? 0) + (baseV.visitors ?? 0)).toLocaleString());
 
   const primary = stats?.metrics.find((m) => m.key === stats.primaryKey);
   for (const c of primary?.cells ?? []) {
@@ -350,9 +371,9 @@ function allowedFigures(results: ExperimentResults, stats: StatsReport | null): 
     add(e.q * 100 < 0.5 ? "q<1%" : `q=${(e.q * 100).toFixed(0)}%`);
   }
   if (stats?.power?.mdeNow !== undefined) add(`±${(stats.power.mdeNow * 100).toFixed(1)}%`);
-  const days = stats?.power?.observationDays;
-  if (days !== undefined) { add(`Day ${days}`); add(`${days} days`); }
-  return out;
+  const dayN = dayNumber(stats);
+  if (dayN !== undefined) add(`Day ${dayN}`);
+  return { display, lookup };
 }
 
 /** Sign-preserving, glyph-insensitive comparison of a cited figure. */
@@ -407,8 +428,10 @@ export function templateFindings(opts: {
   const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
   const pct = (v?: number) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
   const sig = focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0;
-  const total = opts.results.variations.reduce((a, v) => a + (v.visitors ?? 0), 0);
-  const days = stats?.power?.observationDays;
+  const focusV = opts.results.variations.find((v) => v.variationId === stats?.focusVariationId);
+  const baseV = opts.results.variations.find((v) => v.variationId === stats?.baselineVariationId);
+  const total = (focusV?.visitors ?? 0) + (baseV?.visitors ?? 0);
+  const days = dayNumber(stats);
 
   const effect: { figure?: string; claim: string } =
     verdict?.verdict === "not_adjudicable"
@@ -441,14 +464,16 @@ export async function generateReading(opts: {
   orgNotebook: OrgNotebook | null;
   protoNotebook: ProtoNotebook | null;
   basisKey: string;
-  /** Ids of the risks the CODE found — the only ones the analyst may gloss. */
-  attention: { id: string; title: string; detail: string }[];
+  /** The risks the CODE found — the only ones the analyst may gloss. */
+  attention: AttentionItem[];
 }): Promise<{ reading: Reading; dataWishes: string[] }> {
   requireKey();
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
   const figures = allowedFigures(opts.results, opts.stats);
-  const codes = opts.attention.map((a) => a.id);
+  // "all-clear" is not a risk — leaving it in the enum lets the analyst write
+  // its own sentence under "Nothing needs attention".
+  const codes = opts.attention.filter((a) => a.severity !== "good").map((a) => a.id);
 
   // CALL-TIME ENUM: an unknown risk id is unemittable, not merely dropped.
   const tool = JSON.parse(JSON.stringify(readingTool)) as typeof readingTool & { input_schema: { properties: Record<string, unknown> } };
@@ -473,10 +498,10 @@ RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
 ALLOWED FIGURES — a figure you cite must be copied EXACTLY from this list:
-${[...figures].join(" · ") || "(none — omit every figure)"}
+${figures.display.join(" · ") || "(none — omit every figure)"}
 
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
-${opts.attention.map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
+${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
 Give the READING: exactly three findings — the effect, how certain it is, then scale or time. Each claim is ONE line of plain business words with NO DIGITS IN IT; the number belongs in the figure field.`,
     }],
@@ -491,23 +516,28 @@ Give the READING: exactly three findings — the effect, how certain it is, then
   // ── VALIDATE + REPAIR (enforce-in-code): every failure has a deterministic
   // repair and nothing is ever re-prompted. Bad rows are DISCARDED, never
   // truncated — a severed uncertainty statement is a lie.
-  const seenFigures = new Set<string>();
-  const findings: { figure?: string; claim: string }[] = [];
-  for (const f of Array.isArray(raw.findings) ? raw.findings : []) {
-    const rec = f as Record<string, unknown>;
-    const claim = typeof rec.claim === "string" ? stripMd(rec.claim).replace(/\s+/g, " ").trim() : "";
-    if (!claim || claim.length > 86 || /\d/.test(claim)) continue; // DIGIT BAN
-    let figure = typeof rec.figure === "string" ? stripMd(rec.figure).trim() : "";
-    // Soft failure: an uncited or repeated figure loses the gutter, keeps the
-    // sentence — a normalization miss degrades to a good line, not boilerplate.
-    if (figure.length > 14 || !figures.has(normFigure(figure)) || seenFigures.has(normFigure(figure))) figure = "";
-    if (figure) seenFigures.add(normFigure(figure));
-    findings.push({ claim, ...(figure ? { figure } : {}) });
-    if (findings.length === 3) break;
-  }
-  // PADDING — always exactly three rows, in the fixed effect/certainty/scale order.
   const templates = templateFindings({ results: opts.results, stats: opts.stats, verdict: opts.verdict });
-  while (findings.length < 3) findings.push(templates[findings.length]);
+  const rawFindings = Array.isArray(raw.findings) ? raw.findings : [];
+  const seenFigures = new Set<string>();
+  // SLOT-ALIGNED: row i is always the i-th thing (effect, certainty, scale).
+  // Padding by array length would let a dropped middle row shift the others
+  // up — the uncertainty statement would vanish and the effect's earned
+  // colour would land on someone else's number.
+  const findings = [0, 1, 2].map((i) => {
+    const rec = (rawFindings[i] ?? {}) as Record<string, unknown>;
+    const claim = typeof rec.claim === "string" ? stripMd(rec.claim).replace(/\s+/g, " ").trim() : "";
+    if (!claim || claim.length > 86 || /\d/.test(claim)) return templates[i]; // DIGIT BAN
+    // NOT stripMd: its bullet-strip eats a leading "-", which would silently
+    // turn a losing figure into a winning one.
+    const cited = typeof rec.figure === "string" ? rec.figure.replace(/\*\*|__/g, "").trim() : "";
+    const key = normFigure(cited);
+    // Soft failure: an uncited or repeated figure loses the gutter and keeps
+    // the sentence. Storing the CANONICAL display form (not the model's
+    // string) is what keeps the gutter byte-identical to the page.
+    const canon = cited.length <= 14 && figures.lookup.has(key) && !seenFigures.has(key) ? figures.lookup.get(key)! : "";
+    if (canon) seenFigures.add(key);
+    return { claim, ...(canon ? { figure: canon } : {}) };
+  });
 
   const codeSet = new Set(codes);
   const seenCodes = new Set<string>();
