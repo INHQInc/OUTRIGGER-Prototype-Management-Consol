@@ -13,8 +13,11 @@ import type { MetricMap, CompositeMetric } from "@/lib/prototypes/results";
  * human confirms — stamping the plan pre-start. Gaps become
  * instrumentation asks; new events appearing later trip the drift banner.
  */
-export function MeasurementPanel({ prototypeKey, bound, running }: {
+export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
   prototypeKey: string;
+  /** Open-question count, reported up so the tab can carry the badge —
+   *  an unanswered plan question is invisible from the other views. */
+  onPending?: (n: number) => void;
   bound: boolean;
   running: boolean;
 }) {
@@ -77,6 +80,8 @@ export function MeasurementPanel({ prototypeKey, bound, running }: {
   if (loading && !plan) return <p className="text-[13.5px] text-muted-2">Loading the plan and the experiment&apos;s events…</p>;
 
   const pending = plan?.pendingQuestions ?? [];
+  const pendingCount = plan?.confirmed ? 0 : pending.length;
+  useEffect(() => { onPending?.(pendingCount); }, [pendingCount, onPending]);
   const allAnswered = pending.length > 0 && pending.every((q) => (answers[q] ?? "").trim().length > 0);
   const gapPaste = plan?.gaps?.length
     ? `The measurement plan needs events that nothing currently fires. Instrument these in the variation (and where they describe shared behavior, note that the control equivalent must be measurable too), then tell me the event names you registered in Optimizely: ${plan.gaps.join(" · ")}`
@@ -139,18 +144,27 @@ export function MeasurementPanel({ prototypeKey, bound, running }: {
               // "Before start" is OBSERVATION truth, not live status — a
               // paused experiment isn't pre-start.
               ? <span className="text-[11.5px] text-ok font-medium">✓ Confirmed by {plan.confirmedBy}{plan.confirmedAt ? ` · ${plan.confirmedAt.slice(0, 10)}` : ""}{!firstObservedAt || (plan.confirmedAt && plan.confirmedAt.slice(0, 10) <= firstObservedAt) ? " — stamped before traffic" : " — post-start (disclosed in the verdict)"}</span>
-              : <span className="text-[11.5px] text-warn font-medium">Draft — not confirmed yet{firstObservedAt ? " (observation has begun: confirming now will be disclosed as post-start)" : ""}</span>}
+              : <span className="text-[11.5px] text-warn font-medium">
+                  {pending.length > 0
+                    ? `Draft — ${pending.length === 1 ? "one answer" : `${pending.length} answers`} needed to finish it`
+                    : `Draft — not confirmed yet${firstObservedAt ? " (observation has begun: confirming now will be disclosed as post-start)" : ""}`}
+                </span>}
             {plan.understanding !== undefined && !plan.confirmed && (
               <span className="text-[11px] text-muted-2 ml-auto">understanding: {plan.understanding}/100</span>
             )}
           </div>
 
-          {plan.composites.map(compositeRow)}
-
-          {/* The interview — pending questions render as the ONE next action. */}
+          {/* THE INTERVIEW — first thing in the card. These answers are the
+              only thing between a draft and a frozen contract; buried under
+              the measures they were unfindable. */}
           {!plan.confirmed && pending.length > 0 && (
-            <div className="px-3.5 py-3 border-t border-border bg-background/50 space-y-2.5">
-              <div className="text-[12px] font-semibold text-foreground">Claude needs {pending.length === 1 ? "one answer" : "two answers"} to finish the plan:</div>
+            <div id="plan-questions" className="px-3.5 py-3 border-b-2 border-accent bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-accent text-accent-fg text-[11.5px] font-bold tabular-nums">{pending.length}</span>
+                <span className="text-[13.5px] font-semibold text-foreground">
+                  {pending.length === 1 ? "One answer" : `${pending.length} answers`} needed before this plan can be confirmed
+                </span>
+              </div>
               {pending.map((q) => (
                 <div key={q} className="space-y-1">
                   <div className="text-[13px] text-muted">{q}</div>
@@ -166,6 +180,8 @@ export function MeasurementPanel({ prototypeKey, bound, running }: {
               </button>
             </div>
           )}
+
+          {plan.composites.map(compositeRow)}
 
           {/* Gaps: wanted measurements nothing fires — the instrumentation ask. */}
           {Boolean(plan.gaps?.length) && (

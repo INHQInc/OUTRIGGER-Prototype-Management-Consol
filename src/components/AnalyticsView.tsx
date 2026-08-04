@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MeasurementPanel } from "./MeasurementPanel";
 import { ResultsPanel } from "./ResultsPanel";
 
@@ -20,6 +20,8 @@ export function AnalyticsView({ prototypeKey, bound, running }: {
   running: boolean;
 }) {
   const [view, setView] = useState<View>("readout");
+  const [planPending, setPlanPending] = useState(0);
+  const onPending = useCallback((n: number) => setPlanPending(n), []);
 
   useEffect(() => {
     const fromHash = () => {
@@ -44,15 +46,21 @@ export function AnalyticsView({ prototypeKey, bound, running }: {
       <div className="flex items-center gap-1 border-b border-border print:hidden">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setView(t.id)} title={t.sub}
-            className={`px-3.5 py-2 text-[13.5px] font-semibold border-b-2 -mb-px transition-colors ${
+            className={`px-3.5 py-2 text-[13.5px] font-semibold border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
               view === t.id ? "border-accent text-foreground" : "border-transparent text-muted-2 hover:text-foreground"}`}>
             {t.label}
+            {t.id === "plan" && planPending > 0 && (
+              <span title={`${planPending} question${planPending === 1 ? "" : "s"} to answer before the plan can be confirmed`}
+                className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-accent text-accent-fg text-[10.5px] font-bold tabular-nums">
+                {planPending}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       <div className={view === "plan" ? "" : "hidden"} id="measurement">
-        <MeasurementPanel prototypeKey={prototypeKey} bound={bound} running={running} />
+        <MeasurementPanel prototypeKey={prototypeKey} bound={bound} running={running} onPending={onPending} />
       </div>
       <div id="results">
         <ResultsPanel prototypeKey={prototypeKey} bound={bound} running={running} view={view === "numbers" ? "numbers" : "readout"} hidden={view === "plan"} />
