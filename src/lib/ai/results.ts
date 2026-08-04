@@ -237,6 +237,7 @@ function renderVerdict(v: VerdictRecord | null): string {
     const pr = v.preRegistration;
     lines.push(`PRE-REGISTERED ${pr.anchor === "cut" ? `at v${pr.version} cut ${pr.cutAt?.slice(0, 10) ?? "?"}` : `with the measurement plan's confirmation ${pr.cutAt?.slice(0, 10) ?? "?"}`}: ${pr.hypothesis} Primary metric (in words): ${pr.primaryMetric}. Guardrails: ${pr.guardrails.join(" · ") || "(none)"}.`);
     if (pr.mapConfirmedAfterObservation) lines.push(`DISCLOSURE: the metric mapping was confirmed AFTER results observation began — the metric WORDS are pre-registered; their operationalization is not.`);
+    if (pr.primaryChangedAfterObservation) lines.push(`DISCLOSURE: the decision metric was CHANGED after traffic began (was "${pr.primaryChangedAfterObservation.was}", ${pr.primaryChangedAfterObservation.at.slice(0, 10)}) — say so whenever you name the primary.`);
   }
   lines.push(`Gate trace: ${v.gates.map((g) => `${g.title}=${g.pass === null ? "n/a" : g.pass ? "PASS" : "FAIL"}`).join(" · ")}`);
   for (const g of v.guardrails) lines.push(`Guardrail “${g.label}”: ${g.state.toUpperCase()} — ${g.detail}`);

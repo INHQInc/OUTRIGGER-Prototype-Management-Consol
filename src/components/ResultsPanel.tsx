@@ -884,6 +884,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               <p className="text-[13px] text-muted leading-snug max-w-3xl">
                 {pr.hypothesis} <span className="text-muted-2">Primary metric: {pr.primaryMetric}.</span>
                 {pr.mapConfirmedAfterObservation && <span className="text-warn"> Metric mapping set after observation began (disclosed).</span>}
+                {pr.primaryChangedAfterObservation && <span className="text-warn"> Decision metric changed after traffic began (was “{pr.primaryChangedAfterObservation.was}”, {pr.primaryChangedAfterObservation.at.slice(0, 10)}) — disclosed.</span>}
               </p>
             </div>
           )}
@@ -1006,6 +1007,20 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                               <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
                                 {c.source === "custom" ? "console" : c.role}
                               </span>
+                              {c.role !== "primary" && !c.expectedOneArm && renamingId !== c.id && (
+                                <span className="ml-1.5 print:hidden">
+                                  {deleteArmId === `primary:${c.id}` ? (
+                                    <span className="text-[10.5px]">
+                                      <button onClick={() => { setDeleteArmId(null); post("setPrimary", { setPrimary: c.id }); }} className="text-accent font-semibold">make primary?</button>
+                                      <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2 hover:text-foreground">cancel</button>
+                                    </span>
+                                  ) : (
+                                    <button onClick={() => setDeleteArmId(`primary:${c.id}`)}
+                                      title="Make this the console's decision metric — the verdict adjudicates the primary. Changing it after traffic started is recorded and disclosed."
+                                      className="text-[10.5px] text-muted-2 hover:text-accent underline underline-offset-2">make primary</button>
+                                  )}
+                                </span>
+                              )}
                               {c.source === "custom" && renamingId !== c.id && (
                                 <span className="ml-1.5 print:hidden whitespace-nowrap">
                                   <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }}
@@ -1030,13 +1045,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           </tr>
                         );
                       })}
-                      {live.metrics.map((m) => {
+                      {live.metrics.map((m, mi) => {
                         const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
                         const cell = ms?.cells.find((x) => x.variationId === statsEff?.focusVariationId);
                         return (
                           <tr key={m.name} className="border-t border-border/40">
                             <td className="py-1.5 pr-2 text-muted">
                               {m.name}
+                              {mi === 0 && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle" title="Optimizely's own primary metric (first on its experiment). The console adjudicates its composed decision metric instead — the two may legitimately differ.">opti primary</span>}
                               {ms?.featureOnly && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle">{ms.featureOnly}-only</span>}
                             </td>
                             {ordered.map((v) => {

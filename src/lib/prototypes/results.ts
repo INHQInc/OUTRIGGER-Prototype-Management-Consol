@@ -175,6 +175,9 @@ export interface MetricMap {
    *  lose them; emptied on the terminal answers pass. */
   pendingQuestions?: string[];
   plannedAt?: string;
+  /** Primary swaps, in order — a post-observation change of the decision
+   *  metric is legitimate but must be DISCLOSED, never silent. */
+  primaryHistory?: { from: string; to: string; at: string; by: string }[];
   /** Confirmation stamps a Re-plan replaced — the EARLIEST pre-observation
    *  stamp is what the verdict's pre-registration disclosure keys off, so a
    *  mid-run re-plan can't silently erase "this was declared before traffic". */

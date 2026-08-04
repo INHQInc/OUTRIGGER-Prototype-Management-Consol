@@ -75,6 +75,8 @@ export interface PreRegistration {
   /** A post-observation re-confirm changed the frozen brief — the verdict
    *  adjudicates the EARLIEST stamp; the edit is disclosed, never laundered. */
   briefRefrozenAfterObservation?: boolean;
+  /** The decision metric was SWAPPED after observation began. */
+  primaryChangedAfterObservation?: { was: string; at: string };
 }
 
 export interface VerdictRecord {
@@ -225,10 +227,12 @@ export function deriveVerdict(opts: {
   const T = VERDICT_THRESHOLDS;
   const gates: VerdictGate[] = [];
   const snap = opts.pushedVersion?.briefSnapshot;
+  const lateSwap = (map?.primaryHistory ?? []).filter((h) => opts.firstObservedDate && h.at.slice(0, 10) > opts.firstObservedDate).pop();
   const mapDisclosure = {
     mapConfirmedAt: opts.mapConfirmedAt,
     mapConfirmedAfterObservation:
       Boolean(opts.mapConfirmedAt && opts.firstObservedDate && opts.mapConfirmedAt.slice(0, 10) > opts.firstObservedDate),
+    primaryChangedAfterObservation: lateSwap ? { was: lateSwap.from, at: lateSwap.at } : undefined,
   };
 
   // The pre-registration anchor: console-built prototypes freeze the brief

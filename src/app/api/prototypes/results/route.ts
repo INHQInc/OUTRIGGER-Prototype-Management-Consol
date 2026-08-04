@@ -205,6 +205,8 @@ export async function POST(req: NextRequest) {
     removeMetric?: string;
     /** Rename a CUSTOM measure. */
     renameMetric?: { id?: string; label?: string };
+    /** Promote a composite to the console's PRIMARY decision metric. */
+    setPrimary?: string;
     /** Manual "Refresh the reading" — bypasses the current-basis short-circuit. */
     force?: boolean;
     tune?: { question?: string; answer?: string; durable?: boolean };
@@ -406,6 +408,39 @@ export async function POST(req: NextRequest) {
       });
       await audit(g.orgId, actor, "verdict.discovery-promoted", g.proto.name, `${disc.label} → backlog ${idea.id}`);
       return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
+    }
+
+    if (body.setPrimary) {
+      const id = String(body.setPrimary);
+      let fromLabel = "";
+      let toLabel = "";
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const target = cur?.composites.find((c) => c.id === id);
+        if (!cur || !target || target.role === "primary") return null;
+        if (target.expectedOneArm) return null; // one-arm can't adjudicate — the engine would refuse anyway
+        const oldPrimary = cur.composites.find((c) => c.role === "primary");
+        fromLabel = oldPrimary?.label ?? "(none)";
+        toLabel = target.label;
+        return {
+          ...cur,
+          composites: cur.composites.map((c) =>
+            c.id === id ? { ...c, role: "primary" as const } : c.role === "primary" ? { ...c, role: "info" as const } : c),
+          // a primary swap IS a re-confirmation of the contract — the prior
+          // stamp is archived (earliest still anchors) and the swap is
+          // recorded so a post-observation change gets disclosed
+          priorConfirmations: cur.confirmed && cur.confirmedAt
+            ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt, briefAtConfirm: cur.briefAtConfirm }]
+            : cur.priorConfirmations,
+          confirmedBy: cur.confirmed ? actor : cur.confirmedBy,
+          confirmedAt: cur.confirmed ? new Date().toISOString() : cur.confirmedAt,
+          primaryHistory: [...(cur.primaryHistory ?? []), { from: fromLabel, to: toLabel, at: new Date().toISOString(), by: actor }].slice(-8),
+        };
+      });
+      if (!toLabel) return NextResponse.json({ error: "Can't make that the primary — it's already primary, doesn't exist, or fires in only one arm (the control couldn't convert on it)." }, { status: 400 });
+      await audit(g.orgId, actor, "results.primary-changed", g.proto.name, `${fromLabel} → ${toLabel}`);
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict });
     }
 
     if (body.removeMetric) {
