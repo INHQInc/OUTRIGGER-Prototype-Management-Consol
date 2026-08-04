@@ -1190,6 +1190,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 <Glyph kind="grip" />
               </span>
             );
+            // toggle · rename · delete · hide — fixed slots, right-aligned.
+            const CLUSTER = "grid grid-cols-[1.75rem_0.9rem_0.9rem_0.9rem] gap-2 items-center justify-items-center ml-auto w-fit";
             const eye = (rowKey: string, isHidden: boolean) => (
               <button onClick={() => saveHidden(rowKey, !isHidden)}
                 title={isHidden ? "Show this measure again" : "Hide from the index (display only — plan measures still feed the verdict)"}
@@ -1237,33 +1239,31 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</td>
                   <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</td>
                   <td className="py-1.5 pl-2 print:hidden">
-                    <span className="flex items-center justify-end gap-1.5">
-                      {deleteArmId === c.id ? (
-                        <span className="text-[10px] whitespace-nowrap">
-                          <button onClick={() => { setDeleteArmId(null); post("remove", { removeMetric: c.id }); }} className="text-danger font-semibold">delete?</button>
-                          <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2">✕</button>
-                        </span>
-                      ) : (
-                        <>
-                          {/* ONE primary — switch semantics: on = the decision metric;
-                              flipping another on moves it (the server keeps exactly one) */}
-                          <button
-                            onClick={() => { if (c.role !== "primary" && !c.expectedOneArm) void post("setPrimary", { setPrimary: c.id }); }}
-                            disabled={c.role === "primary" || Boolean(c.expectedOneArm) || busy !== null}
-                            title={c.role === "primary" ? "The console’s decision metric — the verdict adjudicates this. Flip another on to move it." : c.expectedOneArm ? "Fires in only one arm — can’t be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
-                            className={`relative w-7 h-4 rounded-full shrink-0 transition-colors ${c.role === "primary" ? "bg-ok" : c.expectedOneArm ? "bg-border opacity-40 cursor-not-allowed" : "bg-border-strong hover:bg-accent/60"}`}>
-                            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-[left] ${c.role === "primary" ? "left-3.5" : "left-0.5"}`} />
-                          </button>
-                          {c.source === "custom" && (
-                            <>
-                              <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }} title="Rename" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
-                              <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
-                            </>
-                          )}
-                          {!pinned && eye(rowKey, isHidden)}
-                        </>
-                      )}
-                    </span>
+                    {deleteArmId === c.id ? (
+                      <span className="flex items-center justify-end gap-1 text-[11px] whitespace-nowrap">
+                        <button onClick={() => { setDeleteArmId(null); post("remove", { removeMetric: c.id }); }} className="text-danger font-semibold">delete?</button>
+                        <button onClick={() => setDeleteArmId(null)} className="text-muted-2">✕</button>
+                      </span>
+                    ) : (
+                      <span className={CLUSTER}>
+                        {/* ONE primary — switch semantics: on = the decision metric;
+                            flipping another on moves it (the server keeps exactly one) */}
+                        <button
+                          onClick={() => { if (c.role !== "primary" && !c.expectedOneArm) void post("setPrimary", { setPrimary: c.id }); }}
+                          disabled={c.role === "primary" || Boolean(c.expectedOneArm) || busy !== null}
+                          title={c.role === "primary" ? "The console’s decision metric — the verdict adjudicates this. Flip another on to move it." : c.expectedOneArm ? "Fires in only one arm — can’t be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
+                          className={`relative w-7 h-4 rounded-full transition-colors ${c.role === "primary" ? "bg-ok" : c.expectedOneArm ? "bg-border opacity-40 cursor-not-allowed" : "bg-border-strong hover:bg-accent/60"}`}>
+                          <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-[left] ${c.role === "primary" ? "left-3.5" : "left-0.5"}`} />
+                        </button>
+                        {c.source === "custom"
+                          ? <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }} title="Rename" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
+                          : <span />}
+                        {c.source === "custom"
+                          ? <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
+                          : <span />}
+                        {pinned ? <span /> : eye(rowKey, isHidden)}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
@@ -1289,7 +1289,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
                   <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
                   <td className="py-1.5 pl-2 print:hidden">
-                    <span className="flex items-center justify-end">{eye(rowKey, isHidden)}</span>
+                    <span className={CLUSTER}>
+                      {/* a raw Optimizely event can't be the console's decision
+                          metric — the slot stays empty so the column holds */}
+                      <span /><span /><span />
+                      {eye(rowKey, isHidden)}
+                    </span>
                   </td>
                 </tr>
               );
@@ -1311,7 +1316,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         ))}
                         <th className="font-medium py-1 pl-2 text-right">Δ vs control</th>
                         <th className="font-medium py-1 pl-2 text-right w-20"></th>
-                        <th className="font-medium py-1 pl-2 w-20 print:hidden"></th>
+                        <th className="font-medium py-1 pl-2 w-[6.5rem] print:hidden"></th>
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
