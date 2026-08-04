@@ -931,68 +931,100 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             );
           })()}
 
-          {/* ── the metric INDEX: every measure, one plain row — composites
-                 (badged console-computed) first, Optimizely events beneath ── */}
-          {live && (
-            <div className="border-t border-border/50 pt-3">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2">All measures</div>
-                <button onClick={() => { setCustomOpen((o) => !o); setCustomMsg(null); }} className="ml-auto text-[11.5px] text-accent hover:text-accent-hover font-medium print:hidden">
-                  {customOpen ? "Cancel" : "+ Track a custom measure"}
-                </button>
-              </div>
-              {customOpen && (
-                <div className="rounded-lg border border-border bg-background/60 px-3 py-2 mb-2 space-y-1.5 print:hidden">
-                  <div className="flex items-center gap-2">
-                    <input value={customDesc} onChange={(e) => setCustomDesc(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && customDesc.trim()) post("define", { defineMetric: customDesc }); }}
-                      placeholder="Describe it — e.g. “all navigation engagement: next room + previous room + destination tabs”"
-                      className="flex-1 h-8 px-2.5 rounded-lg border border-border bg-background text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-                    <button onClick={() => customDesc.trim() && post("define", { defineMetric: customDesc })} disabled={busy !== null || !customDesc.trim()}
-                      className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
-                      {busy === "define" ? "Defining…" : "Add measure"}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-muted-2">Console-computed from the events already reporting — badged as not an Optimizely metric; infeasible asks come back with what&apos;s missing, never a silent approximation.</p>
-                  {customMsg && <p className="text-[12px] text-foreground/90">{customMsg}</p>}
+          {/* ── the metric INDEX: every measure × every arm, named columns,
+                 half-width — composites (badged) first, Opti events beneath ── */}
+          {live && (() => {
+            // canonical arm order: focus first, others, control last
+            const ordered = [
+              ...live.variations.filter((v) => v.variationId === statsEff?.focusVariationId),
+              ...live.variations.filter((v) => v.variationId !== statsEff?.focusVariationId && v.variationId !== statsEff?.baselineVariationId),
+              ...live.variations.filter((v) => v.variationId === statsEff?.baselineVariationId),
+            ].slice(0, 5);
+            const isCtl = (id: string) => id === statsEff?.baselineVariationId;
+            return (
+              <div className="border-t border-border/50 pt-3 max-w-3xl">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2">All measures</div>
+                  <button onClick={() => { setCustomOpen((o) => !o); setCustomMsg(null); }} className="ml-auto text-[11.5px] text-accent hover:text-accent-hover font-medium print:hidden">
+                    {customOpen ? "Cancel" : "+ Track a custom measure"}
+                  </button>
                 </div>
-              )}
-              <div className="divide-y divide-border/40">
-                {(map?.composites ?? []).map((c) => {
-                  const cell = cellFor(`composite:${c.id}`, statsEff?.focusVariationId ?? "");
-                  const rowsC = computeComposite(c, live);
-                  const f = rowsC.find((r) => r.variationId === statsEff?.focusVariationId);
-                  const b = rowsC.find((r) => r.isBaseline);
-                  return (
-                    <div key={c.id} className="flex items-center gap-2.5 py-1.5 text-[12.5px]" title={[c.definition, c.note].filter(Boolean).join(" — ")}>
-                      <span className="min-w-0 truncate font-medium">{c.label}</span>
-                      <span className={`shrink-0 text-[9.5px] font-bold uppercase tracking-wide border rounded px-1 ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
-                        {c.source === "custom" ? "console metric" : c.role === "primary" ? "primary" : c.role}
-                      </span>
-                      <span className="ml-auto shrink-0 tabular-nums text-muted-2">{f && b && f.rate !== undefined && b.rate !== undefined ? `${(f.rate * 100).toFixed(1)}% vs ${(b.rate * 100).toFixed(1)}%` : "—"}</span>
-                      <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</span>
-                      <span className="w-24 shrink-0 text-right text-[11px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</span>
+                {customOpen && (
+                  <div className="rounded-lg border border-border bg-background/60 px-3 py-2 mb-2 space-y-1.5 print:hidden">
+                    <div className="flex items-center gap-2">
+                      <input value={customDesc} onChange={(e) => setCustomDesc(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && customDesc.trim()) post("define", { defineMetric: customDesc }); }}
+                        placeholder="Describe it — e.g. “all navigation engagement: next room + previous room + destination tabs”"
+                        className="flex-1 h-8 px-2.5 rounded-lg border border-border bg-background text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
+                      <button onClick={() => customDesc.trim() && post("define", { defineMetric: customDesc })} disabled={busy !== null || !customDesc.trim()}
+                        className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
+                        {busy === "define" ? "Defining…" : "Add measure"}
+                      </button>
                     </div>
-                  );
-                })}
-                {live.metrics.map((m) => {
-                  const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
-                  const cell = ms?.cells.find((x) => x.variationId === statsEff?.focusVariationId);
-                  const f = m.perVariation.find((r) => r.variationId === statsEff?.focusVariationId);
-                  const b = m.perVariation.find((r) => r.isBaseline);
-                  return (
-                    <div key={m.name} className="flex items-center gap-2.5 py-1.5 text-[12.5px]">
-                      <span className="min-w-0 truncate text-muted">{m.name}</span>
-                      {ms?.featureOnly && <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2">{ms.featureOnly}-only</span>}
-                      <span className="ml-auto shrink-0 tabular-nums text-muted-2">{f && b && f.rate !== undefined && b.rate !== undefined ? `${(f.rate * 100).toFixed(1)}% vs ${(b.rate * 100).toFixed(1)}%` : "—"}</span>
-                      <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</span>
-                      <span className="w-24 shrink-0 text-right text-[11px] text-muted-2">{ms?.featureOnly ? "adoption view" : sigOf(cell) ? "beyond luck" : "too early"}</span>
-                    </div>
-                  );
-                })}
+                    <p className="text-[11px] text-muted-2">Console-computed from the events already reporting — badged as not an Optimizely metric; infeasible asks come back with what&apos;s missing, never a silent approximation.</p>
+                    {customMsg && <p className="text-[12px] text-foreground/90">{customMsg}</p>}
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="text-[10.5px] text-muted-2 text-left">
+                        <th className="font-medium py-1 pr-2">Measure</th>
+                        {ordered.map((v) => (
+                          <th key={v.variationId} className="font-medium py-1 px-1.5 text-right max-w-24">
+                            <span className="block truncate" title={v.name}>{v.name}</span>
+                            {isCtl(v.variationId) && <span className="font-normal">(control)</span>}
+                          </th>
+                        ))}
+                        <th className="font-medium py-1 pl-2 text-right">Δ vs control</th>
+                        <th className="font-medium py-1 pl-2 text-right w-20"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="tabular-nums">
+                      {(map?.composites ?? []).map((c) => {
+                        const cell = cellFor(`composite:${c.id}`, statsEff?.focusVariationId ?? "");
+                        const rowsC = computeComposite(c, live);
+                        return (
+                          <tr key={c.id} className="border-t border-border/40" title={[c.definition, c.note].filter(Boolean).join(" — ")}>
+                            <td className="py-1.5 pr-2">
+                              <span className="font-medium text-[12.5px]">{c.label}</span>{" "}
+                              <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
+                                {c.source === "custom" ? "console" : c.role}
+                              </span>
+                            </td>
+                            {ordered.map((v) => {
+                              const r = rowsC.find((x) => x.variationId === v.variationId);
+                              return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
+                            })}
+                            <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</td>
+                            <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</td>
+                          </tr>
+                        );
+                      })}
+                      {live.metrics.map((m) => {
+                        const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
+                        const cell = ms?.cells.find((x) => x.variationId === statsEff?.focusVariationId);
+                        return (
+                          <tr key={m.name} className="border-t border-border/40">
+                            <td className="py-1.5 pr-2 text-muted">
+                              {m.name}
+                              {ms?.featureOnly && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle">{ms.featureOnly}-only</span>}
+                            </td>
+                            {ordered.map((v) => {
+                              const r = m.perVariation.find((x) => x.variationId === v.variationId);
+                              return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
+                            })}
+                            <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
+                            <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-x-6 gap-y-4 border-t border-border/50 pt-3">
             <div>{readingBlock("main")}</div>
