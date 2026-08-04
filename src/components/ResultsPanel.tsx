@@ -255,6 +255,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [windowData, setWindowData] = useState<{ results: ExperimentResults; stats: StatsReport | null; range: { from: string; to: string } } | null>(null);
   const [windowBusy, setWindowBusy] = useState(false);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customDesc, setCustomDesc] = useState("");
+  const [customMsg, setCustomMsg] = useState<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
@@ -342,6 +345,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       if (data.readingBasis) setReadingBasis(data.readingBasis);
       if (data.notebook) setNotebook(data.notebook);
       if (data.answer) setAnswer(data.answer);
+      if (data.explanation) setCustomMsg(data.explanation);
       if (!res.ok) {
         // A failed reading generation must not poison the retry guard —
         // the next staleness evaluation should try again.
@@ -926,6 +930,69 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </div>
             );
           })()}
+
+          {/* ── the metric INDEX: every measure, one plain row — composites
+                 (badged console-computed) first, Optimizely events beneath ── */}
+          {live && (
+            <div className="border-t border-border/50 pt-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2">All measures</div>
+                <button onClick={() => { setCustomOpen((o) => !o); setCustomMsg(null); }} className="ml-auto text-[11.5px] text-accent hover:text-accent-hover font-medium print:hidden">
+                  {customOpen ? "Cancel" : "+ Track a custom measure"}
+                </button>
+              </div>
+              {customOpen && (
+                <div className="rounded-lg border border-border bg-background/60 px-3 py-2 mb-2 space-y-1.5 print:hidden">
+                  <div className="flex items-center gap-2">
+                    <input value={customDesc} onChange={(e) => setCustomDesc(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && customDesc.trim()) post("define", { defineMetric: customDesc }); }}
+                      placeholder="Describe it — e.g. “all navigation engagement: next room + previous room + destination tabs”"
+                      className="flex-1 h-8 px-2.5 rounded-lg border border-border bg-background text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
+                    <button onClick={() => customDesc.trim() && post("define", { defineMetric: customDesc })} disabled={busy !== null || !customDesc.trim()}
+                      className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
+                      {busy === "define" ? "Defining…" : "Add measure"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-2">Console-computed from the events already reporting — badged as not an Optimizely metric; infeasible asks come back with what&apos;s missing, never a silent approximation.</p>
+                  {customMsg && <p className="text-[12px] text-foreground/90">{customMsg}</p>}
+                </div>
+              )}
+              <div className="divide-y divide-border/40">
+                {(map?.composites ?? []).map((c) => {
+                  const cell = cellFor(`composite:${c.id}`, statsEff?.focusVariationId ?? "");
+                  const rowsC = computeComposite(c, live);
+                  const f = rowsC.find((r) => r.variationId === statsEff?.focusVariationId);
+                  const b = rowsC.find((r) => r.isBaseline);
+                  return (
+                    <div key={c.id} className="flex items-center gap-2.5 py-1.5 text-[12.5px]" title={[c.definition, c.note].filter(Boolean).join(" — ")}>
+                      <span className="min-w-0 truncate font-medium">{c.label}</span>
+                      <span className={`shrink-0 text-[9.5px] font-bold uppercase tracking-wide border rounded px-1 ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
+                        {c.source === "custom" ? "console metric" : c.role === "primary" ? "primary" : c.role}
+                      </span>
+                      <span className="ml-auto shrink-0 tabular-nums text-muted-2">{f && b && f.rate !== undefined && b.rate !== undefined ? `${(f.rate * 100).toFixed(1)}% vs ${(b.rate * 100).toFixed(1)}%` : "—"}</span>
+                      <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</span>
+                      <span className="w-24 shrink-0 text-right text-[11px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</span>
+                    </div>
+                  );
+                })}
+                {live.metrics.map((m) => {
+                  const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
+                  const cell = ms?.cells.find((x) => x.variationId === statsEff?.focusVariationId);
+                  const f = m.perVariation.find((r) => r.variationId === statsEff?.focusVariationId);
+                  const b = m.perVariation.find((r) => r.isBaseline);
+                  return (
+                    <div key={m.name} className="flex items-center gap-2.5 py-1.5 text-[12.5px]">
+                      <span className="min-w-0 truncate text-muted">{m.name}</span>
+                      {ms?.featureOnly && <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2">{ms.featureOnly}-only</span>}
+                      <span className="ml-auto shrink-0 tabular-nums text-muted-2">{f && b && f.rate !== undefined && b.rate !== undefined ? `${(f.rate * 100).toFixed(1)}% vs ${(b.rate * 100).toFixed(1)}%` : "—"}</span>
+                      <span className={`w-16 shrink-0 text-right tabular-nums font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</span>
+                      <span className="w-24 shrink-0 text-right text-[11px] text-muted-2">{ms?.featureOnly ? "adoption view" : sigOf(cell) ? "beyond luck" : "too early"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-x-6 gap-y-4 border-t border-border/50 pt-3">
             <div>{readingBlock("main")}</div>

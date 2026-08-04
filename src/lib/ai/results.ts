@@ -134,6 +134,83 @@ Propose the metric map.`,
   return out;
 }
 
+const defineTool = (eventNames: string[]) => ({
+  name: "define_custom_metric",
+  description: "Turn the user's plain-language description into ONE console-computed compound metric over the experiment's real events.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      id: { type: "string" as const, description: "kebab-case slug" },
+      label: { type: "string" as const, description: "short business name for the measure" },
+      definition: { type: "string" as const, description: "one sentence: exactly WHAT is being summed/compared" },
+      meaning: { type: "string" as const, description: "one sentence: what this number TELLS you and when to care" },
+      events: { type: "array" as const, items: { type: "string" as const, enum: eventNames }, description: "the events summed into it" },
+      direction: { type: "string" as const, enum: ["increase", "decrease"] },
+      feasible: { type: "boolean" as const, description: "false when the description needs data the events can't express (segments, revenue math, time windows)" },
+      whyNot: { type: "string" as const, description: "when feasible=false: what's missing, plainly" },
+    },
+    required: ["id", "label", "definition", "meaning", "events", "direction", "feasible"],
+  },
+});
+
+/** A user-described compound measure → a badged, console-computed composite.
+ *  Honest by construction: infeasible asks come back as an explanation, and
+ *  the events are enum-locked to what actually reports. */
+export async function defineCustomMetric(opts: {
+  orgId: string;
+  proto: PrototypeRecord;
+  description: string;
+  eventNames: string[];
+}): Promise<{ composite: CompositeMetric | null; explanation: string }> {
+  requireKey();
+  if (!opts.eventNames.length) throw new Error("No events reporting yet — custom measures need live results first.");
+  const client = new Anthropic();
+  const { system } = await analystSkill(opts.orgId);
+  const res = await client.messages.create({
+    model: "claude-opus-4-8",
+    max_tokens: 1500,
+    system,
+    messages: [{
+      role: "user",
+      content: `The team wants a CUSTOM console-computed measure for experiment "${opts.proto.name}".
+
+THEIR DESCRIPTION: ${opts.description.slice(0, 600)}
+
+AVAILABLE EVENTS (a custom measure can ONLY sum these):
+${opts.eventNames.map((n) => `- ${n}`).join("\n")}
+
+Define it via the tool. Action-total semantics (a guest firing two member events counts twice). If the description needs anything these events can't express — segments, revenue arithmetic, per-session windows — set feasible=false and say what's missing; NEVER approximate silently.`,
+    }],
+    tools: [defineTool(opts.eventNames)],
+    tool_choice: { type: "tool", name: "define_custom_metric" },
+  });
+  const tu = res.content.find((c) => c.type === "tool_use");
+  if (!tu || tu.type !== "tool_use") throw new Error("The definer returned nothing — try again.");
+  const raw = (tu.input ?? {}) as Record<string, unknown>;
+  if (raw.feasible === false) {
+    return { composite: null, explanation: typeof raw.whyNot === "string" && raw.whyNot.trim() ? stripMd(raw.whyNot).slice(0, 400) : "That measure needs data the current events can't express." };
+  }
+  const events = (Array.isArray(raw.events) ? raw.events : []).filter((e): e is string => typeof e === "string" && opts.eventNames.includes(e));
+  if (!events.length) return { composite: null, explanation: "None of the reporting events can express that measure." };
+  let id = String(raw.id ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `custom-${Date.now().toString(36)}`;
+  id = `custom-${id.replace(/^custom-/, "")}`;
+  const definition = typeof raw.definition === "string" ? stripMd(raw.definition).slice(0, 300) : "";
+  const meaning = typeof raw.meaning === "string" ? stripMd(raw.meaning).slice(0, 300) : "";
+  return {
+    composite: {
+      id,
+      label: String(raw.label ?? id).slice(0, 120),
+      events: [...new Set(events)].slice(0, 10),
+      role: "info",
+      direction: raw.direction === "decrease" ? "decrease" : "increase",
+      definition: definition || undefined,
+      note: meaning || undefined,
+      source: "custom",
+    },
+    explanation: meaning || definition,
+  };
+}
+
 // ── context assembly: computed facts only ───────────────────────────────────
 
 const fmtPct = (v: number | undefined, d = 1) => (v === undefined ? "—" : `${v > 0 ? "+" : ""}${(v * 100).toFixed(d)}%`);

@@ -148,6 +148,9 @@ export interface CompositeMetric {
   /** Pre-registered smallest relative lift worth shipping — powers
    *  "days until YOUR effect is detectable", not a generic one. */
   mdeRel?: number;
+  /** "custom" = user-described, console-computed — badged everywhere as
+   *  NOT an Optimizely metric. Absent = authored by the measurement plan. */
+  source?: "custom";
 }
 
 export interface MetricMap {

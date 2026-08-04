@@ -11,7 +11,7 @@ import {
   getOrgNotebook, getProtoNotebook, addOrgPreference, removeOrgPreference, appendNotebook,
   getReading, saveReading, readingBasisKey,
 } from "@/lib/prototypes/notebook";
-import { proposeMetricMap, analyzeResults, analystSkill, generateReading } from "@/lib/ai/results";
+import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { lastPush } from "@/lib/prototypes/ship";
@@ -199,6 +199,8 @@ export async function POST(req: NextRequest) {
     ask?: string;
     explain?: boolean;
     reading?: boolean;
+    /** Plain-language description of a custom console-computed measure. */
+    defineMetric?: string;
     /** Manual "Refresh the reading" — bypasses the current-basis short-circuit. */
     force?: boolean;
     tune?: { question?: string; answer?: string; durable?: boolean };
@@ -400,6 +402,29 @@ export async function POST(req: NextRequest) {
       });
       await audit(g.orgId, actor, "verdict.discovery-promoted", g.proto.name, `${disc.label} → backlog ${idea.id}`);
       return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
+    }
+
+    if (body.defineMetric) {
+      const desc = String(body.defineMetric).trim().slice(0, 600);
+      if (!desc) return NextResponse.json({ error: "Describe the measure first." }, { status: 400 });
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "Custom measures need live results first." }, { status: 400 });
+      const { composite, explanation } = await defineCustomMetric({
+        orgId: g.orgId, proto: g.proto, description: desc,
+        eventNames: bundle.results.metrics.map((m) => m.name),
+      });
+      if (!composite) return NextResponse.json({ error: explanation }, { status: 400 });
+      // Appending an INFO measure never touches the plan's confirmation or
+      // the primary — the verdict is unaffected by construction.
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const composites = [...(cur?.composites ?? [])];
+        if (composites.some((c) => c.id === composite.id)) composite.id = `${composite.id}-${composites.length}`;
+        composites.push(composite);
+        return { confirmed: false, ...(cur ?? {}), composites: composites.slice(0, 16) };
+      });
+      await audit(g.orgId, actor, "results.custom-metric", g.proto.name, `${composite.label} = ${composite.events.join(" + ")}`.slice(0, 300));
+      const { stats, verdict } = await analyze(g.proto, bundle);
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, explanation });
     }
 
     if (body.reading) {
