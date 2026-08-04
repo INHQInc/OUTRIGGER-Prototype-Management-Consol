@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
 import {
-  normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot,
+  normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
   type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory,
 } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
@@ -82,6 +82,7 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
     focusVariationId: proto.experiment?.variationId,
     weights: bundle.weights,
     history: history.days,
+    experimentStart: bundle.results.startTime,
   });
 
   if (existing?.state === "stamped") return { stats, verdict: existing, history };
@@ -102,6 +103,7 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
     pushedVersion,
     experimentStatus: bundle.experimentStatus,
     firstObservedDate: history.days[0]?.date,
+    experimentStart: bundle.results.startTime,
     // The EARLIEST stamp is the pre-registration disclosure's anchor — a
     // mid-run Re-plan replacing the stamp must not erase "this was declared
     // before traffic".
@@ -142,8 +144,32 @@ export async function GET(req: NextRequest) {
         .filter((m) => !metricMap.known!.includes(m.name) && !(m.baseName && metricMap.known!.includes(m.baseName)))
         .map((m) => m.name)
     : [];
+  // WINDOWED view (honest date-range analytics from the console's own daily
+  // snapshots — Optimizely only reports cumulative). View-layer only: the
+  // verdict always judges the full run.
+  const windowDays = Number(req.nextUrl.searchParams.get("window") ?? "");
+  let windowView: { results: ExperimentResults; from: string; to: string } | null = null;
+  let windowStats: StatsReport | null = null;
+  if (Number.isFinite(windowDays) && windowDays > 0 && bundle.results) {
+    windowView = windowedResults(bundle.results, history.days, windowDays);
+    if (windowView) {
+      windowStats = computeStatsReport({
+        results: windowView.results,
+        map: metricMap,
+        focusVariationId: g.proto.experiment?.variationId,
+        weights: bundle.weights,
+        history: [],
+      });
+    }
+  }
+
   const basis = basisFor({ history, verdict, map: metricMap, orgNb, protoNb });
   return NextResponse.json({
+    windowResults: windowView?.results ?? null,
+    windowStats,
+    windowRange: windowView ? { from: windowView.from, to: windowView.to } : null,
+    // last 31 days of history — powers the per-metric trend charts
+    historyDays: history.days.slice(-31),
     results: bundle.results,
     resultsError: bundle.error,
     experimentStatus: bundle.experimentStatus,

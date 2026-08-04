@@ -537,6 +537,9 @@ export function computeStatsReport(opts: {
   /** Allocation weights by variationId (Optimizely weight units) for SRM. */
   weights?: Record<string, number>;
   history?: DailySnapshot[];
+  /** The experiment's REAL start (Optimizely) — day counts prefer this;
+   *  the console's snapshot window is the fallback. */
+  experimentStart?: string;
 }): StatsReport {
   const { results, map } = opts;
   const flags: StatsFlag[] = [];
@@ -712,6 +715,12 @@ export function computeStatsReport(opts: {
       const cell = metrics.find((ms) => ms.key === `composite:${primary.id}`)?.cells.find((c) => c.variationId === focusId);
       const observedLift = cell?.lift;
       power = { baselineRate: p0, perArmN, mdeNow: mdeNow(p0, perArmN), observedLift };
+      // Real runtime beats the console's observation window — an experiment
+      // running 3 days must never read "Day 1" because snapshots began today.
+      if (opts.experimentStart) {
+        const d = Math.floor((Date.now() - Date.parse(opts.experimentStart)) / 86400000);
+        if (Number.isFinite(d) && d >= 0) power.observationDays = d;
+      }
       const history = opts.history ?? [];
       if (history.length >= 2) {
         const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
@@ -723,7 +732,7 @@ export function computeStatsReport(opts: {
         if (daySpan >= 1) {
           const accrual = Math.max(0, (perArmN - firstN) / daySpan);
           power.accrualPerArmPerDay = Math.round(accrual);
-          power.observationDays = Math.round(daySpan);
+          if (power.observationDays === undefined) power.observationDays = Math.round(daySpan);
           if (observedLift !== undefined && Math.abs(observedLift) > 0.0001 && accrual > 0) {
             const need = requiredPerArm(p0, Math.abs(observedLift));
             if (need !== undefined) power.daysToObserved = need <= perArmN ? 0 : Math.ceil((need - perArmN) / accrual);

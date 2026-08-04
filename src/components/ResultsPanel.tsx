@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
 import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
-import type { StatsReport, CellStats, TrendPoint } from "@/lib/prototypes/stats";
+import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
 import type { AnalystAnswer } from "@/lib/ai/results";
@@ -104,6 +104,54 @@ function ProgressMeter({ daysIn, daysLeft }: { daysIn: number; daysLeft: number 
   );
 }
 
+
+/** Per-metric daily rate lines (cumulative), two arms — identity, not judgment. */
+function MetricTrend({ days, metricName, focusId, baseId, focusName, baseName }: {
+  days: DailySnapshot[]; metricName: string; focusId?: string; baseId?: string; focusName: string; baseName: string;
+}) {
+  const series = (id?: string) => days.map((d) => {
+    if (!id) return undefined;
+    const n = d.variations.find((v) => v.variationId === id)?.visitors ?? 0;
+    const c = d.metrics.find((m) => m.name === metricName)?.perVariation.find((r) => r.variationId === id)?.conversions ?? 0;
+    return n > 0 ? c / n : undefined;
+  });
+  const f = series(focusId);
+  const b = series(baseId);
+  const defined = [...f, ...b].filter((v): v is number => v !== undefined);
+  const points = f.filter((v) => v !== undefined).length;
+  if (points < 3) return <p className="text-[12px] text-muted-2 py-3">Daily trend unlocks after 3 days of snapshots ({points} so far).</p>;
+  const lo = Math.min(...defined);
+  const hi = Math.max(...defined);
+  const span = hi - lo || 1;
+  const W = 600;
+  const H = 96;
+  const xPct = (i: number) => (i / (days.length - 1)) * 84 + 2;
+  const yPct = (v: number) => 8 + (1 - (v - lo) / span) * 84;
+  const path = (arr: (number | undefined)[]) =>
+    arr.map((v, i) => (v === undefined ? null : `${(xPct(i) / 100) * W},${(yPct(v) / 100) * H}`)).filter(Boolean).join(" ");
+  const lastIdx = (arr: (number | undefined)[]) => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] !== undefined) return i; return -1; };
+  const fi = lastIdx(f);
+  const bi = lastIdx(b);
+  return (
+    <div className="relative w-full h-24 my-2">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full" aria-hidden>
+        <polyline fill="none" stroke="currentColor" className="text-muted-2" strokeWidth={2} strokeOpacity={0.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" points={path(b)} />
+        <polyline fill="none" stroke="currentColor" className="text-foreground" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" points={path(f)} />
+      </svg>
+      {fi >= 0 && f[fi] !== undefined && (
+        <span className="absolute text-[10.5px] font-medium text-foreground tabular-nums whitespace-nowrap" style={{ left: `calc(${xPct(fi)}% + 6px)`, top: `calc(${yPct(f[fi]!)}% - 8px)` }}>
+          {focusName} {(f[fi]! * 100).toFixed(1)}%
+        </span>
+      )}
+      {bi >= 0 && b[bi] !== undefined && (
+        <span className="absolute text-[10.5px] text-muted-2 tabular-nums whitespace-nowrap" style={{ left: `calc(${xPct(bi)}% + 6px)`, top: `calc(${yPct(b[bi]!)}% + 2px)` }}>
+          {baseName} {(b[bi]! * 100).toFixed(1)}%
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** One glyph set — inline SVG, currentColor. The ⚠ character risks
  *  rendering as a color emoji outside the palette, so it's banned here. */
 function Glyph({ kind }: { kind: "warn" | "check" }) {
@@ -200,6 +248,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [notebook, setNotebook] = useState<{ org: OrgNotebook; proto: ProtoNotebook } | null>(null);
   const [expStatus, setExpStatus] = useState<string | null>(running ? "running" : null);
   const [planDrift, setPlanDrift] = useState<string[]>([]);
+  const [historyDays, setHistoryDays] = useState<DailySnapshot[]>([]);
+  // Windowed view — honest date-range analytics from the console's own daily
+  // snapshots. View-layer only: the verdict always judges the full run.
+  const [windowDays, setWindowDays] = useState<number | null>(null);
+  const [windowData, setWindowData] = useState<{ results: ExperimentResults; stats: StatsReport | null; range: { from: string; to: string } } | null>(null);
+  const [windowBusy, setWindowBusy] = useState(false);
+  const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
+  const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -235,6 +291,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setReadingBasis(data.readingBasis ?? null);
       setNotebook(data.notebook ?? null);
       setPlanDrift(data.planDrift ?? []);
+      setHistoryDays(data.historyDays ?? []);
       if (data.experimentStatus) setExpStatus(data.experimentStatus);
     } catch {
       setResultsError("Couldn't load results — check the connection.");
@@ -246,6 +303,25 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   useEffect(() => {
     if (bound) void load();
   }, [bound, load]);
+
+  async function selectWindow(days: number | null) {
+    setWindowDays(days);
+    if (days === null) { setWindowData(null); return; }
+    setWindowBusy(true);
+    try {
+      const res = await fetch(`/api/prototypes/results?key=${encodeURIComponent(prototypeKey)}&window=${days}`);
+      const data = await res.json();
+      if (res.ok && data.windowResults) {
+        setWindowData({ results: data.windowResults, stats: data.windowStats ?? null, range: data.windowRange });
+      } else {
+        setWindowData(null);
+        setWindowDays(null);
+        setErr(`Not enough snapshot history for a ${days}-day window yet.`);
+      }
+    } catch {
+      setWindowDays(null);
+    } finally { setWindowBusy(false); }
+  }
 
   async function post(action: string, body: Record<string, unknown>) {
     if (busy) return;
@@ -379,16 +455,25 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   }
   if (statsEff?.power) {
     const p = statsEff.power;
-    const eta = p.daysToTarget ?? p.daysToObserved;
+    const etaSample = p.daysToTarget ?? p.daysToObserved;
     const dayN = (p.observationDays ?? 0) + 1;
-    const ready = eta !== undefined && eta <= 0;
+    // ONE definition of "ready" — the tile mirrors the VERDICT's gates, so
+    // the banner and the Timeline can never read opposite. The 7-day floor
+    // mirrors VERDICT_THRESHOLDS.minRuntimeDays (keep in sync).
+    const runtimeLeft = Math.max(0, 7 - dayN);
+    const daysLeft = etaSample !== undefined ? Math.max(etaSample, runtimeLeft) : runtimeLeft > 0 ? runtimeLeft : undefined;
+    const verdictWaiting = verdict?.verdict === "keep_running" || verdict?.verdict === "not_adjudicable";
+    const ready = daysLeft !== undefined && daysLeft <= 0 && !verdictWaiting;
     tiles.push({
       label: "Timeline",
       value: ready ? "Ready to call" : (
-        <span>Day {dayN}{eta !== undefined && eta > 0 ? <span className="text-[14px] font-normal text-muted-2"> of ~{dayN + eta}</span> : null}</span>
+        <span>Day {dayN}{daysLeft !== undefined && daysLeft > 0 ? <span className="text-[14px] font-normal text-muted-2"> of ~{dayN + daysLeft}</span> : null}</span>
       ),
-      viz: eta !== undefined ? <ProgressMeter daysIn={dayN} daysLeft={eta} /> : undefined,
-      sub: ready ? "decision-ready sample reached" : eta !== undefined ? `~${plural(eta, "more day")} to a decision` : "trend unlocks as daily snapshots accumulate",
+      viz: daysLeft !== undefined ? <ProgressMeter daysIn={dayN} daysLeft={ready ? 0 : Math.max(daysLeft, verdictWaiting ? 1 : 0)} /> : undefined,
+      sub: ready ? "decision-ready — the verdict gates are clear"
+        : daysLeft !== undefined && daysLeft > 0 ? `~${plural(daysLeft, "more day")} to a decision`
+        : verdictWaiting ? "waiting on the verdict gates — see the banner"
+        : "trend unlocks as daily snapshots accumulate",
     });
   }
 
@@ -527,6 +612,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   );
 
   if (view === "numbers") {
+    const numLive = windowData?.results ?? live;
+    const numStats = windowData ? windowData.stats : statsEff;
     return (
       <div className="space-y-3">
         {err && <div className="text-[13px] text-danger">{err}</div>}
@@ -577,30 +664,146 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
         )}
         {Boolean(map?.composites.length) && <div className="space-y-2.5">{map!.composites.map(compositeCard)}</div>}
         <div className="rounded-xl border border-border bg-surface overflow-hidden">
-          <div className="px-4 py-2 border-b border-border flex items-center gap-2">
+          <div className="px-4 py-2 border-b border-border flex items-center gap-3 flex-wrap">
             <span className="text-[12px] font-semibold uppercase tracking-wide text-muted-2">Raw Optimizely metrics</span>
-            {statsEff && statsEff.exploratory.length > 0 && (
-              <span className="text-[11px] text-muted-2 ml-auto">exploratory — FDR-corrected; ~{statsEff.expectedFalsePositives} false mover(s) expected among {statsEff.exploratory.length} at raw α=.05</span>
+            {/* the date-range view: computed honestly from the console's own
+                daily snapshots — the VERDICT always judges the full run */}
+            <span className="flex items-center gap-1">
+              {([[null, "All time"], [7, "7d"], [14, "14d"], [30, "30d"]] as [number | null, string][]).map(([d, lbl]) => (
+                <button key={lbl} onClick={() => void selectWindow(d)} disabled={windowBusy}
+                  className={`px-2 py-0.5 rounded-md text-[11.5px] font-medium border ${windowDays === d ? "border-accent text-accent bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : "border-border text-muted-2 hover:text-foreground"} disabled:opacity-50`}>
+                  {lbl}
+                </button>
+              ))}
+              {windowBusy && <span className="text-[11px] text-muted-2 ml-1">computing…</span>}
+            </span>
+            {windowData && (
+              <span className="text-[11px] text-warn tabular-nums">window {windowData.range.from} → {windowData.range.to} · from console snapshots · the verdict judges the full run</span>
+            )}
+            {numStats && numStats.exploratory.length > 0 && (
+              <span className="text-[11px] text-muted-2 ml-auto">exploratory — FDR-corrected; ~{numStats.expectedFalsePositives} false mover(s) expected among {numStats.exploratory.length} at raw α=.05</span>
             )}
           </div>
-          {(live?.metrics ?? []).map((m) => {
-            const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
-            return (
-              <div key={m.name} className="px-4 py-2 border-t border-border/50 first:border-t-0">
-                <div className="text-[13px] font-semibold mb-1 flex items-center gap-2 flex-wrap">
-                  <span>{m.name}{m.aggregator ? <span className="text-muted-2 font-normal"> · {m.aggregator}</span> : null}</span>
-                  {ms?.featureOnly && (
-                    <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 border border-border rounded px-1"
-                      title={`This event fires only in the ${ms.featureOnly === "variation" ? "variation — the control has no such element" : "control — the variation removed it"}. Comparing against a structural zero is meaningless, so no lift/significance is computed; read the rate as feature ADOPTION.`}>
-                      {ms.featureOnly === "variation" ? "variation-only · adoption view" : "control-only · adoption view"}
-                    </span>
-                  )}
-                </div>
-                {rows(m.perVariation, `metric:${m.name}`, true)}
-              </div>
-            );
-          })}
-          {!live && <div className="px-4 py-2 text-[12.5px] text-muted-2">No raw metrics to show — the live fetch failed and no snapshot is frozen.</div>}
+          {numLive ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12.5px]" style={{ tableLayout: "fixed" }}>
+                <colgroup>
+                  <col style={{ width: "30%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "20%" }} />
+                  <col style={{ width: "15%" }} />
+                </colgroup>
+                {/* ONE table = perfect column alignment; sticky header = the
+                    labels never scroll away */}
+                <thead className="sticky top-0 z-10 bg-surface shadow-[0_1px_0_var(--border)]">
+                  <tr className="text-muted-2 text-left text-[11.5px]">
+                    <th className="font-medium py-2 px-4">Metric / Variation</th>
+                    <th className="font-medium py-2 pr-3 text-right">Conversions</th>
+                    <th className="font-medium py-2 pr-3 text-right">Rate</th>
+                    <th className="font-medium py-2 pr-3 text-right">Lift</th>
+                    <th className="font-medium py-2 pr-3 text-right">95% CI</th>
+                    <th className="font-medium py-2 pr-4 text-right">Opti sig · p</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {numLive.metrics.map((m) => {
+                    const ms = numStats?.metrics.find((x) => x.key === `metric:${m.name}`);
+                    const focusCell = m.perVariation.find((r) => r.variationId === statsEff?.focusVariationId);
+                    const baseCell = m.perVariation.find((r) => r.isBaseline);
+                    const expanded = expandedMetric === m.name;
+                    return (
+                      <React.Fragment key={m.name}>
+                        <tr className="border-t border-border/60">
+                          <td colSpan={6} className="pt-3 pb-1 px-4">
+                            <span className="text-[13px] font-semibold">{m.name}</span>
+                            {m.aggregator && <span className="text-[12px] text-muted-2"> · {m.aggregator}</span>}
+                            {ms?.featureOnly && (
+                              <span className="ml-2 text-[10.5px] font-bold uppercase tracking-wide text-muted-2 border border-border rounded px-1"
+                                title={`Fires only in the ${ms.featureOnly === "variation" ? "variation" : "control"} — adoption view, no lift/significance.`}>
+                                {ms.featureOnly === "variation" ? "variation-only · adoption" : "control-only · adoption"}
+                              </span>
+                            )}
+                            <button onClick={() => setExpandedMetric(expanded ? null : m.name)}
+                              className="ml-3 text-[11.5px] text-accent hover:text-accent-hover font-medium print:hidden">
+                              {expanded ? "Hide chart" : "Chart"}
+                            </button>
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr>
+                            <td colSpan={6} className="px-4 pb-2">
+                              <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                                <div className="flex items-center gap-1 mb-1 print:hidden">
+                                  {(["line", "bar"] as const).map((t) => (
+                                    <button key={t} onClick={() => setChartType(t)}
+                                      className={`px-2 py-0.5 rounded text-[11px] font-medium border ${chartType === t ? "border-accent text-accent" : "border-border text-muted-2 hover:text-foreground"}`}>
+                                      {t === "line" ? "Rate by day" : "Compare"}
+                                    </button>
+                                  ))}
+                                </div>
+                                {chartType === "line" ? (
+                                  <MetricTrend
+                                    days={historyDays}
+                                    metricName={m.name}
+                                    focusId={statsEff?.focusVariationId}
+                                    baseId={statsEff?.baselineVariationId}
+                                    focusName={focusCell?.name ?? "Variant"}
+                                    baseName={baseCell?.name ?? "Original"}
+                                  />
+                                ) : focusCell?.rate !== undefined && baseCell?.rate !== undefined ? (
+                                  <div className="py-2">
+                                    <ComparisonBars
+                                      focusName={focusCell.name}
+                                      focusRate={focusCell.rate}
+                                      focusCount={focusCell.conversions}
+                                      focusN={numLive.variations.find((v) => v.variationId === focusCell.variationId)?.visitors ?? 0}
+                                      baseName={baseCell.name}
+                                      baseRate={baseCell.rate}
+                                      baseCount={baseCell.conversions}
+                                      baseN={numLive.variations.find((v) => v.variationId === baseCell.variationId)?.visitors ?? 0}
+                                      significant={sigOf(numStats?.metrics.find((x) => x.key === `metric:${m.name}`)?.cells.find((c) => c.variationId === focusCell.variationId))}
+                                      positive={(numStats?.metrics.find((x) => x.key === `metric:${m.name}`)?.cells.find((c) => c.variationId === focusCell.variationId)?.lift ?? 0) >= 0}
+                                    />
+                                  </div>
+                                ) : (
+                                  <p className="text-[12px] text-muted-2 py-2">No comparable rates for this metric.</p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {m.perVariation.map((r) => {
+                          const sc = numStats?.metrics.find((x) => x.key === `metric:${m.name}`)?.cells.find((c) => c.variationId === r.variationId);
+                          return (
+                            <tr key={r.variationId} className="border-t border-border/30">
+                              <td className="py-1.5 px-4 pl-7 text-muted">{r.name}{r.isBaseline ? <span className="text-muted-2"> · baseline</span> : ""}</td>
+                              <td className="py-1.5 pr-3 text-right tabular-nums">{r.conversions.toLocaleString()}</td>
+                              <td className="py-1.5 pr-3 text-right tabular-nums">{r.rate === undefined ? "—" : `${(r.rate * 100).toFixed(2)}%`}</td>
+                              <td className={`py-1.5 pr-3 text-right tabular-nums ${toneOf(sc)}`}>{r.isBaseline ? "—" : pctS(sc?.lift)}</td>
+                              <td className="py-1.5 pr-3 text-right tabular-nums text-muted-2 whitespace-nowrap">{r.isBaseline || !sc?.liftCi ? "—" : `${pctS(sc.liftCi.lo)} … ${pctS(sc.liftCi.hi)}`}</td>
+                              <td className="py-1.5 pr-4 text-right tabular-nums whitespace-nowrap">
+                                {r.isBaseline ? "—" : (
+                                  <>
+                                    <span className={sigClass(r.significance)}>{windowData ? "—" : r.significance === undefined ? "—" : `${(r.significance * 100).toFixed(0)}%`}</span>
+                                    {" · "}
+                                    <span className={sc?.p !== undefined && sc.p < 0.05 ? "text-ok font-semibold" : "text-muted-2"}>{sc?.p === undefined ? "—" : sc.p < 0.0001 ? "p<0.0001" : `p=${sc.p.toFixed(3)}`}</span>
+                                  </>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="px-4 py-2 text-[12.5px] text-muted-2">No raw metrics to show — the live fetch failed and no snapshot is frozen.</div>
+          )}
         </div>
       </div>
     );

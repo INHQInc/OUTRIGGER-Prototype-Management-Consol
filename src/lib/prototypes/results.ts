@@ -41,6 +41,9 @@ export interface MetricResult {
 
 export interface ExperimentResults {
   fetchedAt: string;
+  /** The experiment's actual start, from Optimizely's results payload —
+   *  the honest day-counter (the console's snapshots may start later). */
+  startTime?: string;
   totalVisitors?: number;
   variations: { variationId: string; name: string; visitors: number }[];
   metrics: MetricResult[];
@@ -117,7 +120,8 @@ export function normalizeResults(raw: unknown): ExperimentResults | null {
   }
 
   if (!variations.length && !metrics.length) return null;
-  return { fetchedAt: new Date().toISOString(), totalVisitors: num(reach?.total_count), variations, metrics };
+  const startTime = typeof o.start_time === "string" && o.start_time ? o.start_time : undefined;
+  return { fetchedAt: new Date().toISOString(), startTime, totalVisitors: num(reach?.total_count), variations, metrics };
 }
 
 // ── Composite metrics (the semantics layer) ────────────────────────────────
@@ -319,6 +323,58 @@ export async function recordDailySnapshot(prototypeKey: string, results: Experim
     if (await store.compareAndSetFlag(historyKey(prototypeKey), raw, JSON.stringify(next))) return next;
   }
   return getResultsHistory(prototypeKey);
+}
+
+/**
+ * A WINDOWED view of the results: the difference between the latest snapshot
+ * and the one at (or before) the window's start — Optimizely reports only
+ * cumulative totals, but the console's own daily history makes honest
+ * date-range analytics possible. The VERDICT always judges the full run;
+ * a window changes the view, never the adjudication.
+ */
+export function windowedResults(full: ExperimentResults, history: import("./stats").DailySnapshot[], days: number): { results: ExperimentResults; from: string; to: string } | null {
+  const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
+  if (sorted.length < 2) return null;
+  const last = sorted[sorted.length - 1];
+  const cutoff = Date.parse(last.date) - days * 86400000;
+  let base = sorted[0];
+  for (const d of sorted) {
+    if (Date.parse(d.date) <= cutoff) base = d;
+  }
+  if (base.date === last.date) return null;
+
+  const baseVisitors = new Map(base.variations.map((v) => [v.variationId, v.visitors]));
+  const variations = full.variations.map((v) => {
+    const lastV = last.variations.find((x) => x.variationId === v.variationId)?.visitors ?? v.visitors;
+    return { ...v, visitors: Math.max(0, lastV - (baseVisitors.get(v.variationId) ?? 0)) };
+  });
+
+  const baseMetric = new Map(base.metrics.map((m) => [m.name, new Map(m.perVariation.map((r) => [r.variationId, r.conversions]))]));
+  const metrics: MetricResult[] = [];
+  for (const lm of last.metrics) {
+    // shape (aggregator, baseName, baseline flags) comes from the FULL
+    // results by name — snapshots store only counts
+    const shape = full.metrics.find((m) => m.name === lm.name);
+    const prior = baseMetric.get(lm.name);
+    metrics.push({
+      name: lm.name,
+      baseName: shape?.baseName,
+      aggregator: shape?.aggregator,
+      perVariation: lm.perVariation.map((r) => {
+        const fullCell = shape?.perVariation.find((x) => x.variationId === r.variationId);
+        const conv = Math.max(0, r.conversions - (prior?.get(r.variationId) ?? 0));
+        const n = variations.find((v) => v.variationId === r.variationId)?.visitors ?? 0;
+        return {
+          variationId: r.variationId,
+          name: fullCell?.name ?? r.variationId,
+          conversions: conv,
+          rate: n > 0 ? conv / n : undefined,
+          isBaseline: fullCell?.isBaseline,
+        };
+      }),
+    });
+  }
+  return { results: { fetchedAt: full.fetchedAt, variations, metrics }, from: base.date, to: last.date };
 }
 
 export function computeComposite(c: CompositeMetric, results: ExperimentResults): VariationResult[] {

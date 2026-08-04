@@ -217,6 +217,8 @@ export function deriveVerdict(opts: {
   experimentStatus?: string;
   experimentStarted?: boolean;
   firstObservedDate?: string;
+  /** The experiment's REAL start (Optimizely results payload). */
+  experimentStart?: string;
   mapConfirmedAt?: string;
 }): VerdictRecord {
   const { map, stats } = opts;
@@ -354,9 +356,11 @@ export function deriveVerdict(opts: {
   // console's watch). Derived from the FIRST snapshot date, not stats.power
   // (which needs 2+ history days) — otherwise a high-traffic day-one
   // experiment would slide past as "unknown".
-  const obsDays = opts.firstObservedDate
-    ? Math.max(0, Math.floor((Date.now() - Date.parse(opts.firstObservedDate)) / 86400000))
-    : stats.power?.observationDays;
+  const obsDays = opts.experimentStart
+    ? Math.max(0, Math.floor((Date.now() - Date.parse(opts.experimentStart)) / 86400000))
+    : opts.firstObservedDate
+      ? Math.max(0, Math.floor((Date.now() - Date.parse(opts.firstObservedDate)) / 86400000))
+      : stats.power?.observationDays;
   if (obsDays !== undefined && obsDays < T.minRuntimeDays) {
     gates.push({ id: "runtime", title: `Runtime ≥ ${T.minRuntimeDays} days`, pass: false, detail: `Only ${obsDays} day(s) observed — a full weekly cycle is required before any verdict (day-of-week effects are real in travel traffic).` });
     if (running || paused) {
