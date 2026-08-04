@@ -82,10 +82,14 @@ function Sparkline({ trend }: { trend: TrendPoint[] }) {
   );
 }
 
-export function ResultsPanel({ prototypeKey, bound, running }: {
+export function ResultsPanel({ prototypeKey, bound, running, view = "readout", hidden = false }: {
   prototypeKey: string;
   bound: boolean;
   running: boolean;
+  /** "readout" = the presentation screen; "numbers" = the analyst workbench. */
+  view?: "readout" | "numbers";
+  /** Kept mounted while another Analytics view shows — state survives. */
+  hidden?: boolean;
 }) {
   const [results, setResults] = useState<ExperimentResults | null>(null);
   const [resultsError, setResultsError] = useState<string | null>(null);
@@ -181,8 +185,9 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, busy, results, readingStale, readingBasis]);
 
+  if (hidden) return <div className="hidden" />;
   if (!bound) {
-    return <p className="text-[13.5px] text-muted-2">Results appear once an experiment is bound (Ship section above) and has traffic.</p>;
+    return <p className="text-[13.5px] text-muted-2">Results appear once an experiment is bound (Experiment room) and has traffic.</p>;
   }
   if (loading && !results && !verdict) return <p className="text-[13.5px] text-muted-2">Loading live results from Optimizely…</p>;
   if (!results && !verdict) {
@@ -314,18 +319,18 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
     );
   };
 
-  const readingBlock = () => (
+  const readingBlock = (part: "main" | "side") => (
     <div className="space-y-3">
       {reading ? (
         <>
           {/* The SAME sections, every experiment — leaders learn where to look. */}
-          {reading.summary && (
+          {part === "main" && reading.summary && (
             <div className="border-t border-border/50 pt-3">
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Summary</div>
               <p className="text-[15px] leading-relaxed font-medium text-foreground max-w-3xl">{reading.summary}</p>
             </div>
           )}
-          {(reading.keyPoints?.length || reading.dataRead?.length || reading.story?.length) ? (
+          {part === "main" && (reading.keyPoints?.length || reading.dataRead?.length || reading.story?.length) ? (
             <div className="border-t border-border/50 pt-3">
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">What the data shows</div>
               {reading.keyPoints?.length ? (
@@ -342,13 +347,13 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
               )}
             </div>
           ) : null}
-          {reading.trendLine && (
+          {part === "side" && reading.trendLine && (
             <div className="border-t border-border/50 pt-3">
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Trend</div>
               <p className="text-[13px] text-muted max-w-3xl">{reading.trendLine}</p>
             </div>
           )}
-          {reading.watchItems.length > 0 && (
+          {part === "side" && reading.watchItems.length > 0 && (
             <div className="border-t border-border/50 pt-3">
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Watching</div>
               <ul className="space-y-1">
@@ -358,13 +363,13 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
               </ul>
             </div>
           )}
-          {reading.nextStep && (
+          {part === "main" && reading.nextStep && (
             <div className="border-l-2 border-accent bg-[color-mix(in_srgb,var(--accent)_6%,transparent)] rounded-r-lg pl-3 pr-3 py-2">
               <div className="text-[10.5px] font-bold uppercase tracking-wide text-accent mb-0.5">Next step</div>
               <p className="text-[13.5px] font-medium">{reading.nextStep}</p>
             </div>
           )}
-          {reading.questionsForYou.length > 0 && (
+          {part === "main" && reading.questionsForYou.length > 0 && (
             <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-2 print:hidden">
               <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">The analyst wants to know what you care about</div>
               {reading.questionsForYou.map((q) => (
@@ -388,22 +393,102 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
               ))}
             </div>
           )}
-          <div className="text-[11px] text-muted-2 print:hidden">
+          {part === "main" && <div className="text-[11px] text-muted-2 print:hidden">
             Reading from {reading.generatedAt.slice(0, 16).replace("T", " ")} · regenerates when the data moves ·{" "}
             <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
               {busy === "reading" ? "Re-reading the data…" : "Refresh the reading"}
             </button>
             {" · "}
             <button onClick={() => window.print()} className="text-accent hover:text-accent-hover font-medium">Print / PDF</button>
-          </div>
+          </div>}
         </>
-      ) : (
+      ) : part === "side" ? null : (
         <p className="text-[13px] text-muted-2">
           {busy === "reading" ? "The analyst is reading the data…" : <>No reading yet — <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">generate it now</button>.</>}
         </p>
       )}
     </div>
   );
+
+  if (view === "numbers") {
+    return (
+      <div className="space-y-3">
+        {err && <div className="text-[13px] text-danger">{err}</div>}
+        {resultsError && <div className="text-[13px] text-warn">{resultsError}</div>}
+        {planDrift.length > 0 && (
+          <div className="rounded-lg border border-warn/50 bg-surface px-3.5 py-2.5 text-[13px]">
+            <span className="text-warn font-semibold">⚠ Results report events the measurement plan never reviewed:</span>{" "}
+            <span className="font-mono text-[12px]">{planDrift.join(" · ")}</span>
+            <span className="text-muted-2"> — the build moved past the plan. </span>
+            <a href="#measurement" className="text-accent hover:text-accent-hover font-medium">Re-plan to classify them →</a>
+          </div>
+        )}
+        {map?.composites.length ? (
+          <div className="text-[11.5px] text-muted-2">
+            {map.confirmed ? <>Mapping confirmed by {map.confirmedBy}</> : <>Proposed by {map.proposedBy ?? "Claude"} — <button onClick={() => post("confirm", { confirm: { composites: map.composites } })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">{busy === "confirm" ? "Confirming…" : "Confirm this mapping"}</button></>}
+            {" · "}
+            <button onClick={() => { if (map.confirmed && !window.confirm("Replace the CONFIRMED mapping with a fresh unconfirmed proposal?")) return; post("propose", { propose: true }); }} disabled={busy !== null} className="hover:text-foreground underline underline-offset-2 disabled:opacity-40">{busy === "propose" ? "Proposing…" : "Re-propose"}</button>
+          </div>
+        ) : null}
+        {verdict && (
+          <div className="rounded-xl border border-border bg-surface px-4 py-3">
+            <button onClick={() => setShowGates((s) => !s)} className="text-[11.5px] text-accent hover:text-accent-hover font-medium">
+              {showGates ? "Hide" : "Show"} the verdict gate trace ({verdict.gates.filter((gt) => gt.pass === true).length}/{verdict.gates.length} pass)
+            </button>
+            {showGates && (
+              <div className="space-y-1 mt-1.5">
+                {verdict.gates.map((gt) => (
+                  <div key={gt.id} className="flex gap-2 text-[12px]">
+                    <span className={gt.pass === true ? "text-ok" : gt.pass === false ? "text-danger" : "text-muted-2"}>{gt.pass === true ? "✓" : gt.pass === false ? "✗" : "◦"}</span>
+                    <span className="text-muted"><span className="font-medium text-foreground/90">{gt.title}.</span> {gt.detail}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {statsEff?.power && (
+              <p className="text-[12px] text-muted-2 mt-2">
+                Power: with {statsEff.power.perArmN.toLocaleString()}/arm this experiment can reliably detect ±{statsEff.power.mdeNow !== undefined ? (statsEff.power.mdeNow * 100).toFixed(1) : "?"}% on the primary
+                {statsEff.power.observedLift !== undefined ? ` (observed ${pctS(statsEff.power.observedLift)})` : ""}
+                {statsEff.power.daysToObserved !== undefined && statsEff.power.daysToObserved > 0 ? ` · ~${statsEff.power.daysToObserved} more day(s) to confirm the observed effect` : ""}
+                {statsEff.power.targetLift !== undefined ? ` · your ship-worthy lift (${pctS(statsEff.power.targetLift)})${statsEff.power.daysToTarget !== undefined ? ` needs ~${statsEff.power.daysToTarget} more day(s)` : ""}` : ""}
+                {statsEff.power.observationDays !== undefined ? ` · ${statsEff.power.observationDays} day(s) observed` : ""}.
+              </p>
+            )}
+            {statsEff?.flags.filter((f) => f.code !== "SRM_FAIL" && f.code !== "CANNIBALIZATION" && f.code !== "NOVELTY_DECAY").map((f) => (
+              <p key={f.code} className="text-[12px] text-muted-2 mt-1">◦ {f.text}</p>
+            ))}
+          </div>
+        )}
+        {Boolean(map?.composites.length) && <div className="space-y-2.5">{map!.composites.map(compositeCard)}</div>}
+        <div className="rounded-xl border border-border bg-surface overflow-hidden">
+          <div className="px-4 py-2 border-b border-border flex items-center gap-2">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-muted-2">Raw Optimizely metrics</span>
+            {statsEff && statsEff.exploratory.length > 0 && (
+              <span className="text-[11px] text-muted-2 ml-auto">exploratory — FDR-corrected; ~{statsEff.expectedFalsePositives} false mover(s) expected among {statsEff.exploratory.length} at raw α=.05</span>
+            )}
+          </div>
+          {(live?.metrics ?? []).map((m) => {
+            const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
+            return (
+              <div key={m.name} className="px-4 py-2 border-t border-border/50 first:border-t-0">
+                <div className="text-[13px] font-semibold mb-1 flex items-center gap-2 flex-wrap">
+                  <span>{m.name}{m.aggregator ? <span className="text-muted-2 font-normal"> · {m.aggregator}</span> : null}</span>
+                  {ms?.featureOnly && (
+                    <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 border border-border rounded px-1"
+                      title={`This event fires only in the ${ms.featureOnly === "variation" ? "variation — the control has no such element" : "control — the variation removed it"}. Comparing against a structural zero is meaningless, so no lift/significance is computed; read the rate as feature ADOPTION.`}>
+                      {ms.featureOnly === "variation" ? "variation-only · adoption view" : "control-only · adoption view"}
+                    </span>
+                  )}
+                </div>
+                {rows(m.perVariation, `metric:${m.name}`, true)}
+              </div>
+            );
+          })}
+          {!live && <div className="px-4 py-2 text-[12.5px] text-muted-2">No raw metrics to show — the live fetch failed and no snapshot is frozen.</div>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -479,60 +564,73 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
             </div>
           )}
 
-          {primaryStats && primaryFocus?.rate !== undefined && primaryBase?.rate !== undefined && (
-            <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">{primaryStats.label} — per-visitor rate</div>
-              <ComparisonBars
-                focusName={primaryFocus.name}
-                focusRate={primaryFocus.rate}
-                baseName={primaryBase.name}
-                baseRate={primaryBase.rate}
-                good={(primaryFocus.lift ?? 0) >= 0}
-              />
-            </div>
-          )}
-
           {(() => {
             const pts = (statsEff?.trend ?? []).filter((t) => t.lift !== undefined);
-            return pts.length >= 2 ? (
-              <div className="flex items-center gap-3">
-                <Sparkline trend={pts} />
-                <span className="text-[11.5px] text-muted-2">Primary lift by day ({pts[0].date} → {pts[pts.length - 1].date})</span>
+            const bars = primaryStats && primaryFocus?.rate !== undefined && primaryBase?.rate !== undefined;
+            if (!bars && pts.length < 2) return null;
+            return (
+              <div className="grid md:grid-cols-2 gap-4">
+                {bars && (
+                  <div>
+                    <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">{primaryStats!.label} — per-visitor rate</div>
+                    <ComparisonBars
+                      focusName={primaryFocus!.name}
+                      focusRate={primaryFocus!.rate!}
+                      baseName={primaryBase!.name}
+                      baseRate={primaryBase!.rate!}
+                      good={(primaryFocus!.lift ?? 0) >= 0}
+                    />
+                  </div>
+                )}
+                {pts.length >= 2 && (
+                  <div>
+                    <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">Primary lift by day</div>
+                    <div className="flex items-center gap-3">
+                      <Sparkline trend={pts} />
+                      <span className="text-[11px] text-muted-2">{pts[0].date} → {pts[pts.length - 1].date}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : null;
+            );
           })()}
 
-          {readingBlock()}
-
+          <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-x-6 gap-y-4 border-t border-border/50 pt-3">
+            <div>{readingBlock("main")}</div>
+            <div className="space-y-3 lg:border-l lg:border-border/40 lg:pl-5">
+              {readingBlock("side")}
           {verdict && verdict.guardrails.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap text-[12px]">
-              {verdict.guardrails.map((gr) => (
-                <span key={gr.compositeId} title={gr.detail} className={`px-2 py-0.5 rounded-md border text-[11.5px] font-medium ${gr.state === "pass" ? "border-ok/40 text-ok" : gr.state === "breach" ? "border-danger/50 text-danger" : "border-border text-muted-2"}`}>
-                  {gr.label}: {gr.state === "pass" ? "holds" : gr.state === "breach" ? "BREACH" : gr.state === "at_risk" ? "at risk" : "unknown"}
-                </span>
-              ))}
-            </div>
-          )}
-          {statsEff?.flags.filter((f) => f.code === "SRM_FAIL" || f.code === "CANNIBALIZATION" || f.code === "NOVELTY_DECAY").map((f) => (
-            <p key={f.code} className={`text-[12px] ${f.code === "SRM_FAIL" ? "text-danger" : "text-warn"}`}>⚠ {f.text}</p>
-          ))}
-
-          {verdict && verdict.discoveries.length > 0 && (
-            <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-1.5">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">Discoveries — exploratory, never confirmation; each is a candidate NEXT experiment</div>
-              {verdict.discoveries.map((d) => (
-                <div key={d.id} className="flex items-center gap-2 text-[12.5px]">
-                  <span className="min-w-0">{d.label} <span className={liftClass(d.lift)}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
-                  {d.promotedIdeaId
-                    ? <span className="ml-auto text-[11.5px] text-ok shrink-0">✓ in the backlog</span>
-                    : <button onClick={() => post(`promote:${d.id}`, { promote: d.id })} disabled={busy !== null}
-                        className="ml-auto h-6 px-2 rounded-md border border-border text-[11.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
-                        {busy === `promote:${d.id}` ? "Promoting…" : "Promote to backlog →"}
-                      </button>}
+                <div className="flex items-center gap-2 flex-wrap text-[12px]">
+                  {verdict.guardrails.map((gr) => (
+                    <span key={gr.compositeId} title={gr.detail} className={`px-2 py-0.5 rounded-md border text-[11.5px] font-medium ${gr.state === "pass" ? "border-ok/40 text-ok" : gr.state === "breach" ? "border-danger/50 text-danger" : "border-border text-muted-2"}`}>
+                      {gr.label}: {gr.state === "pass" ? "holds" : gr.state === "breach" ? "BREACH" : gr.state === "at_risk" ? "at risk" : "unknown"}
+                    </span>
+                  ))}
                 </div>
+              )}
+              {statsEff?.flags.filter((f) => f.code === "SRM_FAIL" || f.code === "CANNIBALIZATION" || f.code === "NOVELTY_DECAY").map((f) => (
+                <p key={f.code} className={`text-[12px] ${f.code === "SRM_FAIL" ? "text-danger" : "text-warn"}`}>⚠ {f.text}</p>
               ))}
+
+              {verdict && verdict.discoveries.length > 0 && (
+                <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-1.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">Discoveries — exploratory, never confirmation; each is a candidate NEXT experiment</div>
+                  {verdict.discoveries.map((d) => (
+                    <div key={d.id} className="flex items-center gap-2 text-[12.5px]">
+                      <span className="min-w-0">{d.label} <span className={liftClass(d.lift)}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
+                      {d.promotedIdeaId
+                        ? <span className="ml-auto text-[11.5px] text-ok shrink-0">✓ in the backlog</span>
+                        : <button onClick={() => post(`promote:${d.id}`, { promote: d.id })} disabled={busy !== null}
+                            className="ml-auto h-6 px-2 rounded-md border border-border text-[11.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
+                            {busy === `promote:${d.id}` ? "Promoting…" : "Promote to backlog →"}
+                          </button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
             </div>
-          )}
+          </div>
 
           {/* the analyst's ask box — every question becomes analyst memory */}
           <div className="space-y-2 border-t border-border/60 pt-2.5 print:hidden">
@@ -584,14 +682,8 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
         </div>
       </div>
 
-      {/* mapping status (unchanged behavior, quieter placement) */}
-      {map?.composites.length ? (
-        <div className="text-[11.5px] text-muted-2">
-          {map.confirmed ? <>Mapping confirmed by {map.confirmedBy}</> : <>Proposed by {map.proposedBy ?? "Claude"} — <button onClick={() => post("confirm", { confirm: { composites: map.composites } })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">{busy === "confirm" ? "Confirming…" : "Confirm this mapping"}</button></>}
-          {" · "}
-          <button onClick={() => { if (map.confirmed && !window.confirm("Replace the CONFIRMED mapping with a fresh unconfirmed proposal?")) return; post("propose", { propose: true }); }} disabled={busy !== null} className="hover:text-foreground underline underline-offset-2 disabled:opacity-40">{busy === "propose" ? "Proposing…" : "Re-propose"}</button>
-        </div>
-      ) : (
+      {/* the no-mapping invitation is a readout-level CTA — without it nothing adjudicates */}
+      {map?.composites.length ? null : (
         <div className="rounded-lg border border-border bg-surface px-3.5 py-2.5 flex items-center gap-3">
           <span className="text-[13px] text-muted-2 min-w-0">Your decision metric probably spans several raw events. Let Claude propose the mapping — or better, author the full plan in the Measurement section above (pre-registered when done before start).</span>
           <button onClick={() => post("propose", { propose: true })} disabled={busy !== null}
@@ -601,70 +693,6 @@ export function ResultsPanel({ prototypeKey, bound, running }: {
         </div>
       )}
 
-      {/* ═══ ALL THE NUMBERS — the analyst's workbench, folded ═══ */}
-      <details className="rounded-xl border border-border bg-surface overflow-hidden">
-        <summary className="px-4 py-2.5 cursor-pointer text-[12.5px] font-semibold uppercase tracking-wide text-muted-2 hover:text-foreground select-none">
-          All the numbers — composites, raw metrics, gate trace
-        </summary>
-        <div className="px-4 pb-3 space-y-3 border-t border-border">
-          {verdict && (
-            <div className="pt-2.5">
-              <button onClick={() => setShowGates((s) => !s)} className="text-[11.5px] text-accent hover:text-accent-hover font-medium">
-                {showGates ? "Hide" : "Show"} the verdict gate trace ({verdict.gates.filter((gt) => gt.pass === true).length}/{verdict.gates.length} pass)
-              </button>
-              {showGates && (
-                <div className="space-y-1 mt-1.5">
-                  {verdict.gates.map((gt) => (
-                    <div key={gt.id} className="flex gap-2 text-[12px]">
-                      <span className={gt.pass === true ? "text-ok" : gt.pass === false ? "text-danger" : "text-muted-2"}>{gt.pass === true ? "✓" : gt.pass === false ? "✗" : "◦"}</span>
-                      <span className="text-muted"><span className="font-medium text-foreground/90">{gt.title}.</span> {gt.detail}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {statsEff?.power && (
-            <p className="text-[12px] text-muted-2">
-              Power: with {statsEff.power.perArmN.toLocaleString()}/arm this experiment can reliably detect ±{statsEff.power.mdeNow !== undefined ? (statsEff.power.mdeNow * 100).toFixed(1) : "?"}% on the primary
-              {statsEff.power.observedLift !== undefined ? ` (observed ${pctS(statsEff.power.observedLift)})` : ""}
-              {statsEff.power.daysToObserved !== undefined && statsEff.power.daysToObserved > 0 ? ` · ~${statsEff.power.daysToObserved} more day(s) to confirm the observed effect` : ""}
-              {statsEff.power.targetLift !== undefined ? ` · your ship-worthy lift (${pctS(statsEff.power.targetLift)})${statsEff.power.daysToTarget !== undefined ? ` needs ~${statsEff.power.daysToTarget} more day(s)` : ""}` : ""}
-              {statsEff.power.observationDays !== undefined ? ` · ${statsEff.power.observationDays} day(s) observed` : ""}.
-            </p>
-          )}
-          {statsEff?.flags.filter((f) => f.code !== "SRM_FAIL" && f.code !== "CANNIBALIZATION" && f.code !== "NOVELTY_DECAY").map((f) => (
-            <p key={f.code} className="text-[12px] text-muted-2">◦ {f.text}</p>
-          ))}
-          {Boolean(map?.composites.length) && <div className="space-y-2.5">{map!.composites.map(compositeCard)}</div>}
-          <div className="rounded-xl border border-border bg-background/40 overflow-hidden">
-            <div className="px-4 py-2 border-b border-border flex items-center gap-2">
-              <span className="text-[12px] font-semibold uppercase tracking-wide text-muted-2">Raw Optimizely metrics</span>
-              {statsEff && statsEff.exploratory.length > 0 && (
-                <span className="text-[11px] text-muted-2 ml-auto">exploratory — FDR-corrected; ~{statsEff.expectedFalsePositives} false mover(s) expected among {statsEff.exploratory.length} at raw α=.05</span>
-              )}
-            </div>
-            {(live?.metrics ?? []).map((m) => {
-              const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
-              return (
-                <div key={m.name} className="px-4 py-2 border-t border-border/50 first:border-t-0">
-                  <div className="text-[13px] font-semibold mb-1 flex items-center gap-2 flex-wrap">
-                    <span>{m.name}{m.aggregator ? <span className="text-muted-2 font-normal"> · {m.aggregator}</span> : null}</span>
-                    {ms?.featureOnly && (
-                      <span className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 border border-border rounded px-1"
-                        title={`This event fires only in the ${ms.featureOnly === "variation" ? "variation — the control has no such element" : "control — the variation removed it"}. Comparing against a structural zero is meaningless, so no lift/significance is computed; read the rate as feature ADOPTION.`}>
-                        {ms.featureOnly === "variation" ? "variation-only · adoption view" : "control-only · adoption view"}
-                      </span>
-                    )}
-                  </div>
-                  {rows(m.perVariation, `metric:${m.name}`, true)}
-                </div>
-              );
-            })}
-            {!live && <div className="px-4 py-2 text-[12.5px] text-muted-2">No raw metrics to show — the live fetch failed and no snapshot is frozen.</div>}
-          </div>
-        </div>
-      </details>
     </div>
   );
 }

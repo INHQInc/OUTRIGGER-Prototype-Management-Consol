@@ -23,8 +23,7 @@ import { getBriefDrift, briefFingerprint } from "@/lib/prototypes/brief-drift-st
 import { getBriefAuditMarker, briefAuditNeeded, runBriefAudit, auditTargetCode, codeHashOf } from "@/lib/prototypes/brief-audit";
 import { readIntegrationPackage } from "@/lib/prototypes/package";
 import { PackagePanel } from "@/components/PackagePanel";
-import { ResultsPanel } from "@/components/ResultsPanel";
-import { MeasurementPanel } from "@/components/MeasurementPanel";
+import { AnalyticsView } from "@/components/AnalyticsView";
 import { getMetricMap } from "@/lib/prototypes/results";
 import { getCoverage, coverageGate, coverageStale, coverageReviewed, testCasesStale, testCasesRun } from "@/lib/prototypes/coverage";
 import { getVerdict, adjudicationPending } from "@/lib/prototypes/verdict";
@@ -394,7 +393,7 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   }
 
   return (
-    <div className="flex-1 min-h-0 grid grid-cols-[16.5rem_minmax(0,1fr)] xl:grid-cols-[16.5rem_minmax(0,1fr)_17.5rem]">
+    <div className="flex-1 min-h-0 grid grid-cols-[16.5rem_minmax(0,1fr)]">
 
       {/* ── THE COMMAND RAIL ── */}
       <aside className="overflow-y-auto border-r border-border bg-surface px-3.5 py-4">
@@ -499,13 +498,8 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         )}
 
         {tab === "analytics" && (
-          <Room title="Analytics" sub={external ? "The whole point of an Opti-built prototype in this console: declare the measurement plan, then read the results and the verdict." : "Declare how you'll judge it before traffic, then read the results — the verdict card, the analyst's reading, and the numbers beneath."}>
-            <Section id="measurement" title="Measurement plan" sub="Declare how you'll judge the experiment BEFORE traffic runs. Claude decomposes the brief's outcome onto the experiment's real events, asks the few questions that matter, and you confirm — stamped pre-start, the verdict is defensible.">
-              <MeasurementPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
-            </Section>
-            <Section id="results" title="Results" sub="Live from Optimizely — judged against the pre-registered plan: the readout on top, the numbers folded beneath.">
-              <ResultsPanel prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
-            </Section>
+          <Room title="Analytics" sub="Live from Optimizely, judged against the pre-registered plan. Readout for the room, The numbers for the analyst, the plan for how it's judged." wide>
+            <AnalyticsView prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
           </Room>
         )}
 
@@ -562,32 +556,6 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         )}
       </main>
 
-      {/* ── META (xl+) ── */}
-      <aside className="hidden xl:block overflow-y-auto border-l border-border bg-surface px-4 py-5">
-        <div className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-2 mb-2.5">Activity</div>
-        {activity.length === 0 ? (
-          <p className="text-[13px] text-muted-2">Activity appears as the work happens.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {activity.slice(0, 8).map((a, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-border-strong mt-[7px] shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-[12.5px] leading-snug">{a.text}</div>
-                  <div className="text-[11.5px] text-muted-2"><TimeAgo iso={a.at} /></div>
-                </div>
-              </div>
-            ))}
-            <Link href="?tab=settings#history" className="block text-[12.5px] text-accent hover:text-accent-hover font-medium">Full history →</Link>
-          </div>
-        )}
-        <div className="text-[11.5px] font-semibold uppercase tracking-wider text-muted-2 mt-6 mb-2">Recommendations</div>
-        {openRecs === 0 ? (
-          <p className="text-[13px] text-muted-2">None open — the agent raises them as it builds.</p>
-        ) : (
-          <Link href="?tab=build#recommendations" className="text-[13px] text-warn hover:opacity-80 font-medium">{openRecs} open — review →</Link>
-        )}
-      </aside>
     </div>
   );
 }
