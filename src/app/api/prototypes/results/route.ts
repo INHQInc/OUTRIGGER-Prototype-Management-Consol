@@ -201,6 +201,10 @@ export async function POST(req: NextRequest) {
     reading?: boolean;
     /** Plain-language description of a custom console-computed measure. */
     defineMetric?: string;
+    /** Delete a CUSTOM measure by composite id (plan measures are protected). */
+    removeMetric?: string;
+    /** Rename a CUSTOM measure. */
+    renameMetric?: { id?: string; label?: string };
     /** Manual "Refresh the reading" — bypasses the current-basis short-circuit. */
     force?: boolean;
     tune?: { question?: string; answer?: string; durable?: boolean };
@@ -402,6 +406,36 @@ export async function POST(req: NextRequest) {
       });
       await audit(g.orgId, actor, "verdict.discovery-promoted", g.proto.name, `${disc.label} → backlog ${idea.id}`);
       return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
+    }
+
+    if (body.removeMetric) {
+      const id = String(body.removeMetric);
+      let removed: string | null = null;
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const target = cur?.composites.find((c) => c.id === id);
+        if (!cur || !target || target.source !== "custom") return null;
+        removed = target.label;
+        return { ...cur, composites: cur.composites.filter((c) => c.id !== id) };
+      });
+      if (!removed) return NextResponse.json({ error: "Only custom console measures can be deleted here — plan measures are managed in the Measurement plan." }, { status: 400 });
+      await audit(g.orgId, actor, "results.custom-metric-removed", g.proto.name, removed);
+      return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.renameMetric) {
+      const id = String(body.renameMetric.id ?? "");
+      const label = String(body.renameMetric.label ?? "").trim().slice(0, 120);
+      if (!id || !label) return NextResponse.json({ error: "A rename needs the measure and its new name." }, { status: 400 });
+      let renamed = false;
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const target = cur?.composites.find((c) => c.id === id);
+        if (!cur || !target || target.source !== "custom") return null;
+        renamed = true;
+        return { ...cur, composites: cur.composites.map((c) => (c.id === id ? { ...c, label } : c)) };
+      });
+      if (!renamed) return NextResponse.json({ error: "Only custom console measures can be renamed here — plan measures are managed in the Measurement plan." }, { status: 400 });
+      await audit(g.orgId, actor, "results.custom-metric-renamed", g.proto.name, `→ ${label}`);
+      return NextResponse.json({ metricMap: map });
     }
 
     if (body.defineMetric) {

@@ -258,6 +258,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [customOpen, setCustomOpen] = useState(false);
   const [customDesc, setCustomDesc] = useState("");
   const [customMsg, setCustomMsg] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState("");
+  const [deleteArmId, setDeleteArmId] = useState<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
@@ -987,10 +990,36 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         return (
                           <tr key={c.id} className="border-t border-border/40" title={[c.definition, c.note].filter(Boolean).join(" — ")}>
                             <td className="py-1.5 pr-2">
-                              <span className="font-medium text-[12.5px]">{c.label}</span>{" "}
+                              {renamingId === c.id ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <input autoFocus value={renameVal} onChange={(e) => setRenameVal(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && renameVal.trim()) { setRenamingId(null); post("rename", { renameMetric: { id: c.id, label: renameVal } }); }
+                                      if (e.key === "Escape") setRenamingId(null);
+                                    }}
+                                    className="h-6 px-1.5 rounded border border-accent bg-background text-[12.5px] focus:outline-none w-48" />
+                                  <button onClick={() => { if (renameVal.trim()) { setRenamingId(null); post("rename", { renameMetric: { id: c.id, label: renameVal } }); } }} className="text-[11px] text-accent font-medium">Save</button>
+                                </span>
+                              ) : (
+                                <span className="font-medium text-[12.5px]">{c.label}</span>
+                              )}{" "}
                               <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
                                 {c.source === "custom" ? "console" : c.role}
                               </span>
+                              {c.source === "custom" && renamingId !== c.id && (
+                                <span className="ml-1.5 print:hidden whitespace-nowrap">
+                                  <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }}
+                                    title="Rename this measure" className="text-[10.5px] text-muted-2 hover:text-foreground underline underline-offset-2">rename</button>
+                                  {deleteArmId === c.id ? (
+                                    <span className="ml-1.5 text-[10.5px]">
+                                      <button onClick={() => { setDeleteArmId(null); post("remove", { removeMetric: c.id }); }} className="text-danger font-semibold">delete?</button>
+                                      <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2 hover:text-foreground">cancel</button>
+                                    </span>
+                                  ) : (
+                                    <button onClick={() => setDeleteArmId(c.id)} title="Delete this measure" className="ml-1.5 text-[10.5px] text-muted-2 hover:text-danger underline underline-offset-2">delete</button>
+                                  )}
+                                </span>
+                              )}
                             </td>
                             {ordered.map((v) => {
                               const r = rowsC.find((x) => x.variationId === v.variationId);
