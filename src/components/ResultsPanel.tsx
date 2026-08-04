@@ -274,8 +274,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [windowData, setWindowData] = useState<{ results: ExperimentResults; stats: StatsReport | null; range: { from: string; to: string } } | null>(null);
   const [windowBusy, setWindowBusy] = useState(false);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [customDesc, setCustomDesc] = useState("");
   const [customMsg, setCustomMsg] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
@@ -297,11 +295,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<AnalystAnswer | string | null>(null);
   const [showGates, setShowGates] = useState(false);
-  const [tuneA, setTuneA] = useState<Record<string, string>>({});
-  const [tuneDurable, setTuneDurable] = useState<Record<string, boolean>>({});
   const autoReadRef = useRef<string | null>(null);
   // Inline two-step confirm (native window.confirm breaks the shell at the
   // most ceremonial action); auto-reverts after 5s.
@@ -1291,29 +1286,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             };
 
             return (
-              <div className="border-t border-border/50 pt-3 max-w-3xl">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2">All measures</div>
-                  <button onClick={() => { setCustomOpen((o) => !o); setCustomMsg(null); }} className="ml-auto text-[11.5px] text-accent hover:text-accent-hover font-medium print:hidden">
-                    {customOpen ? "Cancel" : "+ Track a custom measure"}
-                  </button>
-                </div>
-                {customOpen && (
-                  <div className="rounded-lg border border-border bg-background/60 px-3 py-2 mb-2 space-y-1.5 print:hidden">
-                    <div className="flex items-center gap-2">
-                      <input value={customDesc} onChange={(e) => setCustomDesc(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter" && customDesc.trim()) post("define", { defineMetric: customDesc }); }}
-                        placeholder="Describe it — e.g. “all navigation engagement: next room + previous room + destination tabs”"
-                        className="flex-1 h-8 px-2.5 rounded-lg border border-border bg-background text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-                      <button onClick={() => customDesc.trim() && post("define", { defineMetric: customDesc })} disabled={busy !== null || !customDesc.trim()}
-                        className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
-                        {busy === "define" ? "Defining…" : "Add measure"}
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-muted-2">Console-computed from the events already reporting — badged as not an Optimizely metric; infeasible asks come back with what&apos;s missing, never a silent approximation.</p>
-                    {customMsg && <p className="text-[12px] text-foreground/90">{customMsg}</p>}
-                  </div>
-                )}
+              <div className="max-w-3xl">
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>
