@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
 import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
+import { figureValue } from "@/lib/ai/results";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
@@ -871,29 +872,26 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     : verdict?.verdict === "guardrail_breach" || verdict?.verdict === "underpowered" ? "border-l-warn"
     : "border-l-border-strong";
 
-  // Fallback findings for the one state the server can't pad: no reading yet.
-  const fallbackFindings = (): { figure?: string; claim: string }[] => {
+  // The analyst NAMES a figure; the page renders the live value. A number
+  // copied into the reading goes stale the moment the counts move — which is
+  // how FINDINGS came to print +91.8% beside a live lift of +90.8%.
+  const figureFor = (key?: string): string | undefined =>
+    key && live ? figureValue(key, { results: live, stats: statsEff }) : undefined;
+  const fallbackFindings = (): { figureKey?: string; claim: string }[] => {
     const lift = primaryFocus?.lift;
-    const ci = primaryFocus?.liftCi;
-    const fv = live?.variations.find((v) => v.variationId === statsEff?.focusVariationId);
-    const bv = live?.variations.find((v) => v.variationId === statsEff?.baselineVariationId);
-    const total = (fv?.visitors ?? 0) + (bv?.visitors ?? 0);
     return [
       verdict?.verdict === "not_adjudicable"
         ? { claim: "the decision measure isn’t bound to a confirmed event yet, so there’s no result to read" }
         : lift === undefined
           ? { claim: "the decision measure hasn’t produced a comparable number yet" }
-          : { figure: pctS(lift), claim: lift > 0 ? "the variant is ahead of the control on the decision measure" : lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" },
-      ci
-        ? { figure: pctS(ci.lo), claim: liftSig ? "the plausible range stays on one side of no-change, so the direction is real" : "the plausible range still includes no-change, so the direction isn’t settled" }
+          : { figureKey: "primary_lift", claim: lift > 0 ? "the variant is ahead of the control on the decision measure" : lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" },
+      primaryFocus?.liftCi
+        ? { figureKey: "primary_ci_low", claim: liftSig ? "the likely range stays on one side of no-change, so the direction is real" : "the likely range still includes no-change, so the direction isn’t settled" }
         : { claim: "there isn’t enough data yet to say how certain this direction is" },
-      { figure: total ? total.toLocaleString() : undefined, claim: "guests have been through the experiment so far" },
+      { figureKey: statsEff?.power?.observationDays !== undefined ? "day" : "visitors_total", claim: "guests have been through both versions since the run began" },
     ];
   };
   const findings = reading?.findings?.length ? reading.findings : fallbackFindings();
-  // CHROMA IS EARNED — by the FIGURE, not by the row. Row 0 only takes the
-  // lift's colour when the figure printed there IS the primary lift.
-  const primaryLiftStrings = new Set([pctS(primaryFocus?.lift), primaryFocus?.lift !== undefined ? `${primaryFocus.lift >= 0 ? "+" : ""}${(primaryFocus.lift * 100).toFixed(0)}%` : undefined].filter(Boolean) as string[]);
   const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
 
   // ── THE ANALYST THREAD — one conversation, hydrated from the notebook so it
@@ -952,12 +950,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   ? <a href={chip.href} className={`${cls} text-accent hover:border-accent`}>{chip.label}</a>
                   : <span className={`${cls} text-muted-2`}>{chip.label}</span>;
               })()}
-              {pr && (
-                <div className="text-[12.5px] text-muted-2 mt-2.5 truncate" title={`${pr.hypothesis} Primary metric: ${pr.primaryMetric}.`}>
-                  {pr.anchor === "cut" ? `Pre-registered v${pr.version}` : "Pre-registered with the plan"}
-                  {pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""} · primary: {pr.primaryMetric}
-                </div>
-              )}
             </div>
             <div className="shrink-0 text-right space-y-1.5">
               {statsEff && (
@@ -1064,7 +1056,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             <div className={`grid grid-cols-[104px_minmax(0,1fr)] gap-x-4 gap-y-3 ${busy === "reading" ? "opacity-60" : ""}`}>
               {findings.slice(0, 3).map((f, i) => (
                 <React.Fragment key={i}>
-                  <div className={`text-[15px] font-semibold tabular-nums text-right ${liftSig && f.figure && primaryLiftStrings.has(f.figure) ? liftClass(primaryFocus?.lift) : ""}`}>{f.figure ?? ""}</div>
+                  {/* CHROMA IS EARNED — by the number that earned it: only
+                      the primary lift itself takes the lift's colour. */}
+                  <div className={`text-[15px] font-semibold tabular-nums text-right ${liftSig && f.figureKey === "primary_lift" ? liftClass(primaryFocus?.lift) : ""}`}>{figureFor(f.figureKey) ?? ""}</div>
                   <div className="text-[15px] leading-snug text-foreground/90 max-w-[76ch]">{f.claim}</div>
                 </React.Fragment>
               ))}
@@ -1120,7 +1114,13 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               <div className="mt-2.5 space-y-2">
                 {verdict.discoveries.slice(0, 3).map((d) => (
                   <div key={d.id} className="flex items-center gap-2 text-[14px]">
-                    <span className="min-w-0">{d.label} <span className={`tabular-nums ${liftClass(d.lift)} opacity-70`}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2 tabular-nums">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
+                    {/* No q-values on a leadership surface — the strength of
+                        the signal in words. The number stays in The numbers. */}
+                    <span className="min-w-0">{d.label} <span className={`tabular-nums ${liftClass(d.lift)} opacity-70`}>{pctS(d.lift)}</span> on {d.variationName}{" "}
+                      <span className="text-muted-2" title={`False-discovery rate q=${(d.q * 100).toFixed(1)}% after correcting for the number of measures swept`}>
+                        {d.q <= 0.01 ? "· very unlikely to be noise" : d.q <= 0.05 ? "· unlikely to be noise" : "· worth a look"}
+                      </span>
+                    </span>
                     {d.promotedIdeaId
                       ? <span className="ml-auto text-[12.5px] text-ok shrink-0">✓ in the backlog</span>
                       : <button onClick={() => post(`promote:${d.id}`, { promote: d.id })} disabled={busy !== null}
@@ -1301,7 +1301,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             };
 
             return (
-              <div className="max-w-3xl">
+              <div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>

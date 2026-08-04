@@ -44,9 +44,10 @@ export interface ProtoNotebook {
 }
 
 export interface Reading {
-  /** EXACTLY three rows — a cited figure plus a digit-free claim. The whole
-   *  narrative budget of the readout. Prose is structurally impossible. */
-  findings: { figure?: string; claim: string }[];
+  /** EXACTLY three rows — a cited figure KEY plus a digit-free claim. The
+   *  analyst names WHICH number it means; the page renders the live value.
+   *  A copied number would be stale the moment the counts moved. */
+  findings: { figureKey?: string; claim: string }[];
   /** ≤70-char glosses keyed to an attention row the CODE authored. The
    *  analyst may explain a risk; it may never invent one. */
   riskNotes: { code: string; note: string }[];
@@ -168,7 +169,7 @@ export function readingBasisKey(parts: {
 }): string {
   // READING_FORMAT bumps retire every cached reading on deploy — a format
   // change must never leave old walls of text rendering until data moves.
-  return ["fmt4", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
+  return ["fmt5", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
 }
 
 export async function getReading(prototypeKey: string): Promise<Reading | null> {

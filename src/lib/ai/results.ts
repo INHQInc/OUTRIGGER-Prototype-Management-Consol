@@ -333,53 +333,57 @@ export function dayNumber(stats: StatsReport | null): number | undefined {
   return d === undefined ? undefined : d + 1;
 }
 
-/** Every value the readout actually renders, at DISPLAY precision. A figure
- *  the analyst cites must be byte-identical to one of these — a narrated
- *  number can then never drift from a rendered one after a refresh.
- *  Returns the DISPLAY forms (what the model is shown and what gets stored)
- *  alongside the normalised lookup — showing the model a normalised string
- *  makes it copy "day5" onto the board page. */
-function allowedFigures(results: ExperimentResults, stats: StatsReport | null): { display: string[]; lookup: Map<string, string> } {
-  const lookup = new Map<string, string>();
-  const display: string[] = [];
-  const add = (v: string | undefined | null) => {
-    if (!v) return;
-    const k = normFigure(v);
-    if (lookup.has(k)) return;
-    lookup.set(k, v);
-    display.push(v);
-  };
-  const pct = (v?: number, dp = 1) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(dp)}%`);
+/** The figures a finding may cite, BY NAME. The analyst names which number
+ *  it means; the page renders the live value at render time. A copied number
+ *  is stale the moment the counts move — which is exactly what put "+91.8%"
+ *  in FINDINGS beside a live lift of +90.8%.
+ *
+ *  Slot-scoped on purpose: the certainty row cannot cite a visitor count, and
+ *  no row can cite another measure's number. */
+export const FIGURE_SLOTS: readonly (readonly string[])[] = [
+  ["primary_lift", "primary_rate_variant", "primary_rate_control", "conversions_variant", "none"],
+  ["primary_ci_low", "primary_ci_high", "none"],
+  ["day", "visitors_total", "conversions_variant", "none"],
+] as const;
 
-  for (const v of results.variations) add(v.visitors?.toLocaleString());
-  // The Visitors tile shows focus + control only; a whole-experiment total
-  // would contradict the number printed directly above the findings.
-  const focusV = results.variations.find((v) => v.variationId === stats?.focusVariationId);
-  const baseV = results.variations.find((v) => v.variationId === stats?.baselineVariationId);
-  if (focusV && baseV) add(((focusV.visitors ?? 0) + (baseV.visitors ?? 0)).toLocaleString());
-
+/** Live value for a cited key — the ONE renderer, shared by the prompt (so
+ *  the analyst sees what it is choosing between) and the readout. */
+export function figureValue(key: string | undefined, opts: { results: ExperimentResults; stats: StatsReport | null }): string | undefined {
+  const { results, stats } = opts;
   const primary = stats?.metrics.find((m) => m.key === stats.primaryKey);
-  for (const c of primary?.cells ?? []) {
-    add(c.count?.toLocaleString());
-    if (c.rate !== undefined) add(`${(c.rate * 100).toFixed(1)}%`);
-    add(pct(c.lift, 0)); add(pct(c.lift, 1));
-    add(pct(c.liftCi?.lo)); add(pct(c.liftCi?.hi));
+  const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
+  const base = primary?.cells.find((c) => c.variationId === stats?.baselineVariationId);
+  const pct = (v?: number) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
+  const rate = (v?: number) => (v === undefined ? undefined : `${(v * 100).toFixed(1)}%`);
+  switch (key) {
+    case "primary_lift": return pct(focus?.lift);
+    case "primary_ci_low": return pct(focus?.liftCi?.lo);
+    case "primary_ci_high": return pct(focus?.liftCi?.hi);
+    case "primary_rate_variant": return rate(focus?.rate);
+    case "primary_rate_control": return rate(base?.rate);
+    case "conversions_variant": return focus?.count?.toLocaleString();
+    case "conversions_control": return base?.count?.toLocaleString();
+    case "visitors_total": {
+      const f = results.variations.find((v) => v.variationId === stats?.focusVariationId)?.visitors ?? 0;
+      const b = results.variations.find((v) => v.variationId === stats?.baselineVariationId)?.visitors ?? 0;
+      return f + b > 0 ? (f + b).toLocaleString() : undefined;
+    }
+    case "day": {
+      const d = dayNumber(stats);
+      return d === undefined ? undefined : `Day ${d}`;
+    }
+    default: return undefined;
   }
-  for (const m of stats?.metrics ?? []) for (const c of m.cells) { add(pct(c.lift, 0)); add(pct(c.lift, 1)); }
-  for (const e of stats?.exploratory ?? []) {
-    add(pct(e.lift, 0)); add(pct(e.lift, 1));
-    add(e.q * 100 < 0.5 ? "q<1%" : `q=${(e.q * 100).toFixed(0)}%`);
-  }
-  if (stats?.power?.mdeNow !== undefined) add(`±${(stats.power.mdeNow * 100).toFixed(1)}%`);
-  const dayN = dayNumber(stats);
-  if (dayN !== undefined) add(`Day ${dayN}`);
-  return { display, lookup };
 }
 
 /** Sign-preserving, glyph-insensitive comparison of a cited figure. */
 function normFigure(s: string): string {
   return s.normalize("NFKC").replace(/[▲▼]/g, "").replace(/[\u2212\u2013\u2014]/g, "-").replace(/\s+/g, "").toLowerCase();
 }
+
+/** Statistician notation an executive doesn't read. The console says
+ *  "beyond what luck explains"; q-values live in The numbers. */
+const STAT_NOTATION = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bFDR\b|\bconfidence interval\b|\bstatistically significant\b/i;
 
 const readingTool = {
   name: "give_reading",
@@ -392,7 +396,7 @@ const readingTool = {
         items: {
           type: "object" as const,
           properties: {
-            figure: { type: "string" as const, description: "≤14 chars, copied EXACTLY from the ALLOWED FIGURES list — the number this claim is about" },
+            figure: { type: "string" as const, description: "the NAME of the number this claim is about, from the list given for this row (or \"none\"). Never type a number — the page prints the live value." },
             claim: { type: "string" as const, description: "≤86 chars, MUST NOT CONTAIN ANY DIGIT — what that number means in plain business words. e.g. 'the variant gets far more guests into the room detail view'" },
           },
           required: ["figure", "claim"],
@@ -422,33 +426,28 @@ const readingTool = {
  *  model-dependent. Day 1 with no reading at all still renders three rows. */
 export function templateFindings(opts: {
   results: ExperimentResults; stats: StatsReport | null; verdict: VerdictRecord | null;
-}): { figure?: string; claim: string }[] {
-  const { stats, verdict } = opts;
+}): { figureKey?: string; claim: string }[] {
+  const { stats } = opts;
   const primary = stats?.metrics.find((m) => m.key === stats.primaryKey);
   const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
-  const pct = (v?: number) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
   const sig = focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0;
-  const focusV = opts.results.variations.find((v) => v.variationId === stats?.focusVariationId);
-  const baseV = opts.results.variations.find((v) => v.variationId === stats?.baselineVariationId);
-  const total = (focusV?.visitors ?? 0) + (baseV?.visitors ?? 0);
-  const days = dayNumber(stats);
 
-  const effect: { figure?: string; claim: string } =
-    verdict?.verdict === "not_adjudicable"
-      ? { claim: "the decision measure isn't bound to a confirmed event yet, so there's no result to read" }
+  const effect: { figureKey?: string; claim: string } =
+    opts.verdict?.verdict === "not_adjudicable"
+      ? { claim: "the decision measure isn’t bound to a confirmed event yet, so there’s no result to read" }
       : focus?.lift === undefined
-        ? { claim: "the decision measure hasn't produced a comparable number yet" }
-        : { figure: pct(focus.lift), claim: focus.lift > 0 ? "the variant is ahead of the control on the decision measure" : focus.lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" };
+        ? { claim: "the decision measure hasn’t produced a comparable number yet" }
+        : { figureKey: "primary_lift", claim: focus.lift > 0 ? "the variant is ahead of the control on the decision measure" : focus.lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" };
 
-  const certainty: { figure?: string; claim: string } =
+  const certainty: { figureKey?: string; claim: string } =
     focus?.liftCi
-      ? { figure: pct(focus.liftCi.lo), claim: sig ? "the plausible range stays on one side of no-change, so the direction is real" : "the plausible range still includes no-change, so the direction isn't settled" }
-      : { claim: "there isn't enough data yet to say how certain this direction is" };
+      ? { figureKey: "primary_ci_low", claim: sig ? "the likely range stays on one side of no-change, so the direction is real" : "the likely range still includes no-change, so the direction isn’t settled" }
+      : { claim: "there isn’t enough data yet to say how certain this direction is" };
 
-  const scale: { figure?: string; claim: string } =
-    days !== undefined
-      ? { figure: `Day ${days}`, claim: total ? "guests have been through both versions since the run began" : "the run has started but no visitors have been recorded yet" }
-      : { figure: total ? total.toLocaleString() : undefined, claim: "guests have been through the experiment so far" };
+  const scale: { figureKey?: string; claim: string } =
+    dayNumber(stats) !== undefined
+      ? { figureKey: "day", claim: "guests have been through both versions since the run began" }
+      : { figureKey: "visitors_total", claim: "guests have been through the experiment so far" };
 
   return [effect, certainty, scale];
 }
@@ -470,7 +469,13 @@ export async function generateReading(opts: {
   requireKey();
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
-  const figures = allowedFigures(opts.results, opts.stats);
+  // What each nameable figure is worth right now — shown to the analyst so
+  // it chooses the right one, never copied into the reading.
+  const slotMenu = FIGURE_SLOTS.map((keys, i) => {
+    const label = ["ROW 1 (the effect)", "ROW 2 (how certain)", "ROW 3 (scale or time)"][i];
+    const opts2 = keys.map((k) => (k === "none" ? "none" : `${k} (currently ${figureValue(k, { results: opts.results, stats: opts.stats }) ?? "unavailable"})`));
+    return `${label}: ${opts2.join(" · ")}`;
+  }).join("\n");
   // "all-clear" is not a risk — leaving it in the enum lets the analyst write
   // its own sentence under "Nothing needs attention".
   const codes = opts.attention.filter((a) => a.severity !== "good").map((a) => a.id);
@@ -497,13 +502,15 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
-ALLOWED FIGURES — a figure you cite must be copied EXACTLY from this list:
-${figures.display.join(" · ") || "(none — omit every figure)"}
+FIGURES — name ONE per row from that row's list (or "none"). NEVER type a
+number: the page prints the live value, so a number you copy would be stale
+the moment the counts move.
+${slotMenu}
 
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING: exactly three findings — the effect, how certain it is, then scale or time. Each claim is ONE line of plain business words with NO DIGITS IN IT; the number belongs in the figure field.`,
+Give the READING: exactly three findings — the effect, how certain it is, then scale or time. Each claim is ONE line of plain business words with NO DIGITS IN IT and no statistics vocabulary (no p-values, no q-values, no "significance" — say "beyond what luck explains"). The audience is hotel executives.`,
     }],
     tools: [tool],
     tool_choice: { type: "tool", name: "give_reading" },
@@ -518,7 +525,7 @@ Give the READING: exactly three findings — the effect, how certain it is, then
   // truncated — a severed uncertainty statement is a lie.
   const templates = templateFindings({ results: opts.results, stats: opts.stats, verdict: opts.verdict });
   const rawFindings = Array.isArray(raw.findings) ? raw.findings : [];
-  const seenFigures = new Set<string>();
+  const usedKeys = new Set<string>();
   // SLOT-ALIGNED: row i is always the i-th thing (effect, certainty, scale).
   // Padding by array length would let a dropped middle row shift the others
   // up — the uncertainty statement would vanish and the effect's earned
@@ -527,16 +534,13 @@ Give the READING: exactly three findings — the effect, how certain it is, then
     const rec = (rawFindings[i] ?? {}) as Record<string, unknown>;
     const claim = typeof rec.claim === "string" ? stripMd(rec.claim).replace(/\s+/g, " ").trim() : "";
     if (!claim || claim.length > 86 || /\d/.test(claim)) return templates[i]; // DIGIT BAN
-    // NOT stripMd: its bullet-strip eats a leading "-", which would silently
-    // turn a losing figure into a winning one.
-    const cited = typeof rec.figure === "string" ? rec.figure.replace(/\*\*|__/g, "").trim() : "";
-    const key = normFigure(cited);
-    // Soft failure: an uncited or repeated figure loses the gutter and keeps
-    // the sentence. Storing the CANONICAL display form (not the model's
-    // string) is what keeps the gutter byte-identical to the page.
-    const canon = cited.length <= 14 && figures.lookup.has(key) && !seenFigures.has(key) ? figures.lookup.get(key)! : "";
-    if (canon) seenFigures.add(key);
-    return { claim, ...(canon ? { figure: canon } : {}) };
+    // A figure is a NAME. Out-of-slot, unknown, repeated, or currently
+    // unavailable → the row keeps its sentence and loses the gutter.
+    const named = typeof rec.figure === "string" ? rec.figure.trim().toLowerCase() : "";
+    const legal = FIGURE_SLOTS[i].includes(named) && named !== "none" && !usedKeys.has(named)
+      && figureValue(named, { results: opts.results, stats: opts.stats }) !== undefined;
+    if (legal) usedKeys.add(named);
+    return { claim, ...(legal ? { figureKey: named } : {}) };
   });
 
   const codeSet = new Set(codes);
@@ -547,6 +551,7 @@ Give the READING: exactly three findings — the effect, how certain it is, then
     const code = typeof rec.code === "string" ? rec.code : "";
     const note = typeof rec.note === "string" ? stripMd(rec.note).replace(/\s+/g, " ").trim() : "";
     if (!code || !note || note.length > 70 || !codeSet.has(code) || seenCodes.has(code)) continue;
+    if (STAT_NOTATION.test(note)) continue; // exec surface — plain words only
     // CROSS-SURFACE DEDUPE: when the computed detail is already short and
     // statistic-free, the computed sentence wins and the gloss never renders.
     const item = opts.attention.find((a) => a.id === code);
@@ -590,7 +595,7 @@ const answerTool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "ONE sentence answering the question directly, plain business words" },
-      bullets: { type: "array" as const, items: { type: "string" as const }, description: "2-6 bullets, ONE fact each, LEADING with the number ('Hero clicks: 4.14% vs 1.47% — the variant is losing'). Plain text, no markdown" },
+      bullets: { type: "array" as const, items: { type: "string" as const }, description: "2-6 bullets, ONE fact each, LEADING with the number ('Hero clicks: 4.14% vs 1.47% — the variant is losing'). Plain text, no markdown. The audience is hotel executives: NEVER write q-values, p-values, 'alpha', 'FDR' or 'statistically significant' — say 'beyond what luck explains' / 'still inside the range luck could produce'" },
       caveat: { type: "string" as const, description: "one sentence when honesty demands it (too early, exploratory, data gap)" },
       nextStep: { type: "string" as const, description: "one sentence recommendation tied to the verdict" },
     },
