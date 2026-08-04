@@ -3,8 +3,7 @@ import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
 import {
   normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
-  type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory,
-} from "@/lib/prototypes/results";
+  type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
 import {
@@ -207,6 +206,11 @@ export async function POST(req: NextRequest) {
     renameMetric?: { id?: string; label?: string };
     /** Promote a composite to the console's PRIMARY decision metric. */
     setPrimary?: string;
+    /** Persist the All-measures display order (row keys). Presentation only. */
+    orderMetrics?: string[];
+    /** Hide/show a measure in the index. Display only — plan measures keep
+     *  feeding the verdict; the primary refuses. */
+    hideMetric?: { key?: string; hidden?: boolean };
     /** Manual "Refresh the reading" — bypasses the current-basis short-circuit. */
     force?: boolean;
     tune?: { question?: string; answer?: string; durable?: boolean };
@@ -229,7 +233,7 @@ export async function POST(req: NextRequest) {
       // results-side re-propose replaces the BINDING, not the understanding.
       // pendingQuestions/understanding described the REPLACED composites, so
       // they're cleared; a replaced confirmation stamp is archived.
-      const map = (await mutateMetricMap(g.proto.key, (prior) => ({
+      const map = (await mutateMetricMap(g.proto.key, (prior) => pruneMeasureKeys({
         ...(prior ?? {}),
         composites,
         proposedBy: "claude (analyst)",
@@ -293,7 +297,7 @@ export async function POST(req: NextRequest) {
       }
       // Confirming from the Results panel must not wipe the measurement-plan
       // layer (interview, drift baseline, gaps) the Measurement room authored.
-      const map = (await mutateMetricMap(g.proto.key, (cur) => ({
+      const map = (await mutateMetricMap(g.proto.key, (cur) => pruneMeasureKeys({
         ...(cur ?? {}),
         composites: composites.slice(0, 12),
         confirmed: true,
@@ -410,6 +414,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
     }
 
+    if (body.orderMetrics) {
+      const order = (Array.isArray(body.orderMetrics) ? body.orderMetrics : [])
+        .filter((k): k is string => typeof k === "string" && k.length > 0)
+        .map((k) => k.slice(0, 220))
+        .slice(0, 100);
+      const map = await mutateMetricMap(g.proto.key, (cur) =>
+        cur ? { ...cur, measureOrder: order } : { composites: [], confirmed: false, measureOrder: order });
+      return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.hideMetric) {
+      const rowKey = String(body.hideMetric.key ?? "").slice(0, 220);
+      const wantHidden = Boolean(body.hideMetric.hidden);
+      if (!rowKey) return NextResponse.json({ error: "A hide needs the measure key." }, { status: 400 });
+      let refused = false;
+      let label = rowKey.startsWith("metric:") ? rowKey.slice(7) : rowKey;
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const base = cur ?? { composites: [], confirmed: false };
+        const target = base.composites.find((c) => `composite:${c.id}` === rowKey);
+        if (target?.role === "primary" && wantHidden) { refused = true; return null; }
+        if (target) label = target.label;
+        const set = new Set(base.hiddenMeasures ?? []);
+        if (wantHidden) set.add(rowKey); else set.delete(rowKey);
+        return { ...base, hiddenMeasures: [...set].slice(0, 100) };
+      });
+      if (refused) return NextResponse.json({ error: "The decision metric can't be hidden — move the primary first." }, { status: 400 });
+      await audit(g.orgId, actor, wantHidden ? "results.measure-hidden" : "results.measure-shown", g.proto.name, label);
+      return NextResponse.json({ metricMap: map });
+    }
+
     if (body.setPrimary) {
       const id = String(body.setPrimary);
       let fromLabel = "";
@@ -434,6 +468,9 @@ export async function POST(req: NextRequest) {
           confirmedBy: cur.confirmed ? actor : cur.confirmedBy,
           confirmedAt: cur.confirmed ? new Date().toISOString() : cur.confirmedAt,
           primaryHistory: [...(cur.primaryHistory ?? []), { from: fromLabel, to: toLabel, at: new Date().toISOString(), by: actor }].slice(-8),
+          // The decision metric is never hidden — promoting a hidden measure
+          // clears its flag, or it would silently vanish on the next swap.
+          hiddenMeasures: (cur.hiddenMeasures ?? []).filter((k) => k !== `composite:${id}`),
         };
       });
       if (!toLabel) return NextResponse.json({ error: "Can't make that the primary — it's already primary, doesn't exist, or fires in only one arm (the control couldn't convert on it)." }, { status: 400 });
@@ -450,7 +487,7 @@ export async function POST(req: NextRequest) {
         const target = cur?.composites.find((c) => c.id === id);
         if (!cur || !target || target.source !== "custom") return null;
         removed = target.label;
-        return { ...cur, composites: cur.composites.filter((c) => c.id !== id) };
+        return pruneMeasureKeys({ ...cur, composites: cur.composites.filter((c) => c.id !== id) });
       });
       if (!removed) return NextResponse.json({ error: "Only custom console measures can be deleted here — plan measures are managed in the Measurement plan." }, { status: 400 });
       await audit(g.orgId, actor, "results.custom-metric-removed", g.proto.name, removed);

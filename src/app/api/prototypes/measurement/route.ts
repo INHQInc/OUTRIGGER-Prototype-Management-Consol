@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
-import { getMetricMap, mutateMetricMap, getResultsHistory, type MetricMap } from "@/lib/prototypes/results";
+import { getMetricMap, mutateMetricMap, getResultsHistory, type MetricMap, pruneMeasureKeys } from "@/lib/prototypes/results";
 import { planMeasurement } from "@/lib/ai/measurement";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
@@ -141,7 +141,11 @@ export async function POST(req: NextRequest) {
       // propose ran). A replaced confirmation stamp is ARCHIVED, never erased
       // — the earliest pre-observation stamp anchors the verdict's
       // pre-registration disclosure.
-      const plan = (await mutateMetricMap(g.proto.key, (cur) => ({
+      const plan = (await mutateMetricMap(g.proto.key, (cur) => pruneMeasureKeys({
+        // The user's own curation of the index (row order, hidden rows) is
+        // presentation, not plan — a re-plan must never silently wipe it.
+        measureOrder: cur?.measureOrder,
+        hiddenMeasures: cur?.hiddenMeasures,
         composites: draft.composites,
         proposedBy: "claude (measurement planner)",
         confirmed: false,

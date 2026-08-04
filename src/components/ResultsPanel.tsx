@@ -154,7 +154,19 @@ function MetricTrend({ days, metricName, focusId, baseId, focusName, baseName }:
 
 /** One glyph set — inline SVG, currentColor. The ⚠ character risks
  *  rendering as a color emoji outside the palette, so it's banned here. */
-function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" }) {
+function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" }) {
+  if (kind === "eye" || kind === "eyeOff") {
+    return (
+      <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 6c1.6-2.7 3.2-4 5-4s3.4 1.3 5 4c-1.6 2.7-3.2 4-5 4S2.6 8.7 1 6Z" />
+        <circle cx="6" cy="6" r="1.6" />
+        {kind === "eyeOff" && <path d="M2 10.5 10 1.5" />}
+      </svg>
+    );
+  }
+  if (kind === "grip") {
+    return <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill="currentColor"><circle cx="4.2" cy="2.5" r="1" /><circle cx="7.8" cy="2.5" r="1" /><circle cx="4.2" cy="6" r="1" /><circle cx="7.8" cy="6" r="1" /><circle cx="4.2" cy="9.5" r="1" /><circle cx="7.8" cy="9.5" r="1" /></svg>;
+  }
   if (kind === "check") {
     return <svg viewBox="0 0 12 12" className="inline-block w-3 h-3 -mt-0.5 mr-0.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 6.5 5 9.5 10 3" /></svg>;
   }
@@ -267,6 +279,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [deleteArmId, setDeleteArmId] = useState<string | null>(null);
+  // Drag-to-reorder the All-measures index — presentation only, persisted on
+  // the metric map. The decision metric is pinned to the top and never drags.
+  const [orderLocal, setOrderLocal] = useState<string[] | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const dragKeyRef = useRef<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
@@ -304,6 +322,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setNotebook(data.notebook ?? null);
       setPlanDrift(data.planDrift ?? []);
       setHistoryDays(data.historyDays ?? []);
+      setOrderLocal(null);
       if (data.experimentStatus) setExpStatus(data.experimentStatus);
     } catch {
       setResultsError("Couldn't load results — check the connection.");
@@ -335,6 +354,48 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     } finally { setWindowBusy(false); }
   }
 
+  // Row order and hide/show are presentation-only CAS writes. They must NOT
+  // ride the analyst busy gate — a background reading holds it for tens of
+  // seconds, and a swallowed drag would leave the table asserting an order the
+  // server never stored. They serialize on their own chain, latest wins, and
+  // an optimistic order is dropped the moment the server refuses it.
+  const quietChain = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingOrder = useRef<string[] | null>(null);
+
+  async function quietPost(body: Record<string, unknown>): Promise<boolean> {
+    try {
+      const res = await fetch("/api/prototypes/results", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, ...body }),
+      });
+      const data = await res.json();
+      if (data.metricMap) setMap(data.metricMap);
+      if (!res.ok) { setErr(data.error ?? "That change didn't save."); return false; }
+      return true;
+    } catch {
+      setErr("Network hiccup — that change didn't save.");
+      return false;
+    }
+  }
+
+  function saveOrder(keys: string[]) {
+    setOrderLocal(keys);
+    pendingOrder.current = keys;
+    quietChain.current = quietChain.current.then(async () => {
+      const next = pendingOrder.current;
+      if (!next) return; // a later drag already superseded this one
+      pendingOrder.current = null;
+      await quietPost({ orderMetrics: next });
+      // Stored map wins either way — on success it mirrors this order, on
+      // failure the table stops showing an order that was never saved.
+      setOrderLocal(null);
+    });
+  }
+
+  function saveHidden(rowKey: string, hidden: boolean) {
+    quietChain.current = quietChain.current.then(() => quietPost({ hideMetric: { key: rowKey, hidden } }));
+  }
+
   async function post(action: string, body: Record<string, unknown>) {
     if (busy) return;
     setBusy(action); setErr(null);
@@ -362,6 +423,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
         setErr(data.error ?? "That didn't work.");
         return;
       }
+      // A primary swap re-derives the verdict, banner, and tiles server-side —
+      // reload the readout in place so a page refresh is never needed.
+      if (action === "setPrimary") await load();
     } catch {
       if (action === "reading") autoReadRef.current = null;
       setErr("Network hiccup — try again.");
@@ -942,7 +1006,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           })()}
 
           {/* ── the metric INDEX: every measure × every arm, named columns,
-                 half-width — composites (badged) first, Opti events beneath ── */}
+                 half-width — the decision metric pinned on top, everything else
+                 in the user’s drag-saved order ── */}
           {live && (() => {
             // canonical arm order: focus first, others, control last
             const ordered = [
@@ -951,6 +1016,151 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               ...live.variations.filter((v) => v.variationId === statsEff?.baselineVariationId),
             ].slice(0, 5);
             const isCtl = (id: string) => id === statsEff?.baselineVariationId;
+
+            const composites = map?.composites ?? [];
+            const primaryComp = composites.find((cc) => cc.role === "primary");
+
+            // Pinned primary first; the rest in the user’s saved order — new
+            // measures append in default order (composites, then raw events).
+            const orderPref = orderLocal ?? map?.measureOrder ?? [];
+            const posOf = new Map(orderPref.map((k, i2) => [k, i2] as const));
+            const keyed = [
+              ...composites.filter((cc) => cc !== primaryComp).map((cc) => ({ kind: "c" as const, c: cc, mi: 0, key: `composite:${cc.id}` })),
+              ...live.metrics.map((m, mi) => ({ kind: "m" as const, m, mi, key: `metric:${m.name}` })),
+            ].sort((a, b) => (posOf.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (posOf.get(b.key) ?? Number.MAX_SAFE_INTEGER));
+
+            const hiddenSet = new Set(map?.hiddenMeasures ?? []);
+            const visibleRows = keyed.filter((r) => !hiddenSet.has(r.key));
+            const hiddenRows = keyed.filter((r) => hiddenSet.has(r.key));
+
+            const dropOn = (targetKey: string) => {
+              const from = dragKeyRef.current;
+              dragKeyRef.current = null;
+              setDragOverKey(null);
+              if (!from || from === targetKey) return;
+              const keys = keyed.map((r) => r.key);
+              const fromIdx = keys.indexOf(from);
+              const toIdx = keys.indexOf(targetKey);
+              if (fromIdx < 0 || toIdx < 0) return;
+              keys.splice(fromIdx, 1);
+              // uniform insert-at-target: drag down lands after it, drag up before
+              keys.splice(toIdx, 0, from);
+              saveOrder(keys);
+            };
+
+            const grip = (rowKey: string) => (
+              <span draggable title="Drag to reorder"
+                onDragStart={() => { dragKeyRef.current = rowKey; }}
+                onDragEnd={() => { dragKeyRef.current = null; setDragOverKey(null); }}
+                className="cursor-grab active:cursor-grabbing text-muted-2/70 hover:text-foreground select-none">
+                <Glyph kind="grip" />
+              </span>
+            );
+            const eye = (rowKey: string, isHidden: boolean) => (
+              <button onClick={() => saveHidden(rowKey, !isHidden)}
+                title={isHidden ? "Show this measure again" : "Hide from the index (display only — plan measures still feed the verdict)"}
+                className="text-muted-2 hover:text-foreground">
+                <Glyph kind={isHidden ? "eyeOff" : "eye"} />
+              </button>
+            );
+            const dragProps = (rowKey: string) => ({
+              onDragOver: (e: React.DragEvent) => { e.preventDefault(); setDragOverKey(rowKey); },
+              onDragLeave: () => setDragOverKey((k) => (k === rowKey ? null : k)),
+              onDrop: (e: React.DragEvent) => { e.preventDefault(); dropOn(rowKey); },
+            });
+
+            const compositeTr = (c: MetricMap["composites"][number], pinned: boolean, isHidden = false) => {
+              const rowKey = `composite:${c.id}`;
+              const cell = cellFor(rowKey, statsEff?.focusVariationId ?? "");
+              const rowsC = computeComposite(c, live);
+              return (
+                <tr key={c.id} title={[c.definition, c.note].filter(Boolean).join(" — ")}
+                  {...(pinned || isHidden ? {} : dragProps(rowKey))}
+                  className={`border-t ${dragOverKey === rowKey ? "border-accent" : "border-border/40"}${isHidden ? " opacity-55" : ""}`}>
+                  <td className="py-1.5 pr-1 print:hidden">{!pinned && !isHidden && grip(rowKey)}</td>
+                  <td className="py-1.5 pr-2">
+                    {renamingId === c.id ? (
+                      <span className="inline-flex items-center gap-1">
+                        <input autoFocus value={renameVal} onChange={(e) => setRenameVal(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && renameVal.trim()) { setRenamingId(null); post("rename", { renameMetric: { id: c.id, label: renameVal } }); }
+                            if (e.key === "Escape") setRenamingId(null);
+                          }}
+                          className="h-6 px-1.5 rounded border border-accent bg-background text-[12.5px] focus:outline-none w-48" />
+                        <button onClick={() => { if (renameVal.trim()) { setRenamingId(null); post("rename", { renameMetric: { id: c.id, label: renameVal } }); } }} className="text-[11px] text-accent font-medium">Save</button>
+                      </span>
+                    ) : (
+                      <span className="font-medium text-[12.5px]">{c.label}</span>
+                    )}{" "}
+                    <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
+                      {c.source === "custom" ? "console" : c.role}
+                    </span>
+                  </td>
+                  {ordered.map((v) => {
+                    const r = rowsC.find((x) => x.variationId === v.variationId);
+                    return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
+                  })}
+                  <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</td>
+                  <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</td>
+                  <td className="py-1.5 pl-2 print:hidden">
+                    <span className="flex items-center justify-end gap-1.5">
+                      {deleteArmId === c.id ? (
+                        <span className="text-[10px] whitespace-nowrap">
+                          <button onClick={() => { setDeleteArmId(null); post("remove", { removeMetric: c.id }); }} className="text-danger font-semibold">delete?</button>
+                          <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2">✕</button>
+                        </span>
+                      ) : (
+                        <>
+                          {/* ONE primary — switch semantics: on = the decision metric;
+                              flipping another on moves it (the server keeps exactly one) */}
+                          <button
+                            onClick={() => { if (c.role !== "primary" && !c.expectedOneArm) void post("setPrimary", { setPrimary: c.id }); }}
+                            disabled={c.role === "primary" || Boolean(c.expectedOneArm) || busy !== null}
+                            title={c.role === "primary" ? "The console’s decision metric — the verdict adjudicates this. Flip another on to move it." : c.expectedOneArm ? "Fires in only one arm — can’t be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
+                            className={`relative w-7 h-4 rounded-full shrink-0 transition-colors ${c.role === "primary" ? "bg-ok" : c.expectedOneArm ? "bg-border opacity-40 cursor-not-allowed" : "bg-border-strong hover:bg-accent/60"}`}>
+                            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-[left] ${c.role === "primary" ? "left-3.5" : "left-0.5"}`} />
+                          </button>
+                          {c.source === "custom" && (
+                            <>
+                              <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }} title="Rename" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
+                              <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
+                            </>
+                          )}
+                          {!pinned && eye(rowKey, isHidden)}
+                        </>
+                      )}
+                    </span>
+                  </td>
+                </tr>
+              );
+            };
+
+            const metricTr = (m: ExperimentResults["metrics"][number], mi: number, isHidden = false) => {
+              const rowKey = `metric:${m.name}`;
+              const ms = statsEff?.metrics.find((x) => x.key === rowKey);
+              const cell = ms?.cells.find((x) => x.variationId === statsEff?.focusVariationId);
+              return (
+                <tr key={m.name} {...(isHidden ? {} : dragProps(rowKey))}
+                  className={`border-t ${dragOverKey === rowKey ? "border-accent" : "border-border/40"}${isHidden ? " opacity-55" : ""}`}>
+                  <td className="py-1.5 pr-1 print:hidden">{!isHidden && grip(rowKey)}</td>
+                  <td className="py-1.5 pr-2 text-muted">
+                    {m.name}
+                    {mi === 0 && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle" title="Optimizely’s own primary metric (first on its experiment). The console adjudicates its composed decision metric instead — the two may legitimately differ.">opti primary</span>}
+                    {ms?.featureOnly && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle">{ms.featureOnly}-only</span>}
+                  </td>
+                  {ordered.map((v) => {
+                    const r = m.perVariation.find((x) => x.variationId === v.variationId);
+                    return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
+                  })}
+                  <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
+                  <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
+                  <td className="py-1.5 pl-2 print:hidden">
+                    <span className="flex items-center justify-end">{eye(rowKey, isHidden)}</span>
+                  </td>
+                </tr>
+              );
+            };
+
             return (
               <div className="border-t border-border/50 pt-3 max-w-3xl">
                 <div className="flex items-center gap-2 mb-1.5">
@@ -979,6 +1189,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="text-[10.5px] text-muted-2 text-left">
+                        <th className="w-5 print:hidden" />
                         <th className="font-medium py-1 pr-2">Measure</th>
                         {ordered.map((v) => (
                           <th key={v.variationId} className="font-medium py-1 px-1.5 text-right max-w-24">
@@ -992,92 +1203,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
-                      {(map?.composites ?? []).map((c) => {
-                        const cell = cellFor(`composite:${c.id}`, statsEff?.focusVariationId ?? "");
-                        const rowsC = computeComposite(c, live);
-                        return (
-                          <tr key={c.id} className="border-t border-border/40" title={[c.definition, c.note].filter(Boolean).join(" — ")}>
-                            <td className="py-1.5 pr-2">
-                              {renamingId === c.id ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <input autoFocus value={renameVal} onChange={(e) => setRenameVal(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter" && renameVal.trim()) { setRenamingId(null); post("rename", { renameMetric: { id: c.id, label: renameVal } }); }
-                                      if (e.key === "Escape") setRenamingId(null);
-                                    }}
-                                    className="h-6 px-1.5 rounded border border-accent bg-background text-[12.5px] focus:outline-none w-48" />
-                                  <button onClick={() => { if (renameVal.trim()) { setRenamingId(null); post("rename", { renameMetric: { id: c.id, label: renameVal } }); } }} className="text-[11px] text-accent font-medium">Save</button>
-                                </span>
-                              ) : (
-                                <span className="font-medium text-[12.5px]">{c.label}</span>
-                              )}{" "}
-                              <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
-                                {c.source === "custom" ? "console" : c.role}
-                              </span>
-                            </td>
-                            {ordered.map((v) => {
-                              const r = rowsC.find((x) => x.variationId === v.variationId);
-                              return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
-                            })}
-                            <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</td>
-                            <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</td>
-                            <td className="py-1.5 pl-2 print:hidden">
-                              <span className="flex items-center justify-end gap-1.5">
-                                {deleteArmId === `primary:${c.id}` ? (
-                                  <span className="text-[10px] whitespace-nowrap">
-                                    <button onClick={() => { setDeleteArmId(null); post("setPrimary", { setPrimary: c.id }); }} className="text-accent font-semibold">primary?</button>
-                                    <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2">✕</button>
-                                  </span>
-                                ) : deleteArmId === c.id ? (
-                                  <span className="text-[10px] whitespace-nowrap">
-                                    <button onClick={() => { setDeleteArmId(null); post("remove", { removeMetric: c.id }); }} className="text-danger font-semibold">delete?</button>
-                                    <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2">✕</button>
-                                  </span>
-                                ) : (
-                                  <>
-                                    {/* ONE primary — radio semantics: filled = current, click another to move it */}
-                                    <button
-                                      onClick={() => { if (c.role !== "primary" && !c.expectedOneArm) setDeleteArmId(`primary:${c.id}`); }}
-                                      disabled={c.role === "primary" || Boolean(c.expectedOneArm)}
-                                      title={c.role === "primary" ? "The console's decision metric — the verdict adjudicates this" : c.expectedOneArm ? "Fires in only one arm — can't be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
-                                      className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${c.role === "primary" ? "border-ok bg-ok" : c.expectedOneArm ? "border-border opacity-40 cursor-not-allowed" : "border-border-strong hover:border-accent"}`}
-                                    />
-                                    {c.source === "custom" && (
-                                      <>
-                                        <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }} title="Rename" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
-                                        <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
-                                      </>
-                                    )}
-                                  </>
-                                )}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {live.metrics.map((m, mi) => {
-                        const ms = statsEff?.metrics.find((x) => x.key === `metric:${m.name}`);
-                        const cell = ms?.cells.find((x) => x.variationId === statsEff?.focusVariationId);
-                        return (
-                          <tr key={m.name} className="border-t border-border/40">
-                            <td className="py-1.5 pr-2 text-muted">
-                              {m.name}
-                              {mi === 0 && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle" title="Optimizely's own primary metric (first on its experiment). The console adjudicates its composed decision metric instead — the two may legitimately differ.">opti primary</span>}
-                              {ms?.featureOnly && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle">{ms.featureOnly}-only</span>}
-                            </td>
-                            {ordered.map((v) => {
-                              const r = m.perVariation.find((x) => x.variationId === v.variationId);
-                              return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
-                            })}
-                            <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
-                            <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
-                            <td className="py-1.5 pl-2 print:hidden" />
-                          </tr>
-                        );
-                      })}
+                      {primaryComp && compositeTr(primaryComp, true)}
+                      {visibleRows.map((r) => (r.kind === "c" ? compositeTr(r.c, false) : metricTr(r.m, r.mi)))}
+                      {showHidden && hiddenRows.map((r) => (r.kind === "c" ? compositeTr(r.c, false, true) : metricTr(r.m, r.mi, true)))}
                     </tbody>
                   </table>
                 </div>
+                {hiddenRows.length > 0 && (
+                  <button onClick={() => setShowHidden((h) => !h)} className="mt-1 text-[11px] text-muted-2 hover:text-foreground print:hidden">
+                    {showHidden ? "Collapse" : "Show"} {plural(hiddenRows.length, "hidden measure")}
+                  </button>
+                )}
               </div>
             );
           })()}

@@ -178,6 +178,12 @@ export interface MetricMap {
   /** Primary swaps, in order — a post-observation change of the decision
    *  metric is legitimate but must be DISCLOSED, never silent. */
   primaryHistory?: { from: string; to: string; at: string; by: string }[];
+  /** User-chosen display order of the All-measures index — row keys
+   *  ("composite:<id>" / "metric:<name>"). Presentation only. */
+  measureOrder?: string[];
+  /** Measures hidden from the index (same key space). Presentation only —
+   *  a hidden guardrail still feeds the verdict; the primary can't hide. */
+  hiddenMeasures?: string[];
   /** Confirmation stamps a Re-plan replaced — the EARLIEST pre-observation
    *  stamp is what the verdict's pre-registration disclosure keys off, so a
    *  mid-run re-plan can't silently erase "this was declared before traffic". */
@@ -209,6 +215,18 @@ export async function setMetricMap(prototypeKey: string, map: MetricMap): Promis
  *  authoring + results binding), and the planner holds a stale read across a
  *  long LLM call. `fn` gets the FRESH record and returns the next one, or
  *  null to keep the current (no write). */
+/** Drop presentation keys pointing at composites that no longer exist. Ids are
+ *  slugified from labels and therefore RE-USED — without this, a re-created
+ *  measure inherits the deleted one's hidden flag and is born invisible. */
+export function pruneMeasureKeys(map: MetricMap): MetricMap {
+  const live = new Set(map.composites.map((c) => `composite:${c.id}`));
+  const keep = (k: string) => !k.startsWith("composite:") || live.has(k);
+  const next = { ...map };
+  if (next.measureOrder) next.measureOrder = next.measureOrder.filter(keep);
+  if (next.hiddenMeasures) next.hiddenMeasures = next.hiddenMeasures.filter(keep);
+  return next;
+}
+
 export async function mutateMetricMap(
   prototypeKey: string,
   fn: (current: MetricMap | null) => MetricMap | null,
