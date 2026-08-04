@@ -5,6 +5,7 @@ import {
   normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
   type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
+import { deriveAttention } from "@/lib/prototypes/attention";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
 import {
   getOrgNotebook, getProtoNotebook, addOrgPreference, removeOrgPreference, appendNotebook,
@@ -163,7 +164,12 @@ export async function GET(req: NextRequest) {
   }
 
   const basis = basisFor({ history, verdict, map: metricMap, orgNb, protoNb });
+  const attention = deriveAttention({
+    verdict, stats, map: metricMap, planDrift,
+    resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
+  });
   return NextResponse.json({
+    attention,
     windowResults: windowView?.results ?? null,
     windowStats,
     windowRange: windowView ? { from: windowView.from, to: windowView.to } : null,
@@ -529,8 +535,14 @@ export async function POST(req: NextRequest) {
         return { confirmed: false, ...(cur ?? {}), composites: composites.slice(0, 16) };
       });
       await audit(g.orgId, actor, "results.custom-metric", g.proto.name, `${composite.label} = ${composite.events.join(" + ")}`.slice(0, 300));
+      // The conversation is the record of what was created — a "note" entry
+      // (an existing kind renderNotebook already attributes correctly).
+      const protoNbAfter = await appendNotebook(g.proto.key, [
+        { kind: "note", text: `Added console measure “${composite.label}” = ${composite.events.join(" + ")}. ${explanation}` },
+      ]);
+      const orgNbNow = await getOrgNotebook(g.orgId);
       const { stats, verdict } = await analyze(g.proto, bundle);
-      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, explanation });
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, explanation, notebook: { org: orgNbNow, proto: protoNbAfter } });
     }
 
     if (body.reading) {
@@ -556,9 +568,13 @@ export async function POST(req: NextRequest) {
       }
       await store.compareAndSetFlag(lockKey, lockRaw, String(now)).catch(() => {});
       try {
+        const planDriftNow = map?.plannedAt && map.known
+          ? bundle.results.metrics.filter((m) => !map.known!.includes(m.name) && !(m.baseName && map.known!.includes(m.baseName))).map((m) => m.name)
+          : [];
         const { reading, dataWishes } = await generateReading({
           orgId: g.orgId, proto: g.proto, results: bundle.results, map, stats, verdict,
           orgNotebook: orgNb, protoNotebook: protoNb, basisKey: basis,
+          attention: deriveAttention({ verdict, stats, map, planDrift: planDriftNow, experimentStatus: bundle.experimentStatus }),
         });
         // Wishes the reading surfaced land in the notebook FIRST, then the
         // basis is recomputed so the just-saved reading isn't instantly

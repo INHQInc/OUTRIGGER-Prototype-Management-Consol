@@ -22,6 +22,7 @@ import type { StatsReport } from "../prototypes/stats";
 import type { VerdictRecord } from "../prototypes/verdict";
 import type { OrgNotebook, ProtoNotebook, Reading } from "../prototypes/notebook";
 import { computeComposite, compositeMembers } from "../prototypes/results";
+import { STAT_NOISE } from "../prototypes/attention";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
 
@@ -324,25 +325,112 @@ function renderNotebook(org: OrgNotebook | null, proto: ProtoNotebook | null): s
   return lines.join("\n");
 }
 
+/** Every value the readout actually renders, at DISPLAY precision. A figure
+ *  the analyst cites must be byte-identical to one of these — a narrated
+ *  number can then never drift from a rendered one after a refresh. */
+function allowedFigures(results: ExperimentResults, stats: StatsReport | null): Set<string> {
+  const out = new Set<string>();
+  const add = (v: string | undefined | null) => { if (v) out.add(normFigure(v)); };
+  const pct = (v?: number, dp = 1) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(dp)}%`);
+
+  for (const v of results.variations) add(v.visitors?.toLocaleString());
+  const total = results.variations.reduce((a, v) => a + (v.visitors ?? 0), 0);
+  add(total.toLocaleString());
+
+  const primary = stats?.metrics.find((m) => m.key === stats.primaryKey);
+  for (const c of primary?.cells ?? []) {
+    add(c.count?.toLocaleString());
+    if (c.rate !== undefined) add(`${(c.rate * 100).toFixed(1)}%`);
+    add(pct(c.lift, 0)); add(pct(c.lift, 1));
+    add(pct(c.liftCi?.lo)); add(pct(c.liftCi?.hi));
+  }
+  for (const m of stats?.metrics ?? []) for (const c of m.cells) { add(pct(c.lift, 0)); add(pct(c.lift, 1)); }
+  for (const e of stats?.exploratory ?? []) {
+    add(pct(e.lift, 0)); add(pct(e.lift, 1));
+    add(e.q * 100 < 0.5 ? "q<1%" : `q=${(e.q * 100).toFixed(0)}%`);
+  }
+  if (stats?.power?.mdeNow !== undefined) add(`±${(stats.power.mdeNow * 100).toFixed(1)}%`);
+  const days = stats?.power?.observationDays;
+  if (days !== undefined) { add(`Day ${days}`); add(`${days} days`); }
+  return out;
+}
+
+/** Sign-preserving, glyph-insensitive comparison of a cited figure. */
+function normFigure(s: string): string {
+  return s.normalize("NFKC").replace(/[▲▼]/g, "").replace(/[\u2212\u2013\u2014]/g, "-").replace(/\s+/g, "").toLowerCase();
+}
+
 const readingTool = {
   name: "give_reading",
-  description: "The standing leadership reading over the computed facts — fixed sections, plain language, no unexplained statistics.",
+  description: "Three cited findings over the computed facts, plus optional glosses on risks the console already found. Never prose.",
   input_schema: {
     type: "object" as const,
     properties: {
-      summary: { type: "string" as const, description: "the TLDR: one or two sentences a leader reads first — where this experiment stands, in plain business words" },
-      keyPoints: { type: "array" as const, items: { type: "string" as const }, description: "3-6 BULLETS, one fact each, LEADING with the number: 'Hero clicks: 4.14% control vs 1.47% variant — the variant is losing the main metric'. Plain words, statistic glossed, NEVER a paragraph. No markdown syntax — plain text only" },
-      trendLine: { type: "string" as const, description: "one sentence: the direction of travel (stabilizing, growing, fading, flat)" },
-      watchItems: { type: "array" as const, items: { type: "string" as const }, description: "0-3 one-sentence things that could change the story — in plain words (e.g. 'the traffic split looks uneven', never bare 'SRM p=0.03')" },
-      questionsForYou: { type: "array" as const, items: { type: "string" as const }, description: "0-2 PREFERENCE questions (what does this team care about) — never statistics questions" },
-      nextStep: { type: "string" as const, description: "one sentence: keep running / ship / iterate / close it out, tied to the verdict" },
-      dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data the notebook or questions surfaced (device mix, segments) — recorded honestly" },
+      findings: {
+        type: "array" as const, minItems: 3, maxItems: 3,
+        items: {
+          type: "object" as const,
+          properties: {
+            figure: { type: "string" as const, description: "≤14 chars, copied EXACTLY from the ALLOWED FIGURES list — the number this claim is about" },
+            claim: { type: "string" as const, description: "≤86 chars, MUST NOT CONTAIN ANY DIGIT — what that number means in plain business words. e.g. 'the variant gets far more guests into the room detail view'" },
+          },
+          required: ["figure", "claim"],
+        },
+        description: "EXACTLY 3, in this order: (1) the effect, (2) how certain it is, (3) scale or time. One line each.",
+      },
+      riskNotes: {
+        type: "array" as const, maxItems: 3,
+        items: {
+          type: "object" as const,
+          properties: {
+            code: { type: "string" as const, description: "an id from the RISKS ALREADY FOUND list — you may only gloss a risk the console found" },
+            note: { type: "string" as const, description: "≤70 chars, plain words, no bare statistics" },
+          },
+          required: ["code", "note"],
+        },
+      },
+      trend: { type: "string" as const, description: "≤64 chars, a caption for the day-by-day picture (e.g. 'the gap has held steady all week')" },
+      question: { type: "string" as const, description: "≤80 chars, at most one PREFERENCE question for the team — never a statistics question" },
+      dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data (segments, device mix) — recorded honestly" },
     },
-    required: ["summary", "keyPoints", "watchItems", "questionsForYou", "nextStep"],
+    required: ["findings"],
   },
 };
 
-/** The standing narrative — exec voice, structured, cache-friendly. */
+/** Deterministic findings — the zone is never empty, never a spinner, never
+ *  model-dependent. Day 1 with no reading at all still renders three rows. */
+export function templateFindings(opts: {
+  results: ExperimentResults; stats: StatsReport | null; verdict: VerdictRecord | null;
+}): { figure?: string; claim: string }[] {
+  const { stats, verdict } = opts;
+  const primary = stats?.metrics.find((m) => m.key === stats.primaryKey);
+  const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
+  const pct = (v?: number) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
+  const sig = focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0;
+  const total = opts.results.variations.reduce((a, v) => a + (v.visitors ?? 0), 0);
+  const days = stats?.power?.observationDays;
+
+  const effect: { figure?: string; claim: string } =
+    verdict?.verdict === "not_adjudicable"
+      ? { claim: "the decision measure isn't bound to a confirmed event yet, so there's no result to read" }
+      : focus?.lift === undefined
+        ? { claim: "the decision measure hasn't produced a comparable number yet" }
+        : { figure: pct(focus.lift), claim: focus.lift > 0 ? "the variant is ahead of the control on the decision measure" : focus.lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" };
+
+  const certainty: { figure?: string; claim: string } =
+    focus?.liftCi
+      ? { figure: pct(focus.liftCi.lo), claim: sig ? "the plausible range stays on one side of no-change, so the direction is real" : "the plausible range still includes no-change, so the direction isn't settled" }
+      : { claim: "there isn't enough data yet to say how certain this direction is" };
+
+  const scale: { figure?: string; claim: string } =
+    days !== undefined
+      ? { figure: `Day ${days}`, claim: total ? "guests have been through both versions since the run began" : "the run has started but no visitors have been recorded yet" }
+      : { figure: total ? total.toLocaleString() : undefined, claim: "guests have been through the experiment so far" };
+
+  return [effect, certainty, scale];
+}
+
+/** The standing narrative — exec voice, three cited rows, cache-friendly. */
 export async function generateReading(opts: {
   orgId: string;
   proto: PrototypeRecord;
@@ -353,13 +441,26 @@ export async function generateReading(opts: {
   orgNotebook: OrgNotebook | null;
   protoNotebook: ProtoNotebook | null;
   basisKey: string;
+  /** Ids of the risks the CODE found — the only ones the analyst may gloss. */
+  attention: { id: string; title: string; detail: string }[];
 }): Promise<{ reading: Reading; dataWishes: string[] }> {
   requireKey();
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
+  const figures = allowedFigures(opts.results, opts.stats);
+  const codes = opts.attention.map((a) => a.id);
+
+  // CALL-TIME ENUM: an unknown risk id is unemittable, not merely dropped.
+  const tool = JSON.parse(JSON.stringify(readingTool)) as typeof readingTool & { input_schema: { properties: Record<string, unknown> } };
+  if (codes.length) {
+    (tool.input_schema.properties.riskNotes as { items: { properties: { code: Record<string, unknown> } } }).items.properties.code = {
+      type: "string", enum: codes, description: "the risk you are glossing",
+    };
+  }
+
   const res = await client.messages.create({
     model: "claude-opus-4-8",
-    max_tokens: 2000,
+    max_tokens: 1200,
     system,
     messages: [{
       role: "user",
@@ -371,49 +472,77 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
-Give the READING (per the standing-reading structure in your instructions).`,
+ALLOWED FIGURES — a figure you cite must be copied EXACTLY from this list:
+${[...figures].join(" · ") || "(none — omit every figure)"}
+
+RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
+${opts.attention.map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
+
+Give the READING: exactly three findings — the effect, how certain it is, then scale or time. Each claim is ONE line of plain business words with NO DIGITS IN IT; the number belongs in the figure field.`,
     }],
-    tools: [readingTool],
+    tools: [tool],
     tool_choice: { type: "tool", name: "give_reading" },
   });
+
   const tu = res.content.find((c) => c.type === "tool_use");
   if (!tu || tu.type !== "tool_use") throw new Error("The reading returned nothing — try again.");
   const raw = (tu.input ?? {}) as Record<string, unknown>;
-  const strArr = (v: unknown, cap: number, len: number) =>
-    (Array.isArray(v) ? v : []).filter((s): s is string => typeof s === "string" && s.trim().length > 0).map((s) => stripMd(s).slice(0, len)).filter(Boolean).slice(0, cap);
-  const summary = typeof raw.summary === "string" ? stripMd(raw.summary).slice(0, 400) : "";
-  const keyPoints = strArr(raw.keyPoints, 6, 400);
-  if (!summary && !keyPoints.length) throw new Error("The reading came back empty — try again.");
 
-  // DETECT-AND-REPAIR (enforce-LLM-behavior-in-code): nextStep is the one
-  // verdict-adjacent sentence with no code tether — a voice preference must
-  // never make it recommend shipping past a non-confirmed verdict.
-  let nextStep = typeof raw.nextStep === "string" ? raw.nextStep.trim().slice(0, 300) : "";
-  const v = opts.verdict?.verdict;
-  if (v && v !== "confirmed" && /\b(ship( it)?|roll( it)? out|launch|go live)\b/i.test(nextStep)) {
-    const SAFE: Record<string, string> = {
-      keep_running: "Keep running — the pre-registered primary is still too early to call.",
-      underpowered: "Don't ship on this — the run is underpowered; decide whether to keep chasing or redesign for a bigger effect.",
-      refuted: "Don't ship — the hypothesis was refuted; document the learning and iterate.",
-      guardrail_breach: "Don't ship — a guardrail broke its pre-set tolerance; iterate before rollout.",
-      invalid: "No decision until the data validity issue is fixed — the numbers can't be trusted.",
-      not_adjudicable: "Confirm the measurement plan first — then the experiment can be judged.",
-    };
-    nextStep = SAFE[v] ?? "Hold the decision — the verdict doesn't support shipping yet.";
+  // ── VALIDATE + REPAIR (enforce-in-code): every failure has a deterministic
+  // repair and nothing is ever re-prompted. Bad rows are DISCARDED, never
+  // truncated — a severed uncertainty statement is a lie.
+  const seenFigures = new Set<string>();
+  const findings: { figure?: string; claim: string }[] = [];
+  for (const f of Array.isArray(raw.findings) ? raw.findings : []) {
+    const rec = f as Record<string, unknown>;
+    const claim = typeof rec.claim === "string" ? stripMd(rec.claim).replace(/\s+/g, " ").trim() : "";
+    if (!claim || claim.length > 86 || /\d/.test(claim)) continue; // DIGIT BAN
+    let figure = typeof rec.figure === "string" ? stripMd(rec.figure).trim() : "";
+    // Soft failure: an uncited or repeated figure loses the gutter, keeps the
+    // sentence — a normalization miss degrades to a good line, not boilerplate.
+    if (figure.length > 14 || !figures.has(normFigure(figure)) || seenFigures.has(normFigure(figure))) figure = "";
+    if (figure) seenFigures.add(normFigure(figure));
+    findings.push({ claim, ...(figure ? { figure } : {}) });
+    if (findings.length === 3) break;
   }
+  // PADDING — always exactly three rows, in the fixed effect/certainty/scale order.
+  const templates = templateFindings({ results: opts.results, stats: opts.stats, verdict: opts.verdict });
+  while (findings.length < 3) findings.push(templates[findings.length]);
+
+  const codeSet = new Set(codes);
+  const seenCodes = new Set<string>();
+  const riskNotes: { code: string; note: string }[] = [];
+  for (const r of Array.isArray(raw.riskNotes) ? raw.riskNotes : []) {
+    const rec = r as Record<string, unknown>;
+    const code = typeof rec.code === "string" ? rec.code : "";
+    const note = typeof rec.note === "string" ? stripMd(rec.note).replace(/\s+/g, " ").trim() : "";
+    if (!code || !note || note.length > 70 || !codeSet.has(code) || seenCodes.has(code)) continue;
+    // CROSS-SURFACE DEDUPE: when the computed detail is already short and
+    // statistic-free, the computed sentence wins and the gloss never renders.
+    const item = opts.attention.find((a) => a.id === code);
+    if (item && item.detail.length <= 70 && !STAT_NOISE.test(item.detail)) continue;
+    seenCodes.add(code);
+    riskNotes.push({ code, note });
+    if (riskNotes.length === 3) break;
+  }
+
+  const one = (v: unknown, cap: number) => {
+    const t = typeof v === "string" ? stripMd(v).replace(/\s+/g, " ").trim() : "";
+    return t && t.length <= cap ? t : undefined;
+  };
 
   return {
     reading: {
-      summary: summary || undefined,
-      keyPoints,
-      trendLine: typeof raw.trendLine === "string" && raw.trendLine.trim() ? raw.trendLine.trim().slice(0, 300) : undefined,
-      watchItems: strArr(raw.watchItems, 3, 300),
-      questionsForYou: [...new Set(strArr(raw.questionsForYou, 2, 300))],
-      nextStep,
+      findings,
+      riskNotes,
+      trend: one(raw.trend, 64),
+      question: one(raw.question, 80),
       generatedAt: new Date().toISOString(),
       basisKey: opts.basisKey,
     },
-    dataWishes: strArr(raw.dataWishes, 4, 200),
+    dataWishes: (Array.isArray(raw.dataWishes) ? raw.dataWishes : [])
+      .filter((w): w is string => typeof w === "string" && w.trim().length > 0)
+      .map((w) => stripMd(w).slice(0, 200)).slice(0, 4),
   };
 }
 

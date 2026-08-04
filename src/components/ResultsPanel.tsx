@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
 import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
+import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
@@ -284,6 +285,13 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [orderLocal, setOrderLocal] = useState<string[] | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [showAllAttention, setShowAllAttention] = useState(false);
+  const [threadOpen, setThreadOpen] = useState(false);
+  const [showMemory, setShowMemory] = useState(false);
+  const [composerMode, setComposerMode] = useState<"ask" | "measure" | "reply">("ask");
+  const [composerText, setComposerText] = useState("");
+  const [replyDurable, setReplyDurable] = useState(false);
   const dragKeyRef = useRef<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [loading, setLoading] = useState(bound);
@@ -322,6 +330,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setNotebook(data.notebook ?? null);
       setPlanDrift(data.planDrift ?? []);
       setHistoryDays(data.historyDays ?? []);
+      setAttention(data.attention ?? []);
       setOrderLocal(null);
       if (data.experimentStatus) setExpStatus(data.experimentStatus);
     } catch {
@@ -414,6 +423,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       if (data.readingStale !== undefined) setReadingStale(Boolean(data.readingStale));
       if (data.readingBasis) setReadingBasis(data.readingBasis);
       if (data.notebook) setNotebook(data.notebook);
+      if (data.attention) setAttention(data.attention);
       if (data.answer) setAnswer(data.answer);
       if (data.explanation) setCustomMsg(data.explanation);
       if (!res.ok) {
@@ -621,73 +631,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     );
   };
 
-  const readingBlock = (part: "main" | "side") => (
-    <div className="space-y-3">
-      {reading ? (
-        <>
-          {/* The SAME sections, every experiment — leaders learn where to look. */}
-          {part === "main" && reading.summary && (
-            <div className={`border-t border-border/50 pt-3 ${busy === "reading" ? "opacity-60" : ""}`}>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Summary{busy === "reading" && <span className="ml-2 normal-case font-normal tracking-normal text-muted-2">Updating the reading…</span>}</div>
-              <p className="text-[15px] leading-relaxed font-medium text-foreground max-w-3xl">{reading.summary}</p>
-            </div>
-          )}
-          {part === "main" && (reading.keyPoints?.length || reading.dataRead?.length || reading.story?.length) ? (
-            <div className="border-t border-border/50 pt-3">
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">What the data shows</div>
-              {reading.keyPoints?.length ? (
-                <ul className="space-y-1">
-                  {reading.keyPoints.map((k) => (
-                    <li key={k} className="flex gap-2 text-[13.5px] leading-snug text-foreground/90">
-                      <span className="text-accent shrink-0">•</span>
-                      <span>{k}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                (reading.dataRead?.length ? reading.dataRead : reading.story ?? []).map((p, i) => <p key={i} className="text-[13.5px] leading-relaxed text-foreground/90 mb-1.5 last:mb-0">{p}</p>)
-              )}
-            </div>
-          ) : null}
-          {part === "side" && reading.trendLine && (
-            <div className="border-t border-border/50 pt-3">
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Trend</div>
-              <p className="text-[13px] text-muted max-w-3xl">{reading.trendLine}</p>
-            </div>
-          )}
-          {part === "side" && reading.watchItems.length > 0 && (
-            <div className="border-t border-border/50 pt-3">
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1">Watching</div>
-              <ul className="space-y-1">
-                {reading.watchItems.map((w) => (
-                  <li key={w} className="flex gap-2 text-[12.5px] text-warn leading-snug"><span className="shrink-0">▸</span><span>{w}</span></li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {part === "main" && reading.nextStep && (
-            <div className="border-l-2 border-accent bg-[color-mix(in_srgb,var(--accent)_6%,transparent)] rounded-r-lg pl-3 pr-3 py-2">
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-accent mb-0.5">Next step</div>
-              <p className="text-[13.5px] font-medium">{reading.nextStep}</p>
-            </div>
-          )}
-          {part === "main" && <div className="text-[11px] text-muted-2 print:hidden">
-            Reading from {reading.generatedAt.slice(0, 16).replace("T", " ")} · regenerates when the data moves ·{" "}
-            <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
-              {busy === "reading" ? "Re-reading the data…" : "Refresh the reading"}
-            </button>
-            {" · "}
-            <button onClick={() => window.print()} className="text-accent hover:text-accent-hover font-medium">Print / PDF</button>
-          </div>}
-        </>
-      ) : part === "side" ? null : (
-        <p className="text-[13px] text-muted-2">
-          {busy === "reading" ? "The analyst is reading the data…" : <>No reading yet — <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">generate it now</button>.</>}
-        </p>
-      )}
-    </div>
-  );
-
   if (view === "numbers") {
     const numLive = windowData?.results ?? live;
     const numStats = windowData ? windowData.stats : statsEff;
@@ -886,101 +829,253 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     );
   }
 
+  // ── ZONE HELPERS ────────────────────────────────────────────────────────
+  // Type ladder (the whole readout obeys it): 26px verdict word · 20px tile
+  // values · 15px findings + answer headlines · 14px body · 12.5px labels.
+  const ZH = "text-[12.5px] font-bold uppercase tracking-[0.08em] text-muted-2";
+
+  const zoneHeader = (label: string, right?: React.ReactNode, id?: string) => (
+    <div id={id} className="flex items-baseline gap-2 border-b border-border pb-1.5 mb-2.5">
+      <span className={ZH}>{label}</span>
+      {right}
+    </div>
+  );
+
+  // The action is COMPUTED from the first failing gate — never narrated, so a
+  // model can't recommend shipping past a gate that hasn't passed.
+  const actionChip = (): { label: string; href?: string } | null => {
+    const failing = verdict?.gates.find((g) => g.pass === false);
+    if (!failing) return stamped ? null : { label: verdict ? "Keep running" : "Waiting for data" };
+    const byGate: Record<string, { label: string; href?: string }> = {
+      mapping: { label: "Confirm the measurement plan →", href: "?tab=analytics#measurement" },
+      focus: { label: "Rebind the experiment →", href: "?tab=experiment#ship" },
+      validity: { label: "Fix the traffic split →", href: "#method" },
+      guardrails: { label: "Review the guardrail →", href: "#attention" },
+    };
+    if (byGate[failing.id]) return byGate[failing.id];
+    if (failing.id === "runtime" || failing.id === "sample") {
+      // Mirrors the Timeline tile's arithmetic (VERDICT_THRESHOLDS.minRuntimeDays = 7).
+      const dayN = (statsEff?.power?.observationDays ?? 0) + 1;
+      const eta = statsEff?.power?.daysToTarget ?? statsEff?.power?.daysToObserved;
+      const left = Math.max(eta ?? 0, Math.max(0, 7 - dayN));
+      return { label: left > 0 ? `Keep running · ~${plural(left, "more day")}` : "Keep running" };
+    }
+    return { label: "Hold the call" };
+  };
+
+  // Severity edge on the decision card — the only place verdict colour lives
+  // now that the background wash is gone.
+  const edge =
+    verdict?.verdict === "confirmed" ? "border-l-ok"
+    : verdict?.verdict === "refuted" || verdict?.verdict === "invalid" ? "border-l-danger"
+    : verdict?.verdict === "guardrail_breach" || verdict?.verdict === "underpowered" ? "border-l-warn"
+    : "border-l-border-strong";
+
+  // Fallback findings for the one state the server can't pad: no reading yet.
+  const fallbackFindings = (): { figure?: string; claim: string }[] => {
+    const lift = primaryFocus?.lift;
+    const ci = primaryFocus?.liftCi;
+    const total = live?.variations.reduce((a, v) => a + (v.visitors ?? 0), 0) ?? 0;
+    return [
+      verdict?.verdict === "not_adjudicable"
+        ? { claim: "the decision measure isn’t bound to a confirmed event yet, so there’s no result to read" }
+        : lift === undefined
+          ? { claim: "the decision measure hasn’t produced a comparable number yet" }
+          : { figure: pctS(lift), claim: lift > 0 ? "the variant is ahead of the control on the decision measure" : lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" },
+      ci
+        ? { figure: pctS(ci.lo), claim: liftSig ? "the plausible range stays on one side of no-change, so the direction is real" : "the plausible range still includes no-change, so the direction isn’t settled" }
+        : { claim: "there isn’t enough data yet to say how certain this direction is" },
+      { figure: total ? total.toLocaleString() : undefined, claim: "guests have been through the experiment so far" },
+    ];
+  };
+  const findings = reading?.findings?.length ? reading.findings : fallbackFindings();
+  const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
+
+  // ── THE ANALYST THREAD — one conversation, hydrated from the notebook so it
+  // survives reloads. Asks, measure definitions, and the analyst's own
+  // question all land here; nothing about it prints.
+  const entries = notebook?.proto.entries ?? [];
+  const lastAnswerIdx = entries.map((e) => e.kind).lastIndexOf("analyst-answer");
+  const shownEntries = threadOpen ? entries : entries.slice(-6);
+
+  const sendComposer = () => {
+    const text = composerText.trim();
+    if (!text || busy) return;
+    setComposerText("");
+    if (composerMode === "measure") { void post("define", { defineMetric: text }); return; }
+    if (composerMode === "reply" && reading?.question) {
+      void post(`tune:${reading.question}`, { tune: { question: reading.question, answer: text, durable: replyDurable } });
+      setComposerMode("ask");
+      return;
+    }
+    void post("ask", { ask: text });
+  };
+
+  const answerBlock = (a: AnalystAnswer) => (
+    <div className="space-y-1.5">
+      <p className="text-[15px] font-medium leading-snug">{a.headline}</p>
+      {a.bullets.length > 0 && (
+        <ul className="space-y-1">
+          {a.bullets.map((b) => (
+            <li key={b} className="flex gap-2 text-[14px] leading-snug text-foreground/90"><span className="text-muted-2 shrink-0">•</span><span>{b}</span></li>
+          ))}
+        </ul>
+      )}
+      {a.caveat && <p className="text-[14px] text-warn leading-snug">{a.caveat}</p>}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {err && <div className="text-[13px] text-danger print:hidden">{err}</div>}
+      {err && <div className="text-[14px] text-danger print:hidden">{err}</div>}
 
-      {/* ═══ THE READOUT — the leadership view ═══ */}
-      <div className={`print-report rounded-xl border ${look?.border ?? "border-border"} bg-surface overflow-hidden`}>
-        <div className={`px-5 py-3.5 border-b border-border ${look?.bg ?? ""} flex items-start gap-3 flex-wrap`}>
-          <div className="min-w-0 flex-1">
-            {/* SUPREMACY RULE: the verdict is the biggest thing on the page — 
-                KPI values reach 26px, nothing exceeds the verdict word. */}
-            {look && <div className={`text-[24px] md:text-[26px] font-extrabold tracking-tight ${look.cls}`}>{look.label}</div>}
-            {verdict && (
-              <p className="text-[13px] text-muted mt-0.5 leading-snug max-w-3xl">
-                {verdict.headline}
-                {verdict.verdict === "not_adjudicable" && <> <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium print:hidden">Set it up in the Measurement section →</a></>}
-              </p>
-            )}
-            <div className="text-[11px] text-muted-2 mt-1 tabular-nums">
-              {stamped
-                ? `Official record — stamped by ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}`
-                : `Live · computed ${relTime(statsEff?.computedAt) || "—"}`}
-              {expStatus ? ` · ${expStatus.toUpperCase()}` : ""}
+      {/* ═══ THE READOUT — decision band · numbers · attention · findings ═══ */}
+      <div className="print-report grid gap-5 xl:grid-cols-[minmax(0,1fr)_23rem] 2xl:grid-cols-[minmax(0,1fr)_26rem] print:block">
+        <div className="min-w-0 space-y-5">
+
+          {/* ── Z(A) · DECISION ─────────────────────────────────────────── */}
+          <div className={`rounded-xl border border-border border-l-4 ${edge} bg-surface px-5 py-4 flex items-start gap-4 flex-wrap`}>
+            <div className="min-w-0 flex-1">
+              {/* SUPREMACY: 26px, exactly once on the page. */}
+              {look && <div className={`text-[26px] font-extrabold tracking-[-0.02em] leading-tight ${look.cls}`}>{look.label}</div>}
+              {verdict && <p className="text-[15px] text-muted mt-1 leading-snug max-w-[76ch]">{verdict.headline}</p>}
+              {(() => {
+                const chip = actionChip();
+                if (!chip) return null;
+                const cls = "inline-flex items-center h-7 px-3 mt-2.5 rounded-full border border-border text-[12.5px] font-bold uppercase tracking-[0.08em]";
+                return chip.href
+                  ? <a href={chip.href} className={`${cls} text-accent hover:border-accent`}>{chip.label}</a>
+                  : <span className={`${cls} text-muted-2`}>{chip.label}</span>;
+              })()}
+              {pr && (
+                <div className="text-[12.5px] text-muted-2 mt-2.5 truncate" title={`${pr.hypothesis} Primary metric: ${pr.primaryMetric}.`}>
+                  {pr.anchor === "cut" ? `Pre-registered v${pr.version}` : "Pre-registered with the plan"}
+                  {pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""} · primary: {pr.primaryMetric}
+                </div>
+              )}
+            </div>
+            <div className="shrink-0 text-right space-y-1.5">
+              {statsEff && (
+                <a href="#attention" className={`block text-[12.5px] font-bold uppercase tracking-[0.08em] ${statsEff.validity.status === "ok" ? "text-ok" : statsEff.validity.status === "unknown" ? "text-muted-2" : statsEff.validity.status === "warn" ? "text-warn" : "text-danger"}`} title={statsEff.validity.detail}>
+                  {statsEff.validity.status === "ok" ? "✓ health" : statsEff.validity.status === "unknown" ? "health unchecked" : "⚠ health"}
+                </a>
+              )}
+              <div className="text-[12.5px] text-muted-2 tabular-nums">
+                {stamped
+                  ? `Official — ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}`
+                  : `Live · ${relTime(statsEff?.computedAt) || "—"}`}
+                {expStatus ? ` · ${expStatus.toUpperCase()}` : ""}
+              </div>
+              <span className="flex items-center gap-2 justify-end print:hidden">
+                {verdict && !stamped && stoppable && (confirmAction === "stamp" ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[12.5px] text-muted-2">Make it the record?</span>
+                    <button onClick={() => { setConfirmAction(null); post("stamp", { stamp: true, expectVerdict: verdict.verdict }); }} className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover">Yes, stamp</button>
+                    <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12.5px] text-muted hover:text-foreground">Cancel</button>
+                  </span>
+                ) : (
+                  <button onClick={() => armConfirm("stamp")} disabled={busy !== null}
+                    className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40">
+                    {busy === "stamp" ? "Stamping…" : "Stamp the verdict"}
+                  </button>
+                ))}
+                {stamped && (confirmAction === "reopen" ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[12.5px] text-muted-2">Reopen? (audited)</span>
+                    <button onClick={() => { setConfirmAction(null); post("unstamp", { unstamp: true }); }} className="h-7 px-2 rounded-md border border-danger/50 text-[12.5px] text-danger hover:bg-danger/10">Yes, reopen</button>
+                    <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12.5px] text-muted hover:text-foreground">Cancel</button>
+                  </span>
+                ) : (
+                  <button onClick={() => armConfirm("reopen")} disabled={busy !== null} className="text-[12.5px] text-muted-2 hover:text-foreground underline underline-offset-2 disabled:opacity-40">
+                    {busy === "unstamp" ? "Reopening…" : "Reopen"}
+                  </button>
+                ))}
+                <button onClick={() => void load()} disabled={loading || busy !== null} className="text-[12.5px] text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
+                <button onClick={() => window.print()} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Print</button>
+              </span>
             </div>
           </div>
-          <span className="flex items-center gap-2 shrink-0">
-            {statsEff && (
-              <span className={`text-[11px] ${statsEff.validity.status === "ok" ? "text-ok" : statsEff.validity.status === "unknown" ? "text-muted-2" : statsEff.validity.status === "warn" ? "text-warn font-semibold" : "text-danger font-semibold"}`} title={statsEff.validity.detail}>
-                {statsEff.validity.status === "ok" ? "✓ data health OK" : statsEff.validity.status === "unknown" ? "data health: too early to check" : statsEff.validity.status === "warn" ? "data health: traffic split off" : "data health: broken"}
-              </span>
-            )}
-            <span className="flex items-center gap-2 print:hidden">
-            {verdict && !stamped && stoppable && (confirmAction === "stamp" ? (
-              <span className="flex items-center gap-1.5">
-                <span className="text-[11.5px] text-muted-2">Make it the immutable record?</span>
-                <button onClick={() => { setConfirmAction(null); post("stamp", { stamp: true, expectVerdict: verdict.verdict }); }} className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover">Yes, stamp</button>
-                <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12px] text-muted hover:text-foreground">Cancel</button>
-              </span>
-            ) : (
-              <button onClick={() => armConfirm("stamp")} disabled={busy !== null}
-                className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12px] font-semibold hover:bg-accent-hover disabled:opacity-40">
-                {busy === "stamp" ? "Stamping…" : "Stamp the verdict"}
-              </button>
-            ))}
-            {stamped && (confirmAction === "reopen" ? (
-              <span className="flex items-center gap-1.5">
-                <span className="text-[11.5px] text-muted-2">Reopen the record? (audited)</span>
-                <button onClick={() => { setConfirmAction(null); post("unstamp", { unstamp: true }); }} className="h-7 px-2 rounded-md border border-danger/50 text-[12px] text-danger hover:bg-danger/10">Yes, reopen</button>
-                <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12px] text-muted hover:text-foreground">Cancel</button>
-              </span>
-            ) : (
-              <button onClick={() => armConfirm("reopen")} disabled={busy !== null}
-                className="text-[11.5px] text-muted-2 hover:text-foreground underline underline-offset-2 disabled:opacity-40">
-                {busy === "unstamp" ? "Reopening…" : "Reopen"}
-              </button>
-            ))}
-            <button onClick={() => void load()} disabled={loading || busy !== null} className="text-[11.5px] text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
-            </span>
-          </span>
-        </div>
 
-        {resultsError && <div className="px-5 py-1.5 text-[12px] text-warn border-b border-border/50">{resultsError}</div>}
-        <div className="px-5 py-4 space-y-4">
-          {pr && (
-            <div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-0.5">The hypothesis · {pr.anchor === "cut" ? `frozen at v${pr.version}` : "frozen with the measurement plan"}{pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""}</div>
-              <p className="text-[13px] text-muted leading-snug max-w-3xl">
-                {pr.hypothesis} <span className="text-muted-2">Primary metric: {pr.primaryMetric}.</span>
-                {pr.mapConfirmedAfterObservation && <span className="text-warn"> Metric mapping set after observation began (disclosed).</span>}
-                {pr.primaryChangedAfterObservation && <span className="text-warn"> Decision metric changed after traffic began (was “{pr.primaryChangedAfterObservation.was}”, {pr.primaryChangedAfterObservation.at.slice(0, 10)}) — disclosed.</span>}
-              </p>
-            </div>
-          )}
-
+          {/* ── Z(B) · THE NUMBERS — four tiles, hard cap ─────────────────── */}
           {tiles.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {tiles.map((t) => (
-                <div key={t.label} className="rounded-lg border border-border bg-background/50 px-3.5 py-2.5 min-h-[92px] flex flex-col">
-                  <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 truncate" title={t.label}>{t.label}</div>
-                  <div className={`text-[26px] font-semibold leading-tight tracking-tight tabular-nums ${t.cls ?? ""}`}>{t.value}</div>
+                <div key={t.label} className="rounded-xl border border-border bg-surface px-3.5 py-2.5 min-h-[92px] flex flex-col">
+                  <div className={`${ZH} truncate`} title={t.label}>{t.label}</div>
+                  <div className={`text-[20px] font-semibold leading-tight tracking-tight tabular-nums mt-0.5 ${t.cls ?? ""}`}>{t.value}</div>
                   {t.viz}
-                  {t.sub && <div className={`text-[11px] text-muted-2 tabular-nums mt-auto ${t.wrapSub ? "leading-snug" : "truncate"}`}>{t.sub}</div>}
+                  {t.sub && <div className={`text-[12.5px] text-muted-2 tabular-nums mt-auto ${t.wrapSub ? "leading-snug" : "truncate"}`}>{t.sub}</div>}
                 </div>
               ))}
             </div>
           )}
 
+          {/* ── Z(C) · NEEDS ATTENTION — 100% computed ─────────────────────── */}
+          {attention.length > 0 && (() => {
+            const criticals = attention.filter((a) => a.severity === "critical");
+            const rest = attention.filter((a) => a.severity !== "critical");
+            const room = Math.max(1, 4 - criticals.length);
+            const shown = [...criticals, ...(showAllAttention ? rest : rest.slice(0, room))];
+            const hiddenCount = rest.length - (showAllAttention ? rest.length : Math.min(room, rest.length));
+            const tone = (s: string) => (s === "critical" ? "text-danger" : s === "attention" ? "text-warn" : "text-ok");
+            const bar = (s: string) => (s === "critical" ? "bg-danger" : s === "attention" ? "bg-warn" : "bg-ok");
+            return (
+              <div>
+                {zoneHeader("Needs attention", criticals.length + rest.length > 0 && attention[0].severity !== "good"
+                  ? <span className="text-[20px] font-semibold tabular-nums leading-none">{attention.length}</span>
+                  : undefined, "attention")}
+                <div className="divide-y divide-border/40">
+                  {shown.map((a) => (
+                    <div key={a.id} className="flex items-start gap-3 py-2.5">
+                      <span className={`w-[3px] self-stretch rounded-full shrink-0 ${bar(a.severity)}`} />
+                      <span className="min-w-0 flex-1">
+                        <span className={`block text-[14px] font-semibold truncate ${tone(a.severity)}`} title={a.title}>{a.title}</span>
+                        <span className="block text-[14px] text-muted leading-snug line-clamp-2">{riskNote(a.id) ?? a.detail}</span>
+                      </span>
+                      {a.actionLabel && (
+                        a.actionHref === "#refresh"
+                          ? <button onClick={() => void load()} className="shrink-0 text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover print:hidden">{a.actionLabel}</button>
+                          : <a href={a.actionHref} className="shrink-0 text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover">{a.actionLabel} →</a>
+                      )}
+                    </div>
+                  ))}
+                  {hiddenCount > 0 && (
+                    <button onClick={() => setShowAllAttention(true)} className="py-2 text-[14px] text-muted-2 hover:text-foreground print:hidden">+{hiddenCount} more</button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Z(D) · FINDINGS — the entire narrative budget ──────────────── */}
+          <div>
+            {zoneHeader("Findings",
+              <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
+                {reading ? `read ${reading.generatedAt.slice(11, 16)}` : "no reading yet"} ·{" "}
+                <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
+                  {busy === "reading" ? "re-reading…" : "re-read"}
+                </button>
+              </span>, "findings")}
+            <div className={`grid grid-cols-[104px_minmax(0,1fr)] gap-x-4 gap-y-3 ${busy === "reading" ? "opacity-60" : ""}`}>
+              {findings.slice(0, 3).map((f, i) => (
+                <React.Fragment key={i}>
+                  <div className={`text-[15px] font-semibold tabular-nums text-right ${i === 0 && liftSig ? liftClass(primaryFocus?.lift) : ""}`}>{f.figure ?? ""}</div>
+                  <div className="text-[15px] leading-snug text-foreground/90 max-w-[76ch]">{f.claim}</div>
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Z(E) · PROOF — see it, don't read it ──────────────────────── */}
           {(() => {
             const pts = (statsEff?.trend ?? []).filter((t) => t.lift !== undefined);
             const bars = primaryStats && primaryFocus?.rate !== undefined && primaryBase?.rate !== undefined;
             if (!bars && pts.length < 3) return null;
             return (
-              <div className="grid md:grid-cols-2 gap-4">
+              <div id="proof" className="rounded-xl border border-border bg-surface p-4 grid gap-5 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
                 {bars && (
-                  <div>
-                    <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">{primaryStats!.label} — per-visitor rate</div>
+                  <div className="min-w-0">
+                    <div className={`${ZH} mb-1.5 truncate`} title={primaryStats!.label}>The comparison — {primaryStats!.label}</div>
                     <ComparisonBars
                       focusName={primaryFocus!.name}
                       focusRate={primaryFocus!.rate!}
@@ -995,16 +1090,50 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     />
                   </div>
                 )}
-                {pts.length >= 3 && (
-                  <div>
-                    <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">Primary lift by day <span className="font-normal normal-case tracking-normal tabular-nums">· {pts[0].date} → {pts[pts.length - 1].date}</span></div>
-                    <Sparkline trend={pts} significant={liftSig} />
-                  </div>
-                )}
+                <div className={`min-w-0 ${bars ? "md:border-l md:border-border/40 md:pl-5" : ""}`}>
+                  <div className={`${ZH} mb-1.5`}>Day by day {pts.length >= 3 && <span className="font-normal normal-case tracking-normal tabular-nums">· {pts[0].date} → {pts[pts.length - 1].date}</span>}</div>
+                  {pts.length >= 3 ? (
+                    <>
+                      <Sparkline trend={pts} significant={liftSig} />
+                      {reading?.trend && <p className="text-[14px] text-muted mt-1.5 leading-snug">{reading.trend}</p>}
+                    </>
+                  ) : (
+                    <p className="text-[14px] text-muted-2">Daily trend unlocks after 3 days of snapshots ({pts.length} so far).</p>
+                  )}
+                </div>
               </div>
             );
           })()}
 
+          {/* ── Z(F) · EXPLORATORY — never confirmation ───────────────────── */}
+          {verdict && verdict.discoveries.length > 0 && (
+            <details>
+              <summary className="cursor-pointer select-none border-b border-border pb-1.5">
+                <span className={ZH}>Exploratory signals ({verdict.discoveries.length})</span>
+                <span className="block text-[12.5px] text-muted-2 mt-0.5">not pre-registered — candidates for the next test, never confirmation</span>
+              </summary>
+              <div className="mt-2.5 space-y-2">
+                {verdict.discoveries.slice(0, 3).map((d) => (
+                  <div key={d.id} className="flex items-center gap-2 text-[14px]">
+                    <span className="min-w-0">{d.label} <span className={`tabular-nums ${liftClass(d.lift)} opacity-70`}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2 tabular-nums">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
+                    {d.promotedIdeaId
+                      ? <span className="ml-auto text-[12.5px] text-ok shrink-0">✓ in the backlog</span>
+                      : <button onClick={() => post(`promote:${d.id}`, { promote: d.id })} disabled={busy !== null}
+                          className="ml-auto h-7 px-2 rounded-md border border-border text-[12.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0 print:hidden">
+                          {busy === `promote:${d.id}` ? "Promoting…" : "Promote to backlog →"}
+                        </button>}
+                  </div>
+                ))}
+                {verdict.discoveries.length > 3 && <div className="text-[12.5px] text-muted-2">+{verdict.discoveries.length - 3} more in The numbers</div>}
+              </div>
+            </details>
+          )}
+
+          {/* ── Z(G) · ALL MEASURES — every measure, the user's own order ── */}
+          <div>
+            {zoneHeader("All measures",
+              <a href="#numbers" onClick={(e) => { e.preventDefault(); window.location.hash = "numbers"; }} className="ml-auto text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover print:hidden">Open the numbers →</a>,
+              "measures")}
           {/* ── the metric INDEX: every measure × every arm, named columns,
                  half-width — the decision metric pinned on top, everything else
                  in the user’s drag-saved order ── */}
@@ -1217,146 +1346,156 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </div>
             );
           })()}
-
-          <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-x-6 gap-y-4 border-t border-border/50 pt-3">
-            <div>{readingBlock("main")}</div>
-            <div className="space-y-3 lg:border-l lg:border-border/40 lg:pl-5">
-              {readingBlock("side")}
-              {planDrift.length > 0 && (
-                <div className="text-[12px] text-warn leading-snug">
-                  <Glyph kind="warn" /> The plan doesn&apos;t know {plural(planDrift.length, "reported event")} ({planDrift.slice(0, 3).join(", ")}{planDrift.length > 3 ? "…" : ""}) — <a href="?tab=analytics#measurement" className="text-accent hover:text-accent-hover font-medium print:hidden">re-plan to classify →</a>
-                </div>
-              )}
-          {verdict && verdict.guardrails.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap text-[12px]">
-                  {verdict.guardrails.map((gr) => (
-                    <span key={gr.compositeId} title={gr.detail} className={`px-2 py-0.5 rounded-md border text-[11.5px] font-medium ${gr.state === "pass" ? "border-ok/40 text-ok" : gr.state === "breach" ? "border-danger/50 text-danger" : "border-border text-muted-2"}`}>
-                      {gr.label}: {gr.state === "pass" ? "holds" : gr.state === "breach" ? "BREACH" : gr.state === "at_risk" ? "at risk" : "unknown"}
-                    </span>
+          </div>
+          {/* ── Z(H) · HOW THESE NUMBERS WERE COMPUTED — folded, prints ──── */}
+          <details id="method">
+            <summary className="cursor-pointer select-none border-b border-border pb-1.5">
+              <span className={ZH}>How these numbers were computed</span>
+            </summary>
+            <div className="mt-2.5 space-y-2 text-[14px] text-muted leading-snug">
+              {pr && <p><span className="font-semibold text-foreground">The hypothesis:</span> {pr.hypothesis} <span className="text-muted-2">Primary metric: {pr.primaryMetric}.</span></p>}
+              {verdict && (
+                <ul className="space-y-1">
+                  {verdict.gates.map((g) => (
+                    <li key={g.id} className="flex gap-2">
+                      <span className={`shrink-0 font-semibold ${g.pass === true ? "text-ok" : g.pass === false ? "text-danger" : "text-muted-2"}`}>{g.pass === true ? "PASS" : g.pass === false ? "FAIL" : "n/a"}</span>
+                      <span>{g.title} — {g.detail}</span>
+                    </li>
                   ))}
+                </ul>
+              )}
+              {statsEff?.flags.map((f) => <p key={f.code} className="text-muted-2">{f.text}</p>)}
+              {statsEff && <p className="text-muted-2">Validity: {statsEff.validity.detail} · expected false movers among the exploratory sweep: {statsEff.expectedFalsePositives.toFixed(1)}.</p>}
+            </div>
+          </details>
+        </div>
+
+        {/* ── Z(R) · ANALYST — one conversation: ask it, or add a measure ── */}
+        <aside className="print:hidden xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100dvh-6rem)] flex flex-col min-h-[420px]">
+          <div className="flex-1 min-h-0 rounded-xl border border-border bg-surface flex flex-col">
+            <div className="shrink-0 flex items-center gap-2 px-4 pt-3 pb-2 border-b border-border">
+              <span className={ZH}>Analyst</span>
+              {(notebook?.org.preferences.length || notebook?.proto.dataWishes.length) ? (
+                <button onClick={() => setShowMemory((m) => !m)} className="ml-auto text-[12.5px] text-muted-2 hover:text-foreground">
+                  Memory ({(notebook?.org.preferences.length ?? 0) + (notebook?.proto.dataWishes.length ?? 0)})
+                </button>
+              ) : null}
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
+              {entries.length === 0 && !busy && (
+                <div className="space-y-2">
+                  <p className="text-[14px] text-muted-2 leading-snug">Ask anything about this experiment, or describe a measure you want tracked.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      verdict?.verdict === "not_adjudicable" ? "What’s blocking the call?" : "Why isn’t this ready to call?",
+                      "What’s driving the difference?",
+                      "Is this safe to ship?",
+                    ].map((q) => (
+                      <button key={q} onClick={() => { setComposerMode("ask"); setComposerText(q); }}
+                        className="h-7 px-2.5 rounded-full border border-border text-[12.5px] text-muted hover:text-foreground hover:border-border-strong">{q}</button>
+                    ))}
+                  </div>
                 </div>
               )}
-              {statsEff?.flags.filter((f) => f.code === "SRM_FAIL" || f.code === "CANNIBALIZATION" || f.code === "NOVELTY_DECAY").map((f) => (
-                <p key={f.code} className={`text-[12px] ${f.code === "SRM_FAIL" ? "text-danger" : "text-warn"}`} leading-snug><Glyph kind="warn" /> {f.text}</p>
-              ))}
 
-              {verdict && verdict.discoveries.length > 0 && (
-                <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-1.5">
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">Discoveries — exploratory, never confirmation; each is a candidate NEXT experiment</div>
-                  {verdict.discoveries.slice(0, 3).map((d) => (
-                    <div key={d.id} className="flex items-center gap-2 text-[12.5px]">
-                      <span className="min-w-0">{d.label} <span className={`tabular-nums ${liftClass(d.lift)}`}>{pctS(d.lift)}</span> on {d.variationName} <span className="text-muted-2 tabular-nums">(q{d.q * 100 < 0.5 ? "<1" : `=${(d.q * 100).toFixed(0)}`}%)</span></span>
-                      {d.promotedIdeaId
-                        ? <span className="ml-auto text-[11.5px] text-ok shrink-0">✓ in the backlog</span>
-                        : <button onClick={() => post(`promote:${d.id}`, { promote: d.id })} disabled={busy !== null}
-                            className="ml-auto h-6 px-2 rounded-md border border-border text-[11.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
-                            {busy === `promote:${d.id}` ? "Promoting…" : "Promote to backlog →"}
-                          </button>}
+              {entries.length > 6 && !threadOpen && (
+                <button onClick={() => setThreadOpen(true)} className="text-[12.5px] text-muted-2 hover:text-foreground">Show earlier ({entries.length - 6})</button>
+              )}
+
+              {shownEntries.map((e, i) => {
+                const idx = threadOpen ? i : entries.length - shownEntries.length + i;
+                if (e.kind === "user-question" || e.kind === "answer") {
+                  return (
+                    <div key={`${e.at}:${idx}`} className="flex justify-end">
+                      <p className="max-w-[85%] rounded-lg bg-background px-3 py-1.5 text-[14px] font-medium leading-snug">{e.text}</p>
                     </div>
-                  ))}
-                  {verdict.discoveries.length > 3 && (
-                    <div className="text-[11.5px] text-muted-2">+{verdict.discoveries.length - 3} more in The numbers</div>
+                  );
+                }
+                if (e.kind === "analyst-answer") {
+                  // The live structured answer replaces the flattened stored
+                  // copy for the most recent turn — same content, real bullets.
+                  if (idx === lastAnswerIdx && answer && typeof answer !== "string") return <div key={`${e.at}:${idx}`}>{answerBlock(answer)}</div>;
+                  return <p key={`${e.at}:${idx}`} className="text-[14px] leading-snug text-foreground/90">{e.text}</p>;
+                }
+                if (e.kind === "ai-question") {
+                  return <p key={`${e.at}:${idx}`} className="text-[14px] leading-snug text-muted"><span className={ZH}>asked you</span><br />{e.text}</p>;
+                }
+                return <p key={`${e.at}:${idx}`} className="text-[14px] leading-snug text-ok">{e.text}</p>;
+              })}
+
+              {busy === "ask" && <p className="text-[14px] text-muted-2">Reading the numbers…</p>}
+              {busy === "define" && <p className="text-[14px] text-muted-2">Working out whether that measure is computable…</p>}
+              {customMsg && <p className="text-[14px] leading-snug text-ok">{customMsg}</p>}
+
+              {/* the analyst's own question — answering it tunes future readings */}
+              {reading?.question && (
+                <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-1.5">
+                  <div className={ZH}>The analyst wants to know</div>
+                  <p className="text-[14px] leading-snug">{reading.question}</p>
+                  {composerMode === "reply" ? (
+                    <label className="flex items-center gap-1.5 text-[12.5px] text-muted-2">
+                      <input type="checkbox" checked={replyDurable} onChange={(e) => setReplyDurable(e.target.checked)} />
+                      apply to all experiments
+                    </label>
+                  ) : (
+                    <button onClick={() => setComposerMode("reply")} className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover">Answer this →</button>
                   )}
                 </div>
               )}
 
-            </div>
-          </div>
-
-          {/* the analyst's ask box — every question becomes analyst memory */}
-          <div className="space-y-2 border-t border-border/60 pt-2.5 print:hidden">
-            <div className="flex items-center gap-2">
-              <input value={question} onChange={(e) => setQuestion(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && question.trim()) post("ask", { ask: question }); }}
-                placeholder="Ask the results anything — the analyst remembers what you care about"
-                className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-[13.5px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-              <button onClick={() => question.trim() && post("ask", { ask: question })} disabled={busy !== null || !question.trim()}
-                className="h-9 px-3.5 rounded-lg bg-accent text-accent-fg text-[13.5px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
-                {busy === "ask" ? "Thinking…" : "Ask"}
-              </button>
-            </div>
-            {answer && (typeof answer === "string" ? (
-              <div className="text-[13.5px] leading-relaxed whitespace-pre-wrap text-foreground/90">{answer}</div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-[14px] font-medium text-foreground">{answer.headline}</p>
-                {answer.bullets.length > 0 && (
-                  <ul className="space-y-1">
-                    {answer.bullets.map((b) => (
-                      <li key={b} className="flex gap-2 text-[13.5px] leading-snug text-foreground/90">
-                        <span className="text-accent shrink-0">•</span>
-                        <span>{b}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {answer.caveat && <p className="text-[12.5px] text-warn">{answer.caveat}</p>}
-                {answer.nextStep && <p className="text-[13px]"><span className="font-semibold">Next:</span> {answer.nextStep}</p>}
-              </div>
-            ))}
-          </div>
-
-          {/* workflow, not readout: tuning folds away and never prints */}
-          {(Boolean(reading?.questionsForYou.length) || Boolean(notebook?.org.preferences.length) || Boolean(notebook?.proto.dataWishes.length)) && (
-            <details className="print:hidden">
-              <summary className="text-[11.5px] text-muted-2 hover:text-foreground cursor-pointer select-none">Tune the analyst</summary>
-              <div className="mt-2 space-y-2.5">
-          {Boolean(reading?.questionsForYou.length) && reading && (
-            <div className="rounded-lg border border-border bg-background/60 px-3 py-2 space-y-2 print:hidden">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-muted-2">The analyst wants to know what you care about</div>
-              {reading.questionsForYou.map((q) => (
-                <div key={q} className="space-y-1">
-                  <div className="text-[13px] text-muted">{q}</div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <input value={tuneA[q] ?? ""} onChange={(e) => setTuneA((a) => ({ ...a, [q]: e.target.value }))}
-                      placeholder="Your answer…"
-                      className="flex-1 min-w-40 h-8 px-2.5 rounded-lg border border-border bg-background text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-                    <label className="flex items-center gap-1 text-[11.5px] text-muted-2 shrink-0">
-                      <input type="checkbox" checked={tuneDurable[q] ?? false} onChange={(e) => setTuneDurable((d) => ({ ...d, [q]: e.target.checked }))} />
-                      all experiments
-                    </label>
-                    <button onClick={() => (tuneA[q] ?? "").trim() && post(`tune:${q}`, { tune: { question: q, answer: tuneA[q], durable: tuneDurable[q] ?? false } })}
-                      disabled={busy !== null || !(tuneA[q] ?? "").trim()}
-                      className="h-8 px-2.5 rounded-lg border border-border text-[12.5px] font-medium text-muted hover:text-foreground hover:border-border-strong disabled:opacity-40 shrink-0">
-                      {busy === `tune:${q}` ? "Saving…" : "Tell the analyst"}
-                    </button>
-                  </div>
+              {showMemory && (
+                <div className="border-t border-border/60 pt-2 flex flex-wrap gap-1.5 text-[12.5px] text-muted-2">
+                  {notebook?.org.preferences.map((p) => (
+                    <span key={p} className="border border-border rounded px-1.5 py-0.5 inline-flex items-center gap-1 max-w-full">
+                      <span className="truncate" title={p}>{p}</span>
+                      <button onClick={() => post("forget", { forgetPreference: p })} disabled={busy !== null} title="Forget this preference" className="hover:text-danger shrink-0">×</button>
+                    </span>
+                  ))}
+                  {notebook?.proto.dataWishes.map((w) => (
+                    <span key={w} className="border border-warn/40 text-warn rounded px-1.5 py-0.5 max-w-full truncate" title={`Wanted, but not measurable with today's data: ${w}`}>wish: {w}</span>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-          {(Boolean(notebook?.org.preferences.length) || Boolean(notebook?.proto.dataWishes.length)) && (
-            <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-muted-2 border-t border-border/60 pt-2 print:hidden">
-              <span className="font-bold uppercase tracking-wide">Analyst memory</span>
-              {notebook!.org.preferences.map((p) => (
-                <span key={p} className="border border-border rounded px-1.5 py-0.5 inline-flex items-center gap-1">
-                  {p}
-                  <button onClick={() => post("forget", { forgetPreference: p })} disabled={busy !== null} title="Forget this preference" className="hover:text-danger">×</button>
-                </span>
-              ))}
-              {notebook!.proto.dataWishes.map((w) => (
-                <span key={w} className="border border-warn/40 text-warn rounded px-1.5 py-0.5" title="Wanted, but not measurable with today's data — an instrumentation ask">wish: {w}</span>
-              ))}
-            </div>
-          )}
+
+            {/* composer — the MODE CHIP routes the action, never the text. A
+                question can't silently create a measure. */}
+            <div className="shrink-0 border-t border-border p-3 space-y-2">
+              <div className="flex items-center gap-1.5">
+                {([["ask", "Ask"], ["measure", "Track a measure"]] as const).map(([m, label]) => (
+                  <button key={m} onClick={() => setComposerMode(m)}
+                    className={`h-6 px-2 rounded-full border text-[12.5px] font-bold uppercase tracking-[0.08em] ${composerMode === m ? "border-accent text-accent" : "border-border text-muted-2 hover:text-foreground"}`}>
+                    {label}
+                  </button>
+                ))}
+                {composerMode === "reply" && (
+                  <span className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent">Answering the analyst</span>
+                )}
               </div>
-            </details>
-          )}
-
-        </div>
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={composerText}
+                  onChange={(e) => setComposerText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendComposer(); } }}
+                  rows={2}
+                  placeholder={composerMode === "measure"
+                    ? "Describe the measure — e.g. “all navigation engagement: next room + previous room + destination tabs”"
+                    : composerMode === "reply" ? "Your answer…" : "Ask about these results…"}
+                  className="flex-1 min-w-0 max-h-24 px-2.5 py-1.5 rounded-lg border border-border bg-background text-[14px] leading-snug placeholder:text-muted-2 focus:border-accent focus:outline-none resize-none"
+                />
+                <button onClick={sendComposer} disabled={busy !== null || !composerText.trim()}
+                  className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
+                  {busy ? "…" : composerMode === "measure" ? "Add" : "Send"}
+                </button>
+              </div>
+              {composerMode === "measure" && (
+                <p className="text-[12.5px] text-muted-2 leading-snug">Console-computed from the events already reporting — badged as not an Optimizely metric; an infeasible ask comes back with what’s missing, never a silent approximation.</p>
+              )}
+            </div>
+          </div>
+        </aside>
       </div>
-
-      {/* the no-mapping invitation is a readout-level CTA — without it nothing adjudicates */}
-      {map?.composites.length ? null : (
-        <div className="rounded-lg border border-border bg-surface px-3.5 py-2.5 flex items-center gap-3">
-          <span className="text-[13px] text-muted-2 min-w-0">Your decision metric probably spans several raw events. Let Claude propose the mapping — or better, author the full plan in the Measurement section above (pre-registered when done before start).</span>
-          <button onClick={() => post("propose", { propose: true })} disabled={busy !== null}
-            className="ml-auto h-8 px-3 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
-            {busy === "propose" ? "Reading the numbers…" : "Map my decision metric"}
-          </button>
-        </div>
-      )}
-
     </div>
   );
 }

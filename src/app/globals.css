@@ -90,6 +90,9 @@ body {
    leave near-white text on white paper). */
 @media print {
   body { background: #fff !important; }
+  /* Folds are a screen affordance — on paper the report is complete. */
+  details > summary { list-style: none; }
+  details > *:not(summary) { display: block !important; }
   body * { visibility: hidden; }
   .print-report, .print-report * { visibility: visible; }
   .print-report {

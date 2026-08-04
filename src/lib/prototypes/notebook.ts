@@ -44,18 +44,16 @@ export interface ProtoNotebook {
 }
 
 export interface Reading {
-  /** The TLDR — one or two sentences a leader reads first. */
-  summary?: string;
-  /** "What the data shows" — BULLETS, each one fact leading with its number. */
-  keyPoints?: string[];
-  /** Legacy paragraph format. */
-  dataRead?: string[];
-  /** Legacy cached readings (pre-sectioned format). */
-  story?: string[];
-  trendLine?: string;
-  watchItems: string[];
-  questionsForYou: string[];
-  nextStep: string;
+  /** EXACTLY three rows — a cited figure plus a digit-free claim. The whole
+   *  narrative budget of the readout. Prose is structurally impossible. */
+  findings: { figure?: string; claim: string }[];
+  /** ≤70-char glosses keyed to an attention row the CODE authored. The
+   *  analyst may explain a risk; it may never invent one. */
+  riskNotes: { code: string; note: string }[];
+  /** One caption under the day-by-day picture it describes. */
+  trend?: string;
+  /** At most one preference question, answered in the analyst thread. */
+  question?: string;
   generatedAt: string;
   /** What the reading was generated FROM — staleness is a key comparison. */
   basisKey: string;
@@ -170,12 +168,12 @@ export function readingBasisKey(parts: {
 }): string {
   // READING_FORMAT bumps retire every cached reading on deploy — a format
   // change must never leave old walls of text rendering until data moves.
-  return ["fmt3", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
+  return ["fmt4", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
 }
 
 export async function getReading(prototypeKey: string): Promise<Reading | null> {
   const r = await readJson<Reading>(readingKey(prototypeKey));
-  return r && Array.isArray(r.story) ? r : null;
+  return r && Array.isArray(r.findings) ? r : null;
 }
 
 /** CAS save — an older generation racing a newer one must never win the flag. */
