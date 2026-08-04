@@ -119,64 +119,64 @@ function Glyph({ kind }: { kind: "warn" | "check" }) {
   );
 }
 
-function Sparkline({ trend }: { trend: TrendPoint[] }) {
+function Sparkline({ trend, significant }: { trend: TrendPoint[]; significant: boolean }) {
   const pts = trend.filter((t) => t.lift !== undefined);
-  if (pts.length < 2) return null;
-  const W = 240;
+  // A two-point "trend" is a coin flip drawn as a line — don't chart it.
+  if (pts.length < 3) return null;
+  const W = 600;
   const H = 56;
-  const PAD_R = 38; // reserved for the endpoint label
   const lifts = pts.map((p) => p.lift!);
   const lo = Math.min(...lifts, 0);
   const hi = Math.max(...lifts, 0);
   const span = hi - lo || 1;
-  const x = (i: number) => (i / (pts.length - 1)) * (W - 12 - PAD_R) + 6;
-  const y = (v: number) => H - 6 - ((v - lo) / span) * (H - 12);
-  const zeroY = y(0);
+  const xPct = (i: number) => (i / (pts.length - 1)) * 88 + 2; // % of width; right 10% reserved for the label
+  const yPct = (v: number) => 10 + (1 - (v - lo) / span) * 80;  // % of height
+  const X = (i: number) => (xPct(i) / 100) * W;
+  const Y = (v: number) => (yPct(v) / 100) * H;
+  const zeroY = Y(0);
   const last = lifts[lifts.length - 1];
-  const lastSig = pts.length >= 2; // display tone comes from the caller-computed cell; endpoint uses lift sign only when meaningful
-  const endTone = last >= 0 ? "text-ok" : "text-danger";
-  // Honest ending: a partial (today's) final point must not read as a cliff.
+  const tone = !significant ? "text-muted-2" : last >= 0 ? "text-ok" : "text-danger";
   const today = new Date().toISOString().slice(0, 10);
   const partial = pts[pts.length - 1].date === today;
   const lineTo = partial ? pts.length - 2 : pts.length - 1;
-  const label = `${last > 0 ? "+" : ""}${(last * 100).toFixed(1)}%`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-14" role="img" aria-label="Primary lift by day">
-      {/* zero reference: recessive solid hairline */}
-      <line x1={6} x2={W - PAD_R} y1={zeroY} y2={zeroY} stroke="currentColor" strokeOpacity={0.14} strokeWidth={1} />
-      {/* history is NEUTRAL — never repainted by the current sign */}
-      <polygon
-        className="text-muted-2"
-        fill="currentColor"
-        fillOpacity={0.08}
-        points={`${x(0)},${zeroY} ${pts.map((p, i) => `${x(i)},${y(p.lift!)}`).join(" ")} ${x(pts.length - 1)},${zeroY}`}
-      />
-      <polyline
-        fill="none"
-        stroke="currentColor"
-        className="text-muted-2"
-        strokeWidth={2}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        points={pts.slice(0, lineTo + 1).map((p, i) => `${x(i)},${y(p.lift!)}`).join(" ")}
-      />
-      {partial && (
-        <polyline
-          fill="none"
-          stroke="currentColor"
+    <div className="relative w-full h-14">
+      {/* geometry only in the stretched SVG — text and dots would distort */}
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="absolute inset-0 w-full h-full" aria-hidden>
+        <line x1={X(0)} x2={(0.9) * W} y1={zeroY} y2={zeroY} stroke="currentColor" strokeOpacity={0.14} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        {/* wash fills to the chart FLOOR (a sliver under a flat line), never
+            to zero — an all-negative day must not paint the whole panel */}
+        <polygon
           className="text-muted-2"
-          strokeWidth={2}
-          strokeOpacity={0.5}
-          strokeDasharray="2 3"
-          strokeLinecap="round"
-          points={pts.slice(lineTo).map((p, i) => `${x(lineTo + i)},${y(p.lift!)}`).join(" ")}
+          fill="currentColor"
+          fillOpacity={0.07}
+          points={`${X(0)},${H - 2} ${pts.map((p, i) => `${X(i)},${Y(p.lift!)}`).join(" ")} ${X(pts.length - 1)},${H - 2}`}
         />
-      )}
-      {/* endpoint: ≥8px marker, 2px surface ring, direct-labeled */}
-      <circle cx={x(pts.length - 1)} cy={y(last)} r={6} className="text-surface" fill="currentColor" />
-      <circle cx={x(pts.length - 1)} cy={y(last)} r={4} className={endTone} fill="currentColor" fillOpacity={partial ? 0.5 : 1} />
-      <text x={x(pts.length - 1) + 9} y={y(last) + 4} className={`${endTone} text-[11px] font-semibold tabular-nums`} fill="currentColor">{lastSig ? label : ""}</text>
-    </svg>
+        <polyline
+          fill="none" stroke="currentColor" className="text-muted-2"
+          strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke"
+          points={pts.slice(0, lineTo + 1).map((p, i) => `${X(i)},${Y(p.lift!)}`).join(" ")}
+        />
+        {partial && (
+          <polyline
+            fill="none" stroke="currentColor" className="text-muted-2"
+            strokeWidth={2} strokeOpacity={0.5} strokeDasharray="3 4" strokeLinecap="round" vectorEffect="non-scaling-stroke"
+            points={pts.slice(lineTo).map((p, i) => `${X(lineTo + i)},${Y(p.lift!)}`).join(" ")}
+          />
+        )}
+      </svg>
+      {/* endpoint dot + label live in HTML — pixel-true at any width */}
+      <span
+        className={`absolute w-2.5 h-2.5 rounded-full ring-2 ring-[var(--surface)] ${tone} ${partial ? "opacity-60" : ""}`}
+        style={{ left: `calc(${xPct(pts.length - 1)}% - 5px)`, top: `calc(${yPct(last)}% - 5px)`, backgroundColor: "currentColor" }}
+      />
+      <span
+        className={`absolute text-[11px] font-semibold tabular-nums ${tone}`}
+        style={{ left: `calc(${xPct(pts.length - 1)}% + 8px)`, top: `calc(${yPct(last)}% - 8px)` }}
+      >
+        {`${last > 0 ? "+" : ""}${(last * 100).toFixed(1)}%`}
+      </span>
+    </div>
   );
 }
 
@@ -694,7 +694,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           {(() => {
             const pts = (statsEff?.trend ?? []).filter((t) => t.lift !== undefined);
             const bars = primaryStats && primaryFocus?.rate !== undefined && primaryBase?.rate !== undefined;
-            if (!bars && pts.length < 2) return null;
+            if (!bars && pts.length < 3) return null;
             return (
               <div className="grid md:grid-cols-2 gap-4">
                 {bars && (
@@ -714,13 +714,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     />
                   </div>
                 )}
-                {pts.length >= 2 && (
+                {pts.length >= 3 && (
                   <div>
-                    <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">Primary lift by day</div>
-                    <div className="flex items-center gap-3">
-                      <Sparkline trend={pts} />
-                      <span className="text-[11px] text-muted-2">{pts[0].date} → {pts[pts.length - 1].date}</span>
-                    </div>
+                    <div className="text-[10.5px] font-bold uppercase tracking-wide text-muted-2 mb-1.5">Primary lift by day <span className="font-normal normal-case tracking-normal tabular-nums">· {pts[0].date} → {pts[pts.length - 1].date}</span></div>
+                    <Sparkline trend={pts} significant={liftSig} />
                   </div>
                 )}
               </div>
