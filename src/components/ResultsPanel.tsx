@@ -154,9 +154,15 @@ function MetricTrend({ days, metricName, focusId, baseId, focusName, baseName }:
 
 /** One glyph set — inline SVG, currentColor. The ⚠ character risks
  *  rendering as a color emoji outside the palette, so it's banned here. */
-function Glyph({ kind }: { kind: "warn" | "check" }) {
+function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" }) {
   if (kind === "check") {
     return <svg viewBox="0 0 12 12" className="inline-block w-3 h-3 -mt-0.5 mr-0.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 6.5 5 9.5 10 3" /></svg>;
+  }
+  if (kind === "pencil") {
+    return <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 1.5 10.5 3.5 4 10 1.5 10.5 2 8 8.5 1.5Z" /></svg>;
+  }
+  if (kind === "trash") {
+    return <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"><path d="M1.5 3h9M4.5 3V1.5h3V3M2.5 3l.7 7.5h5.6L9.5 3M5 5v3.5M7 5v3.5" /></svg>;
   }
   return (
     <svg viewBox="0 0 12 12" className="inline-block w-3 h-3 -mt-0.5 mr-0.5" fill="currentColor">
@@ -982,6 +988,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         ))}
                         <th className="font-medium py-1 pl-2 text-right">Δ vs control</th>
                         <th className="font-medium py-1 pl-2 text-right w-20"></th>
+                        <th className="font-medium py-1 pl-2 w-20 print:hidden"></th>
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">
@@ -1007,34 +1014,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                               <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
                                 {c.source === "custom" ? "console" : c.role}
                               </span>
-                              {c.role !== "primary" && !c.expectedOneArm && renamingId !== c.id && (
-                                <span className="ml-1.5 print:hidden">
-                                  {deleteArmId === `primary:${c.id}` ? (
-                                    <span className="text-[10.5px]">
-                                      <button onClick={() => { setDeleteArmId(null); post("setPrimary", { setPrimary: c.id }); }} className="text-accent font-semibold">make primary?</button>
-                                      <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2 hover:text-foreground">cancel</button>
-                                    </span>
-                                  ) : (
-                                    <button onClick={() => setDeleteArmId(`primary:${c.id}`)}
-                                      title="Make this the console's decision metric — the verdict adjudicates the primary. Changing it after traffic started is recorded and disclosed."
-                                      className="text-[10.5px] text-muted-2 hover:text-accent underline underline-offset-2">make primary</button>
-                                  )}
-                                </span>
-                              )}
-                              {c.source === "custom" && renamingId !== c.id && (
-                                <span className="ml-1.5 print:hidden whitespace-nowrap">
-                                  <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }}
-                                    title="Rename this measure" className="text-[10.5px] text-muted-2 hover:text-foreground underline underline-offset-2">rename</button>
-                                  {deleteArmId === c.id ? (
-                                    <span className="ml-1.5 text-[10.5px]">
-                                      <button onClick={() => { setDeleteArmId(null); post("remove", { removeMetric: c.id }); }} className="text-danger font-semibold">delete?</button>
-                                      <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2 hover:text-foreground">cancel</button>
-                                    </span>
-                                  ) : (
-                                    <button onClick={() => setDeleteArmId(c.id)} title="Delete this measure" className="ml-1.5 text-[10.5px] text-muted-2 hover:text-danger underline underline-offset-2">delete</button>
-                                  )}
-                                </span>
-                              )}
                             </td>
                             {ordered.map((v) => {
                               const r = rowsC.find((x) => x.variationId === v.variationId);
@@ -1042,6 +1021,37 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                             })}
                             <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</td>
                             <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</td>
+                            <td className="py-1.5 pl-2 print:hidden">
+                              <span className="flex items-center justify-end gap-1.5">
+                                {deleteArmId === `primary:${c.id}` ? (
+                                  <span className="text-[10px] whitespace-nowrap">
+                                    <button onClick={() => { setDeleteArmId(null); post("setPrimary", { setPrimary: c.id }); }} className="text-accent font-semibold">primary?</button>
+                                    <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2">✕</button>
+                                  </span>
+                                ) : deleteArmId === c.id ? (
+                                  <span className="text-[10px] whitespace-nowrap">
+                                    <button onClick={() => { setDeleteArmId(null); post("remove", { removeMetric: c.id }); }} className="text-danger font-semibold">delete?</button>
+                                    <button onClick={() => setDeleteArmId(null)} className="ml-1 text-muted-2">✕</button>
+                                  </span>
+                                ) : (
+                                  <>
+                                    {/* ONE primary — radio semantics: filled = current, click another to move it */}
+                                    <button
+                                      onClick={() => { if (c.role !== "primary" && !c.expectedOneArm) setDeleteArmId(`primary:${c.id}`); }}
+                                      disabled={c.role === "primary" || Boolean(c.expectedOneArm)}
+                                      title={c.role === "primary" ? "The console's decision metric — the verdict adjudicates this" : c.expectedOneArm ? "Fires in only one arm — can't be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
+                                      className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${c.role === "primary" ? "border-ok bg-ok" : c.expectedOneArm ? "border-border opacity-40 cursor-not-allowed" : "border-border-strong hover:border-accent"}`}
+                                    />
+                                    {c.source === "custom" && (
+                                      <>
+                                        <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }} title="Rename" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
+                                        <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </span>
+                            </td>
                           </tr>
                         );
                       })}
@@ -1061,6 +1071,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                             })}
                             <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
                             <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
+                            <td className="py-1.5 pl-2 print:hidden" />
                           </tr>
                         );
                       })}
