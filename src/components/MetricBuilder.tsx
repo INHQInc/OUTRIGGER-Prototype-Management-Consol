@@ -106,15 +106,15 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
   const canSave = Boolean(label.trim()) && Boolean(preview?.length) && !busy;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 p-4 overflow-y-auto print:hidden" onClick={onClose}>
-      <div className="w-full max-w-3xl my-8 rounded-xl border border-border bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-3.5 border-b border-border flex items-center gap-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 print:hidden" onClick={onClose}>
+      <div className="w-full max-w-[min(1180px,95vw)] max-h-[92vh] rounded-xl border border-border bg-surface shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 px-5 py-3.5 border-b border-border flex items-center gap-3">
           <span className="text-[15px] font-bold">{editing ? "Edit measure" : "Build a measure"}</span>
           <span className="text-[11px] font-bold uppercase tracking-[0.07em] border border-accent/40 text-accent rounded px-1.5">console</span>
           <span className="ml-auto text-[12.5px] text-muted-2">Computed by the console from Optimizely events &mdash; not an Optimizely metric</span>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4 flex flex-col">
           {/* name + polarity */}
           <div className="flex gap-3 flex-wrap items-end">
             <label className="flex-1 min-w-60">
@@ -159,20 +159,20 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
           </div>
 
           {/* the events */}
-          <div>
+          <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex items-center gap-2 mb-1.5">
               <span className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-muted-2">Events</span>
               <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter…"
                 className="ml-auto h-7 px-2.5 w-48 rounded-lg border border-border bg-background text-[13px] focus:border-accent focus:outline-none" />
             </div>
-            <div className="border border-border rounded-lg overflow-hidden max-h-72 overflow-y-auto">
-              <table className="w-full text-[13px]">
+            <div className="border border-border rounded-lg flex-1 min-h-[220px] overflow-y-auto">
+              <table className="w-full text-[13.5px]">
                 <thead className="sticky top-0 bg-surface-2 border-b border-border">
                   <tr className="text-[11.5px] uppercase tracking-[0.06em] text-muted-2 text-left">
                     <th className="font-semibold py-1.5 px-3">Event</th>
                     {arms.map((a) => (
-                      <th key={a.variationId} className="font-semibold py-1.5 px-2 text-right max-w-32">
-                        <span className="block truncate" title={a.name}>{a.name}</span>
+                      <th key={a.variationId} className="font-semibold py-2 px-3 text-right w-44">
+                        <span className="block leading-tight" title={a.name}>{a.name}</span>
                         {a.variationId === baselineId && <span className="font-normal normal-case">(control)</span>}
                       </th>
                     ))}
@@ -183,7 +183,7 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
                     const on = perArm ? arms.some((a) => (byArm[a.variationId] ?? []).includes(r.name)) : shared.includes(r.name);
                     return (
                       <tr key={r.name} className={`border-b border-border/40 last:border-0 ${on ? "bg-accent/5" : ""}`}>
-                        <td className="py-1.5 px-3">
+                        <td className="py-2 px-3">
                           {perArm ? (
                             <span className="font-medium">{r.name}</span>
                           ) : (
@@ -197,7 +197,7 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
                         {arms.map((a) => {
                           const cell = r.perArm[a.variationId];
                           return (
-                            <td key={a.variationId} className="py-1.5 px-2 text-right">
+                            <td key={a.variationId} className="py-2 px-3 text-right">
                               {perArm ? (
                                 <label className="inline-flex items-center gap-1.5 cursor-pointer">
                                   <span className="text-muted-2">{rate(cell?.rate)}</span>
@@ -262,7 +262,7 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t border-border flex items-center gap-2">
+        <div className="shrink-0 px-5 py-3 border-t border-border flex items-center gap-2">
           <span className="text-[12.5px] text-muted-2">
             {perArm ? `${arms.filter((a) => (byArm[a.variationId] ?? []).length).length} of ${arms.length} versions have events` : `${shared.length} event${shared.length === 1 ? "" : "s"} selected`}
           </span>
