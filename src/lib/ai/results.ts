@@ -387,69 +387,88 @@ const STAT_NOTATION = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bF
 
 const readingTool = {
   name: "give_reading",
-  description: "Three cited findings over the computed facts, plus optional glosses on risks the console already found. Never prose.",
+  description: "The story a leader reads: one headline, one short paragraph, then the numbers as beats. The words carry no numbers; a beat names the measure it is about.",
   input_schema: {
     type: "object" as const,
     properties: {
-      findings: {
-        type: "array" as const, minItems: 3, maxItems: 3,
+      headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
+      lede: { type: "string" as const, description: "<=360 chars, NO DIGITS, two or three sentences of plain business English. What happened, what the trade-off is, and what has not answered yet. No statistics vocabulary." },
+      beats: {
+        type: "array" as const, minItems: 3, maxItems: 4,
         items: {
           type: "object" as const,
           properties: {
-            figure: { type: "string" as const, description: "the NAME of the number this claim is about, from the list given for this row (or \"none\"). Never type a number — the page prints the live value." },
-            claim: { type: "string" as const, description: "≤86 chars, MUST NOT CONTAIN ANY DIGIT — what that number means in plain business words. e.g. 'the variant gets far more guests into the room detail view'" },
+            measure: { type: "string" as const, description: "the NAME of a measure from the list given - never type a number, the page prints the live value" },
+            label: { type: "string" as const, description: "<=34 chars, NO DIGITS - what that measure is, in plain words, e.g. 'room-detail engagement'" },
           },
-          required: ["figure", "claim"],
+          required: ["measure", "label"],
         },
-        description: "EXACTLY 3, in this order: (1) the effect, (2) how certain it is, (3) scale or time. One line each.",
+        description: "3-4 numbers worth putting in front of a leader. Lead with the decision measure.",
       },
       riskNotes: {
         type: "array" as const, maxItems: 3,
         items: {
           type: "object" as const,
           properties: {
-            code: { type: "string" as const, description: "an id from the RISKS ALREADY FOUND list — you may only gloss a risk the console found" },
-            note: { type: "string" as const, description: "≤70 chars, plain words, no bare statistics" },
+            code: { type: "string" as const, description: "an id from the RISKS ALREADY FOUND list" },
+            note: { type: "string" as const, description: "<=70 chars, plain words, no bare statistics" },
           },
           required: ["code", "note"],
         },
       },
-      trend: { type: "string" as const, description: "≤64 chars, a caption for the day-by-day picture (e.g. 'the gap has held steady all week')" },
-      question: { type: "string" as const, description: "≤80 chars, at most one PREFERENCE question for the team — never a statistics question" },
-      dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data (segments, device mix) — recorded honestly" },
+      trend: { type: "string" as const, description: "<=64 chars, a caption for the day-by-day picture" },
+      question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
+      dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data, recorded honestly" },
     },
-    required: ["findings"],
+    required: ["headline", "lede", "beats"],
   },
 };
 
-/** Deterministic findings — the zone is never empty, never a spinner, never
- *  model-dependent. Day 1 with no reading at all still renders three rows. */
-export function templateFindings(opts: {
+/** The deterministic story — day one, a failed call, or a model that broke
+ *  the format all land here. The zone is never empty and never a spinner. */
+export function templateStory(opts: {
   results: ExperimentResults; stats: StatsReport | null; verdict: VerdictRecord | null;
-}): { figureKey?: string; claim: string }[] {
-  const { stats } = opts;
+}): { headline: string; lede: string; beats: { measureKey: string; label: string }[] } {
+  const { stats, verdict } = opts;
   const primary = stats?.metrics.find((m) => m.key === stats.primaryKey);
   const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
-  const sig = focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0;
+  const sig = Boolean(focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0);
+  const lift = focus?.lift;
 
-  const effect: { figureKey?: string; claim: string } =
-    opts.verdict?.verdict === "not_adjudicable"
-      ? { claim: "the decision measure isn’t bound to a confirmed event yet, so there’s no result to read" }
-      : focus?.lift === undefined
-        ? { claim: "the decision measure hasn’t produced a comparable number yet" }
-        : { figureKey: "primary_lift", claim: focus.lift > 0 ? "the variant is ahead of the control on the decision measure" : focus.lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" };
+  const headline =
+    verdict?.verdict === "not_adjudicable" ? "The traffic is real; the definition is not settled"
+    : lift === undefined ? "Nothing comparable has come through yet"
+    : !sig ? "Nothing separates the two versions yet"
+    : lift > 0 ? "The variant is ahead on the measure this test was written to prove"
+    : "The variant is behind on the measure this test was written to prove";
 
-  const certainty: { figureKey?: string; claim: string } =
-    focus?.liftCi
-      ? { figureKey: "primary_ci_low", claim: sig ? "the likely range stays on one side of no-change, so the direction is real" : "the likely range still includes no-change, so the direction isn’t settled" }
-      : { claim: "there isn’t enough data yet to say how certain this direction is" };
+  const lede =
+    verdict?.verdict === "not_adjudicable"
+      ? "Guests are moving through both versions and the events are reporting, but the console has no confirmed definition of what counts as success here, so nothing below is a result yet. Confirm the measurement plan and everything already collected still counts."
+      : lift === undefined
+        ? "The decision measure has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
+        : !sig
+          ? "Both versions are still trading places on the decision measure. The gap is small enough that ordinary variation could produce it either way, so there is nothing here to ship or kill on yet."
+          : lift > 0
+            ? "The variant is ahead of the control on the decision measure by a margin wider than luck explains. Read it next to the guardrails and the downstream measures before treating it as money in the bank."
+            : "The variant is behind the control on the decision measure by a margin wider than luck explains. The idea as built is costing something rather than adding it.";
 
-  const scale: { figureKey?: string; claim: string } =
-    dayNumber(stats) !== undefined
-      ? { figureKey: "day", claim: "guests have been through both versions since the run began" }
-      : { figureKey: "visitors_total", claim: "guests have been through the experiment so far" };
+  // Beats: the decision measure first, then the biggest movers that have
+  // actually earned their number, then anything else reporting.
+  const others = (stats?.metrics ?? []).filter((m) => m.key !== stats?.primaryKey);
+  const scored = others.map((m) => {
+    const c = m.cells.find((x) => x.variationId === stats?.focusVariationId);
+    const s2 = Boolean(c?.liftCi && c.liftCi.lo * c.liftCi.hi > 0);
+    return { m, mag: Math.abs(c?.lift ?? 0), sig: s2 };
+  }).sort((a, b) => Number(b.sig) - Number(a.sig) || b.mag - a.mag);
 
-  return [effect, certainty, scale];
+  const beats: { measureKey: string; label: string }[] = [];
+  if (primary) beats.push({ measureKey: primary.key, label: primary.label.slice(0, 34) });
+  for (const s3 of scored) {
+    if (beats.length >= 4) break;
+    beats.push({ measureKey: s3.m.key, label: s3.m.label.slice(0, 34) });
+  }
+  return { headline, lede, beats };
 }
 
 /** The standing narrative — exec voice, three cited rows, cache-friendly. */
@@ -469,22 +488,28 @@ export async function generateReading(opts: {
   requireKey();
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
-  // What each nameable figure is worth right now — shown to the analyst so
-  // it chooses the right one, never copied into the reading.
-  const slotMenu = FIGURE_SLOTS.map((keys, i) => {
-    const label = ["ROW 1 (the effect)", "ROW 2 (how certain)", "ROW 3 (scale or time)"][i];
-    const opts2 = keys.map((k) => (k === "none" ? "none" : `${k} (currently ${figureValue(k, { results: opts.results, stats: opts.stats }) ?? "unavailable"})`));
-    return `${label}: ${opts2.join(" · ")}`;
-  }).join("\n");
+  // The measures a beat may name, with what each reads right now. Shown so
+  // the analyst picks the right one — never copied into the words.
+  const measureKeys = (opts.stats?.metrics ?? []).map((m) => m.key);
+  const measureMenu = (opts.stats?.metrics ?? []).map((m) => {
+    const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
+    const delta = m.featureOnly ? "variation-only" : c?.lift === undefined ? "not computing" : `${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%`;
+    return `${m.key} — ${m.label} (${delta})`;
+  }).join("\n") || "(no measures reporting)";
   // "all-clear" is not a risk — leaving it in the enum lets the analyst write
   // its own sentence under "Nothing needs attention".
   const codes = opts.attention.filter((a) => a.severity !== "good").map((a) => a.id);
 
-  // CALL-TIME ENUM: an unknown risk id is unemittable, not merely dropped.
+  // CALL-TIME ENUMS: an unknown risk id or measure key is unemittable.
   const tool = JSON.parse(JSON.stringify(readingTool)) as typeof readingTool & { input_schema: { properties: Record<string, unknown> } };
   if (codes.length) {
     (tool.input_schema.properties.riskNotes as { items: { properties: { code: Record<string, unknown> } } }).items.properties.code = {
       type: "string", enum: codes, description: "the risk you are glossing",
+    };
+  }
+  if (measureKeys.length) {
+    (tool.input_schema.properties.beats as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
+      type: "string", enum: measureKeys, description: "the measure this beat is about",
     };
   }
 
@@ -502,15 +527,17 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
-FIGURES — name ONE per row from that row's list (or "none"). NEVER type a
-number: the page prints the live value, so a number you copy would be stale
+MEASURES you may put in a beat — name one per beat. NEVER type a number
+anywhere: the page prints the live value, so a number you copy would be stale
 the moment the counts move.
-${slotMenu}
+${measureMenu}
 
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING: exactly three findings — the effect, how certain it is, then scale or time. Each claim is ONE line of plain business words with NO DIGITS IN IT and no statistics vocabulary (no p-values, no q-values, no "significance" — say "beyond what luck explains"). The audience is hotel executives.`,
+Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE (two or three sentences — what happened, the trade-off, and what hasn't answered yet), and 3-4 BEATS naming the measures worth putting in front of a leader, decision measure first.
+NO DIGITS in the headline, the lede, or a beat label — the numbers are printed for you. No statistics vocabulary anywhere: no p-values, no q-values, no "significance"; say "beyond what luck explains".
+When nothing is settled yet, SAY THAT plainly — do not manufacture a story out of movement that luck could produce.`,
     }],
     tools: [tool],
     tool_choice: { type: "tool", name: "give_reading" },
@@ -520,28 +547,38 @@ Give the READING: exactly three findings — the effect, how certain it is, then
   if (!tu || tu.type !== "tool_use") throw new Error("The reading returned nothing — try again.");
   const raw = (tu.input ?? {}) as Record<string, unknown>;
 
-  // ── VALIDATE + REPAIR (enforce-in-code): every failure has a deterministic
-  // repair and nothing is ever re-prompted. Bad rows are DISCARDED, never
-  // truncated — a severed uncertainty statement is a lie.
-  const templates = templateFindings({ results: opts.results, stats: opts.stats, verdict: opts.verdict });
-  const rawFindings = Array.isArray(raw.findings) ? raw.findings : [];
-  const usedKeys = new Set<string>();
-  // SLOT-ALIGNED: row i is always the i-th thing (effect, certainty, scale).
-  // Padding by array length would let a dropped middle row shift the others
-  // up — the uncertainty statement would vanish and the effect's earned
-  // colour would land on someone else's number.
-  const findings = [0, 1, 2].map((i) => {
-    const rec = (rawFindings[i] ?? {}) as Record<string, unknown>;
-    const claim = typeof rec.claim === "string" ? stripMd(rec.claim).replace(/\s+/g, " ").trim() : "";
-    if (!claim || claim.length > 86 || /\d/.test(claim)) return templates[i]; // DIGIT BAN
-    // A figure is a NAME. Out-of-slot, unknown, repeated, or currently
-    // unavailable → the row keeps its sentence and loses the gutter.
-    const named = typeof rec.figure === "string" ? rec.figure.trim().toLowerCase() : "";
-    const legal = FIGURE_SLOTS[i].includes(named) && named !== "none" && !usedKeys.has(named)
-      && figureValue(named, { results: opts.results, stats: opts.stats }) !== undefined;
-    if (legal) usedKeys.add(named);
-    return { claim, ...(legal ? { figureKey: named } : {}) };
-  });
+  // ── VALIDATE + REPAIR (enforce-in-code): the words may carry no digits and
+  // a beat may only name a measure that exists. Anything that fails falls
+  // back to the computed story rather than being patched into shape.
+  const fallback = templateStory({ results: opts.results, stats: opts.stats, verdict: opts.verdict });
+  const clean = (v: unknown, cap: number) => {
+    const t = typeof v === "string" ? stripMd(v).replace(/\s+/g, " ").trim() : "";
+    if (!t || t.length > cap || /\d/.test(t) || STAT_NOTATION.test(t)) return "";
+    return t;
+  };
+
+  const headline = clean(raw.headline, 80) || fallback.headline;
+  const lede = clean(raw.lede, 360) || fallback.lede;
+
+  const known = new Set(measureKeys);
+  const seenMeasures = new Set<string>();
+  const beats: { measureKey: string; label: string }[] = [];
+  for (const b of Array.isArray(raw.beats) ? raw.beats : []) {
+    const rec = b as Record<string, unknown>;
+    const key = typeof rec.measure === "string" ? rec.measure.trim() : "";
+    const label = clean(rec.label, 34);
+    if (!key || !label || !known.has(key) || seenMeasures.has(key)) continue;
+    seenMeasures.add(key);
+    beats.push({ measureKey: key, label });
+    if (beats.length === 4) break;
+  }
+  // Never fewer than three: top up from the computed order, skipping repeats.
+  for (const b of fallback.beats) {
+    if (beats.length >= 3) break;
+    if (seenMeasures.has(b.measureKey)) continue;
+    seenMeasures.add(b.measureKey);
+    beats.push(b);
+  }
 
   const codeSet = new Set(codes);
   const seenCodes = new Set<string>();
@@ -568,7 +605,9 @@ Give the READING: exactly three findings — the effect, how certain it is, then
 
   return {
     reading: {
-      findings,
+      headline,
+      lede,
+      beats,
       riskNotes,
       trend: one(raw.trend, 64),
       question: one(raw.question, 80),

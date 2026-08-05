@@ -44,10 +44,15 @@ export interface ProtoNotebook {
 }
 
 export interface Reading {
-  /** EXACTLY three rows — a cited figure KEY plus a digit-free claim. The
-   *  analyst names WHICH number it means; the page renders the live value.
-   *  A copied number would be stale the moment the counts moved. */
-  findings: { figureKey?: string; claim: string }[];
+  /** The story in the shape a leader reads: one headline, one short
+   *  paragraph, then the numbers as beats. The WORDS carry no digits and a
+   *  beat names a MEASURE, not a number — the page resolves the live value,
+   *  so the narrative can never drift from the data beside it. */
+  headline?: string;
+  lede?: string;
+  beats?: { measureKey: string; label: string }[];
+  /** Previous three-row form — still rendered if a cached reading has it. */
+  findings?: { figureKey?: string; claim: string }[];
   /** ≤70-char glosses keyed to an attention row the CODE authored. The
    *  analyst may explain a risk; it may never invent one. */
   riskNotes: { code: string; note: string }[];
@@ -169,7 +174,7 @@ export function readingBasisKey(parts: {
 }): string {
   // READING_FORMAT bumps retire every cached reading on deploy — a format
   // change must never leave old walls of text rendering until data moves.
-  return ["fmt5", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
+  return ["fmt6", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
 }
 
 /** Blank the cached reading. */
@@ -186,7 +191,7 @@ export async function clearProtoNotebook(prototypeKey: string): Promise<void> {
 
 export async function getReading(prototypeKey: string): Promise<Reading | null> {
   const r = await readJson<Reading>(readingKey(prototypeKey));
-  return r && Array.isArray(r.findings) ? r : null;
+  return r && (Array.isArray(r.beats) || Array.isArray(r.findings)) ? r : null;
 }
 
 /** CAS save — an older generation racing a newer one must never win the flag. */

@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
 import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
-import { figureValue } from "@/lib/ai/results";
+import { figureValue, templateStory } from "@/lib/ai/results";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
@@ -872,26 +872,51 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     : verdict?.verdict === "guardrail_breach" || verdict?.verdict === "underpowered" ? "border-l-warn"
     : "border-l-border-strong";
 
-  // The analyst NAMES a figure; the page renders the live value. A number
-  // copied into the reading goes stale the moment the counts move — which is
-  // how FINDINGS came to print +91.8% beside a live lift of +90.8%.
+  // The analyst writes the WORDS; every number is resolved here, live, from
+  // the measure a beat names. A number copied into saved prose goes stale the
+  // moment the counts move.
   const figureFor = (key?: string): string | undefined =>
     key && live ? figureValue(key, { results: live, stats: statsEff }) : undefined;
-  const fallbackFindings = (): { figureKey?: string; claim: string }[] => {
-    const lift = primaryFocus?.lift;
-    return [
-      verdict?.verdict === "not_adjudicable"
-        ? { claim: "the decision measure isn’t bound to a confirmed event yet, so there’s no result to read" }
-        : lift === undefined
-          ? { claim: "the decision measure hasn’t produced a comparable number yet" }
-          : { figureKey: "primary_lift", claim: lift > 0 ? "the variant is ahead of the control on the decision measure" : lift < 0 ? "the variant is behind the control on the decision measure" : "the two versions are level on the decision measure" },
-      primaryFocus?.liftCi
-        ? { figureKey: "primary_ci_low", claim: liftSig ? "the likely range stays on one side of no-change, so the direction is real" : "the likely range still includes no-change, so the direction isn’t settled" }
-        : { claim: "there isn’t enough data yet to say how certain this direction is" },
-      { figureKey: statsEff?.power?.observationDays !== undefined ? "day" : "visitors_total", claim: "guests have been through both versions since the run began" },
-    ];
+
+  type Beat = { key: string; label: string; value: string; qualifier?: string; tone: string };
+  const beatFor = (b: { measureKey: string; label: string }): Beat | null => {
+    const m = statsEff?.metrics.find((x) => x.key === b.measureKey);
+    if (!m) return null;
+    const focus = m.cells.find((c) => c.variationId === statsEff?.focusVariationId);
+    const sig = sigOf(focus);
+    const comp = map?.composites.find((c) => `composite:${c.id}` === b.measureKey);
+    // Direction-of-good comes from the plan, so a rising bounce reads red.
+    const good = comp?.direction === "decrease" ? (focus?.lift ?? 0) < 0 : (focus?.lift ?? 0) > 0;
+    const breach = verdict?.guardrails.find((g) => `composite:${g.compositeId}` === b.measureKey && g.state === "breach");
+
+    if (m.featureOnly) {
+      return { key: b.measureKey, label: b.label, tone: "text-muted",
+        value: focus?.rate !== undefined ? `${(focus.rate * 100).toFixed(1)}%` : "—",
+        qualifier: "new surface" };
+    }
+    return {
+      key: b.measureKey, label: b.label,
+      value: pctS(focus?.lift),
+      // QUALIFIERS ARE COMPUTED, never written — the analyst cannot drop one
+      // to make a story read cleaner.
+      qualifier: breach ? "guardrail" : !sig ? "too early" : undefined,
+      tone: !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
+    };
   };
-  const findings = reading?.findings?.length ? reading.findings : fallbackFindings();
+
+  const story = (() => {
+    if (reading?.headline || reading?.beats?.length) {
+      return {
+        headline: reading.headline,
+        lede: reading.lede,
+        beats: (reading.beats ?? []).map(beatFor).filter(Boolean) as Beat[],
+      };
+    }
+    // No reading yet (or a cached one in the old shape): the computed story.
+    const t = templateStory({ results: live!, stats: statsEff ?? null, verdict });
+    return { headline: t.headline, lede: t.lede, beats: t.beats.map(beatFor).filter(Boolean) as Beat[] };
+  })();
+
   const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
 
   // ── THE ANALYST THREAD — one conversation, hydrated from the notebook so it
@@ -950,6 +975,29 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   ? <a href={chip.href} className={`${cls} text-accent hover:border-accent`}>{chip.label}</a>
                   : <span className={`${cls} text-muted-2`}>{chip.label}</span>;
               })()}
+              {live && (
+                <div className="border-t border-border/70 mt-3.5 pt-3 space-y-2">
+                  {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance">{story.headline}</p>}
+                  {story.lede && <p className="text-[16.5px] leading-relaxed max-w-[70ch] [font-family:ui-serif,Georgia,serif]">{story.lede}</p>}
+                  {story.beats.length > 0 && (
+                    <ul className={`flex flex-wrap gap-x-7 gap-y-1.5 mt-1 ${busy === "reading" ? "opacity-60" : ""}`}>
+                      {story.beats.map((b) => (
+                        <li key={b.key} className="text-[14px] text-muted">
+                          <span className={`font-extrabold tabular-nums mr-1.5 ${b.tone}`}>{b.value}</span>
+                          {b.label}
+                          {b.qualifier && <span className="text-muted-2"> — {b.qualifier}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="text-[12.5px] text-muted-2 print:hidden">
+                    {reading ? `read ${reading.generatedAt.slice(11, 16)}` : "no reading yet"} ·{" "}
+                    <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
+                      {busy === "reading" ? "re-reading…" : "re-read"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="shrink-0 text-right space-y-1.5">
               {statsEff && (
@@ -1043,27 +1091,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </div>
             );
           })()}
-
-          {/* ── Z(D) · FINDINGS — the entire narrative budget ──────────────── */}
-          <div>
-            {zoneHeader("Findings",
-              <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
-                {reading ? `read ${reading.generatedAt.slice(11, 16)}` : "no reading yet"} ·{" "}
-                <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
-                  {busy === "reading" ? "re-reading…" : "re-read"}
-                </button>
-              </span>, "findings")}
-            <div className={`grid grid-cols-[104px_minmax(0,1fr)] gap-x-4 gap-y-3 ${busy === "reading" ? "opacity-60" : ""}`}>
-              {findings.slice(0, 3).map((f, i) => (
-                <React.Fragment key={i}>
-                  {/* CHROMA IS EARNED — by the number that earned it: only
-                      the primary lift itself takes the lift's colour. */}
-                  <div className={`text-[15px] font-semibold tabular-nums text-right ${liftSig && f.figureKey === "primary_lift" ? liftClass(primaryFocus?.lift) : ""}`}>{figureFor(f.figureKey) ?? ""}</div>
-                  <div className="text-[15px] leading-snug text-foreground/90 max-w-[76ch]">{f.claim}</div>
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
 
           {/* ── Z(E) · PROOF — see it, don't read it ──────────────────────── */}
           {(() => {
