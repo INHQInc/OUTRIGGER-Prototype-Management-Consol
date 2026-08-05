@@ -227,6 +227,17 @@ export function pruneMeasureKeys(map: MetricMap): MetricMap {
   return next;
 }
 
+/** Blank the metric map. The store has no delete; every reader treats an
+ *  empty flag as absent, which is what "no plan yet" means. */
+export async function clearMetricMap(prototypeKey: string): Promise<void> {
+  await (await getContentStore()).setFlag(mapKey(prototypeKey), "");
+}
+
+/** Blank the console's own daily observation history (the day-by-day trend). */
+export async function clearResultsHistory(prototypeKey: string): Promise<void> {
+  await (await getContentStore()).setFlag(historyKey(prototypeKey), "");
+}
+
 export async function mutateMetricMap(
   prototypeKey: string,
   fn: (current: MetricMap | null) => MetricMap | null,

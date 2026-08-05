@@ -110,6 +110,12 @@ export const VERDICT_THRESHOLDS = {
 
 const flagKey = (k: string) => `verdict:${k}`;
 
+/** Blank the verdict record — draft or stamped. Stamped is the immutable
+ *  record, so the route refuses to do this without an explicit confirmation. */
+export async function clearVerdict(prototypeKey: string): Promise<void> {
+  await (await getContentStore()).setFlag(flagKey(prototypeKey), "");
+}
+
 export async function getVerdict(prototypeKey: string): Promise<VerdictRecord | null> {
   const raw = await (await getContentStore()).getFlag(flagKey(prototypeKey));
   if (!raw) return null;

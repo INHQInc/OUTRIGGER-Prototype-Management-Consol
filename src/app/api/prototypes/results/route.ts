@@ -3,14 +3,13 @@ import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
 import {
   normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
-  type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys } from "@/lib/prototypes/results";
+  type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys, clearMetricMap, clearResultsHistory } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
 import { deriveAttention } from "@/lib/prototypes/attention";
-import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
+import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, clearVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
 import {
   getOrgNotebook, getProtoNotebook, addOrgPreference, removeOrgPreference, appendNotebook,
-  getReading, saveReading, readingBasisKey,
-} from "@/lib/prototypes/notebook";
+  getReading, saveReading, readingBasisKey, clearReading, clearProtoNotebook } from "@/lib/prototypes/notebook";
 import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
@@ -232,6 +231,11 @@ export async function POST(req: NextRequest) {
     /** Hide/show a measure in the index. Display only — plan measures keep
      *  feeding the verdict; the primary refuses. */
     hideMetric?: { key?: string; hidden?: boolean };
+    /** Start over: blank the console's analytics state for this prototype.
+     *  Scoped on purpose — the caller says exactly what goes. */
+    reset?: { plan?: boolean; verdict?: boolean; reading?: boolean; history?: boolean; notebook?: boolean };
+    /** Required to wipe a STAMPED verdict — the record doesn't go silently. */
+    confirmStamped?: boolean;
     /** Manual "Refresh the reading" — bypasses the current-basis short-circuit. */
     force?: boolean;
     tune?: { question?: string; answer?: string; durable?: boolean };
@@ -433,6 +437,47 @@ export async function POST(req: NextRequest) {
       });
       await audit(g.orgId, actor, "verdict.discovery-promoted", g.proto.name, `${disc.label} → backlog ${idea.id}`);
       return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
+    }
+
+    if (body.reset) {
+      const scope = body.reset;
+      const wanted = Object.entries(scope).filter(([, v]) => v === true).map(([k]) => k);
+      if (!wanted.length) return NextResponse.json({ error: "Nothing selected to reset." }, { status: 400 });
+
+      // A stamped verdict is the immutable record of a decision. It can be
+      // discarded, but never as a side effect of clearing something else.
+      if (scope.verdict) {
+        const existing = await getVerdict(g.proto.key);
+        if (existing?.state === "stamped" && !body.confirmStamped) {
+          return NextResponse.json({
+            error: `This experiment has a STAMPED verdict (${existing.verdict.toUpperCase()} by ${existing.stampedBy ?? "?"}). Resetting discards that record — confirm explicitly to proceed.`,
+            needsStampedConfirm: true,
+          }, { status: 409 });
+        }
+      }
+
+      await Promise.all([
+        scope.plan ? clearMetricMap(g.proto.key) : null,
+        scope.verdict ? clearVerdict(g.proto.key) : null,
+        scope.reading ? clearReading(g.proto.key) : null,
+        scope.history ? clearResultsHistory(g.proto.key) : null,
+        scope.notebook ? clearProtoNotebook(g.proto.key) : null,
+      ].filter(Boolean));
+
+      await audit(g.orgId, actor, "results.reset", g.proto.name, `cleared: ${wanted.join(", ")}`);
+      // Re-derive from whatever survives so the client sees the new truth
+      // rather than its own optimistic guess about what a reset means.
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      const map = await getMetricMap(g.proto.key);
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: null };
+      const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
+      return NextResponse.json({
+        cleared: wanted,
+        metricMap: map, results: bundle.results, stats, verdict,
+        reading: null, readingStale: true,
+        notebook: { org: orgNb, proto: protoNb },
+        attention: attentionFor({ results: bundle.results, map, stats, verdict, resultsError: bundle.error, experimentStatus: bundle.experimentStatus }),
+      });
     }
 
     if (body.orderMetrics) {

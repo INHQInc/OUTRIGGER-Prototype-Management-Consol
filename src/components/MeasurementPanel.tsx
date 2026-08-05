@@ -30,7 +30,38 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
   const [err, setErr] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [firstObservedAt, setFirstObservedAt] = useState<string | null>(null);
+  // Start over — scoped on purpose. The experiment's own metrics changed, so
+  // the plan built against the old ones is worse than nothing.
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetScope, setResetScope] = useState({ plan: true, verdict: true, reading: true, history: true, notebook: true });
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [needsStamped, setNeedsStamped] = useState(false);
   const router = useRouter();
+
+  async function runReset(confirmStamped: boolean) {
+    if (resetBusy) return;
+    setResetBusy(true); setResetMsg(null); setErr(null);
+    try {
+      const res = await fetch("/api/prototypes/results", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, reset: resetScope, confirmStamped }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErr(data.error ?? "The reset didn't run.");
+        setNeedsStamped(Boolean(data.needsStampedConfirm));
+        return;
+      }
+      setNeedsStamped(false);
+      setResetOpen(false);
+      setResetMsg(`Cleared: ${(data.cleared ?? []).join(", ")}. Draft a fresh plan when you're ready.`);
+      await load();
+      router.refresh();
+    } catch {
+      setErr("Network hiccup — the reset didn't run.");
+    } finally { setResetBusy(false); }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,6 +189,48 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
             )}
           </div>
 
+          {resetMsg && (
+            <div className="px-3.5 py-2 border-b border-border text-[13px] text-ok">{resetMsg}</div>
+          )}
+          {resetOpen && (
+            <div className="px-3.5 py-3 border-b border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,transparent)] space-y-2">
+              <div className="text-[13px] font-semibold text-danger">Start over — clear this experiment&apos;s analytics</div>
+              <p className="text-[12.5px] text-muted leading-snug">
+                Optimizely&apos;s own numbers are untouched; this clears what the CONSOLE derived from them.
+                Your org-wide analyst preferences are kept.
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                {([
+                  ["plan", "Measurement plan & composites"],
+                  ["verdict", "Verdict (and its stamp)"],
+                  ["reading", "Cached reading"],
+                  ["history", "Daily snapshot history"],
+                  ["notebook", "Analyst thread for this prototype"],
+                ] as const).map(([k, label]) => (
+                  <label key={k} className="flex items-center gap-1.5 text-[12.5px] text-muted">
+                    <input type="checkbox" checked={resetScope[k]}
+                      onChange={(e) => setResetScope((sc) => ({ ...sc, [k]: e.target.checked }))} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              {needsStamped ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[12.5px] text-danger font-medium">That discards a stamped record.</span>
+                  <button onClick={() => runReset(true)} disabled={resetBusy}
+                    className="h-8 px-3 rounded-lg border border-danger text-[12.5px] font-semibold text-danger hover:bg-danger/10 disabled:opacity-40">
+                    {resetBusy ? "Clearing…" : "Yes, discard it and start over"}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => runReset(false)} disabled={resetBusy || !Object.values(resetScope).some(Boolean)}
+                  className="h-8 px-3 rounded-lg bg-danger text-white text-[12.5px] font-semibold hover:brightness-110 disabled:opacity-40">
+                  {resetBusy ? "Clearing…" : "Clear the selected data"}
+                </button>
+              )}
+            </div>
+          )}
+
           {/* THE INTERVIEW — first thing in the card. These answers are the
               only thing between a draft and a frozen contract; buried under
               the measures they were unfindable. */}
@@ -214,6 +287,10 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
                 disabled={busy !== null}
                 className="hover:text-foreground underline underline-offset-2 disabled:opacity-40">
                 {busy === "replan" ? "Re-planning…" : "Re-plan"}
+              </button>
+              <button onClick={() => { setResetOpen((o) => !o); setResetMsg(null); }} disabled={resetBusy}
+                className="hover:text-danger underline underline-offset-2 disabled:opacity-40">
+                {resetOpen ? "Cancel" : "Start over…"}
               </button>
               {!plan.confirmed && pending.length === 0 && (
                 <button onClick={() => post("confirm", { confirm: true, expectPlannedAt: plan.plannedAt })} disabled={busy !== null}

@@ -172,6 +172,18 @@ export function readingBasisKey(parts: {
   return ["fmt5", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
 }
 
+/** Blank the cached reading. */
+export async function clearReading(prototypeKey: string): Promise<void> {
+  await (await getContentStore()).setFlag(readingKey(prototypeKey), "");
+}
+
+/** Blank this prototype's analyst notebook — the thread and its data wishes.
+ *  ORG preferences live in a different flag and are deliberately untouched:
+ *  they are how the analyst writes for this team, not what it learned here. */
+export async function clearProtoNotebook(prototypeKey: string): Promise<void> {
+  await (await getContentStore()).setFlag(protoKey(prototypeKey), "");
+}
+
 export async function getReading(prototypeKey: string): Promise<Reading | null> {
   const r = await readJson<Reading>(readingKey(prototypeKey));
   return r && Array.isArray(r.findings) ? r : null;
