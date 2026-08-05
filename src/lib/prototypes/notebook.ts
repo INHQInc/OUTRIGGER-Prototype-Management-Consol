@@ -182,6 +182,16 @@ export async function clearReading(prototypeKey: string): Promise<void> {
   await (await getContentStore()).setFlag(readingKey(prototypeKey), "");
 }
 
+/** Clear the CONVERSATION only. Data wishes are an instrumentation ledger
+ *  and org preferences are how the analyst writes for this team — neither is
+ *  chat history, so neither goes with it. */
+export async function clearNotebookEntries(prototypeKey: string): Promise<void> {
+  await casMutate<ProtoNotebook>(protoKey(prototypeKey), { entries: [], dataWishes: [] }, (cur) => {
+    if (!cur?.entries?.length) return null;
+    return { ...cur, entries: [], updatedAt: new Date().toISOString() };
+  }).catch(() => { /* nothing to clear */ });
+}
+
 /** Blank this prototype's analyst notebook — the thread and its data wishes.
  *  ORG preferences live in a different flag and are deliberately untouched:
  *  they are how the analyst writes for this team, not what it learned here. */

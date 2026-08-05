@@ -9,7 +9,7 @@ import { deriveAttention } from "@/lib/prototypes/attention";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, clearVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
 import {
   getOrgNotebook, getProtoNotebook, addOrgPreference, removeOrgPreference, appendNotebook,
-  getReading, saveReading, readingBasisKey, clearReading, clearProtoNotebook } from "@/lib/prototypes/notebook";
+  getReading, saveReading, readingBasisKey, clearReading, clearNotebookEntries, clearProtoNotebook } from "@/lib/prototypes/notebook";
 import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
@@ -216,6 +216,11 @@ export async function POST(req: NextRequest) {
     unstamp?: boolean;
     promote?: string;
     ask?: string;
+    /** How the analyst should read: answer the question, or argue against
+     *  the current call. Different instructions, same answer schema. */
+    stance?: "ask" | "challenge";
+    /** Clear the analyst conversation for this prototype (audited). */
+    clearThread?: boolean;
     explain?: boolean;
     reading?: boolean;
     /** Plain-language description of a custom console-computed measure. */
@@ -518,6 +523,13 @@ export async function POST(req: NextRequest) {
         attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
+    if (body.clearThread) {
+      await clearNotebookEntries(g.proto.key);
+      await audit(g.orgId, actor, "results.thread-cleared", g.proto.name, "analyst conversation cleared");
+      const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
+      return NextResponse.json({ notebook: { org: orgNb, proto: protoNb }, cleared: ["thread"] });
+    }
+
     if (body.reset) {
       const scope = body.reset;
       const wanted = Object.entries(scope).filter(([, v]) => v === true).map(([k]) => k);
@@ -791,6 +803,7 @@ export async function POST(req: NextRequest) {
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
       const question = body.explain ? undefined : String(body.ask ?? "");
       const answer = await analyzeResults({
+        stance: body.stance === "challenge" ? "challenge" : "ask",
         orgId: g.orgId,
         proto: g.proto,
         results: bundle.results,

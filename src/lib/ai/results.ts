@@ -157,6 +157,8 @@ const defineTool = (eventNames: string[]) => ({
 /** A user-described compound measure → a badged, console-computed composite.
  *  Honest by construction: infeasible asks come back as an explanation, and
  *  the events are enum-locked to what actually reports. */
+/** Describe-it-and-I-will-pick-the-events, for the BUILDER — the proposal is
+ *  reviewed and saved by a human, never written straight to the map. */
 export async function defineCustomMetric(opts: {
   orgId: string;
   proto: PrototypeRecord;
@@ -660,6 +662,10 @@ export async function analyzeResults(opts: {
   orgNotebook?: OrgNotebook | null;
   protoNotebook?: ProtoNotebook | null;
   question?: string;
+  /** "challenge" runs the same analyst against its own conclusion — the
+   *  strongest case that the current call is wrong, argued from the same
+   *  numbers. Same answer schema, different job. */
+  stance?: "ask" | "challenge";
 }): Promise<AnalystAnswer> {
   requireKey();
   const client = new Anthropic();
@@ -679,9 +685,11 @@ ${renderStats(opts.stats ?? null)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
-${opts.question?.trim()
-  ? `QUESTION: ${opts.question.trim().slice(0, 1000)}`
-  : "Give the readout: the verdict as the headline, then the numbers that matter as bullets, a caveat if honesty demands one, and the recommendation."}`,
+${opts.stance === "challenge"
+  ? `CHALLENGE THIS RESULT. Argue the strongest honest case that the current call is WRONG, from these same numbers. Name the weakest link in the chain, what would have to be true for the reading to be mistaken, and what evidence would settle it. Do not invent numbers, do not manufacture doubt where the data is genuinely clean — if the call holds up, say plainly which part is actually solid and where the remaining exposure is.${opts.question?.trim() ? `\nThe reader also asked: ${opts.question.trim().slice(0, 600)}` : ""}`
+  : opts.question?.trim()
+    ? `QUESTION: ${opts.question.trim().slice(0, 1000)}`
+    : "Give the readout: the verdict as the headline, then the numbers that matter as bullets, a caveat if honesty demands one, and the recommendation."}`,
     }],
     tools: [answerTool],
     tool_choice: { type: "tool", name: "give_answer" },

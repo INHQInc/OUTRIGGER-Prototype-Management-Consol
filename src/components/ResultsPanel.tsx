@@ -290,7 +290,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [threadOpen, setThreadOpen] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
-  const [composerMode, setComposerMode] = useState<"ask" | "measure" | "reply">("ask");
+  // Ask vs Challenge are different INSTRUCTIONS, not different destinations —
+  // measure-building left the chat entirely when the builder arrived.
+  const [composerMode, setComposerMode] = useState<"ask" | "challenge" | "reply">("ask");
+  const [analystOpen, setAnalystOpen] = useState(false);
+  const [clearArmed, setClearArmed] = useState(false);
   const [composerText, setComposerText] = useState("");
   const [replyDurable, setReplyDurable] = useState(false);
   const dragKeyRef = useRef<string | null>(null);
@@ -932,13 +936,13 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     const text = composerText.trim();
     if (!text || busy) return;
     setComposerText("");
-    if (composerMode === "measure") { void post("define", { defineMetric: text }); return; }
+
     if (composerMode === "reply" && reading?.question) {
       void post(`tune:${reading.question}`, { tune: { question: reading.question, answer: text, durable: replyDurable } });
       setComposerMode("ask");
       return;
     }
-    void post("ask", { ask: text });
+    void post("ask", { ask: text, stance: composerMode === "challenge" ? "challenge" : "ask" });
   };
 
   const answerBlock = (a: AnalystAnswer) => (
@@ -971,7 +975,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       )}
 
       {/* ═══ THE READOUT — decision band · numbers · attention · findings ═══ */}
-      <div className="print-report grid gap-5 xl:grid-cols-[minmax(0,1fr)_23rem] 2xl:grid-cols-[minmax(0,1fr)_26rem] print:block">
+      <div className="print-report">
         <div className="min-w-0 space-y-5">
 
           {/* ── Z(A) · DECISION ─────────────────────────────────────────── */}
@@ -1424,9 +1428,40 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           </details>
         </div>
 
-        {/* ── Z(R) · ANALYST — one conversation: ask it, or add a measure ── */}
-        <aside className="print:hidden xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100dvh-6rem)] flex flex-col min-h-[420px]">
-          <div className="flex-1 min-h-0 rounded-xl border border-border bg-surface flex flex-col">
+      </div>
+
+      {/* ── THE ANALYST — a drawer, not a column. It slides in when you want
+             it, so the readout owns the full width the rest of the time. ── */}
+      <button onClick={() => setAnalystOpen(true)}
+        className="fixed bottom-5 right-5 z-30 h-11 px-4 rounded-full bg-accent text-accent-fg text-[13.5px] font-semibold shadow-lg hover:bg-accent-hover print:hidden flex items-center gap-2">
+        Ask the analyst
+        {entries.length > 0 && <span className="text-[11.5px] font-bold opacity-80">{Math.floor(entries.length / 2) || ""}</span>}
+      </button>
+
+      {analystOpen && (
+        <div className="fixed inset-0 z-40 print:hidden" role="dialog" aria-label="Analyst">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setAnalystOpen(false)} />
+          <aside className="absolute inset-y-0 right-0 w-full max-w-[30rem] bg-surface border-l border-border shadow-2xl flex flex-col animate-[slidein_.18s_ease-out]">
+            <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b border-border">
+              <span className={ZH}>Analyst</span>
+              {(notebook?.org.preferences.length || notebook?.proto.dataWishes.length) ? (
+                <button onClick={() => setShowMemory((m) => !m)} className="text-[12.5px] text-muted-2 hover:text-foreground">
+                  Memory ({(notebook?.org.preferences.length ?? 0) + (notebook?.proto.dataWishes.length ?? 0)})
+                </button>
+              ) : null}
+              <span className="ml-auto flex items-center gap-3">
+                {entries.length > 0 && (clearArmed ? (
+                  <span className="flex items-center gap-1.5 text-[12.5px]">
+                    <button onClick={() => { setClearArmed(false); void post("clearThread", { clearThread: true }); }} className="text-danger font-semibold">clear it?</button>
+                    <button onClick={() => setClearArmed(false)} className="text-muted-2">&#215;</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setClearArmed(true)} className="text-[12.5px] text-muted-2 hover:text-danger">Clear history</button>
+                ))}
+                <button onClick={() => setAnalystOpen(false)} aria-label="Close" className="text-[18px] leading-none text-muted-2 hover:text-foreground">&#215;</button>
+              </span>
+            </div>
+          <div className="flex-1 min-h-0 flex flex-col">
             <div className="shrink-0 flex items-center gap-2 px-4 pt-3 pb-2 border-b border-border">
               <span className={ZH}>Analyst</span>
               {(notebook?.org.preferences.length || notebook?.proto.dataWishes.length) ? (
@@ -1479,7 +1514,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               })}
 
               {busy === "ask" && <p className="text-[14px] text-muted-2">Reading the numbers…</p>}
-              {busy === "define" && <p className="text-[14px] text-muted-2">Working out whether that measure is computable…</p>}
+
               {customMsg && <p className="text-[14px] leading-snug text-ok">{customMsg}</p>}
 
               {/* the analyst's own question — answering it tunes future readings */}
@@ -1517,7 +1552,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 question can't silently create a measure. */}
             <div className="shrink-0 border-t border-border p-3 space-y-2">
               <div className="flex items-center gap-1.5">
-                {([["ask", "Ask"], ["measure", "Track a measure"]] as const).map(([m, label]) => (
+                {([["ask", "Ask"], ["challenge", "Challenge this"]] as const).map(([m, label]) => (
                   <button key={m} onClick={() => setComposerMode(m)}
                     className={`h-6 px-2 rounded-full border text-[12.5px] font-bold uppercase tracking-[0.08em] ${composerMode === m ? "border-accent text-accent" : "border-border text-muted-2 hover:text-foreground"}`}>
                     {label}
@@ -1533,23 +1568,25 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   onChange={(e) => setComposerText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendComposer(); } }}
                   rows={2}
-                  placeholder={composerMode === "measure"
-                    ? "Describe the measure — e.g. “all navigation engagement: next room + previous room + destination tabs”"
+                  placeholder={composerMode === "challenge"
+                    ? "Anything specific to press on? (or just send — it will argue against the current call)"
                     : composerMode === "reply" ? "Your answer…" : "Ask about these results…"}
                   className="flex-1 min-w-0 max-h-24 px-2.5 py-1.5 rounded-lg border border-border bg-background text-[14px] leading-snug placeholder:text-muted-2 focus:border-accent focus:outline-none resize-none"
                 />
                 <button onClick={sendComposer} disabled={busy !== null || !composerText.trim()}
                   className="h-8 px-3 rounded-lg bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40 shrink-0">
-                  {busy ? "…" : composerMode === "measure" ? "Add" : "Send"}
+                  {busy ? "…" : "Send"}
                 </button>
               </div>
-              {composerMode === "measure" && (
-                <p className="text-[12.5px] text-muted-2 leading-snug">Console-computed from the events already reporting — badged as not an Optimizely metric; an infeasible ask comes back with what’s missing, never a silent approximation.</p>
+              {composerMode === "challenge" && (
+                <p className="text-[12.5px] text-muted-2 leading-snug">Runs the analyst against its own conclusion — the strongest honest case that this call is wrong, from the same numbers.</p>
               )}
             </div>
           </div>
-        </aside>
-      </div>
+          </aside>
+        </div>
+      )}
+      <style>{`@keyframes slidein { from { transform: translateX(16px); opacity: .6 } to { transform: none; opacity: 1 } }`}</style>
     </div>
   );
 }
