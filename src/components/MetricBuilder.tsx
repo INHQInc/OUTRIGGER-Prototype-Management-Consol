@@ -84,6 +84,25 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
   }, [arms, byArm, direction, editing?.id, label, perArm, results, shared]);
 
   const previewFocus = preview?.find((r) => !r.isBaseline);
+
+  // THE HONESTY CHECK. Pairing a variation-only surface with the control's
+  // equivalent is legitimate. Dropping an event from an arm that is FIRING it
+  // is a different thing: it removes real behaviour from one side of the
+  // comparison and inflates the gap. Name it, with the number.
+  const leaks = useMemo(() => {
+    if (!perArm) return [];
+    const out: { name: string; arm: string; rate?: number }[] = [];
+    for (const a of arms) {
+      const chosen = new Set(byArm[a.variationId] ?? []);
+      const elsewhere = new Set(arms.filter((x) => x.variationId !== a.variationId).flatMap((x) => byArm[x.variationId] ?? []));
+      for (const name of elsewhere) {
+        if (chosen.has(name)) continue;
+        const row = results.metrics.find((m) => m.name === name)?.perVariation.find((r) => r.variationId === a.variationId);
+        if (row && row.conversions > 0) out.push({ name, arm: a.name, rate: row.rate });
+      }
+    }
+    return out;
+  }, [arms, byArm, perArm, results.metrics]);
   const canSave = Boolean(label.trim()) && Boolean(preview?.length) && !busy;
 
   return (
@@ -218,6 +237,24 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
               </div>
             ) : (
               <p className="text-[13.5px] text-muted-2">Pick events and the numbers appear here &mdash; computed the same way the readout will compute them.</p>
+            )}
+            {leaks.length > 0 && (
+              <div className="mt-2.5 rounded-lg border border-warn/50 bg-warn/5 px-3 py-2">
+                <div className="text-[12.5px] font-semibold text-warn">This leaves out behaviour that is actually happening</div>
+                <ul className="mt-1 space-y-0.5">
+                  {leaks.map((l) => (
+                    <li key={`${l.arm}:${l.name}`} className="text-[12.5px] text-muted leading-snug">
+                      &ldquo;{l.name}&rdquo; fires in <b className="text-foreground">{l.arm}</b>
+                      {l.rate !== undefined ? ` at ${(l.rate * 100).toFixed(1)}%` : ""} but isn&apos;t counted there.
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[12px] text-muted-2 mt-1.5 leading-snug">
+                  That is right when the event only exists in one version and the other side has its own equivalent.
+                  It is wrong when the event genuinely fires in both &mdash; you would be removing real clicks from one
+                  side and the gap would read wider than it is.
+                </p>
+              </div>
             )}
             <p className="text-[12px] text-muted-2 mt-2 leading-snug">
               Summed ACTIONS, not unique guests: someone who clicks two of these counts twice, so the rate is actions per visitor and can exceed 100%.
