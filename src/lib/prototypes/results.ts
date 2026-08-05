@@ -151,6 +151,12 @@ export interface CompositeMetric {
   /** "custom" = user-described, console-computed — badged everywhere as
    *  NOT an Optimizely metric. Absent = authored by the measurement plan. */
   source?: "custom";
+  /** PER-ARM event sets. A surface that exists in only one arm can't be
+   *  compared to itself; this is how the variation's new CTA is paired with
+   *  the control's equivalent action so both arms can express the same
+   *  intent. An arm with no entry falls back to `events`, so a symmetric
+   *  composite behaves exactly as it always has. */
+  armEvents?: { variationId: string; events: string[] }[];
 }
 
 export interface MetricMap {
@@ -282,12 +288,24 @@ export function resolveMetricRow(eventName: string, results: ExperimentResults):
   return [...candidates].sort((a, b) => pref(a) - pref(b))[0];
 }
 
+/** The event names this composite reads for one arm. */
+export function armEventsFor(c: CompositeMetric, variationId: string): string[] {
+  return c.armEvents?.find((a) => a.variationId === variationId)?.events ?? c.events;
+}
+
+/** Every event the composite touches in any arm — the membership used for
+ *  staleness reporting ("a member stopped reporting") and for the raw-event
+ *  overlap checks. */
+export function allCompositeEvents(c: CompositeMetric): string[] {
+  return [...new Set([...(c.events ?? []), ...(c.armEvents ?? []).flatMap((a) => a.events)])];
+}
+
 export function compositeMembers(c: CompositeMetric, results: ExperimentResults): { members: MetricResult[]; missing: string[]; excluded: string[] } {
   const members: MetricResult[] = [];
   const excluded: string[] = [];
   const missing: string[] = [];
   const used = new Set<MetricResult>();
-  for (const e of c.events) {
+  for (const e of allCompositeEvents(c)) {
     const row = resolveMetricRow(e, results);
     if (!row || used.has(row)) {
       if (!row) missing.push(e);
@@ -419,6 +437,9 @@ export function computeComposite(c: CompositeMetric, results: ExperimentResults)
   const byVar = new Map<string, VariationResult>();
   for (const m of members) {
     for (const r of m.perVariation) {
+      // An arm only counts the events ITS OWN list names — that is what makes
+      // pairing a variation-only surface with the control's equivalent honest.
+      if (!armEventsFor(c, r.variationId).some((e) => resolveMetricRow(e, results) === m)) continue;
       const cur = byVar.get(r.variationId);
       if (cur) { cur.conversions += r.conversions; cur.isBaseline = cur.isBaseline || r.isBaseline; }
       else byVar.set(r.variationId, { variationId: r.variationId, name: r.name, conversions: r.conversions, isBaseline: r.isBaseline });

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
 import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
+import { MetricBuilder } from "./MetricBuilder";
 import { figureValue, templateStory } from "@/lib/ai/results";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
@@ -284,6 +285,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [orderLocal, setOrderLocal] = useState<string[] | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [builder, setBuilder] = useState<{ editing: CompositeMetric | null } | null>(null);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [threadOpen, setThreadOpen] = useState(false);
@@ -906,11 +908,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
   const story = (() => {
     if (reading?.headline || reading?.beats?.length) {
-      return {
-        headline: reading.headline,
-        lede: reading.lede,
-        beats: (reading.beats ?? []).map(beatFor).filter(Boolean) as Beat[],
-      };
+      const picked = (reading.beats ?? []).map(beatFor).filter(Boolean) as Beat[];
+      // The decision measure always reads first — it is the one the verdict
+      // adjudicates, so it cannot appear third behind a secondary.
+      picked.sort((a, b) => Number(b.key === statsEff?.primaryKey) - Number(a.key === statsEff?.primaryKey));
+      return { headline: reading.headline, lede: reading.lede, beats: picked };
     }
     // No reading yet (or a cached one in the old shape): the computed story.
     const t = templateStory({ results: live!, stats: statsEff ?? null, verdict });
@@ -957,6 +959,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     <div className="space-y-3">
       {err && <div className="text-[14px] text-danger print:hidden">{err}</div>}
 
+      {builder && live && (
+        <MetricBuilder
+          results={live}
+          editing={builder.editing}
+          baselineId={statsEff?.baselineVariationId}
+          busy={busy === "build"}
+          onClose={() => setBuilder(null)}
+          onSave={async (draft) => { setBuilder(null); await post("build", { buildMetric: draft }); }}
+        />
+      )}
+
       {/* ═══ THE READOUT — decision band · numbers · attention · findings ═══ */}
       <div className="print-report grid gap-5 xl:grid-cols-[minmax(0,1fr)_23rem] 2xl:grid-cols-[minmax(0,1fr)_26rem] print:block">
         <div className="min-w-0 space-y-5">
@@ -978,7 +991,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               {live && (
                 <div className="border-t border-border/70 mt-3.5 pt-3 space-y-2">
                   {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance">{story.headline}</p>}
-                  {story.lede && <p className="text-[16.5px] leading-relaxed max-w-[70ch] [font-family:ui-serif,Georgia,serif]">{story.lede}</p>}
+                  {story.lede && <p className="text-[15px] leading-relaxed max-w-[76ch] text-foreground/90">{story.lede}</p>}
                   {story.beats.length > 0 && (
                     <ul className={`flex flex-wrap gap-x-7 gap-y-1.5 mt-1 ${busy === "reading" ? "opacity-60" : ""}`}>
                       {story.beats.map((b) => (
@@ -1164,7 +1177,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           {/* ── Z(G) · ALL MEASURES — every measure, the user's own order ── */}
           <div>
             {zoneHeader("All measures",
-              <a href="#numbers" onClick={(e) => { e.preventDefault(); window.location.hash = "numbers"; }} className="ml-auto text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover print:hidden">Open the numbers →</a>,
+              <span className="ml-auto flex items-center gap-4 print:hidden">
+                <button onClick={() => setBuilder({ editing: null })} disabled={!live}
+                  className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover disabled:opacity-40">+ Build a measure</button>
+                <a href="#numbers" onClick={(e) => { e.preventDefault(); window.location.hash = "numbers"; }} className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover">Open the numbers →</a>
+              </span>,
               "measures")}
           {/* ── the metric INDEX: every measure × every arm, named columns,
                  half-width — the decision metric pinned on top, everything else
@@ -1255,8 +1272,20 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     ) : (
                       <span className="font-medium text-[12.5px]">{c.label}</span>
                     )}{" "}
-                    <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.source === "custom" ? "border-accent/40 text-accent" : c.role === "primary" ? "border-ok/40 text-ok" : "border-border text-muted-2"}`}>
-                      {c.source === "custom" ? "console" : c.role}
+                    <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.role === "primary" ? "border-ok/40 text-ok" : c.role === "guardrail" ? "border-warn/40 text-warn" : "border-border text-muted-2"}`}>
+                      {c.role}
+                    </span>
+                    {c.armEvents?.length ? (
+                      <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
+                        title={c.armEvents.map((a) => `${live.variations.find((v) => v.variationId === a.variationId)?.name ?? a.variationId}: ${a.events.join(" + ")}`).join(" · ")}>
+                        per version
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <span className="text-[9px] font-bold uppercase tracking-wide border border-accent/40 text-accent rounded px-1"
+                      title={`Computed by the console from Optimizely events: ${(c.armEvents?.length ? c.armEvents.flatMap((a) => a.events) : c.events).join(" + ")}`}>
+                      console
                     </span>
                   </td>
                   {ordered.map((v) => {
@@ -1276,14 +1305,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {/* ONE primary — switch semantics: on = the decision metric;
                             flipping another on moves it (the server keeps exactly one) */}
                         <button
-                          onClick={() => { if (c.role !== "primary" && !c.expectedOneArm) void post("setPrimary", { setPrimary: c.id }); }}
-                          disabled={c.role === "primary" || Boolean(c.expectedOneArm) || busy !== null}
-                          title={c.role === "primary" ? "The console’s decision metric — the verdict adjudicates this. Flip another on to move it." : c.expectedOneArm ? "Fires in only one arm — can’t be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
+                          onClick={() => {
+                            if (c.role === "primary") void post("setPrimary", { clearPrimary: true });
+                            else if (!c.expectedOneArm) void post("setPrimary", { setPrimary: c.id });
+                          }}
+                          disabled={Boolean(c.expectedOneArm) || busy !== null}
+                          title={c.role === "primary" ? "The console’s decision metric. Flip it off to stand it down — the experiment then has no decision metric until you pick one." : c.expectedOneArm ? "Fires in only one arm — can’t be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
                           className={`relative w-7 h-4 rounded-full transition-colors ${c.role === "primary" ? "bg-ok" : c.expectedOneArm ? "bg-border opacity-40 cursor-not-allowed" : "bg-border-strong hover:bg-accent/60"}`}>
                           <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-[left] ${c.role === "primary" ? "left-3.5" : "left-0.5"}`} />
                         </button>
                         {c.source === "custom"
-                          ? <button onClick={() => { setRenamingId(c.id); setRenameVal(c.label); setDeleteArmId(null); }} title="Rename" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
+                          ? <button onClick={() => setBuilder({ editing: c })} title="Edit this measure" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
                           : <span />}
                         {c.source === "custom"
                           ? <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
@@ -1306,8 +1338,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <td className="py-1.5 pr-1 print:hidden">{!isHidden && grip(rowKey)}</td>
                   <td className="py-1.5 pr-2 text-muted">
                     {m.name}
-                    {mi === 0 && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle" title="Optimizely’s own primary metric (first on its experiment). The console adjudicates its composed decision metric instead — the two may legitimately differ.">opti primary</span>}
                     {ms?.featureOnly && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle">{ms.featureOnly}-only</span>}
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <span className="text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2" title="Reported by Optimizely exactly as it fires">optimizely</span>
+                    {mi === 0 && <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-muted-2" title="Optimizely’s own primary metric (first on its experiment). The console adjudicates its composed decision metric instead — the two may legitimately differ.">· primary</span>}
                   </td>
                   {ordered.map((v) => {
                     const r = m.perVariation.find((x) => x.variationId === v.variationId);
@@ -1335,6 +1370,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       <tr className="text-[10.5px] text-muted-2 text-left">
                         <th className="w-5 print:hidden" />
                         <th className="font-medium py-1 pr-2">Measure</th>
+                        <th className="font-medium py-1 pr-2 w-24">Source</th>
                         {ordered.map((v) => (
                           <th key={v.variationId} className="font-medium py-1 px-1.5 text-right max-w-24">
                             <span className="block truncate" title={v.name}>{v.name}</span>

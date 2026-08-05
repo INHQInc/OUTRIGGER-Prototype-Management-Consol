@@ -12,7 +12,7 @@
  * (same data → same numbers, always), and power/MDE projection.
  */
 import type { ExperimentResults, MetricMap, CompositeMetric, MetricResult } from "./results";
-import { compositeMembers, resolveMetricRow } from "./results";
+import { compositeMembers, resolveMetricRow, armEventsFor } from "./results";
 
 // ── numeric primitives ─────────────────────────────────────────────────────
 
@@ -416,7 +416,14 @@ const visitorsOf = (results: ExperimentResults, variationId: string) => results.
 function compositeCounts(c: CompositeMetric, results: ExperimentResults): Map<string, number> {
   const { members } = compositeMembers(c, results);
   const byVar = new Map<string, number>();
-  for (const m of members) for (const r of m.perVariation) byVar.set(r.variationId, (byVar.get(r.variationId) ?? 0) + r.conversions);
+  for (const m of members) {
+    for (const r of m.perVariation) {
+      // Per-arm membership — the stats engine and the display must sum the
+      // SAME events for an arm, or the index and the verdict disagree.
+      if (!armEventsFor(c, r.variationId).some((e) => resolveMetricRow(e, results) === m)) continue;
+      byVar.set(r.variationId, (byVar.get(r.variationId) ?? 0) + r.conversions);
+    }
+  }
   return byVar;
 }
 

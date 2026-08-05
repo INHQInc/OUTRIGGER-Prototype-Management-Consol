@@ -462,11 +462,19 @@ export function templateStory(opts: {
     return { m, mag: Math.abs(c?.lift ?? 0), sig: s2 };
   }).sort((a, b) => Number(b.sig) - Number(a.sig) || b.mag - a.mag);
 
+  // Trim at a word boundary — "Room-detail engagement (overlay op" reads as
+  // a rendering bug, not as a label.
+  const shortLabel = (t: string) => {
+    const bare = t.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    if (bare.length <= 34) return bare;
+    const cut = bare.slice(0, 34);
+    return cut.slice(0, cut.lastIndexOf(" ") > 12 ? cut.lastIndexOf(" ") : 34).trim();
+  };
   const beats: { measureKey: string; label: string }[] = [];
-  if (primary) beats.push({ measureKey: primary.key, label: primary.label.slice(0, 34) });
+  if (primary) beats.push({ measureKey: primary.key, label: shortLabel(primary.label) });
   for (const s3 of scored) {
     if (beats.length >= 4) break;
-    beats.push({ measureKey: s3.m.key, label: s3.m.label.slice(0, 34) });
+    beats.push({ measureKey: s3.m.key, label: shortLabel(s3.m.label) });
   }
   return { headline, lede, beats };
 }

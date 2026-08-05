@@ -226,11 +226,25 @@ export async function POST(req: NextRequest) {
     renameMetric?: { id?: string; label?: string };
     /** Promote a composite to the console's PRIMARY decision metric. */
     setPrimary?: string;
+    /** Stand the decision metric down entirely. The experiment then has no
+     *  console primary and says so — better than being locked into one. */
+    clearPrimary?: boolean;
     /** Persist the All-measures display order (row keys). Presentation only. */
     orderMetrics?: string[];
     /** Hide/show a measure in the index. Display only — plan measures keep
      *  feeding the verdict; the primary refuses. */
     hideMetric?: { key?: string; hidden?: boolean };
+    /** Build a composite by hand — no LLM. The builder shows live numbers as
+     *  the author picks, so this is a save, not an interpretation. */
+    buildMetric?: {
+      id?: string;                       // present = edit in place
+      label?: string;
+      events?: string[];
+      armEvents?: { variationId: string; events: string[] }[];
+      direction?: "increase" | "decrease";
+      role?: "guardrail" | "info";
+      definition?: string;
+    };
     /** Start over: blank the console's analytics state for this prototype.
      *  Scoped on purpose — the caller says exactly what goes. */
     reset?: { plan?: boolean; verdict?: boolean; reading?: boolean; history?: boolean; notebook?: boolean };
@@ -439,6 +453,71 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ verdict: updated ?? verdict, ideaId: idea.id });
     }
 
+    if (body.buildMetric) {
+      const b = body.buildMetric;
+      const label = String(b.label ?? "").trim().slice(0, 120);
+      if (!label) return NextResponse.json({ error: "Give the measure a name." }, { status: 400 });
+
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "Live results are needed to build a measure." }, { status: 400 });
+      // Only events Optimizely is actually reporting — a composite built on a
+      // name that doesn't exist would silently compute as zero.
+      const reported = new Set(bundle.results.metrics.map((m) => m.name));
+      const armIds = new Set(bundle.results.variations.map((v) => v.variationId));
+      const clean = (list: unknown) => (Array.isArray(list) ? list : [])
+        .filter((e): e is string => typeof e === "string" && reported.has(e)).slice(0, 12);
+
+      const events = clean(b.events);
+      const armEvents = (Array.isArray(b.armEvents) ? b.armEvents : [])
+        .filter((a) => a && typeof a.variationId === "string" && armIds.has(a.variationId))
+        .map((a) => ({ variationId: a.variationId, events: clean(a.events) }))
+        .filter((a) => a.events.length);
+      if (!events.length && !armEvents.length) {
+        return NextResponse.json({ error: "Pick at least one event that is reporting." }, { status: 400 });
+      }
+      // A per-arm build needs BOTH arms named, or one side silently reads zero
+      // and the comparison is a lie.
+      if (armEvents.length && armEvents.length < armIds.size && !events.length) {
+        return NextResponse.json({ error: "With per-version events, every version needs its own list (or a shared fallback list)." }, { status: 400 });
+      }
+
+      const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "measure";
+      let saved: CompositeMetric | null = null;
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const composites = [...(cur?.composites ?? [])];
+        const existingIdx = b.id ? composites.findIndex((c) => c.id === b.id) : -1;
+        // Editing a plan-authored measure would rewrite the pre-registered
+        // contract behind the verdict's back — the builder owns custom only.
+        if (existingIdx >= 0 && composites[existingIdx].source !== "custom") return null;
+        let id = b.id && existingIdx >= 0 ? composites[existingIdx].id : slug;
+        if (existingIdx < 0) {
+          let n = 2;
+          while (composites.some((c) => c.id === id)) id = `${slug}-${n++}`;
+        }
+        const next: CompositeMetric = {
+          ...(existingIdx >= 0 ? composites[existingIdx] : {}),
+          id, label,
+          events,
+          ...(armEvents.length ? { armEvents } : {}),
+          role: existingIdx >= 0 ? composites[existingIdx].role : (b.role === "guardrail" ? "guardrail" : "info"),
+          direction: b.direction === "decrease" ? "decrease" : "increase",
+          definition: typeof b.definition === "string" ? b.definition.slice(0, 400) : composites[existingIdx]?.definition,
+          source: "custom",
+        };
+        saved = next;
+        if (existingIdx >= 0) composites[existingIdx] = next;
+        else composites.push(next);
+        return { confirmed: false, ...(cur ?? {}), composites: composites.slice(0, 24) };
+      });
+      if (!saved) return NextResponse.json({ error: "That measure is part of the confirmed measurement plan — edit it there, not here." }, { status: 400 });
+
+      await audit(g.orgId, actor, b.id ? "results.metric-rebuilt" : "results.metric-built", g.proto.name,
+        `${label} = ${armEvents.length ? armEvents.map((a) => `${a.variationId}:[${a.events.join(" + ")}]`).join(" vs ") : events.join(" + ")}`.slice(0, 400));
+      const { stats, verdict } = await analyze(g.proto, bundle);
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict,
+        attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
+    }
+
     if (body.reset) {
       const scope = body.reset;
       const wanted = Object.entries(scope).filter(([, v]) => v === true).map(([k]) => k);
@@ -508,6 +587,31 @@ export async function POST(req: NextRequest) {
       if (refused) return NextResponse.json({ error: "The decision metric can't be hidden — move the primary first." }, { status: 400 });
       await audit(g.orgId, actor, wantHidden ? "results.measure-hidden" : "results.measure-shown", g.proto.name, label);
       return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.clearPrimary) {
+      let fromLabel = "";
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const old = cur?.composites.find((c) => c.role === "primary");
+        if (!cur || !old) return null;
+        fromLabel = old.label;
+        return {
+          ...cur,
+          composites: cur.composites.map((c) => (c.role === "primary" ? { ...c, role: "info" as const } : c)),
+          // Standing the decision metric down IS a change to the contract, so
+          // it is archived and disclosed exactly like a swap.
+          priorConfirmations: cur.confirmed && cur.confirmedAt
+            ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt, briefAtConfirm: cur.briefAtConfirm }]
+            : cur.priorConfirmations,
+          primaryHistory: [...(cur.primaryHistory ?? []), { from: fromLabel, to: "(none)", at: new Date().toISOString(), by: actor }].slice(-8),
+        };
+      });
+      if (!fromLabel) return NextResponse.json({ error: "There is no decision metric to stand down." }, { status: 400 });
+      await audit(g.orgId, actor, "results.primary-cleared", g.proto.name, fromLabel);
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict,
+        attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.setPrimary) {
