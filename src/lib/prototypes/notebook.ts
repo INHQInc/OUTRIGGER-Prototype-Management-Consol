@@ -51,6 +51,8 @@ export interface Reading {
   headline?: string;
   lede?: string;
   beats?: { measureKey: string; label: string }[];
+  /** One line per WATCHED measure — an observation, never a decision. */
+  observations?: { measureKey: string; note: string }[];
   /** Previous three-row form — still rendered if a cached reading has it. */
   findings?: { figureKey?: string; claim: string }[];
   /** ≤70-char glosses keyed to an attention row the CODE authored. The
@@ -174,7 +176,7 @@ export function readingBasisKey(parts: {
 }): string {
   // READING_FORMAT bumps retire every cached reading on deploy — a format
   // change must never leave old walls of text rendering until data moves.
-  return ["fmt6", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
+  return ["fmt7", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
 }
 
 /** Blank the cached reading. */

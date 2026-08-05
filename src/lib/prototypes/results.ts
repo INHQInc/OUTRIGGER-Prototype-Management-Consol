@@ -187,6 +187,9 @@ export interface MetricMap {
   /** User-chosen display order of the All-measures index — row keys
    *  ("composite:<id>" / "metric:<name>"). Presentation only. */
   measureOrder?: string[];
+  /** Measures the reader wants an OBSERVATION for — watched, never
+   *  adjudicated. The verdict still reads the decision measure alone. */
+  observed?: string[];
   /** Measures hidden from the index (same key space). Presentation only —
    *  a hidden guardrail still feeds the verdict; the primary can't hide. */
   hiddenMeasures?: string[];

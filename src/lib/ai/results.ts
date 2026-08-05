@@ -418,6 +418,18 @@ const readingTool = {
           required: ["code", "note"],
         },
       },
+      observations: {
+        type: "array" as const, maxItems: 6,
+        items: {
+          type: "object" as const,
+          properties: {
+            measure: { type: "string" as const, description: "a measure from the WATCHED list — you may not observe anything else" },
+            note: { type: "string" as const, description: "<=90 chars, NO DIGITS. What is worth noticing about this measure in THIS experiment — the mechanism, not the number. The console prints the number itself." },
+          },
+          required: ["measure", "note"],
+        },
+        description: "One line per watched measure. These are observations, never decisions — the verdict reads the decision measure alone.",
+      },
       trend: { type: "string" as const, description: "<=64 chars, a caption for the day-by-day picture" },
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
       dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data, recorded honestly" },
@@ -522,6 +534,15 @@ export async function generateReading(opts: {
       type: "string", enum: measureKeys, description: "the measure this beat is about",
     };
   }
+  // Only WATCHED measures can be observed — an unwatched one is unemittable.
+  const watched = (opts.map?.observed ?? []).filter((k) => measureKeys.includes(k));
+  if (watched.length) {
+    (tool.input_schema.properties.observations as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
+      type: "string", enum: watched, description: "the watched measure you are observing",
+    };
+  } else {
+    delete (tool.input_schema.properties as Record<string, unknown>).observations;
+  }
 
   const res = await client.messages.create({
     model: "claude-opus-4-8",
@@ -537,6 +558,11 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
+${watched.length ? `WATCHED — the reader asked for an observation on each of these. One line each: what is worth NOTICING about it in this experiment (the mechanism, the trade-off, the caveat), never the number.\n${watched.map((k) => {
+  const m = opts.stats?.metrics.find((x) => x.key === k);
+  const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
+  return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
+}).join("\n")}\n` : ""}
 MEASURES you may put in a beat — name one per beat. NEVER type a number
 anywhere: the page prints the live value, so a number you copy would be stale
 the moment the counts move.
@@ -590,6 +616,18 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     beats.push(b);
   }
 
+  const watchedSet = new Set(watched);
+  const seenObs = new Set<string>();
+  const observations: { measureKey: string; note: string }[] = [];
+  for (const o of Array.isArray(raw.observations) ? raw.observations : []) {
+    const rec = o as Record<string, unknown>;
+    const key = typeof rec.measure === "string" ? rec.measure.trim() : "";
+    const note = clean(rec.note, 90);
+    if (!key || !note || !watchedSet.has(key) || seenObs.has(key)) continue;
+    seenObs.add(key);
+    observations.push({ measureKey: key, note });
+  }
+
   const codeSet = new Set(codes);
   const seenCodes = new Set<string>();
   const riskNotes: { code: string; note: string }[] = [];
@@ -618,6 +656,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       headline,
       lede,
       beats,
+      observations,
       riskNotes,
       trend: one(raw.trend, 64),
       question: one(raw.question, 80),

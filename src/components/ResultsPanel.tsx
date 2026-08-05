@@ -157,7 +157,14 @@ function MetricTrend({ days, metricName, focusId, baseId, focusName, baseName }:
 
 /** One glyph set — inline SVG, currentColor. The ⚠ character risks
  *  rendering as a color emoji outside the palette, so it's banned here. */
-function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" }) {
+function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
+  if (kind === "watch" || kind === "watchOn") {
+    return (
+      <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill={kind === "watchOn" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
+        <path d="M6 1.3 7.45 4.4 10.7 4.8 8.3 7.05 8.95 10.3 6 8.75 3.05 10.3 3.7 7.05 1.3 4.8 4.55 4.4Z" />
+      </svg>
+    );
+  }
   if (kind === "eye" || kind === "eyeOff") {
     return (
       <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
@@ -923,6 +930,43 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     return { headline: t.headline, lede: t.lede, beats: t.beats.map(beatFor).filter(Boolean) as Beat[] };
   })();
 
+  // WATCHED measures get an observation: the arithmetic in a sentence, plus
+  // at most one line of the analyst's own about the mechanism. Observing
+  // something never makes it adjudicable — the verdict reads the primary.
+  const observed = (map?.observed ?? []).filter((k) => statsEff?.metrics.some((m) => m.key === k));
+  const observationFor = (key: string) => {
+    const m = statsEff?.metrics.find((x) => x.key === key);
+    if (!m || !live) return null;
+    const focus = m.cells.find((c) => c.variationId === statsEff?.focusVariationId);
+    const base = m.cells.find((c) => c.variationId === statsEff?.baselineVariationId);
+    const sig = sigOf(focus);
+    const comp = map?.composites.find((c) => `composite:${c.id}` === key);
+    const good = comp?.direction === "decrease" ? (focus?.lift ?? 0) < 0 : (focus?.lift ?? 0) > 0;
+    const breach = verdict?.guardrails.find((g) => `composite:${g.compositeId}` === key && g.state === "breach");
+    const days = statsEff?.power?.daysToObserved;
+    const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
+
+    const computedLine = m.featureOnly
+      ? "New surface — the control has no equivalent, so this is adoption, not a lift."
+      : breach
+        ? "Past the tolerance set before the run began."
+        : sig
+          ? "The gap is beyond what luck explains."
+          : days !== undefined
+            ? `Still inside the range luck could produce — about ${plural(days, "more day")} at this traffic.`
+            : "Still inside the range luck could produce.";
+
+    return {
+      key, label: m.label,
+      value: m.featureOnly ? rate(focus?.rate) : pctS(focus?.lift),
+      tone: m.featureOnly || !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
+      rates: m.featureOnly
+        ? `${rate(focus?.rate)} in ${focus?.name ?? "the variation"} · nothing equivalent in the control`
+        : `${rate(focus?.rate)} vs ${rate(base?.rate)} control`,
+      computedLine,
+      gloss: reading?.observations?.find((o) => o.measureKey === key)?.note,
+    };
+  };
   const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
 
   // ── THE ANALYST THREAD — one conversation, hydrated from the notebook so it
@@ -1057,6 +1101,34 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </span>
             </div>
           </div>
+
+          {/* ── OBSERVATIONS — watched measures. Noticed, never judged. ──── */}
+          {observed.length > 0 && (
+            <div>
+              {zoneHeader("Observations",
+                <span className="ml-auto text-[12.5px] text-muted-2">watched, not judged — the verdict reads the decision measure alone</span>,
+                "observations")}
+              <div className="divide-y divide-border/40">
+                {observed.map((key) => {
+                  const o = observationFor(key);
+                  if (!o) return null;
+                  return (
+                    <div key={key} className="flex items-baseline gap-3 py-2">
+                      <span className={`text-[15px] font-bold tabular-nums w-20 shrink-0 text-right ${o.tone}`}>{o.value}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="text-[14px] font-semibold">{o.label}</span>
+                        <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
+                        <span className="block text-[14px] text-muted leading-snug">{o.gloss ?? o.computedLine}</span>
+                      </span>
+                      <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
+                        title="Stop watching this measure"
+                        className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">stop watching</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ── Z(B) · THE NUMBERS — four tiles, hard cap ─────────────────── */}
           {tiles.length > 0 && (
@@ -1239,7 +1311,19 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </span>
             );
             // toggle · rename · delete · hide — fixed slots, right-aligned.
-            const CLUSTER = "grid grid-cols-[1.75rem_0.9rem_0.9rem_0.9rem] gap-2 items-center justify-items-center ml-auto w-fit";
+            const CLUSTER = "grid grid-cols-[0.9rem_1.75rem_0.9rem_0.9rem_0.9rem] gap-2 items-center justify-items-center ml-auto w-fit";
+            const watch = (rowKey: string) => {
+              const on = (map?.observed ?? []).includes(rowKey);
+              const full = (map?.observed ?? []).length >= 6 && !on;
+              return (
+                <button onClick={() => !full && void post("observe", { observeMetric: { key: rowKey, on: !on } })}
+                  disabled={busy !== null || full}
+                  title={on ? "Watched — it has an observation at the top" : full ? "Six observations is the cap — stop watching one first" : "Watch this measure: it gets an observation at the top"}
+                  className={on ? "text-accent" : full ? "text-muted-2/30 cursor-not-allowed" : "text-muted-2 hover:text-foreground"}>
+                  <Glyph kind={on ? "watchOn" : "watch"} />
+                </button>
+              );
+            };
             const eye = (rowKey: string, isHidden: boolean) => (
               <button onClick={() => saveHidden(rowKey, !isHidden)}
                 title={isHidden ? "Show this measure again" : "Hide from the index (display only — plan measures still feed the verdict)"}
@@ -1314,6 +1398,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </span>
                     ) : (
                       <span className={CLUSTER}>
+                        {watch(rowKey)}
                         {/* ONE primary — switch semantics: on = the decision metric;
                             flipping another on moves it (the server keeps exactly one) */}
                         <button
@@ -1364,6 +1449,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
                   <td className="py-1.5 pl-2 print:hidden">
                     <span className={CLUSTER}>
+                      {watch(rowKey)}
                       {/* a raw Optimizely event can't be the console's decision
                           metric — the slot stays empty so the column holds */}
                       <span /><span /><span />
@@ -1391,7 +1477,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         ))}
                         <th className="font-medium py-1 pl-2 text-right">Δ vs control</th>
                         <th className="font-medium py-1 pl-2 text-right w-20"></th>
-                        <th className="font-medium py-1 pl-2 w-[6.5rem] print:hidden"></th>
+                        <th className="font-medium py-1 pl-2 w-[8rem] print:hidden"></th>
                       </tr>
                     </thead>
                     <tbody className="tabular-nums">

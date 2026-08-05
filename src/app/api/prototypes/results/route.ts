@@ -236,6 +236,9 @@ export async function POST(req: NextRequest) {
     clearPrimary?: boolean;
     /** Persist the All-measures display order (row keys). Presentation only. */
     orderMetrics?: string[];
+    /** Watch a measure: it gets an observation under the decision summary.
+     *  Display only — observing something never makes it adjudicable. */
+    observeMetric?: { key?: string; on?: boolean };
     /** Hide/show a measure in the index. Display only — plan measures keep
      *  feeding the verdict; the primary refuses. */
     hideMetric?: { key?: string; hidden?: boolean };
@@ -578,6 +581,21 @@ export async function POST(req: NextRequest) {
         .slice(0, 100);
       const map = await mutateMetricMap(g.proto.key, (cur) =>
         cur ? { ...cur, measureOrder: order } : { composites: [], confirmed: false, measureOrder: order });
+      return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.observeMetric) {
+      const rowKey = String(body.observeMetric.key ?? "").slice(0, 220);
+      const on = Boolean(body.observeMetric.on);
+      if (!rowKey) return NextResponse.json({ error: "An observation needs the measure key." }, { status: 400 });
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const base = cur ?? { composites: [], confirmed: false };
+        const set = new Set(base.observed ?? []);
+        if (on) set.add(rowKey); else set.delete(rowKey);
+        // Six is the point where a list of observations becomes the wall this
+        // readout exists to avoid.
+        return { ...base, observed: [...set].slice(0, 6) };
+      });
       return NextResponse.json({ metricMap: map });
     }
 
