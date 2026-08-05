@@ -1287,10 +1287,18 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     ) : null}
                   </td>
                   <td className="py-1.5 pr-2">
-                    <span className="text-[9px] font-bold uppercase tracking-wide border border-accent/40 text-accent rounded px-1"
-                      title={`Computed by the console from Optimizely events: ${(c.armEvents?.length ? c.armEvents.flatMap((a) => a.events) : c.events).join(" + ")}`}>
-                      console
-                    </span>
+                    {c.source === "custom" ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wide border border-accent/40 text-accent rounded px-1"
+                        title={`Built here from Optimizely events: ${(c.armEvents?.length ? c.armEvents.flatMap((a) => a.events) : c.events).join(" + ")}`}>
+                        console
+                      </span>
+                    ) : (
+                      <a href="?tab=analytics#measurement"
+                        className="text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 hover:text-foreground hover:border-border-strong"
+                        title={`Part of the measurement plan — the contract the verdict adjudicates. Edit or remove it in the Measurement plan, not here. = ${(c.armEvents?.length ? c.armEvents.flatMap((a) => a.events) : c.events).join(" + ")}`}>
+                        plan →
+                      </a>
+                    )}
                   </td>
                   {ordered.map((v) => {
                     const r = rowsC.find((x) => x.variationId === v.variationId);
@@ -1320,10 +1328,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         </button>
                         {c.source === "custom"
                           ? <button onClick={() => setBuilder({ editing: c })} title="Edit this measure" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
-                          : <span />}
+                          : <a href="?tab=analytics#measurement" title="This measure belongs to the measurement plan — edit it there. Removing plan measures here would unwind the contract the verdict adjudicates." className="text-muted-2/50 hover:text-foreground"><Glyph kind="pencil" /></a>}
                         {c.source === "custom"
                           ? <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
-                          : <span />}
+                          : <span title="Plan measures are removed in the Measurement plan (Re-plan), so the pre-registered contract changes on the record" className="text-muted-2/25 cursor-not-allowed"><Glyph kind="trash" /></span>}
                         {pinned ? <span /> : eye(rowKey, isHidden)}
                       </span>
                     )}
