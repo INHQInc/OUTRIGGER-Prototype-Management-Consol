@@ -535,7 +535,14 @@ export async function generateReading(opts: {
     };
   }
   // Only WATCHED measures can be observed — an unwatched one is unemittable.
-  const watched = (opts.map?.observed ?? []).filter((k) => measureKeys.includes(k));
+  // Optimizely's own primary is watched whether or not anyone asked: it is the
+  // number the client reads in THEIR tool, and the console must never quietly
+  // disagree with it.
+  const optiPrimaryKey = opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : "";
+  const watched = [...new Set([
+    ...(optiPrimaryKey && measureKeys.includes(optiPrimaryKey) ? [optiPrimaryKey] : []),
+    ...(opts.map?.observed ?? []),
+  ])].filter((k) => measureKeys.includes(k));
   if (watched.length) {
     (tool.input_schema.properties.observations as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
       type: "string", enum: watched, description: "the watched measure you are observing",
