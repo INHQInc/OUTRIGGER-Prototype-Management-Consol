@@ -187,6 +187,11 @@ export interface MetricMap {
   /** User-chosen display order of the All-measures index — row keys
    *  ("composite:<id>" / "metric:<name>"). Presentation only. */
   measureOrder?: string[];
+  /** Attention rows the team has SEEN and accepted. Acknowledged is not
+   *  deleted: they leave the working view and still print, tagged, because a
+   *  leadership PDF that omits "the decision metric changed mid-run" is worse
+   *  than one that admits it. */
+  acknowledged?: string[];
   /** Measures the reader wants an OBSERVATION for — watched, never
    *  adjudicated. The verdict still reads the decision measure alone. */
   observed?: string[];

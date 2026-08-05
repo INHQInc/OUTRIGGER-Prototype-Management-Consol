@@ -295,6 +295,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [builder, setBuilder] = useState<{ editing: CompositeMetric | null } | null>(null);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [showAllAttention, setShowAllAttention] = useState(false);
+  const [showAcked, setShowAcked] = useState(false);
   const [threadOpen, setThreadOpen] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
   // Ask vs Challenge are different INSTRUCTIONS, not different destinations —
@@ -1163,17 +1164,22 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
           {/* ── Z(C) · NEEDS ATTENTION — 100% computed ─────────────────────── */}
           {attention.length > 0 && (() => {
+            const ackSet = new Set(map?.acknowledged ?? []);
+            // Acknowledged rows leave the WORKING view and still print: the
+            // reader has seen them, the record has not lost them.
+            const acked = attention.filter((a) => a.severity !== "critical" && ackSet.has(a.id));
             const criticals = attention.filter((a) => a.severity === "critical");
-            const rest = attention.filter((a) => a.severity !== "critical");
+            const rest = attention.filter((a) => a.severity !== "critical" && !ackSet.has(a.id));
             const room = Math.max(1, 4 - criticals.length);
             const shown = [...criticals, ...(showAllAttention ? rest : rest.slice(0, room))];
+            if (!shown.length && !acked.length) return null;
             const hiddenCount = rest.length - (showAllAttention ? rest.length : Math.min(room, rest.length));
             const tone = (s: string) => (s === "critical" ? "text-danger" : s === "attention" ? "text-warn" : "text-ok");
             const bar = (s: string) => (s === "critical" ? "bg-danger" : s === "attention" ? "bg-warn" : "bg-ok");
             return (
               <div>
                 {zoneHeader("Needs attention", criticals.length + rest.length > 0 && attention[0].severity !== "good"
-                  ? <span className="text-[20px] font-semibold tabular-nums leading-none">{attention.length}</span>
+                  ? <span className="text-[20px] font-semibold tabular-nums leading-none">{criticals.length + rest.length}</span>
                   : undefined, "attention")}
                 <div className="divide-y divide-border/40">
                   {shown.map((a) => (
@@ -1188,10 +1194,32 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           ? <button onClick={() => void load()} className="shrink-0 text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover print:hidden">{a.actionLabel}</button>
                           : <a href={a.actionHref} className="shrink-0 text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover">{a.actionLabel} →</a>
                       )}
+                      {a.severity !== "critical" && a.severity !== "good" && (
+                        <button onClick={() => void post("ack", { acknowledge: { id: a.id, on: true } })}
+                          title="Mark as seen — it leaves this list and still prints on the report"
+                          className="shrink-0 text-[15px] leading-none text-muted-2/60 hover:text-foreground print:hidden">&#215;</button>
+                      )}
                     </div>
                   ))}
                   {hiddenCount > 0 && (
                     <button onClick={() => setShowAllAttention(true)} className="py-2 text-[14px] text-muted-2 hover:text-foreground print:hidden">+{hiddenCount} more</button>
+                  )}
+                  {acked.length > 0 && (
+                    <div className="py-2">
+                      <button onClick={() => setShowAcked((v) => !v)} className="text-[12.5px] text-muted-2 hover:text-foreground print:hidden">
+                        {showAcked ? "Hide" : "Show"} {plural(acked.length, "acknowledged item")}
+                      </button>
+                      <div className={`${showAcked ? "" : "hidden"} print:block mt-1.5 space-y-1.5`}>
+                        {acked.map((a) => (
+                          <div key={a.id} className="flex items-start gap-2 text-[13.5px] text-muted-2">
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 mt-0.5">seen</span>
+                            <span className="min-w-0"><b className="font-semibold">{a.title}</b> — {riskNote(a.id) ?? a.detail}</span>
+                            <button onClick={() => void post("ack", { acknowledge: { id: a.id, on: false } })}
+                              className="ml-auto shrink-0 text-[12.5px] hover:text-foreground print:hidden">restore</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

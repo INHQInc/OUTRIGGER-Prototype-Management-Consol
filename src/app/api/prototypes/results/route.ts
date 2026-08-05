@@ -236,6 +236,8 @@ export async function POST(req: NextRequest) {
     clearPrimary?: boolean;
     /** Persist the All-measures display order (row keys). Presentation only. */
     orderMetrics?: string[];
+    /** Mark an attention row as seen — it collapses on screen, still prints. */
+    acknowledge?: { id?: string; on?: boolean };
     /** Watch a measure: it gets an observation under the decision summary.
      *  Display only — observing something never makes it adjudicable. */
     observeMetric?: { key?: string; on?: boolean };
@@ -581,6 +583,20 @@ export async function POST(req: NextRequest) {
         .slice(0, 100);
       const map = await mutateMetricMap(g.proto.key, (cur) =>
         cur ? { ...cur, measureOrder: order } : { composites: [], confirmed: false, measureOrder: order });
+      return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.acknowledge) {
+      const id = String(body.acknowledge.id ?? "").slice(0, 220);
+      const on = Boolean(body.acknowledge.on);
+      if (!id) return NextResponse.json({ error: "An acknowledgement needs the row id." }, { status: 400 });
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const base = cur ?? { composites: [], confirmed: false };
+        const set = new Set(base.acknowledged ?? []);
+        if (on) set.add(id); else set.delete(id);
+        return { ...base, acknowledged: [...set].slice(0, 40) };
+      });
+      await audit(g.orgId, actor, on ? "results.attention-acknowledged" : "results.attention-restored", g.proto.name, id);
       return NextResponse.json({ metricMap: map });
     }
 
