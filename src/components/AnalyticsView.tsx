@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { MeasurementPanel } from "./MeasurementPanel";
+import { EvidencePanel } from "./EvidencePanel";
 import { ResultsPanel } from "./ResultsPanel";
 
-type View = "readout" | "numbers" | "plan";
+type View = "readout" | "numbers" | "evidence" | "plan";
 
 /**
  * Analytics as a DASHBOARD, not a scroll: one segmented control, three
@@ -27,6 +28,7 @@ export function AnalyticsView({ prototypeKey, bound, running }: {
     const fromHash = () => {
       const h = window.location.hash.replace("#", "");
       if (h === "measurement") setView("plan");
+      else if (h === "evidence") setView("evidence");
       else if (h === "numbers") setView("numbers");
       else if (h === "results") setView("readout");
     };
@@ -38,6 +40,7 @@ export function AnalyticsView({ prototypeKey, bound, running }: {
   const TABS: { id: View; label: string; sub: string }[] = [
     { id: "readout", label: "Readout", sub: "the verdict and the story — presentation-ready" },
     { id: "numbers", label: "The numbers", sub: "every metric, interval, and check" },
+    { id: "evidence", label: "Evidence", sub: "the screens, with each tracked element's number on it" },
     { id: "plan", label: "Measurement plan", sub: "how this experiment is judged" },
   ];
 
@@ -59,11 +62,14 @@ export function AnalyticsView({ prototypeKey, bound, running }: {
         ))}
       </div>
 
+      <div className={view === "evidence" ? "" : "hidden"} id="evidence">
+        <EvidencePanel prototypeKey={prototypeKey} bound={bound} />
+      </div>
       <div className={view === "plan" ? "" : "hidden"} id="measurement">
         <MeasurementPanel prototypeKey={prototypeKey} bound={bound} running={running} onPending={onPending} />
       </div>
       <div id="results">
-        <ResultsPanel prototypeKey={prototypeKey} bound={bound} running={running} view={view === "numbers" ? "numbers" : "readout"} hidden={view === "plan"} />
+        <ResultsPanel prototypeKey={prototypeKey} bound={bound} running={running} view={view === "numbers" ? "numbers" : "readout"} hidden={view === "plan" || view === "evidence"} />
       </div>
     </div>
   );
