@@ -1438,7 +1438,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     </div>
 
                     {openObs === key && (
-                      <div className="mt-2 rounded-lg border border-border bg-background/50 px-5 py-4 space-y-2.5">
+                      <div className="mt-2 ml-[5.75rem] md:ml-[11.5rem] rounded-lg border border-border bg-background/50 px-5 py-4 space-y-2.5">
                         {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this metric against the brief and what was built…</p>}
                         {deepObs[key] && (
                           <>
