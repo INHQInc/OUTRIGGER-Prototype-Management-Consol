@@ -21,7 +21,7 @@ import type { ExperimentResults, MetricMap, CompositeMetric } from "../prototype
 import type { StatsReport } from "../prototypes/stats";
 import type { VerdictRecord } from "../prototypes/verdict";
 import type { OrgNotebook, ProtoNotebook, Reading } from "../prototypes/notebook";
-import { computeComposite, compositeMembers } from "../prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, SUPPORTING_CAP } from "../prototypes/results";
 import { STAT_NOISE, type AttentionItem } from "../prototypes/attention";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
@@ -396,16 +396,20 @@ const readingTool = {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
       lede: { type: "string" as const, description: "<=620 chars, three to five sentences, NO DIGITS, two or three sentences of plain business English. What happened, what the trade-off is, and what has not answered yet. No statistics vocabulary." },
       beats: {
-        type: "array" as const, minItems: 3, maxItems: 4,
+        // Bounds are set at call time from the team's supporting set — this
+        // pair is only the shape for a run with nothing marked.
+        type: "array" as const, minItems: 1, maxItems: 8,
         items: {
           type: "object" as const,
           properties: {
             measure: { type: "string" as const, description: "the NAME of a metric from the list given - never type a number, the page prints the live value" },
             label: { type: "string" as const, description: "<=34 chars, NO DIGITS - what that metric is, in plain words, e.g. 'room-detail engagement'" },
           },
-          required: ["metric", "label"],
+          // `measure`, not `metric` — requiring an absent property taught the
+          // model to emit a field the validator then failed to find.
+          required: ["measure", "label"],
         },
-        description: "3-4 numbers worth putting in front of a leader. Lead with the decision metric.",
+        description: "ONE per metric in the beat list, in that order. Lead with the decision metric.",
       },
       riskNotes: {
         type: "array" as const, maxItems: 3,
@@ -419,16 +423,19 @@ const readingTool = {
         },
       },
       observations: {
-        type: "array" as const, maxItems: 6,
+        type: "array" as const, maxItems: 8,
         items: {
           type: "object" as const,
           properties: {
-            measure: { type: "string" as const, description: "a metric from the WATCHED list — you may not observe anything else" },
+            measure: { type: "string" as const, description: "a metric from the SUPPORTING list — you may not observe anything else" },
             note: { type: "string" as const, description: "<=180 chars, NO DIGITS. A CLAIM WITH ITS TENSION, in the shape 'More visitors reach the booking step, but the gap is still too faint to lean on' — say what happened AND what qualifies it, in one sentence. Never a status line like 'guests behave about the same'. Answer the only question the business is asking: WHAT DOES THIS TELL US? What guests are doing differently on this surface, and what it means for the booking path — where intent is being created, where it is leaking, what it implies about the next move. Name the surface in the reader's words. e.g. 'Guests reach for availability far more often once the overlay puts it in front of them — the intent was there, the old layout was burying it.' NEVER write about significance, sample size, confidence, or how long the test needs." },
           },
-          required: ["metric", "note"],
+          // The property is `measure` — requiring a `metric` that does not
+          // exist in the schema invited the model to emit the wrong field
+          // name, and every observation carrying it was silently dropped.
+          required: ["measure", "note"],
         },
-        description: "ONE LINE FOR EVERY pinned metric listed — do not skip any. Each says WHAT THAT METRIC CAPTURES in guest behaviour, as a definition. What HAPPENED to it is written elsewhere. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
+        description: "ONE LINE FOR EVERY supporting metric listed — do not skip any. Each says WHAT THAT METRIC CAPTURES in guest behaviour, as a definition. What HAPPENED to it is written elsewhere. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
       },
       trend: { type: "string" as const, description: "<=64 chars, a caption for the day-by-day picture" },
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
@@ -440,11 +447,25 @@ const readingTool = {
 
 /** The deterministic story — day one, a failed call, or a model that broke
  *  the format all land here. The zone is never empty and never a spinner. */
+/** Trim at a word boundary — "Room-detail engagement (overlay op" reads as a
+ *  rendering bug, not as a label. Exported because the PAGE builds the same
+ *  row from the same set and must label a metric the cached reading skipped
+ *  exactly as the generator would. */
+export function shortLabel(t: string): string {
+  const bare = t.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (bare.length <= 34) return bare;
+  const cut = bare.slice(0, 34);
+  return cut.slice(0, cut.lastIndexOf(" ") > 12 ? cut.lastIndexOf(" ") : 34).trim();
+}
+
 export function templateStory(opts: {
   results: ExperimentResults; stats: StatsReport | null; verdict: VerdictRecord | null;
+  /** The team's supporting set. When present it IS the beats row — the
+   *  computed floor obeys the same contract the analyst does. */
+  supporting?: string[];
 }): { headline: string; lede: string; beats: { measureKey: string; label: string }[] } {
   const { stats, verdict } = opts;
-  const headlineKey = stats?.primaryKey ?? (opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : undefined);
+  const headlineKey = stats?.primaryKey ?? (optiPrimaryKeyOf(opts.results) || undefined);
   const primary = stats?.metrics.find((m) => m.key === headlineKey);
   const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
   const sig = Boolean(focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0);
@@ -492,15 +513,23 @@ export function templateStory(opts: {
     return { m, mag: Math.abs(c?.lift ?? 0), sig: s2 };
   }).sort((a, b) => Number(b.sig) - Number(a.sig) || b.mag - a.mag);
 
-  // Trim at a word boundary — "Room-detail engagement (overlay op" reads as
-  // a rendering bug, not as a label.
-  const shortLabel = (t: string) => {
-    const bare = t.replace(/\s*\([^)]*\)\s*$/, "").trim();
-    if (bare.length <= 34) return bare;
-    const cut = bare.slice(0, 34);
-    return cut.slice(0, cut.lastIndexOf(" ") > 12 ? cut.lastIndexOf(" ") : 34).trim();
-  };
   const beats: { measureKey: string; label: string }[] = [];
+  if (opts.supporting?.length) {
+    // The team said what belongs in the top line. The floor does not get to
+    // pick something else because it moved more.
+    const byKey = new Map((stats?.metrics ?? []).map((m) => [m.key, m] as const));
+    for (const k of opts.supporting) {
+      const m = byKey.get(k);
+      if (m) beats.push({ measureKey: k, label: shortLabel(m.label) });
+    }
+    // THE HEADLINE METRIC READS FIRST. The supporting set is ordered with
+    // Optimizely's primary at the front (it is the number the client sees in
+    // their own tool), but the ROW is about whatever the verdict adjudicates
+    // — the same promotion generateReading and the page both apply.
+    const h = headlineKey ? beats.findIndex((b) => b.measureKey === headlineKey) : -1;
+    if (h > 0) beats.unshift(...beats.splice(h, 1));
+    return { headline, lede, beats };
+  }
   if (primary) beats.push({ measureKey: primary.key, label: shortLabel(primary.label) });
   for (const s3 of scored) {
     if (beats.length >= 4) break;
@@ -528,33 +557,58 @@ export async function generateReading(opts: {
   const { system } = await analystSkill(opts.orgId);
   // The metrics a beat may name, with what each reads right now. Shown so
   // the analyst picks the right one — never copied into the words.
-  const measureKeys = (opts.stats?.metrics ?? []).map((m) => m.key);
+  // THE SUPPORTING SET — the team's own answer to "what is this readout
+  // about". It bounds what a beat may name, so the analyst's job is to
+  // EXPLAIN the metrics they chose rather than to choose metrics.
+  const allKeys = (opts.stats?.metrics ?? []).map((m) => m.key);
+  const supporting = supportingKeys({
+    map: opts.map,
+    optiPrimaryKey: optiPrimaryKeyOf(opts.results),
+    decisionKey: opts.stats?.primaryKey,
+    available: allKeys,
+  });
+  const supportingSet = new Set(supporting);
+  // A HIDDEN row is not part of the story: out of THE PATH, out of WHAT MOVED,
+  // out of the beat menu. It stays in RAW NUMBERS, which is the numeric table
+  // of record, and its risks still reach the analyst through the computed
+  // attention list — hiding a guardrail must not hide a guardrail BREACH.
+  // The two primaries can't hide.
+  const hidden = new Set(opts.map?.hiddenMeasures ?? []);
+  const narratable = (opts.stats?.metrics ?? []).filter((m) => !hidden.has(m.key) || supportingSet.has(m.key));
+  const measureKeys = narratable.map((m) => m.key);
   // WHAT MOVED — the raw material for a mechanism sentence. Without this the
   // analyst can only write "the decision metric is ahead", which is a
   // restatement of the verdict rather than an observation of the experiment.
+  // TIERED: the supporting metrics are what the story is made of; everything
+  // else is context the analyst may CONTRADICT the story with but may never
+  // promote. Marking controls what gets promoted, never what gets suppressed.
   const focusName = opts.results.variations.find((v) => v.variationId === opts.stats?.focusVariationId)?.name ?? "the variant";
-  const movers = (opts.stats?.metrics ?? []).map((m) => {
+  const movers = narratable.map((m) => {
     const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
     const sig = Boolean(c?.liftCi && c.liftCi.lo * c.liftCi.hi > 0);
     return { label: m.label, lift: c?.lift, sig, oneArm: Boolean(m.featureOnly), role: m.role, key: m.key };
   });
-  const up = movers.filter((m) => m.sig && (m.lift ?? 0) > 0);
-  const down = movers.filter((m) => m.sig && (m.lift ?? 0) < 0);
-  const flat = movers.filter((m) => !m.sig && !m.oneArm);
-  const newSurfaces = movers.filter((m) => m.oneArm);
-  const whatMoved = [
-    up.length ? `UP beyond luck: ${up.map((m) => m.label).join(", ")}` : "",
-    down.length ? `DOWN beyond luck: ${down.map((m) => m.label).join(", ")}` : "",
-    newSurfaces.length ? `ONLY EXISTS IN ${focusName.toUpperCase()}: ${newSurfaces.map((m) => m.label).join(", ")}` : "",
-    flat.length ? `NOT SETTLED EITHER WAY: ${flat.map((m) => m.label).join(", ")}` : "",
-    up.length && down.length ? `TENSION: things moved BOTH ways — say whether the gain looks like new behaviour or behaviour that moved from one surface to another.` : "",
+  const movedBlock = (rows: typeof movers) => [
+    rows.filter((m) => m.sig && (m.lift ?? 0) > 0).length ? `UP beyond luck: ${rows.filter((m) => m.sig && (m.lift ?? 0) > 0).map((m) => m.label).join(", ")}` : "",
+    rows.filter((m) => m.sig && (m.lift ?? 0) < 0).length ? `DOWN beyond luck: ${rows.filter((m) => m.sig && (m.lift ?? 0) < 0).map((m) => m.label).join(", ")}` : "",
+    rows.filter((m) => m.oneArm).length ? `ONLY EXISTS IN ${focusName.toUpperCase()}: ${rows.filter((m) => m.oneArm).map((m) => m.label).join(", ")}` : "",
+    rows.filter((m) => !m.sig && !m.oneArm).length ? `NOT SETTLED EITHER WAY: ${rows.filter((m) => !m.sig && !m.oneArm).map((m) => m.label).join(", ")}` : "",
   ].filter(Boolean).join("\n");
+  const supMovers = movers.filter((m) => supportingSet.has(m.key));
+  const ctxMovers = movers.filter((m) => !supportingSet.has(m.key));
+  const anyUp = movers.some((m) => m.sig && (m.lift ?? 0) > 0);
+  const anyDown = movers.some((m) => m.sig && (m.lift ?? 0) < 0);
+  const whatMoved = [
+    supMovers.length ? `THE METRICS THIS READOUT IS ABOUT (the team marked these as supporting the hypothesis — the story is made of THESE):\n${movedBlock(supMovers)}` : "",
+    ctxMovers.length ? `CONTEXT ONLY (running underneath; you may raise one as a CAUTION if it contradicts the story, but it may NEVER be a beat and may never lead):\n${movedBlock(ctxMovers)}` : "",
+    anyUp && anyDown ? `TENSION: things moved BOTH ways — say whether the gain looks like new behaviour or behaviour that moved from one surface to another.` : "",
+  ].filter(Boolean).join("\n\n");
 
   // THE PATH. The team's own row order (dragged in All metrics) is the funnel
   // as they understand it, so the story can trace steps instead of listing
   // movers. Plan definitions ride along — they say what each step IS.
   const orderRank = new Map((opts.map?.measureOrder ?? []).map((k, i) => [k, i] as const));
-  const pathLines = [...(opts.stats?.metrics ?? [])]
+  const pathLines = [...narratable]
     .sort((a, b) => (orderRank.get(a.key) ?? 999) - (orderRank.get(b.key) ?? 999))
     .map((m) => {
       const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
@@ -567,11 +621,15 @@ export async function generateReading(opts: {
       return `- ${m.label} (${state})${comp?.definition ? ` — ${comp.definition}` : ""}${comp?.role === "guardrail" ? " [GUARDRAIL: must not drop]" : ""}`;
     }).join("\n");
 
-  const measureMenu = (opts.stats?.metrics ?? []).map((m) => {
+  // The beat menu is the SUPPORTING SET ONLY — showing the analyst metrics it
+  // is not allowed to name would be an invitation to argue with the enum.
+  const measureMenu = supporting.map((k) => {
+    const m = narratable.find((x) => x.key === k);
+    if (!m) return "";
     const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
     const delta = m.featureOnly ? "variation-only" : c?.lift === undefined ? "not computing" : `${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%`;
     return `${m.key} — ${m.label} (${delta})`;
-  }).join("\n") || "(no metrics reporting)";
+  }).filter(Boolean).join("\n") || "(no metrics reporting)";
   // "all-clear" is not a risk — leaving it in the enum lets the analyst write
   // its own sentence under "Nothing needs attention".
   const codes = opts.attention.filter((a) => a.severity !== "good").map((a) => a.id);
@@ -583,25 +641,34 @@ export async function generateReading(opts: {
       type: "string", enum: codes, description: "the risk you are glossing",
     };
   }
-  if (measureKeys.length) {
-    (tool.input_schema.properties.beats as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
-      type: "string", enum: measureKeys, description: "the metric this beat is about",
+  // A BEAT MAY ONLY NAME A SUPPORTING METRIC. This is the whole feature: the
+  // top line of the readout is the team's set, not whatever moved most. The
+  // enum makes anything else unemittable rather than merely discouraged.
+  // The fallback is only reachable with nothing reporting at all (a reporting
+  // experiment always has an Optimizely primary, which is always supporting).
+  // It is capped anyway: an unbounded enum would demand one beat per metric.
+  const beatEnum = supporting.length ? supporting : measureKeys.slice(0, 4);
+  if (beatEnum.length) {
+    const beatsSchema = tool.input_schema.properties.beats as {
+      minItems: number; maxItems: number;
+      items: { properties: { measure: Record<string, unknown> } };
     };
+    beatsSchema.items.properties.measure = {
+      type: "string", enum: beatEnum, description: "the metric this beat is about",
+    };
+    // Exactly one beat per supporting metric. A floor of three when only two
+    // are marked would force the model to pad from an enum that cannot supply
+    // a third — an unsatisfiable schema, not a stricter one.
+    beatsSchema.minItems = Math.min(beatEnum.length, SUPPORTING_CAP);
+    beatsSchema.maxItems = Math.min(beatEnum.length, SUPPORTING_CAP);
   }
-  // Only WATCHED metrics can be observed — an unwatched one is unemittable.
-  // Optimizely's own primary is watched whether or not anyone asked: it is the
-  // number the client reads in THEIR tool, and the console must never quietly
-  // disagree with it.
-  // BOTH primaries are always observed: Optimizely's, because it is the number
-  // the client reads in their own tool, and the console's decision metric,
-  // because it is the one being adjudicated. They may disagree — that is
-  // exactly why each needs its own read.
-  const optiPrimaryKey = opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : "";
-  const watched = [...new Set([
-    ...(optiPrimaryKey ? [optiPrimaryKey] : []),
-    ...(opts.stats?.primaryKey ? [opts.stats.primaryKey] : []),
-    ...(opts.map?.observed ?? []),
-  ])].filter((k) => measureKeys.includes(k));
+  // The same set is what gets an OBSERVATION — one act, one meaning: this
+  // metric is part of the story. BOTH primaries are in it whether or not
+  // anyone marked them: Optimizely's, because it is the number the client
+  // reads in their own tool, and the console's decision metric, because it is
+  // the one being adjudicated. They may disagree — that is exactly why each
+  // needs its own read.
+  const watched = supporting;
   if (watched.length) {
     (tool.input_schema.properties.observations as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
       type: "string", enum: watched, description: "the watched metric you are observing",
@@ -612,7 +679,10 @@ export async function generateReading(opts: {
 
   const res = await client.messages.create({
     model: "claude-opus-4-8",
-    max_tokens: 1200,
+    // The mandated output scales with the team's set — up to eight beats AND
+    // eight observations, where it used to be four and six. A truncated tool
+    // call returns nothing usable and falls back to the computed story.
+    max_tokens: 2400,
     system,
     messages: [{
       role: "user",
@@ -624,7 +694,7 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
-${watched.length ? `PINNED — write ONE observation for EVERY metric below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are guests doing differently on that surface, where is intent being created or lost along the booking path, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
+${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones that support the hypothesis. Write ONE observation for EVERY metric below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are guests doing differently on that surface, where is intent being created or lost along the booking path, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
   const m = opts.stats?.metrics.find((x) => x.key === k);
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
@@ -639,17 +709,21 @@ ${pathLines || "(no metrics reporting)"}
 WHAT MOVED (write about THESE, by name, in the reader's words):
 ${whatMoved || "(nothing has moved beyond luck yet)"}
 
-MEASURES you may put in a beat — name one per beat. NEVER type a number
-anywhere: the page prints the live value, so a number you copy would be stale
-the moment the counts move.
+THE ONLY METRICS YOU MAY PUT IN A BEAT — write one beat for EACH of them, in
+this order, and no others. These are the team's choice, not yours: a metric
+that moved spectacularly and is not on this list does not belong in the top
+line. NEVER type a number anywhere: the page prints the live value, so a
+number you copy would be stale the moment the counts move.
 ${measureMenu}
 
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and 3-4 BEATS naming the metrics worth putting in front of a leader, decision metric first.
+Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and ONE BEAT FOR EACH metric in the beat list above, in that order, decision metric first.
 
 THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
+
+THE TEAM CHOSE WHAT THIS READOUT IS ABOUT. The supporting metrics are the steps they believe lead to the headline metric, so the lede's job is to CHAIN THEM: what guests do first, what that produces next, and where it does or does not arrive at the outcome. A CONTEXT-ONLY metric may be raised once, and only as a caution that something is moving against the story — never as the subject of a sentence and never in a beat. A metric that is absent from THE PATH and from WHAT MOVED has been taken off this readout by the team — it may still appear in the raw tables above, and you must not write about it at all.
 
 TRACE THE PATH TO IT. The experiment's own hypothesis names the steps: clicks lead somewhere, that somewhere leads to the outcome. So say where guests are being gained and where they are being lost ALONG THAT PATH, and finish on what it means for the headline metric — "the shortcut wins the click, the click is not reaching the booking engine" is the shape. A metric marked MISNAMED is a BROKEN DEFINITION, not a result: the console cannot compute it because the event name in the plan does not match anything Optimizely reports. Say exactly that — "the plan's version of this step names an event that isn't reporting under that name" — and if ANOTHER metric on the path measures the same step and IS reporting, say so and read that one instead. NEVER describe a metric as unwired when it is reporting numbers: check the path above before making that claim. If a guardrail is dropping, name it — the team said in advance it must not.
 
@@ -669,7 +743,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // ── VALIDATE + REPAIR (enforce-in-code): the words may carry no digits and
   // a beat may only name a metric that exists. Anything that fails falls
   // back to the computed story rather than being patched into shape.
-  const fallback = templateStory({ results: opts.results, stats: opts.stats, verdict: opts.verdict });
+  const fallback = templateStory({ results: opts.results, stats: opts.stats, verdict: opts.verdict, supporting });
   const clean = (v: unknown, cap: number) => {
     const t = typeof v === "string" ? stripMd(v).replace(/\s+/g, " ").trim() : "";
     if (!t || t.length > cap || /\d/.test(t) || STAT_NOTATION.test(t)) return "";
@@ -705,51 +779,37 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   headline = headline || fallback.headline;
   lede = lede || fallback.lede;
 
-  const known = new Set(measureKeys);
-  const seenMeasures = new Set<string>();
-  const beats: { measureKey: string; label: string }[] = [];
+  // THE BEATS ROW IS THE TEAM'S SET, RECONCILED IN CODE — not whatever the
+  // model returned. The analyst contributes WORDING; the membership and the
+  // order are the console's. A supporting metric the model skipped still gets
+  // a beat (labelled from the metric itself), and anything it named outside
+  // the set is dropped. Prompt-hoping was never going to hold this.
+  const allowed = new Set(beatEnum);
+  const written = new Map<string, string>();
   for (const b of Array.isArray(raw.beats) ? raw.beats : []) {
     const rec = b as Record<string, unknown>;
     const key = typeof rec.measure === "string" ? rec.measure.trim() : "";
     const label = clean(rec.label, 34);
-    if (!key || !label || !known.has(key) || seenMeasures.has(key)) continue;
-    seenMeasures.add(key);
-    beats.push({ measureKey: key, label });
-    if (beats.length === 4) break;
+    if (!key || !label || !allowed.has(key) || written.has(key)) continue;
+    written.set(key, label);
   }
-  // THE HEADLINE METRIC IS ALWAYS THE FIRST BEAT. The story is about it —
-  // the decision metric when one is nominated, Optimizely's own primary when
-  // none is. A model that wrote about something else gets corrected here
-  // rather than asked again.
-  const headKey = opts.stats?.primaryKey ?? (opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : undefined);
-  if (headKey && measureKeys.includes(headKey)) {
-    const existing = beats.findIndex((b) => b.measureKey === headKey);
-    if (existing > 0) {
-      const [b] = beats.splice(existing, 1);
-      beats.unshift(b);
-    } else if (existing < 0) {
-      const label = opts.stats?.metrics.find((m) => m.key === headKey)?.label ?? "the headline metric";
-      beats.unshift({ measureKey: headKey, label: label.replace(/\s*\([^)]*\)\s*$/, "").trim().slice(0, 34) });
-      seenMeasures.add(headKey);
-      if (beats.length > 4) beats.pop();
-    }
-  }
+  const labelOf = (k: string) => written.get(k) ?? shortLabel(opts.stats?.metrics.find((m) => m.key === k)?.label ?? k);
+  const beats: { measureKey: string; label: string }[] = beatEnum
+    .filter((k) => measureKeys.includes(k))
+    .map((k) => ({ measureKey: k, label: labelOf(k) }));
 
-  // Supporting beats read in the team's own order — the funnel as they have
-  // arranged it — so the row of numbers walks the path rather than jumping.
-  const head = beats[0];
-  const rest = beats.slice(1).sort((a, b) => (orderRank.get(a.measureKey) ?? 999) - (orderRank.get(b.measureKey) ?? 999));
-  beats.length = 0;
-  if (head) beats.push(head);
-  beats.push(...rest);
+  // THE HEADLINE METRIC IS ALWAYS THE FIRST BEAT. The story is about it — the
+  // decision metric when one is nominated, Optimizely's own primary when none
+  // is. (The supporting set leads with Optimizely's primary because that is
+  // the number the client reads in their own tool; the beats row leads with
+  // whatever the story is ABOUT. Both orderings are deliberate.)
+  const headKey = opts.stats?.primaryKey ?? (optiPrimaryKeyOf(opts.results) || undefined);
+  const at = headKey ? beats.findIndex((b) => b.measureKey === headKey) : -1;
+  if (at > 0) beats.unshift(...beats.splice(at, 1));
+  beats.length = Math.min(beats.length, SUPPORTING_CAP);
 
-  // Never fewer than three: top up from the computed order, skipping repeats.
-  for (const b of fallback.beats) {
-    if (beats.length >= 3) break;
-    if (seenMeasures.has(b.measureKey)) continue;
-    seenMeasures.add(b.measureKey);
-    beats.push(b);
-  }
+  // A prototype with nothing marked and nothing reporting still gets a row.
+  if (!beats.length) beats.push(...fallback.beats);
 
   const watchedSet = new Set(watched);
   const seenObs = new Set<string>();
@@ -757,7 +817,9 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   for (const o of Array.isArray(raw.observations) ? raw.observations : []) {
     const rec = o as Record<string, unknown>;
     const key = typeof rec.measure === "string" ? rec.measure.trim() : "";
-    const note = clean(rec.note, 90);
+    // Asked for at 180 and discarded at 90 — the analyst's observations were
+    // being thrown away for obeying the instruction they were given.
+    const note = clean(rec.note, 180);
     if (!key || !note || !watchedSet.has(key) || seenObs.has(key)) continue;
     seenObs.add(key);
     observations.push({ measureKey: key, note });

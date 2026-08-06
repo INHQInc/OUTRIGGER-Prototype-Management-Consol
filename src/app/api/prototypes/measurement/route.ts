@@ -151,10 +151,14 @@ export async function POST(req: NextRequest) {
       // — the earliest pre-observation stamp anchors the verdict's
       // pre-registration disclosure.
       const plan = (await mutateMetricMap(g.proto.key, (cur) => pruneMeasureKeys({
-        // The user's own curation of the index (row order, hidden rows) is
-        // presentation, not plan — a re-plan must never silently wipe it.
+        // The user's own curation of the index (row order, hidden rows, and
+        // WHICH METRICS SUPPORT THE HYPOTHESIS) is presentation and authorship,
+        // not plan — a re-plan must never silently wipe it. `observed` is now
+        // the set the readout is written about, so dropping it here would
+        // collapse the top line to the two primaries with nothing said.
         measureOrder: cur?.measureOrder,
         hiddenMeasures: cur?.hiddenMeasures,
+        observed: cur?.observed,
         composites: draft.composites,
         proposedBy: "claude (measurement planner)",
         confirmed: false,

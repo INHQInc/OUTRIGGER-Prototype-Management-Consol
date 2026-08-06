@@ -241,7 +241,67 @@ export function pruneMeasureKeys(map: MetricMap): MetricMap {
   const next = { ...map };
   if (next.measureOrder) next.measureOrder = next.measureOrder.filter(keep);
   if (next.hiddenMeasures) next.hiddenMeasures = next.hiddenMeasures.filter(keep);
+  // `observed` is the SUPPORTING set and now drives the beats row, so a key
+  // pointing at a deleted composite would promote a metric that no longer
+  // exists into the readout's top line.
+  if (next.observed) next.observed = next.observed.filter(keep);
   return next;
+}
+
+/** Optimizely's OWN primary metric — the first metric attached to the
+ *  experiment, which is the number the client reads in their own tool. Four
+ *  call sites derived this inline; it is one rule, so it lives in one place. */
+export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined): string {
+  return results?.metrics[0] ? `metric:${results.metrics[0].name}` : "";
+}
+
+/** Six marked + both primaries. The beats row is one line, not a table. */
+export const SUPPORTING_CAP = 8;
+
+/** THE SUPPORTING SET — the metrics the readout promotes and the analyst is
+ *  asked to reason about: Optimizely's primary, the console's decision metric,
+ *  and whatever the team marked as supporting the hypothesis.
+ *
+ *  This is THE seam. The beats row, the Observations list, the reading prompt
+ *  and the reading's cache basis all resolve through it — anything picking its
+ *  own subset of metrics to narrate is a bug, because the whole point is that
+ *  the TEAM chooses what the summary is about, not the model.
+ *
+ *  Marking supports PROMOTION only, never suppression: an unmarked metric is
+ *  still computed, still feeds the verdict, and may still be raised as a
+ *  contradiction. Otherwise the toggle would be a way to curate a flattering
+ *  readout by omission.
+ */
+export function supportingKeys(opts: {
+  map: MetricMap | null;
+  /** Optimizely's primary — always supporting, marked or not. */
+  optiPrimaryKey?: string | null;
+  /** The console's decision metric — always supporting when one is set. */
+  decisionKey?: string | null;
+  /** Keys that actually exist in the current stats report. */
+  available: string[];
+  /** Row order; the client passes its in-flight local order while a drag saves. */
+  order?: string[];
+}): string[] {
+  const hidden = new Set(opts.map?.hiddenMeasures ?? []);
+  const avail = new Set(opts.available);
+  const rank = new Map((opts.order ?? opts.map?.measureOrder ?? []).map((k, i) => [k, i] as const));
+  // Optimizely's primary leads, then the decision metric, then the team's own
+  // row order — ONE ordering to think about across every surface.
+  const rankOf = (k: string) =>
+    k === opts.optiPrimaryKey ? -2
+      : k === opts.decisionKey ? -1
+      : rank.get(k) ?? Number.MAX_SAFE_INTEGER;
+  return [...new Set([
+    ...(opts.optiPrimaryKey ? [opts.optiPrimaryKey] : []),
+    ...(opts.decisionKey ? [opts.decisionKey] : []),
+    ...(opts.map?.observed ?? []),
+  ])]
+    // A hidden row is hidden everywhere — except the two primaries, which
+    // refuse to hide and are read whether or not anyone asked.
+    .filter((k) => avail.has(k) && (!hidden.has(k) || k === opts.optiPrimaryKey || k === opts.decisionKey))
+    .sort((a, b) => rankOf(a) - rankOf(b))
+    .slice(0, SUPPORTING_CAP);
 }
 
 /** Blank the metric map. The store has no delete; every reader treats an

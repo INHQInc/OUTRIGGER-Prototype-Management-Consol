@@ -2,11 +2,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
-import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, SUPPORTING_CAP } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
-import { figureValue, templateStory } from "@/lib/ai/results";
+import { figureValue, templateStory, shortLabel } from "@/lib/ai/results";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
@@ -488,7 +488,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   }
 
   function saveHidden(rowKey: string, hidden: boolean) {
-    quietChain.current = quietChain.current.then(() => quietPost({ hideMetric: { key: rowKey, hidden } }));
+    quietChain.current = quietChain.current.then(async () => {
+      const ok = await quietPost({ hideMetric: { key: rowKey, hidden } });
+      // Hiding a SUPPORTING metric releases the mark server-side, so what the
+      // reading is about just changed — say so, or the summary keeps
+      // describing a row that is no longer on the readout.
+      if (ok && (map?.observed ?? []).includes(rowKey)) { autoReadRef.current = null; setReadingStale(true); }
+      return ok;
+    });
   }
 
   async function openObservation(key: string) {
@@ -540,6 +547,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       // A primary swap re-derives the verdict, banner, and tiles server-side —
       // reload the readout in place so a page refresh is never needed.
       if (action === "setPrimary") await load();
+      // CHANGING THE SUPPORTING SET CHANGES WHAT THE READING IS ABOUT. These
+      // routes answer with the metric map alone, so the server's new basis
+      // never reaches the client and the auto-regeneration would never fire —
+      // the summary would keep describing the old set and the toggle would
+      // look broken. Marking it stale here starts the regeneration; the row
+      // itself has already changed, because it is built from the set.
+      if (action === "observe" || action === "hide") {
+        autoReadRef.current = null;
+        setReadingStale(true);
+      }
     } catch {
       if (action === "reading") autoReadRef.current = null;
       setErr("Network hiccup — try again.");
@@ -599,7 +616,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // tile 3 · time → tile 4 · RATES live in the comparison bars only.
   // With no decision metric set, the readout does NOT quietly pick one: it
   // reads Optimizely's primary and says that is what it is doing.
-  const optiKey = live?.metrics[0] ? `metric:${live.metrics[0].name}` : undefined;
+  const optiKey = optiPrimaryKeyOf(live) || undefined;
   const headlineKey = statsEff?.primaryKey ?? optiKey;
   const headlineIsOpti = !statsEff?.primaryKey && Boolean(optiKey);
   const primaryStats = statsEff?.metrics.find((m) => m.key === headlineKey);
@@ -1017,17 +1034,46 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     };
   };
 
+  // THE SUPPORTING SET — the metrics the team marked as supporting the
+  // hypothesis, plus both primaries. It bounds the beats row AND the
+  // observations list: one act, one meaning. ONE DERIVATION — the same
+  // function the reading generator and the cache basis use, so what the
+  // analyst was asked about and what the page shows can never drift apart.
+  const optiPrimaryKey = optiPrimaryKeyOf(live);
+  const supporting = supportingKeys({
+    map: map ?? null,
+    optiPrimaryKey,
+    decisionKey: statsEff?.primaryKey,
+    available: (statsEff?.metrics ?? []).map((m) => m.key),
+    order: orderLocal ?? map?.measureOrder ?? [],
+  });
+
   const story = (() => {
     if (reading?.headline || reading?.beats?.length) {
-      const picked = (reading.beats ?? []).map(beatFor).filter(Boolean) as Beat[];
+      // THE ROW IS BUILT FROM THE SET, NOT FROM THE CACHED READING — the same
+      // reconciliation the generator runs, so the page and the generator can
+      // never resolve different rows from the same set (ONE DERIVATION). The
+      // saved reading contributes WORDING for the metrics it happened to
+      // cover; a metric marked since it was written still gets its beat,
+      // labelled from the metric itself. So the top line answers a toggle
+      // immediately, while the prose catches up in the background.
+      const written = new Map((reading.beats ?? []).map((b) => [b.measureKey, b.label] as const));
+      const rowKeys = supporting.length ? supporting : (reading.beats ?? []).map((b) => b.measureKey);
+      const picked = rowKeys
+        .map((k) => beatFor({ measureKey: k, label: written.get(k) ?? shortLabel(statsEff?.metrics.find((m) => m.key === k)?.label ?? k) }))
+        .filter(Boolean) as Beat[];
       // The decision metric always reads first — it is the one the verdict
-      // adjudicates, so it cannot appear third behind a secondary.
+      // adjudicates, so it cannot appear third behind a supporting metric.
       picked.sort((a, b) => Number(b.key === headlineKey) - Number(a.key === headlineKey));
-      return { headline: reading.headline, lede: reading.lede, beats: picked };
+      if (picked.length) return { headline: reading.headline, lede: reading.lede, beats: picked };
     }
     // No reading yet (or a cached one in the old shape): the computed story.
-    const t = templateStory({ results: live!, stats: statsEff ?? null, verdict });
-    return { headline: t.headline, lede: t.lede, beats: t.beats.map(beatFor).filter(Boolean) as Beat[] };
+    const t = templateStory({ results: live!, stats: statsEff ?? null, verdict, supporting });
+    return {
+      headline: reading?.headline || t.headline,
+      lede: reading?.lede || t.lede,
+      beats: t.beats.map(beatFor).filter(Boolean) as Beat[],
+    };
   })();
 
   // WATCHED metrics get an observation: the arithmetic in a sentence, plus
@@ -1036,24 +1082,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // Optimizely's own primary is ALWAYS at the top, watched or not — whoever
   // opens Optimizely sees that number, so the console shows it beside its own
   // decision metric rather than letting the two disagree in different tools.
-  const optiPrimaryKey = live?.metrics[0] ? `metric:${live.metrics[0].name}` : "";
-  // Pinned rows read in the SAME order as the index: reordering the table
-  // reorders what is pinned above it, so there is one ordering to think about.
-  const orderPrefTop = orderLocal ?? map?.measureOrder ?? [];
-  const rankOf = new Map(orderPrefTop.map((k, i) => [k, i] as const));
-  const indexRank = (key: string) =>
-    // Optimizely's primary leads the observations, always — it is the number
-    // the client sees in their own tool, so it is read first here too.
-    key === optiPrimaryKey ? -2
-      : key === statsEff?.primaryKey ? -1
-      : rankOf.get(key) ?? Number.MAX_SAFE_INTEGER;
-  const observed = [...new Set([
-    ...(optiPrimaryKey ? [optiPrimaryKey] : []),
-    ...(statsEff?.primaryKey ? [statsEff.primaryKey] : []),
-    ...(map?.observed ?? []),
-  ])]
-    .filter((k) => statsEff?.metrics.some((m) => m.key === k))
-    .sort((a, b) => indexRank(a) - indexRank(b));
+  // Supporting rows read in the SAME order as the index: reordering the table
+  // reorders what sits above it, so there is one ordering to think about.
+  const observed = supporting;
   // What this metric has actually DONE, day by day, from the console's own
   // snapshots — the same source the primary's trend line uses. Deterministic:
   // an observation should never depend on the analyst noticing a shape.
@@ -1338,6 +1369,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     ))}
                   </ul>
                 )}
+                {/* The row is the team's set, so a SHORT row is a statement:
+                    nothing else has been declared to support the hypothesis.
+                    Said out loud, it reads as a choice rather than a gap. */}
+                {!(map?.observed ?? []).length && (
+                  <p className="text-[12.5px] text-muted-2 pt-0.5 print:hidden">
+                    Only the primaries are declared. Mark a metric as supporting in All metrics to add it here and have the summary written about it.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -1459,7 +1498,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             );
           })()}
 
-          {/* ── OBSERVATIONS — watched metrics. Noticed, never judged. ──── */}
+          {/* ── OBSERVATIONS — the supporting metrics. Noticed, never judged. ── */}
           {observed.length > 0 && (
             <div>
               {zoneHeader("Observations", undefined, "observations")}
@@ -1506,7 +1545,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {obsBusy === key ? "reading…" : openObs === key ? "close" : "read the full observation"}
                       </button>
                       {(key === optiPrimaryKey || key === statsEff?.primaryKey) && !(map?.observed ?? []).includes(key) ? (
-                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — both primaries are read here whether or not anyone pinned them">always pinned</span>
+                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always supporting — both primaries are read here whether or not anyone marked them">always supporting</span>
                       ) : (
                         <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
                           title="Unpin this metric"
@@ -1667,13 +1706,20 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             );
             // toggle · rename · delete · hide — fixed slots, right-aligned.
             const CLUSTER = "grid grid-cols-[0.9rem_1.75rem_0.9rem_0.9rem_0.9rem] gap-2 items-center justify-items-center ml-auto w-fit";
+            // SUPPORTING — the one act that says "this metric is part of the
+            // story": it enters the readout's top line AND gets an
+            // observation. Marking promotes; it never suppresses, so an
+            // unmarked metric can still be raised as a contradiction.
             const watch = (rowKey: string) => {
               const on = (map?.observed ?? []).includes(rowKey);
-              const full = (map?.observed ?? []).length >= 6 && !on;
+              const full = (map?.observed ?? []).length >= SUPPORTING_CAP - 2 && !on;
               return (
                 <button onClick={() => !full && void post("observe", { observeMetric: { key: rowKey, on: !on } })}
                   disabled={busy !== null || full}
-                  title={on ? "Pinned to the top — unpin to remove its observation" : full ? "Six pinned metrics is the cap — unpin one first" : "Pin this metric to the top, with an observation of how it is doing"}
+                  title={on
+                    ? "Supporting the hypothesis — the summary is written about this metric. Click to drop it back to context."
+                    : full ? `${SUPPORTING_CAP - 2} supporting metrics is the cap — drop one first`
+                    : "Mark as SUPPORTING: it joins the top line of the readout and the summary is written about it"}
                   className={on ? "text-accent" : full ? "text-muted-2/30 cursor-not-allowed" : "text-muted-2 hover:text-foreground"}>
                   <Glyph kind={on ? "watchOn" : "watch"} />
                 </button>

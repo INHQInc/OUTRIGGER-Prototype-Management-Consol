@@ -173,10 +173,19 @@ export function readingBasisKey(parts: {
   mapConfirmedAt?: string;
   orgNotebookUpdatedAt?: string;
   protoNotebookUpdatedAt?: string;
+  /** The supporting set. Marking a metric changes what the reading is ABOUT,
+   *  so a cached reading from the old set is stale by definition — without
+   *  this the toggle looks broken: the row never changes. */
+  supporting?: string[];
 }): string {
   // READING_FORMAT bumps retire every cached reading on deploy — a format
   // change must never leave old walls of text rendering until data moves.
-  return ["fmt7", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-"].join("|");
+  // MEMBERSHIP, not order: the keys are sorted so dragging a row in the index
+  // — presentation — cannot retire the reading and buy a fresh Opus call for
+  // words that would come out the same.
+  const sup = parts.supporting?.length ? [...parts.supporting].sort().join(",") : "";
+  return ["fmt8", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
+    sup ? `sup:${sup}` : "-"].join("|");
 }
 
 /** Blank the cached reading. */

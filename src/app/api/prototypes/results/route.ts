@@ -3,7 +3,8 @@ import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
 import {
   normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
-  type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys, clearMetricMap, clearResultsHistory } from "@/lib/prototypes/results";
+  type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys, clearMetricMap, clearResultsHistory,
+  supportingKeys, optiPrimaryKeyOf, SUPPORTING_CAP } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
 import { deriveAttention } from "@/lib/prototypes/attention";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, clearVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
@@ -128,8 +129,38 @@ function attentionFor(opts: {
   });
 }
 
+type BasisInput = {
+  history: ResultsHistory; verdict: VerdictRecord | null; map: MetricMap | null;
+  orgNb: { updatedAt?: string }; protoNb: { updatedAt?: string };
+  stats?: StatsReport | null; results?: ExperimentResults | null;
+};
+
+/** The set the reading is ABOUT, as the generator will resolve it. */
+function supportingFor(opts: BasisInput): string[] {
+  return supportingKeys({
+    map: opts.map,
+    optiPrimaryKey: optiPrimaryKeyOf(opts.results),
+    decisionKey: opts.stats?.primaryKey,
+    available: (opts.stats?.metrics ?? []).map((m) => m.key),
+  });
+}
+
 /** The reading's staleness basis, derived from the current truth. */
-function basisFor(opts: { history: ResultsHistory; verdict: VerdictRecord | null; map: MetricMap | null; orgNb: { updatedAt?: string }; protoNb: { updatedAt?: string } }): string {
+function basisFor(opts: BasisInput): string {
+  return readingBasisKey({
+    latestSnapshotDate: opts.history.days[opts.history.days.length - 1]?.date,
+    verdict: opts.verdict?.verdict,
+    mapConfirmedAt: opts.map?.confirmedAt,
+    orgNotebookUpdatedAt: opts.orgNb.updatedAt,
+    protoNotebookUpdatedAt: opts.protoNb.updatedAt,
+    supporting: supportingFor(opts),
+  });
+}
+
+/** Deep observations are PER-METRIC and don't depend on which other metrics
+ *  are supporting, so they keep the basis WITHOUT the set — otherwise marking
+ *  a fourth metric would throw away the three deep reads already generated. */
+function obsBasisFor(opts: BasisInput): string {
   return readingBasisKey({
     latestSnapshotDate: opts.history.days[opts.history.days.length - 1]?.date,
     verdict: opts.verdict?.verdict,
@@ -178,9 +209,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const basis = basisFor({ history, verdict, map: metricMap, orgNb, protoNb });
+  const basisIn = { history, verdict, map: metricMap, orgNb, protoNb, stats, results: bundle.results };
+  const basis = basisFor(basisIn);
   const deepCache = JSON.parse((await (await getContentStore()).getFlag(`observations:${g.proto.key}`)) || "{}") as Record<string, { basisKey?: string }>;
-  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => v?.basisKey === `${basis}|obs2`));
+  const obsBasis = obsBasisFor(basisIn);
+  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => v?.basisKey === `${obsBasis}|obs2`));
   const attention = deriveAttention({
     verdict, stats, map: metricMap, planDrift,
     resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
@@ -605,7 +638,7 @@ export async function POST(req: NextRequest) {
       const map = await getMetricMap(g.proto.key);
       const { stats, verdict, history } = await analyze(g.proto, bundle);
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
-      const basis = basisFor({ history, verdict, map, orgNb, protoNb });
+      const basis = obsBasisFor({ history, verdict, map, orgNb, protoNb });
 
       const store = await getContentStore();
       const cacheKey = `observations:${g.proto.key}`;
@@ -653,10 +686,15 @@ export async function POST(req: NextRequest) {
         const base = cur ?? { composites: [], confirmed: false };
         const set = new Set(base.observed ?? []);
         if (on) set.add(rowKey); else set.delete(rowKey);
-        // Six is the point where a list of observations becomes the wall this
-        // readout exists to avoid.
-        return { ...base, observed: [...set].slice(0, 6) };
+        // Marking a HIDDEN row shows it again. supportingKeys drops hidden
+        // metrics, so the alternative is a lit toggle that consumes a slot and
+        // does nothing — a control that lies about what it did.
+        const hidden = on ? (base.hiddenMeasures ?? []).filter((k) => k !== rowKey) : base.hiddenMeasures;
+        // Six marked is the point where a list of observations becomes the
+        // wall this readout exists to avoid (both primaries ride free).
+        return { ...base, observed: [...set].slice(0, SUPPORTING_CAP - 2), ...(hidden ? { hiddenMeasures: hidden } : {}) };
       });
+      await audit(g.orgId, actor, on ? "results.metric-supporting" : "results.metric-context", g.proto.name, rowKey);
       return NextResponse.json({ metricMap: map });
     }
 
@@ -673,7 +711,10 @@ export async function POST(req: NextRequest) {
         if (target) label = target.label;
         const set = new Set(base.hiddenMeasures ?? []);
         if (wantHidden) set.add(rowKey); else set.delete(rowKey);
-        return { ...base, hiddenMeasures: [...set].slice(0, 100) };
+        // Hiding a SUPPORTING metric releases it. Leaving the mark behind
+        // would keep a row nobody can see driving the readout's top line.
+        const observed = wantHidden ? (base.observed ?? []).filter((k) => k !== rowKey) : base.observed;
+        return { ...base, hiddenMeasures: [...set].slice(0, 100), ...(observed ? { observed } : {}) };
       });
       if (refused) return NextResponse.json({ error: "The decision metric can't be hidden — move the primary first." }, { status: 400 });
       await audit(g.orgId, actor, wantHidden ? "results.measure-hidden" : "results.measure-shown", g.proto.name, label);
@@ -837,7 +878,7 @@ export async function POST(req: NextRequest) {
       const map = await getMetricMap(g.proto.key);
       const { stats, verdict, history } = await analyze(g.proto, bundle);
       const [orgNb, protoNb, cached] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key), getReading(g.proto.key)]);
-      const basis = basisFor({ history, verdict, map, orgNb, protoNb });
+      const basis = basisFor({ history, verdict, map, orgNb, protoNb, stats, results: bundle.results });
       if (!body.force && cached?.basisKey === basis) {
         return NextResponse.json({ reading: cached, readingStale: false, readingBasis: basis, notebook: { org: orgNb, proto: protoNb } });
       }
@@ -865,7 +906,7 @@ export async function POST(req: NextRequest) {
         // concurrent tune/ask that must keep the new reading stale.
         const protoNb2 = dataWishes.length ? await appendNotebook(g.proto.key, [], dataWishes) : protoNb;
         const foreignWrite = protoNb2.entries.length !== protoNb.entries.length;
-        reading.basisKey = foreignWrite ? basis : basisFor({ history, verdict, map, orgNb, protoNb: protoNb2 });
+        reading.basisKey = foreignWrite ? basis : basisFor({ history, verdict, map, orgNb, protoNb: protoNb2, stats, results: bundle.results });
         await saveReading(g.proto.key, reading);
         return NextResponse.json({ reading, readingStale: foreignWrite, readingBasis: reading.basisKey, notebook: { org: orgNb, proto: protoNb2 } });
       } finally {
