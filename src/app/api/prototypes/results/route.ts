@@ -186,8 +186,12 @@ export async function GET(req: NextRequest) {
     resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
   });
   return NextResponse.json({
-    // the printed readout should name the experiment it is about
+    // the printed readout should name the experiment it is about, and state
+    // what was being tested even when nothing is frozen yet
     prototypeName: g.proto.name,
+    liveHypothesis: g.proto.hypothesis?.change || g.proto.hypothesis?.outcome
+      ? `We believe ${g.proto.hypothesis.change || "…"} for ${g.proto.hypothesis.audience || "…"} will cause ${g.proto.hypothesis.outcome || "…"}.`
+      : null,
     attention,
     deepObservations,
     windowResults: windowView?.results ?? null,

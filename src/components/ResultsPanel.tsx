@@ -354,6 +354,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [builder, setBuilder] = useState<{ editing: CompositeMetric | null } | null>(null);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [protoName, setProtoName] = useState<string | null>(null);
+  const [liveHypothesis, setLiveHypothesis] = useState<string | null>(null);
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [showAcked, setShowAcked] = useState(false);
   // The full read of one metric, fetched on demand and cached server-side.
@@ -407,6 +408,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setAttention(data.attention ?? []);
       if (data.deepObservations) setDeepObs(data.deepObservations);
       setProtoName(data.prototypeName ?? null);
+      setLiveHypothesis(data.liveHypothesis ?? null);
       setOrderLocal(null);
       if (data.experimentStatus) setExpStatus(data.experimentStatus);
     } catch {
@@ -1187,12 +1189,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   ? <a href={chip.href} className={`${cls} text-accent hover:border-accent`}>{chip.label}</a>
                   : <span className={`${cls} text-muted-2`}>{chip.label}</span>;
               })()}
-              {(protoName || pr?.hypothesis) && (
+              {(protoName || pr?.hypothesis || liveHypothesis) && (
                 <div className="mt-1 space-y-0.5">
                   {protoName && <div className="text-[14px] font-semibold text-foreground/90">{protoName}</div>}
-                  {pr?.hypothesis && (
+                  {/* The FROZEN hypothesis when one exists — that is the contract
+                      the verdict adjudicates. Otherwise the live one, said to be
+                      live, because "no hypothesis" is never the honest answer. */}
+                  {(pr?.hypothesis || liveHypothesis) && (
                     <p className="text-[13.5px] text-muted-2 leading-snug max-w-[100ch]">
-                      <span className="font-semibold">Hypothesis: </span>{pr.hypothesis}
+                      <span className="font-semibold">{pr?.hypothesis ? "Hypothesis: " : "Hypothesis (not frozen yet): "}</span>
+                      {pr?.hypothesis ?? liveHypothesis}
                     </p>
                   )}
                 </div>
