@@ -116,6 +116,15 @@ export function deriveAttention(opts: {
     });
   }
 
+  if (verdict?.preRegistration?.hypothesisNotFrozen) {
+    attention.push({
+      id: "hypothesis-not-frozen", severity: "attention",
+      title: "Hypothesis wasn't frozen",
+      detail: "Nothing was locked before traffic, so this run is read against the brief as it stands today — strong evidence, but not a pre-registered result. Cut a version to freeze the next one.",
+      actionLabel: "See the method", actionHref: "#method",
+    });
+  }
+
   if (verdict?.preRegistration?.primaryUnratified) {
     attention.push({
       id: "mapping-unratified", severity: "attention",

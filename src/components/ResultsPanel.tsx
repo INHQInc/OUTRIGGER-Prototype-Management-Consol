@@ -177,6 +177,42 @@ const SHOW_CALL = false;
  *  which say what they mean as well as what they are. */
 const SHOW_TILES = false;
 
+/** The reading rewrites itself in the background whenever the team changes
+ *  what the readout is about. A dimmed block alone read as "broken", so the
+ *  region says what it is doing. */
+function Working({ label }: { label: string }) {
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/65 backdrop-blur-[1px]" role="status" aria-live="polite">
+      <span className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-sm">
+        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none text-accent" fill="none" stroke="currentColor" strokeWidth={2}>
+          <circle cx="8" cy="8" r="6" className="opacity-25" />
+          <path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" />
+        </svg>
+        <span className="text-[12.5px] font-medium text-muted">{label}</span>
+      </span>
+    </div>
+  );
+}
+
+/** Confirmation that the background work finished. Auto-dismisses; polite for
+ *  screen readers; never covers the metric index. */
+function Toast({ text, onDone }: { text: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3600);
+    return () => clearTimeout(t);
+  }, [text, onDone]);
+  return (
+    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 print:hidden" role="status" aria-live="polite">
+      <div className="flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 shadow-lg">
+        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 text-ok" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 8.5 6.5 12 13 4.5" />
+        </svg>
+        <span className="text-[13px] text-foreground">{text}</span>
+      </div>
+    </div>
+  );
+}
+
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
   if (kind === "watch" || kind === "watchOn") {
     return (
@@ -388,6 +424,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // The DECISION METRIC as the server resolved it. Read-only on purpose: the
   // page must never hold Optimizely's synthesized composite, because it
   // round-trips its map through confirm/propose and would persist it.
+  const [toast, setToast] = useState<string | null>(null);
   const [decision, setDecision] = useState<{ key: string; label: string; source: "console" | "optimizely"; direction?: "increase" | "decrease"; directionDeclared: boolean } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [answer, setAnswer] = useState<AnalystAnswer | string | null>(null);
@@ -593,6 +630,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       // A primary swap re-derives the verdict, banner, and tiles server-side —
       // reload the readout in place so a page refresh is never needed.
       if (action === "setPrimary") await load();
+      if (action === "reading" && data.reading) setToast("Summary and observations updated");
 
     } catch {
       if (action === "reading") autoReadRef.current = null;
@@ -1262,6 +1300,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
   return (
     <div className="space-y-3">
+      {toast && <Toast text={toast} onDone={() => setToast(null)} />}
       {err && <div className="text-[14px] text-danger print:hidden">{err}</div>}
 
       {builder && live && (
@@ -1410,7 +1449,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     {busy === "reading" ? "re-reading…" : "re-read"}
                   </button>
                 </span>)}
-              <div className={`space-y-2 ${busy === "reading" ? "opacity-60" : ""}`}>
+              <div className={`relative space-y-2 ${busy === "reading" ? "opacity-60" : ""}`}>
+                {busy === "reading" && <Working label="Rewriting the summary…" />}
                 {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
                 {story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>}
                 {story.beats.length > 0 && (
@@ -1557,7 +1597,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           {observed.length > 0 && (
             <div>
               {zoneHeader("Observations", undefined, "observations")}
-              <div className="divide-y divide-border/40">
+              <div className={`relative divide-y divide-border/40 ${busy === "reading" ? "opacity-60" : ""}`}>
+                {busy === "reading" && <Working label="Re-reading these metrics…" />}
                 {observed.map((key) => {
                   const o = observationFor(key);
                   if (!o) return null;

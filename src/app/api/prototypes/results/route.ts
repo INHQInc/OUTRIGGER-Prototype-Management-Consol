@@ -130,6 +130,18 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
     // mid-run Re-plan replacing the stamp must not erase "this was declared
     // before traffic".
     mapConfirmedAt: [...(map?.priorConfirmations?.map((p) => p.confirmedAt) ?? []), ...(map?.confirmedAt ? [map.confirmedAt] : [])].sort()[0],
+    // The floor: with nothing frozen, the run is read against the brief as it
+    // stands today and the record says so. A missing plan stops the console
+    // pre-registering a result; it no longer stops it reading one.
+    liveBrief: proto.hypothesis?.change || proto.hypothesis?.outcome
+      ? {
+          change: proto.hypothesis.change,
+          audience: proto.hypothesis.audience,
+          outcome: proto.hypothesis.outcome,
+          primary: proto.metrics?.primary,
+          guardrails: proto.metrics?.guardrails,
+        }
+      : undefined,
   });
   const saved = await saveDraftVerdict(proto.key, draft);
   return { stats, verdict: saved, history, map };

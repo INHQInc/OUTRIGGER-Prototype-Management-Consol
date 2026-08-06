@@ -502,12 +502,20 @@ export function templateStory(opts: {
 
   const lede =
     verdict?.verdict === "not_adjudicable"
-      // THE GATE OWNS THE REASON. Five different gates return not_adjudicable
-      // and each already states its own cause in plain words; paraphrasing
-      // them here produced a vague line that contradicted the gate trace on
-      // the same screen. Quote the gate that actually failed.
-      ? `${(verdict.gates.find((g) => g.pass === false)?.detail
-          ?? "The console can't adjudicate this run yet.").replace(/\s+/g, " ").trim()} The numbers below are real and everything already collected still counts.`
+      // The gate details are written for the METHOD FOLD — they name internal
+      // machinery ("pre-registration anchor", "cut/push"). An executive
+      // readout gets the same fact in the reader's own words, one line per
+      // cause, and never the raw gate text.
+      ? `${(() => {
+          const f = verdict.gates.find((g) => g.pass === false);
+          switch (f?.id) {
+            case "mapping": return "Neither Optimizely nor this console has a primary metric for this experiment, so there is nothing to judge the run against";
+            case "focus": return "The version this prototype is bound to isn't in the results, so the console won't read a result off a different one";
+            case "prereg": return "The brief doesn't say what this experiment was meant to change, so there is no claim to test";
+            case "significance": return "The decision metric isn't producing a number both versions can be compared on";
+            default: return "The console can't read a result from this run yet";
+          }
+        })()} — the numbers below are real and everything already collected still counts.`
       : lift === undefined
         ? "The decision metric has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
         : !sig

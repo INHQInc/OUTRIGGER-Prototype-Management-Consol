@@ -99,17 +99,11 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
     if (!t.bound) {
       q.push({ id: "bind", kind: "link", tab: "experiment", anchor: "ship", label: "Bind the Optimizely experiment", why: "pick the experiment built in Optimizely — everything downstream reads from it" });
     } else if (!t.experimentRunning) {
-      if (!t.measurementPlanned) {
-        q.push({ id: "measurement-plan", kind: "link", tab: "analytics", anchor: "measurement", label: "Confirm the measurement plan", why: "declare the decision metric over real events before traffic — a plan stamped pre-start makes the verdict defensible" });
-      }
       // A run that ENDED wants adjudication (queued above), not a restart.
       if (!t.adjudicationPending) {
         q.push({ id: "start-experiment", kind: "link", tab: "experiment", label: "Start the experiment in Optimizely", why: "starting traffic is a human act — the console never does it" });
       }
     } else {
-      if (!t.measurementPlanned) {
-        q.push({ id: "measurement-plan-late", kind: "link", tab: "analytics", anchor: "measurement", label: "Confirm the measurement plan (post-start)", why: "traffic started without a confirmed plan — confirming now is disclosed in the verdict; later is worse" });
-      }
       q.push({ id: "running", kind: "wait", tab: "analytics", label: "Experiment RUNNING", why: "let it decide — the readout closes it out when it ends" });
     }
     return q;
@@ -192,19 +186,10 @@ export function deriveFlow(t: FlowInputs): FlowAction[] {
     }
   }
   if (t.bound && t.pushCurrent && !t.needsCut && !t.experimentRunning && !t.adjudicationPending) {
-    if (!t.measurementPlanned) {
-      // Declare how you'll judge it BEFORE the first visitor — this ordering
-      // is what makes the eventual verdict's pre-registration claim hold.
-      q.push({ id: "measurement-plan", kind: "link", tab: "analytics", anchor: "measurement", label: "Confirm the measurement plan", why: "declare the decision metric over real events before traffic — a plan stamped pre-start makes the verdict defensible" });
-    }
     // A human ACT, not a machine wait — it gets a link, not a pulse.
     q.push({ id: "start-experiment", kind: "link", tab: "experiment", label: "Start the experiment in Optimizely", why: "starting traffic is a human act — the console never does it" });
   }
   if (t.experimentRunning && t.pushCurrent) {
-    if (!t.measurementPlanned) {
-      // Started without a plan — late is disclosed, but later is worse.
-      q.push({ id: "measurement-plan-late", kind: "link", tab: "analytics", anchor: "measurement", label: "Confirm the measurement plan (post-start)", why: "traffic started without a confirmed plan — confirming now is disclosed in the verdict; later is worse" });
-    }
     q.push({ id: "running", kind: "wait", tab: "experiment", label: "Experiment RUNNING · locked", why: "let it decide; ship the winner from Handoff when it's done" });
   }
 

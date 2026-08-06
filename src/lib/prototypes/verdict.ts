@@ -60,9 +60,13 @@ export interface Discovery {
 }
 
 export interface PreRegistration {
-  /** What froze the contract: a version cut (console-built) or the
-   *  measurement plan's confirmation (externally-built — no cuts exist). */
-  anchor: "cut" | "plan";
+  /** What froze the contract: a version cut (console-built), the measurement
+   *  plan's confirmation (externally-built — no cuts exist), or NOTHING —
+   *  "live" means the run is judged against the brief as it reads today. */
+  anchor: "cut" | "plan" | "live";
+  /** anchor "live": the hypothesis was never frozen before traffic, so this is
+   *  evidence rather than a pre-registered result. Judged, and said so. */
+  hypothesisNotFrozen?: boolean;
   /** Present only for anchor "cut". */
   version?: number;
   cutAt?: string;
@@ -236,6 +240,10 @@ export function deriveVerdict(opts: {
   /** The experiment's REAL start (Optimizely results payload). */
   experimentStart?: string;
   mapConfirmedAt?: string;
+  /** The brief as it reads NOW. Used ONLY when nothing was frozen before
+   *  traffic: the run is still read, and the record discloses that the
+   *  hypothesis was never frozen. Never overrides a frozen anchor. */
+  liveBrief?: { change?: string; audience?: string; outcome?: string; primary?: string; guardrails?: string[] };
 }): VerdictRecord {
   const { map, stats } = opts;
   const T = VERDICT_THRESHOLDS;
@@ -272,7 +280,7 @@ export function deriveVerdict(opts: {
     && opts.firstObservedDate && latestStamp.at.slice(0, 10) > opts.firstObservedDate,
   );
   const planBrief = earliestStamp?.brief;
-  const preRegistration: PreRegistration | undefined = opts.pushedVersion
+  let preRegistration: PreRegistration | undefined = opts.pushedVersion
     ? {
         anchor: "cut",
         version: opts.pushedVersion.version,
@@ -355,14 +363,39 @@ export function deriveVerdict(opts: {
     return finish("not_adjudicable", "Not adjudicable — the bound variation isn't in the results (stale binding). Rebind, then re-derive.", [], discoveries);
   }
 
-  if (!preRegistration) {
+  // NOTHING FROZEN IS NOT NOTHING TO SAY.
+  //
+  // Refusing here left a running experiment with a real hypothesis, a declared
+  // metric and real traffic reading "not adjudicable" — the console watching a
+  // result happen and declining to describe it. The frozen anchor is what
+  // separates a PRE-REGISTERED result from EVIDENCE; it is not what separates
+  // a readable run from an unreadable one. So with nothing frozen the run is
+  // judged against the brief as it reads TODAY, and the record says exactly
+  // that, everywhere, permanently. Disclosure, not refusal — and the verdict
+  // still can't launder itself, because `hypothesisNotFrozen` rides with it.
+  if (!preRegistration && opts.liveBrief) {
+    preRegistration = {
+      anchor: "live",
+      hypothesisNotFrozen: true,
+      hypothesis: `We believe ${opts.liveBrief.change || "…"} for ${opts.liveBrief.audience || "…"} will cause ${opts.liveBrief.outcome || "…"}.`,
+      primaryMetric: opts.liveBrief.primary || primary.label,
+      guardrails: opts.liveBrief.guardrails ?? [],
+      ...mapDisclosure,
+    };
+    gates.push({
+      id: "prereg", title: "Pre-registration resolved", pass: null,
+      detail: "Nothing was frozen before traffic, so the run is read against the brief as it stands today. That makes this EVIDENCE rather than a pre-registered result — cut a version, or confirm the measurement plan, to freeze the contract for the next one.",
+    });
+  } else if (!preRegistration) {
+    gates.push({ id: "prereg", title: "Pre-registration resolved", pass: false,
+      detail: "There is no hypothesis to judge this against — the brief has no change or outcome written yet." });
+    return finish("not_adjudicable", "Nothing to judge against — the brief doesn't say what this experiment was meant to change.", [], discoveries);
+  } else {
     const legacyPlan = Boolean(map?.confirmed && !map.briefAtConfirm);
-    gates.push({ id: "prereg", title: "Pre-registration resolved", pass: false, detail: legacyPlan
-      ? "The plan was confirmed before the console froze the brief with it — open the Measurement section and Re-confirm once to freeze the contract."
-      : "No pre-registration anchor — console-built prototypes freeze the brief at cut/push; externally-built ones freeze it when the measurement plan is CONFIRMED. Confirm the plan to make this adjudicable." });
-    return finish("not_adjudicable", legacyPlan
-      ? "Not adjudicable — re-confirm the measurement plan once to freeze the brief (a one-time upgrade)."
-      : "Not adjudicable — nothing frozen to adjudicate against yet. Confirm the measurement plan.", [], discoveries);
+    if (legacyPlan) {
+      gates.push({ id: "prereg", title: "Pre-registration resolved", pass: null,
+        detail: "The plan was confirmed before the console started freezing the brief with it — re-confirm once in the Measurement section to freeze the contract." });
+    }
   }
 
   // Gate 2: validity (SRM). Compromised → nothing downstream matters.
