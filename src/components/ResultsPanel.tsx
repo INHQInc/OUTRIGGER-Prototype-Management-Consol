@@ -1091,16 +1091,19 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     const breach = verdict?.guardrails.find((g) => `composite:${g.compositeId}` === key && g.state === "breach");
     const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
 
-    // Fallback only — the analyst's behavioural read is what belongs here.
-    // Even so, it describes what GUESTS did, not what the statistics did.
+    // Fallback only, and it says the same KIND of thing the analyst is asked
+    // for: what this metric counts, not how it is doing.
     const focusLabel = focus?.name ?? "the variant";
-    const computedLine = m.featureOnly
-      ? `Only ${focusLabel} has this surface, so this is how many guests used it — there is nothing in the control to compare it against.`
-      : breach
-        ? `Guests are doing this more than the team was willing to accept before the run began.`
-        : sig
-          ? `Guests do this ${(focus?.lift ?? 0) >= 0 ? "more" : "less"} in ${focusLabel} than in the control, by more than luck explains.`
-          : `Guests behave about the same on this in both versions so far.`;
+    const comp2 = map?.composites.find((c) => `composite:${c.id}` === key);
+    const eventList = comp2
+      ? (comp2.armEvents?.length
+          ? comp2.armEvents.map((a) => `${live?.variations.find((v) => v.variationId === a.variationId)?.name ?? "a version"}: ${a.events.join(" + ")}`).join(" · ")
+          : comp2.events.join(" + "))
+      : key.startsWith("metric:") ? key.slice(7) : m.label;
+    const computedLine = comp2
+      ? `Counts ${eventList}, per visitor.`
+      : `Counts every ${eventList}, per visitor.`;
+    const oneArmNote = m.featureOnly ? ` Only ${focusLabel} has this surface, so it shows take-up rather than a gap.` : "";
 
     const pts = m.featureOnly ? [] : seriesFor(key);
     return {
@@ -1112,11 +1115,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       tone: m.featureOnly || !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
       focusRate: rate(focus?.rate),
       baseRate: m.featureOnly ? null : rate(base?.rate),
-      computedLine,
-      // Collapsed, the row says WHAT IS BEING OBSERVED — the behaviour. The
-      // headline is a claim and belongs to the open panel, where it leads;
-      // repeating it in both places said the same thing twice.
-      gloss: deepObs[key]?.observation ?? deepObs[key]?.headline
+      computedLine: computedLine + oneArmNote,
+      // Collapsed, the row says WHAT THIS METRIC CAPTURES — a definition that
+      // reads the same whichever way the number went. What HAPPENED to it is
+      // the expanded read's job; putting it in both places said it twice.
+      gloss: deepObs[key]?.captures
         ?? reading?.observations?.find((o) => o.measureKey === key)?.note,
     };
   };

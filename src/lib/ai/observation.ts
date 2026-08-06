@@ -22,6 +22,9 @@ import { armEventsFor } from "../prototypes/results";
 export interface DeepObservation {
   metricKey: string;
   headline: string;
+  /** WHAT THIS METRIC CAPTURES — the guest behaviour it counts. A definition,
+   *  not a finding: true before the experiment ran and after it ends. */
+  captures?: string;
   /** WHAT HAPPENED — the behaviour, not the arithmetic. */
   observation: string;
   /** WHY — the mechanism, read off what was actually built. */
@@ -48,6 +51,7 @@ const tool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=110 chars, NO DIGITS. A claim carrying its own qualification, e.g. 'More visitors reach the booking step, but the gap is still too faint to lean on'. Never a status line." },
+      captures: { type: "string" as const, description: "<=140 chars, NO DIGITS. WHAT THIS METRIC CAPTURES: the guest behaviour it counts, in plain words — e.g. 'Guests who reach the booking engine's rooms and rates step' or 'Guests opening a room's details, by either route'. A DEFINITION, not a finding: it must read the same whether the metric went up, down or nowhere. Never mention versions, results, or movement." },
       observation: { type: "string" as const, description: "<=450 chars, NO DIGITS. WHAT HAPPENED, behaviourally: what guests did differently on this surface between the two versions. Describe behaviour, not arithmetic." },
       mechanism: { type: "string" as const, description: "<=500 chars, NO DIGITS. WHY it happened, read off what was actually built — the specific thing on the screen that changed and how it altered the path. If the code or the surfaces do not support an explanation, say that the mechanism is unclear rather than inventing one." },
       rival: { type: "string" as const, description: "<=400 chars, NO DIGITS. WHY IT MIGHT NOT BE THAT: the strongest competing explanation for the same movement — attention shifting from another surface rather than new demand, curiosity rather than intent, a difference in who was exposed, a knock-on from a change elsewhere in the path. Omit ONLY if no credible rival exists." },
@@ -55,7 +59,7 @@ const tool = {
       caution: { type: "string" as const, description: "<=350 chars, NO DIGITS. Measurement caveats specifically: a surface only one version has, a metric counting actions rather than guests, a single page-visit event standing in for a booking, too little data. Omit if there is genuinely nothing." },
       watch: { type: "string" as const, description: "<=300 chars, NO DIGITS. The one thing to watch next on this metric." },
     },
-    required: ["headline", "observation", "mechanism", "implication"],
+    required: ["captures", "headline", "observation", "mechanism", "implication"],
   },
 };
 
@@ -130,7 +134,7 @@ ${neighbours || "(none)"}
 
 ${opts.variationJs ? `THE CODE THAT WAS ACTUALLY BUILT (read it to explain WHY guests behaved differently — what changed on the screen):\n${opts.variationJs.slice(0, 6000)}` : "(The variation was built in Optimizely, so its code is not available here — reason from the surfaces named above.)"}
 
-Write the full read of this ONE metric, for the hotel's team, in the parts an analyst separates:
+Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed. Then write the full read of this ONE metric, for the hotel's team, in the parts an analyst separates:
   WHAT HAPPENED (behaviour, not arithmetic) · WHY (the mechanism, read off what was built) · WHY IT MIGHT NOT BE THAT (the strongest rival explanation) · WHAT IT MEANS (for the booking path and the goal).
 A mechanism offered without a rival explanation is a story rather than an analysis, so give the rival unless none is credible.
 NO DIGITS in your words — every number is printed beside your sentences and would go stale the moment the counts move. No statistics vocabulary: no significance, no sample size, no confidence, no days remaining. Do not give a verdict on the experiment; that belongs to the decision metric and the console computes it.`,
@@ -143,6 +147,7 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
   if (!tu || tu.type !== "tool_use") throw new Error("The observation came back empty — try again.");
   const raw = (tu.input ?? {}) as Record<string, unknown>;
 
+  let captures = clean(raw.captures, 140);
   let headline = clean(raw.headline, 110);
   let observation = clean(raw.observation, 450);
   let mechanism = clean(raw.mechanism, 500);
@@ -169,6 +174,7 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
       const m2 = /\{[\s\S]*\}/.exec(txt);
       if (m2) {
         const parsed = JSON.parse(m2[0]) as Record<string, unknown>;
+        captures = captures || clean(parsed.captures, 140);
         headline = headline || clean(parsed.headline, 110);
         observation = observation || clean(parsed.observation, 450);
         mechanism = mechanism || clean(parsed.mechanism, 500);
@@ -197,6 +203,7 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
 
   return {
     metricKey: opts.metricKey,
+    captures: captures || `Counts ${m.label.toLowerCase()}, per visitor.`,
     headline, observation, mechanism, implication,
     rival: rival || undefined,
     caution: caution || undefined,

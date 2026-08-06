@@ -428,7 +428,7 @@ const readingTool = {
           },
           required: ["metric", "note"],
         },
-        description: "ONE LINE FOR EVERY watched metric listed — do not skip any. Each answers 'what does this tell us about our guests and our booking path?'. They are observations, never decisions. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
+        description: "ONE LINE FOR EVERY pinned metric listed — do not skip any. Each says WHAT THAT METRIC CAPTURES in guest behaviour, as a definition. What HAPPENED to it is written elsewhere. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
       },
       trend: { type: "string" as const, description: "<=64 chars, a caption for the day-by-day picture" },
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
