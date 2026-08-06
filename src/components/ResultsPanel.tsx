@@ -353,6 +353,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [showHidden, setShowHidden] = useState(false);
   const [builder, setBuilder] = useState<{ editing: CompositeMetric | null } | null>(null);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
+  const [protoName, setProtoName] = useState<string | null>(null);
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [showAcked, setShowAcked] = useState(false);
   // The full read of one metric, fetched on demand and cached server-side.
@@ -405,6 +406,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setHistoryDays(data.historyDays ?? []);
       setAttention(data.attention ?? []);
       if (data.deepObservations) setDeepObs(data.deepObservations);
+      setProtoName(data.prototypeName ?? null);
       setOrderLocal(null);
       if (data.experimentStatus) setExpStatus(data.experimentStatus);
     } catch {
@@ -1184,6 +1186,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   ? <a href={chip.href} className={`${cls} text-accent hover:border-accent`}>{chip.label}</a>
                   : <span className={`${cls} text-muted-2`}>{chip.label}</span>;
               })()}
+              {(protoName || pr?.hypothesis) && (
+                <div className="mt-1 space-y-0.5">
+                  {protoName && <div className="text-[14px] font-semibold text-foreground/90">{protoName}</div>}
+                  {pr?.hypothesis && (
+                    <p className="text-[13.5px] text-muted-2 leading-snug max-w-[100ch]">
+                      <span className="font-semibold">Hypothesis: </span>{pr.hypothesis}
+                    </p>
+                  )}
+                </div>
+              )}
               {live && (
                 <div className="border-t border-border/70 mt-3.5 pt-3 space-y-2">
                   {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance">{story.headline}</p>}
@@ -1421,15 +1433,42 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {deepObs[key] && (
                           <>
                             <p className="text-[17px] font-bold leading-snug max-w-[90ch]">{deepObs[key].headline}</p>
-                            <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].read}</p>
-                            <p className="text-[15px] leading-relaxed text-muted max-w-[110ch]">{deepObs[key].context}</p>
+
+                            {deepObs[key].observation && (
+                              <div>
+                                <div className={`${ZH} mb-0.5`}>What happened</div>
+                                <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].observation}</p>
+                              </div>
+                            )}
+                            {deepObs[key].mechanism && (
+                              <div>
+                                <div className={`${ZH} mb-0.5`}>Why</div>
+                                <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].mechanism}</p>
+                              </div>
+                            )}
+                            {deepObs[key].rival && (
+                              <div>
+                                <div className={`${ZH} mb-0.5`}>Why it might not be that</div>
+                                <p className="text-[15px] leading-relaxed text-muted max-w-[110ch]">{deepObs[key].rival}</p>
+                              </div>
+                            )}
+                            {deepObs[key].implication && (
+                              <div>
+                                <div className={`${ZH} mb-0.5`}>What it means</div>
+                                <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].implication}</p>
+                              </div>
+                            )}
+                            {/* a cached read from the previous single-paragraph form */}
+                            {!deepObs[key].observation && deepObs[key].read && (
+                              <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].read}</p>
+                            )}
                             {deepObs[key].caution && (
-                              <p className="text-[14px] leading-relaxed text-warn">
+                              <p className="text-[15px] leading-relaxed text-warn max-w-[110ch]">
                                 <span className="font-semibold">What would make this wrong: </span>{deepObs[key].caution}
                               </p>
                             )}
                             {deepObs[key].watch && (
-                              <p className="text-[14px] leading-relaxed text-muted">
+                              <p className="text-[15px] leading-relaxed text-muted max-w-[110ch]">
                                 <span className="font-semibold text-foreground/80">Watch next: </span>{deepObs[key].watch}
                               </p>
                             )}
