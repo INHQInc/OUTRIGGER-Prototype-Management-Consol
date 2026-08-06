@@ -203,6 +203,24 @@ function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" 
   );
 }
 
+/** Geometry only — no labels, no dot. The observation rows put this beside
+ *  running text, and the full Sparkline's HTML overlays land on top of it. */
+function MicroTrend({ trend }: { trend: TrendPoint[] }) {
+  const pts = trend.filter((t) => t.lift !== undefined);
+  if (pts.length < 3) return null;
+  const ys = pts.map((p) => p.lift!);
+  const lo = Math.min(...ys, 0), hi = Math.max(...ys, 0);
+  const span = hi - lo || 1;
+  const d = pts.map((p, i) => `${(i / (pts.length - 1)) * 100},${28 - ((p.lift! - lo) / span) * 24 - 2}`).join(" ");
+  const zero = 28 - ((0 - lo) / span) * 24 - 2;
+  return (
+    <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="w-full h-6 overflow-visible" aria-hidden>
+      <line x1="0" y1={zero} x2="100" y2={zero} stroke="currentColor" strokeOpacity=".18" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <polyline points={d} fill="none" stroke="currentColor" strokeOpacity=".55" strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function Sparkline({ trend, significant }: { trend: TrendPoint[]; significant: boolean }) {
   const pts = trend.filter((t) => t.lift !== undefined);
   // A two-point "trend" is a coin flip drawn as a line — don't chart it.
@@ -1006,18 +1024,18 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     const comp = map?.composites.find((c) => `composite:${c.id}` === key);
     const good = comp?.direction === "decrease" ? (focus?.lift ?? 0) < 0 : (focus?.lift ?? 0) > 0;
     const breach = verdict?.guardrails.find((g) => `composite:${g.compositeId}` === key && g.state === "breach");
-    const days = statsEff?.power?.daysToObserved;
     const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
 
+    // Fallback only — the analyst's behavioural read is what belongs here.
+    // Even so, it describes what GUESTS did, not what the statistics did.
+    const focusLabel = focus?.name ?? "the variant";
     const computedLine = m.featureOnly
-      ? "New surface — the control has no equivalent, so this is adoption, not a lift."
+      ? `Only ${focusLabel} has this surface, so this is how many guests used it — there is nothing in the control to compare it against.`
       : breach
-        ? "Past the tolerance set before the run began."
+        ? `Guests are doing this more than the team was willing to accept before the run began.`
         : sig
-          ? "The gap is beyond what luck explains."
-          : days !== undefined
-            ? `Still inside the range luck could produce — about ${plural(days, "more day")} at this traffic.`
-            : "Still inside the range luck could produce.";
+          ? `Guests do this ${(focus?.lift ?? 0) >= 0 ? "more" : "less"} in ${focusLabel} than in the control, by more than luck explains.`
+          : `Guests behave about the same on this in both versions so far.`;
 
     const pts = m.featureOnly ? [] : seriesFor(key);
     return {
@@ -1168,50 +1186,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             </div>
           </div>
 
-          {/* ── OBSERVATIONS — watched measures. Noticed, never judged. ──── */}
-          {observed.length > 0 && (
-            <div>
-              {zoneHeader("Observations",
-                <span className="ml-auto text-[12.5px] text-muted-2">watched, not judged — the verdict reads the decision measure alone</span>,
-                "observations")}
-              <div className="divide-y divide-border/40">
-                {observed.map((key) => {
-                  const o = observationFor(key);
-                  if (!o) return null;
-                  return (
-                    <div key={key} className="flex items-baseline gap-3 py-2">
-                      <span className={`text-[15px] font-bold tabular-nums w-20 shrink-0 text-right ${o.tone}`}>{o.value}</span>
-                      {o.points.length >= 3 && (
-                        <span className="hidden md:block w-28 shrink-0 self-center opacity-80"><Sparkline trend={o.points} significant={false} /></span>
-                      )}
-                      <span className="min-w-0 flex-1">
-                        <span className="text-[14px] font-semibold">{o.label}</span>
-                        {key === optiPrimaryKey && (
-                          <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
-                            title="Optimizely's own primary metric. The console adjudicates its composed decision measure instead — the two may legitimately differ, which is exactly why both are shown.">
-                            optimizely&rsquo;s primary
-                          </span>
-                        )}
-                        <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
-                        <span className="block text-[14px] text-muted leading-snug">
-                          {o.computedLine}{o.trend ? ` ${o.trend}` : ""}
-                        </span>
-                        {o.gloss && <span className="block text-[14px] text-foreground/80 leading-snug mt-0.5">{o.gloss}</span>}
-                      </span>
-                      {key === optiPrimaryKey && !(map?.observed ?? []).includes(key) ? (
-                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — it is the number Optimizely reports as this experiment's primary">always pinned</span>
-                      ) : (
-                        <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
-                          title="Unpin this measure"
-                          className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">unpin</button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* ── Z(B) · THE NUMBERS — four tiles, hard cap ─────────────────── */}
           {tiles.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -1328,6 +1302,48 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </div>
             );
           })()}
+
+          {/* ── OBSERVATIONS — watched measures. Noticed, never judged. ──── */}
+          {observed.length > 0 && (
+            <div>
+              {zoneHeader("Observations",
+                <span className="ml-auto text-[12.5px] text-muted-2">watched, not judged — the verdict reads the decision measure alone</span>,
+                "observations")}
+              <div className="divide-y divide-border/40">
+                {observed.map((key) => {
+                  const o = observationFor(key);
+                  if (!o) return null;
+                  return (
+                    <div key={key} className="flex items-baseline gap-3 py-2">
+                      <span className={`text-[15px] font-bold tabular-nums w-20 shrink-0 text-right ${o.tone}`}>{o.value}</span>
+                      {o.points.length >= 3 && (
+                        <span className="hidden md:block w-20 shrink-0 self-center text-muted-2"><MicroTrend trend={o.points} /></span>
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="text-[14px] font-semibold">{o.label}</span>
+                        {key === optiPrimaryKey && (
+                          <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
+                            title="Optimizely's own primary metric. The console adjudicates its composed decision measure instead — the two may legitimately differ, which is exactly why both are shown.">
+                            optimizely&rsquo;s primary
+                          </span>
+                        )}
+                        <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
+                        <span className="block text-[14px] text-foreground/85 leading-snug">{o.gloss ?? o.computedLine}</span>
+                        {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
+                      </span>
+                      {key === optiPrimaryKey && !(map?.observed ?? []).includes(key) ? (
+                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — it is the number Optimizely reports as this experiment's primary">always pinned</span>
+                      ) : (
+                        <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
+                          title="Unpin this measure"
+                          className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">unpin</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ── Z(F) · EXPLORATORY — never confirmation ───────────────────── */}
           {SHOW_EXPLORATORY && verdict && verdict.discoveries.length > 0 && (

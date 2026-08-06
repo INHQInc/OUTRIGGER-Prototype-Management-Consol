@@ -424,11 +424,11 @@ const readingTool = {
           type: "object" as const,
           properties: {
             measure: { type: "string" as const, description: "a measure from the WATCHED list — you may not observe anything else" },
-            note: { type: "string" as const, description: "<=90 chars, NO DIGITS. What is worth noticing about this measure in THIS experiment — the mechanism, not the number. The console prints the number itself." },
+            note: { type: "string" as const, description: "<=180 chars, NO DIGITS. Answer the only question the business is asking: WHAT DOES THIS TELL US? What guests are doing differently on this surface, and what it means for the booking path — where intent is being created, where it is leaking, what it implies about the next move. Name the surface in the reader's words. e.g. 'Guests reach for availability far more often once the overlay puts it in front of them — the intent was there, the old layout was burying it.' NEVER write about significance, sample size, confidence, or how long the test needs." },
           },
           required: ["measure", "note"],
         },
-        description: "One line per watched measure. These are observations, never decisions — the verdict reads the decision measure alone.",
+        description: "ONE LINE FOR EVERY watched measure listed — do not skip any. Each answers 'what does this tell us about our guests and our booking path?'. They are observations, never decisions. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
       },
       trend: { type: "string" as const, description: "<=64 chars, a caption for the day-by-day picture" },
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
@@ -599,7 +599,7 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
-${watched.length ? `WATCHED — the reader asked for an observation on each of these. One line each: what is worth NOTICING about it in this experiment (the mechanism, the trade-off, the caveat), never the number.\n${watched.map((k) => {
+${watched.length ? `PINNED — write ONE observation for EVERY measure below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are guests doing differently on that surface, where is intent being created or lost along the booking path, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
   const m = opts.stats?.metrics.find((x) => x.key === k);
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
