@@ -2,7 +2,7 @@
  * EVIDENCE BOARD — the experiment as a picture.
  *
  * Screenshots of each arm with a box over every tracked element, carrying that
- * measure's live number. The board stores a REFERENCE to the measure, never a
+ * metric's live number. The board stores a REFERENCE to the metric, never a
  * copied number: a stored figure is stale the moment the counts move, which is
  * the same defect that once put "+91.8%" in FINDINGS beside a live +90.8%.
  *

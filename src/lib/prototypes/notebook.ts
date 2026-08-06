@@ -51,7 +51,7 @@ export interface Reading {
   headline?: string;
   lede?: string;
   beats?: { measureKey: string; label: string }[];
-  /** One line per WATCHED measure — an observation, never a decision. */
+  /** One line per WATCHED metric — an observation, never a decision. */
   observations?: { measureKey: string; note: string }[];
   /** Previous three-row form — still rendered if a cached reading has it. */
   findings?: { figureKey?: string; claim: string }[];

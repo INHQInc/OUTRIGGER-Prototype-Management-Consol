@@ -143,7 +143,7 @@ export function deriveAttention(opts: {
   if (flag(stats, "CANNIBALIZATION")) {
     attention.push({
       id: "cannibalization", severity: "attention",
-      title: "Another measure moved the other way",
+      title: "Another metric moved the other way",
       detail: flag(stats, "CANNIBALIZATION")!.text,
       actionLabel: "See findings", actionHref: "#findings",
     });

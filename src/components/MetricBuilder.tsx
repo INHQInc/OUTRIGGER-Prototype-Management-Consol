@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * THE MEASURE BUILDER — compose a measure by picking events, not by describing
+ * THE MEASURE BUILDER — compose a metric by picking events, not by describing
  * one in a chat window.
  *
  * The whole point is that you see the arithmetic while you choose: every event
@@ -21,7 +21,7 @@ import { computeComposite } from "@/lib/prototypes/results";
 
 export function MetricBuilder({ results, editing, baselineId, busy, onSave, onClose }: {
   results: ExperimentResults;
-  /** Present = editing an existing custom measure. */
+  /** Present = editing an existing custom metric. */
   editing?: CompositeMetric | null;
   baselineId?: string;
   busy: boolean;
@@ -74,7 +74,7 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
   // exactly what the index and the verdict will read afterwards.
   const preview = useMemo(() => {
     const draft: CompositeMetric = {
-      id: editing?.id ?? "preview", label: label || "New measure",
+      id: editing?.id ?? "preview", label: label || "New metric",
       events: perArm ? [] : shared, role: "info", direction,
       ...(perArm ? { armEvents: arms.map((a) => ({ variationId: a.variationId, events: byArm[a.variationId] ?? [] })) } : {}),
     };
@@ -109,7 +109,7 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 print:hidden" onClick={onClose}>
       <div className="w-full max-w-[min(1180px,95vw)] max-h-[92vh] rounded-xl border border-border bg-surface shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="shrink-0 px-5 py-3.5 border-b border-border flex items-center gap-3">
-          <span className="text-[15px] font-bold">{editing ? "Edit measure" : "Build a measure"}</span>
+          <span className="text-[15px] font-bold">{editing ? "Edit metric" : "Build a metric"}</span>
           <span className="text-[11px] font-bold uppercase tracking-[0.07em] border border-accent/40 text-accent rounded px-1.5">console</span>
           <span className="ml-auto text-[12.5px] text-muted-2">Computed by the console from Optimizely events &mdash; not an Optimizely metric</span>
         </div>
@@ -278,7 +278,7 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
                 direction, role,
               })}
               className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40">
-              {busy ? "Saving…" : editing ? "Save changes" : "Add measure"}
+              {busy ? "Saving…" : editing ? "Save changes" : "Add metric"}
             </button>
           </span>
         </div>

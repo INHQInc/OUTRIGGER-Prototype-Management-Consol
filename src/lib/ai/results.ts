@@ -86,7 +86,7 @@ export async function proposeMetricMap(opts: {
   const res = await client.messages.create({
     model: "claude-opus-4-8",
     max_tokens: 3000,
-    system: "You map an experiment's BUSINESS metrics onto its INSTRUMENTED events. The brief states the decision metric in words; Optimizely reports raw event metrics; the built code shows which UI elements fire what. Propose composites: the PRIMARY decision metric (usually a sum of related events — e.g. the same CTA reachable in two places counts once as intent), guardrails from the brief, and at most one or two informative extras. Only compose events that genuinely measure the same intent — never pad. Use ONLY the provided event names. Set direction=decrease on metrics where DOWN is good (bounce, exits, support contacts). CRITICAL: an event fired only by a variation-added element (a new CTA the control doesn't have) must NEVER stand alone as the primary — the control structurally can't convert on it. Pair it with the control's equivalent event (main CTA + new overlay CTA = total intent BOTH arms can express); standalone one-arm events are adoption metrics, not decision metrics.",
+    system: "You map an experiment's BUSINESS metrics onto its INSTRUMENTED events. The brief states the decision metric in words; Optimizely reports raw event metrics; the built code shows which UI elements fire what. Propose composites: the PRIMARY decision metric (usually a sum of related events — e.g. the same CTA reachable in two places counts once as intent), guardrails from the brief, and at most one or two informative extras. Only compose events that genuinely metric the same intent — never pad. Use ONLY the provided event names. Set direction=decrease on metrics where DOWN is good (bounce, exits, support contacts). CRITICAL: an event fired only by a variation-added element (a new CTA the control doesn't have) must NEVER stand alone as the primary — the control structurally can't convert on it. Pair it with the control's equivalent event (main CTA + new overlay CTA = total intent BOTH arms can express); standalone one-arm events are adoption metrics, not decision metrics.",
     messages: [{
       role: "user",
       content: `THE BRIEF'S METRICS (in words):
@@ -142,7 +142,7 @@ const defineTool = (eventNames: string[]) => ({
     type: "object" as const,
     properties: {
       id: { type: "string" as const, description: "kebab-case slug" },
-      label: { type: "string" as const, description: "short business name for the measure" },
+      label: { type: "string" as const, description: "short business name for the metric" },
       definition: { type: "string" as const, description: "one sentence: exactly WHAT is being summed/compared" },
       meaning: { type: "string" as const, description: "one sentence: what this number TELLS you and when to care" },
       events: { type: "array" as const, items: { type: "string" as const, enum: eventNames }, description: "the events summed into it" },
@@ -154,7 +154,7 @@ const defineTool = (eventNames: string[]) => ({
   },
 });
 
-/** A user-described compound measure → a badged, console-computed composite.
+/** A user-described compound metric → a badged, console-computed composite.
  *  Honest by construction: infeasible asks come back as an explanation, and
  *  the events are enum-locked to what actually reports. */
 /** Describe-it-and-I-will-pick-the-events, for the BUILDER — the proposal is
@@ -166,7 +166,7 @@ export async function defineCustomMetric(opts: {
   eventNames: string[];
 }): Promise<{ composite: CompositeMetric | null; explanation: string }> {
   requireKey();
-  if (!opts.eventNames.length) throw new Error("No events reporting yet — custom measures need live results first.");
+  if (!opts.eventNames.length) throw new Error("No events reporting yet — custom metrics need live results first.");
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
   const res = await client.messages.create({
@@ -175,11 +175,11 @@ export async function defineCustomMetric(opts: {
     system,
     messages: [{
       role: "user",
-      content: `The team wants a CUSTOM console-computed measure for experiment "${opts.proto.name}".
+      content: `The team wants a CUSTOM console-computed metric for experiment "${opts.proto.name}".
 
 THEIR DESCRIPTION: ${opts.description.slice(0, 600)}
 
-AVAILABLE EVENTS (a custom measure can ONLY sum these):
+AVAILABLE EVENTS (a custom metric can ONLY sum these):
 ${opts.eventNames.map((n) => `- ${n}`).join("\n")}
 
 Define it via the tool. Action-total semantics (a guest firing two member events counts twice). If the description needs anything these events can't express — segments, revenue arithmetic, per-session windows — set feasible=false and say what's missing; NEVER approximate silently.`,
@@ -191,10 +191,10 @@ Define it via the tool. Action-total semantics (a guest firing two member events
   if (!tu || tu.type !== "tool_use") throw new Error("The definer returned nothing — try again.");
   const raw = (tu.input ?? {}) as Record<string, unknown>;
   if (raw.feasible === false) {
-    return { composite: null, explanation: typeof raw.whyNot === "string" && raw.whyNot.trim() ? stripMd(raw.whyNot).slice(0, 400) : "That measure needs data the current events can't express." };
+    return { composite: null, explanation: typeof raw.whyNot === "string" && raw.whyNot.trim() ? stripMd(raw.whyNot).slice(0, 400) : "That metric needs data the current events can't express." };
   }
   const events = (Array.isArray(raw.events) ? raw.events : []).filter((e): e is string => typeof e === "string" && opts.eventNames.includes(e));
-  if (!events.length) return { composite: null, explanation: "None of the reporting events can express that measure." };
+  if (!events.length) return { composite: null, explanation: "None of the reporting events can express that metric." };
   let id = String(raw.id ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `custom-${Date.now().toString(36)}`;
   id = `custom-${id.replace(/^custom-/, "")}`;
   const definition = typeof raw.definition === "string" ? stripMd(raw.definition).slice(0, 300) : "";
@@ -341,7 +341,7 @@ export function dayNumber(stats: StatsReport | null): number | undefined {
  *  in FINDINGS beside a live lift of +90.8%.
  *
  *  Slot-scoped on purpose: the certainty row cannot cite a visitor count, and
- *  no row can cite another measure's number. */
+ *  no row can cite another metric's number. */
 export const FIGURE_SLOTS: readonly (readonly string[])[] = [
   ["primary_lift", "primary_rate_variant", "primary_rate_control", "conversions_variant", "none"],
   ["primary_ci_low", "primary_ci_high", "none"],
@@ -389,7 +389,7 @@ const STAT_NOTATION = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bF
 
 const readingTool = {
   name: "give_reading",
-  description: "The story a leader reads: one headline, one short paragraph, then the numbers as beats. The words carry no numbers; a beat names the measure it is about.",
+  description: "The story a leader reads: one headline, one short paragraph, then the numbers as beats. The words carry no numbers; a beat names the metric it is about.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -400,12 +400,12 @@ const readingTool = {
         items: {
           type: "object" as const,
           properties: {
-            measure: { type: "string" as const, description: "the NAME of a measure from the list given - never type a number, the page prints the live value" },
-            label: { type: "string" as const, description: "<=34 chars, NO DIGITS - what that measure is, in plain words, e.g. 'room-detail engagement'" },
+            measure: { type: "string" as const, description: "the NAME of a metric from the list given - never type a number, the page prints the live value" },
+            label: { type: "string" as const, description: "<=34 chars, NO DIGITS - what that metric is, in plain words, e.g. 'room-detail engagement'" },
           },
-          required: ["measure", "label"],
+          required: ["metric", "label"],
         },
-        description: "3-4 numbers worth putting in front of a leader. Lead with the decision measure.",
+        description: "3-4 numbers worth putting in front of a leader. Lead with the decision metric.",
       },
       riskNotes: {
         type: "array" as const, maxItems: 3,
@@ -423,12 +423,12 @@ const readingTool = {
         items: {
           type: "object" as const,
           properties: {
-            measure: { type: "string" as const, description: "a measure from the WATCHED list — you may not observe anything else" },
+            measure: { type: "string" as const, description: "a metric from the WATCHED list — you may not observe anything else" },
             note: { type: "string" as const, description: "<=180 chars, NO DIGITS. A CLAIM WITH ITS TENSION, in the shape 'More visitors reach the booking step, but the gap is still too faint to lean on' — say what happened AND what qualifies it, in one sentence. Never a status line like 'guests behave about the same'. Answer the only question the business is asking: WHAT DOES THIS TELL US? What guests are doing differently on this surface, and what it means for the booking path — where intent is being created, where it is leaking, what it implies about the next move. Name the surface in the reader's words. e.g. 'Guests reach for availability far more often once the overlay puts it in front of them — the intent was there, the old layout was burying it.' NEVER write about significance, sample size, confidence, or how long the test needs." },
           },
-          required: ["measure", "note"],
+          required: ["metric", "note"],
         },
-        description: "ONE LINE FOR EVERY watched measure listed — do not skip any. Each answers 'what does this tell us about our guests and our booking path?'. They are observations, never decisions. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
+        description: "ONE LINE FOR EVERY watched metric listed — do not skip any. Each answers 'what does this tell us about our guests and our booking path?'. They are observations, never decisions. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
       },
       trend: { type: "string" as const, description: "<=64 chars, a caption for the day-by-day picture" },
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
@@ -448,8 +448,8 @@ export function templateStory(opts: {
   const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
   const sig = Boolean(focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0);
   const lift = focus?.lift;
-  // Even the computed floor names real measures — a template that says
-  // "the decision measure" tells the reader nothing they didn't know.
+  // Even the computed floor names real metrics — a template that says
+  // "the decision metric" tells the reader nothing they didn't know.
   const others2 = (stats?.metrics ?? []).filter((m) => m.key !== stats?.primaryKey);
   const cellOf = (m: (typeof others2)[number]) => m.cells.find((c) => c.variationId === stats?.focusVariationId);
   const sigOf2 = (m: (typeof others2)[number]) => {
@@ -466,21 +466,21 @@ export function templateStory(opts: {
     verdict?.verdict === "not_adjudicable" ? "The traffic is real; the definition is not settled"
     : lift === undefined ? "Nothing comparable has come through yet"
     : !sig ? "Nothing separates the two versions yet"
-    : lift > 0 ? "The variant is ahead on the measure this test was written to prove"
-    : "The variant is behind on the measure this test was written to prove";
+    : lift > 0 ? "The variant is ahead on the metric this test was written to prove"
+    : "The variant is behind on the metric this test was written to prove";
 
   const lede =
     verdict?.verdict === "not_adjudicable"
       ? "Guests are moving through both versions and the events are reporting, but the console has no confirmed definition of what counts as success here, so nothing below is a result yet. Confirm the measurement plan and everything already collected still counts."
       : lift === undefined
-        ? "The decision measure has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
+        ? "The decision metric has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
         : !sig
-          ? "Both versions are still trading places on the decision measure. The gap is small enough that ordinary variation could produce it either way, so there is nothing here to ship or kill on yet."
+          ? "Both versions are still trading places on the decision metric. The gap is small enough that ordinary variation could produce it either way, so there is nothing here to ship or kill on yet."
           : lift > 0
-            ? `${primary?.label ?? "The decision measure"} is ahead by more than luck explains${moved.down.length ? `, while ${moved.down[0]} moved the other way — part of the gain may be behaviour shifting between surfaces rather than new demand` : ""}. ${moved.flat.length ? `${moved.flat[0]} has not answered yet.` : "The downstream measures have not answered yet."}`
-            : `${primary?.label ?? "The decision measure"} is behind by more than luck explains${moved.up.length ? `, even though ${moved.up[0]} is up` : ""}. The idea as built is costing something rather than adding it.`;
+            ? `${primary?.label ?? "The decision metric"} is ahead by more than luck explains${moved.down.length ? `, while ${moved.down[0]} moved the other way — part of the gain may be behaviour shifting between surfaces rather than new demand` : ""}. ${moved.flat.length ? `${moved.flat[0]} has not answered yet.` : "The downstream metrics have not answered yet."}`
+            : `${primary?.label ?? "The decision metric"} is behind by more than luck explains${moved.up.length ? `, even though ${moved.up[0]} is up` : ""}. The idea as built is costing something rather than adding it.`;
 
-  // Beats: the decision measure first, then the biggest movers that have
+  // Beats: the decision metric first, then the biggest movers that have
   // actually earned their number, then anything else reporting.
   const others = (stats?.metrics ?? []).filter((m) => m.key !== stats?.primaryKey);
   const scored = others.map((m) => {
@@ -523,11 +523,11 @@ export async function generateReading(opts: {
   requireKey();
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
-  // The measures a beat may name, with what each reads right now. Shown so
+  // The metrics a beat may name, with what each reads right now. Shown so
   // the analyst picks the right one — never copied into the words.
   const measureKeys = (opts.stats?.metrics ?? []).map((m) => m.key);
   // WHAT MOVED — the raw material for a mechanism sentence. Without this the
-  // analyst can only write "the decision measure is ahead", which is a
+  // analyst can only write "the decision metric is ahead", which is a
   // restatement of the verdict rather than an observation of the experiment.
   const focusName = opts.results.variations.find((v) => v.variationId === opts.stats?.focusVariationId)?.name ?? "the variant";
   const movers = (opts.stats?.metrics ?? []).map((m) => {
@@ -551,12 +551,12 @@ export async function generateReading(opts: {
     const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
     const delta = m.featureOnly ? "variation-only" : c?.lift === undefined ? "not computing" : `${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%`;
     return `${m.key} — ${m.label} (${delta})`;
-  }).join("\n") || "(no measures reporting)";
+  }).join("\n") || "(no metrics reporting)";
   // "all-clear" is not a risk — leaving it in the enum lets the analyst write
   // its own sentence under "Nothing needs attention".
   const codes = opts.attention.filter((a) => a.severity !== "good").map((a) => a.id);
 
-  // CALL-TIME ENUMS: an unknown risk id or measure key is unemittable.
+  // CALL-TIME ENUMS: an unknown risk id or metric key is unemittable.
   const tool = JSON.parse(JSON.stringify(readingTool)) as typeof readingTool & { input_schema: { properties: Record<string, unknown> } };
   if (codes.length) {
     (tool.input_schema.properties.riskNotes as { items: { properties: { code: Record<string, unknown> } } }).items.properties.code = {
@@ -565,15 +565,15 @@ export async function generateReading(opts: {
   }
   if (measureKeys.length) {
     (tool.input_schema.properties.beats as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
-      type: "string", enum: measureKeys, description: "the measure this beat is about",
+      type: "string", enum: measureKeys, description: "the metric this beat is about",
     };
   }
-  // Only WATCHED measures can be observed — an unwatched one is unemittable.
+  // Only WATCHED metrics can be observed — an unwatched one is unemittable.
   // Optimizely's own primary is watched whether or not anyone asked: it is the
   // number the client reads in THEIR tool, and the console must never quietly
   // disagree with it.
   // BOTH primaries are always observed: Optimizely's, because it is the number
-  // the client reads in their own tool, and the console's decision measure,
+  // the client reads in their own tool, and the console's decision metric,
   // because it is the one being adjudicated. They may disagree — that is
   // exactly why each needs its own read.
   const optiPrimaryKey = opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : "";
@@ -584,7 +584,7 @@ export async function generateReading(opts: {
   ])].filter((k) => measureKeys.includes(k));
   if (watched.length) {
     (tool.input_schema.properties.observations as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
-      type: "string", enum: watched, description: "the watched measure you are observing",
+      type: "string", enum: watched, description: "the watched metric you are observing",
     };
   } else {
     delete (tool.input_schema.properties as Record<string, unknown>).observations;
@@ -604,7 +604,7 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map)}
 
-${watched.length ? `PINNED — write ONE observation for EVERY measure below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are guests doing differently on that surface, where is intent being created or lost along the booking path, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
+${watched.length ? `PINNED — write ONE observation for EVERY metric below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are guests doing differently on that surface, where is intent being created or lost along the booking path, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
   const m = opts.stats?.metrics.find((x) => x.key === k);
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
@@ -620,10 +620,10 @@ ${measureMenu}
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and 3-4 BEATS naming the measures worth putting in front of a leader, decision measure first.
+Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and 3-4 BEATS naming the metrics worth putting in front of a leader, decision metric first.
 
-THE LEDE IS THE WHOLE POINT. Two or three sentences that name the ACTUAL SURFACES and say what is happening between them — the mechanism, not the status. Write about the overlay, the room-card CTA, the booking widget, whatever this experiment actually touches, by name, in the words a hotel executive would use. If some measures rose while others fell, say whether the gain looks like new demand or like behaviour that moved from one surface to another. End with what has not answered yet.
-NEVER write a sentence like "the variant is ahead of the control on the decision measure" — that is the verdict restated, and the console has already printed it.
+THE LEDE IS THE WHOLE POINT. Two or three sentences that name the ACTUAL SURFACES and say what is happening between them — the mechanism, not the status. Write about the overlay, the room-card CTA, the booking widget, whatever this experiment actually touches, by name, in the words a hotel executive would use. If some metrics rose while others fell, say whether the gain looks like new demand or like behaviour that moved from one surface to another. End with what has not answered yet.
+NEVER write a sentence like "the variant is ahead of the control on the decision metric" — that is the verdict restated, and the console has already printed it.
 NO DIGITS in the headline, the lede, or a beat label — the numbers are printed for you. No statistics vocabulary anywhere: no p-values, no q-values, no "significance"; say "beyond what luck explains".
 When nothing is settled yet, SAY THAT plainly — do not manufacture a story out of movement that luck could produce.`,
     }],
@@ -636,7 +636,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   const raw = (tu.input ?? {}) as Record<string, unknown>;
 
   // ── VALIDATE + REPAIR (enforce-in-code): the words may carry no digits and
-  // a beat may only name a measure that exists. Anything that fails falls
+  // a beat may only name a metric that exists. Anything that fails falls
   // back to the computed story rather than being patched into shape.
   const fallback = templateStory({ results: opts.results, stats: opts.stats, verdict: opts.verdict });
   const clean = (v: unknown, cap: number) => {

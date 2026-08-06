@@ -7,7 +7,7 @@
  * MEASURE KEY; the number is resolved live from the same stats the readout
  * uses, so an annotation can never drift from the data it points at.
  *
- * Chroma is earned here too: a measure wears green or red only once its
+ * Chroma is earned here too: a metric wears green or red only once its
  * interval excludes zero. An author may override a box's colour for emphasis —
  * the reading beside it keeps the earned tone, so emphasis can't restate data.
  */
@@ -34,7 +34,7 @@ const TONE_CHIP: Record<Tone, string> = {
   flat: "border-border-strong text-muted",
 };
 
-interface Measure {
+interface Metric {
   key: string;
   label: string;
   tone: Tone;
@@ -91,12 +91,12 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
     } finally { setBusy(null); }
   }
 
-  // ── the measures, live from the same stats the readout adjudicates ──────
+  // ── the metrics, live from the same stats the readout adjudicates ──────
   const pct = (v?: number) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
   const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
   const sigOf = (c?: CellStats) => Boolean(c?.liftCi && c.liftCi.lo * c.liftCi.hi > 0);
 
-  const measures: Measure[] = (stats?.metrics ?? []).map((m) => {
+  const metrics: Metric[] = (stats?.metrics ?? []).map((m) => {
     const focus = m.cells.find((c) => c.variationId === stats?.focusVariationId);
     const base = m.cells.find((c) => c.variationId === stats?.baselineVariationId);
     const sig = sigOf(focus);
@@ -116,7 +116,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
           : "Moved, but still inside the range luck could produce.",
     };
   });
-  const byKey = Object.fromEntries(measures.map((m) => [m.key, m]));
+  const byKey = Object.fromEntries(metrics.map((m) => [m.key, m]));
 
   // ── upload: downsize in the browser so a 27MB page capture never travels ──
   async function addShot(file: File, variationId: string, label: string) {
@@ -138,7 +138,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
     } finally { setBusy(null); }
   }
 
-  if (!bound) return <p className="text-[14px] text-muted-2">Evidence needs a bound experiment — the boxes attach to its tracked measures.</p>;
+  if (!bound) return <p className="text-[14px] text-muted-2">Evidence needs a bound experiment — the boxes attach to its tracked metrics.</p>;
   if (loading && !board) return <p className="text-[14px] text-muted-2">Loading the board…</p>;
 
   const shots = board?.shots ?? [];
@@ -313,12 +313,12 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
 
       {shots.length === 0 && (
         <p className="text-[14px] text-muted-2">
-          Add a screenshot of each arm, then drag a box over any tracked element. The box carries that measure&apos;s live number —
+          Add a screenshot of each arm, then drag a box over any tracked element. The box carries that metric&apos;s live number —
           it re-reads every time this page loads, so the picture can never disagree with the numbers.
         </p>
       )}
 
-      {/* what the picture shows — one card per annotated measure */}
+      {/* what the picture shows — one card per annotated metric */}
       {marks.length > 0 && (
         <section>
           <div className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-muted-2 border-b border-border pb-1.5 mb-2.5">What the picture shows</div>
@@ -329,7 +329,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
               if (!meas) return (
                 <article key={key} className="rounded-xl border border-border bg-surface px-4 py-3">
                   <h4 className="text-[14px] font-bold">{key}</h4>
-                  <p className="text-[13.5px] text-muted">This measure isn&apos;t reporting any more — the box is still on the picture, but there is no live number for it.</p>
+                  <p className="text-[13.5px] text-muted">This metric isn&apos;t reporting any more — the box is still on the picture, but there is no live number for it.</p>
                 </article>
               );
               const cls = meas.tone === "up" ? "text-ok" : meas.tone === "down" ? "text-danger" : meas.tone === "new" ? "text-accent" : "text-muted";
@@ -354,8 +354,8 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
           <div className="w-full max-w-lg rounded-xl border border-border bg-surface shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-border text-[14px] font-bold">Which tracked element is this?</div>
             <div className="max-h-[60vh] overflow-y-auto p-2">
-              {measures.length === 0 && <p className="p-3 text-[13.5px] text-muted-2">No measures are reporting yet — bind the plan first.</p>}
-              {measures.map((m) => (
+              {metrics.length === 0 && <p className="p-3 text-[13.5px] text-muted-2">No metrics are reporting yet — bind the plan first.</p>}
+              {metrics.map((m) => (
                 <button key={m.key}
                   onClick={() => {
                     const p = picking;

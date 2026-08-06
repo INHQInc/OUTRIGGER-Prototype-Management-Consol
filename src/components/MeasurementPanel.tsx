@@ -233,7 +233,7 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
 
           {/* THE INTERVIEW — first thing in the card. These answers are the
               only thing between a draft and a frozen contract; buried under
-              the measures they were unfindable. */}
+              the metrics they were unfindable. */}
           {!plan.confirmed && pending.length > 0 && (
             <div id="plan-questions" className="px-3.5 py-3 border-b-2 border-accent bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] space-y-2.5">
               <div className="flex items-center gap-2">

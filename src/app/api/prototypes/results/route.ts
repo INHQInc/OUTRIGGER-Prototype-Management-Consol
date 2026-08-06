@@ -227,27 +227,27 @@ export async function POST(req: NextRequest) {
     clearThread?: boolean;
     explain?: boolean;
     reading?: boolean;
-    /** Plain-language description of a custom console-computed measure. */
+    /** Plain-language description of a custom console-computed metric. */
     defineMetric?: string;
-    /** Delete a CUSTOM measure by composite id (plan measures are protected). */
+    /** Delete a CUSTOM metric by composite id (plan metrics are protected). */
     removeMetric?: string;
-    /** Rename a CUSTOM measure. */
+    /** Rename a CUSTOM metric. */
     renameMetric?: { id?: string; label?: string };
     /** Promote a composite to the console's PRIMARY decision metric. */
     setPrimary?: string;
     /** Stand the decision metric down entirely. The experiment then has no
      *  console primary and says so — better than being locked into one. */
     clearPrimary?: boolean;
-    /** Persist the All-measures display order (row keys). Presentation only. */
+    /** Persist the All-metrics display order (row keys). Presentation only. */
     orderMetrics?: string[];
-    /** The full read of ONE measure, generated on demand and cached. */
+    /** The full read of ONE metric, generated on demand and cached. */
     deepDive?: { key?: string; force?: boolean };
     /** Mark an attention row as seen — it collapses on screen, still prints. */
     acknowledge?: { id?: string; on?: boolean };
     /** Watch a measure: it gets an observation under the decision summary.
      *  Display only — observing something never makes it adjudicable. */
     observeMetric?: { key?: string; on?: boolean };
-    /** Hide/show a measure in the index. Display only — plan measures keep
+    /** Hide/show a metric in the index. Display only — plan metrics keep
      *  feeding the verdict; the primary refuses. */
     hideMetric?: { key?: string; hidden?: boolean };
     /** Build a composite by hand — no LLM. The builder shows live numbers as
@@ -472,10 +472,10 @@ export async function POST(req: NextRequest) {
     if (body.buildMetric) {
       const b = body.buildMetric;
       const label = String(b.label ?? "").trim().slice(0, 120);
-      if (!label) return NextResponse.json({ error: "Give the measure a name." }, { status: 400 });
+      if (!label) return NextResponse.json({ error: "Give the metric a name." }, { status: 400 });
 
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "Live results are needed to build a measure." }, { status: 400 });
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "Live results are needed to build a metric." }, { status: 400 });
       // Only events Optimizely is actually reporting — a composite built on a
       // name that doesn't exist would silently compute as zero.
       const reported = new Set(bundle.results.metrics.map((m) => m.name));
@@ -497,12 +497,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "With per-version events, every version needs its own list (or a shared fallback list)." }, { status: 400 });
       }
 
-      const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "measure";
+      const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "metric";
       let saved: CompositeMetric | null = null;
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const composites = [...(cur?.composites ?? [])];
         const existingIdx = b.id ? composites.findIndex((c) => c.id === b.id) : -1;
-        // Editing a plan-authored measure would rewrite the pre-registered
+        // Editing a plan-authored metric would rewrite the pre-registered
         // contract behind the verdict's back — the builder owns custom only.
         if (existingIdx >= 0 && composites[existingIdx].source !== "custom") return null;
         let id = b.id && existingIdx >= 0 ? composites[existingIdx].id : slug;
@@ -525,7 +525,7 @@ export async function POST(req: NextRequest) {
         else composites.push(next);
         return { confirmed: false, ...(cur ?? {}), composites: composites.slice(0, 24) };
       });
-      if (!saved) return NextResponse.json({ error: "That measure is part of the confirmed measurement plan — edit it there, not here." }, { status: 400 });
+      if (!saved) return NextResponse.json({ error: "That metric is part of the confirmed measurement plan — edit it there, not here." }, { status: 400 });
 
       await audit(g.orgId, actor, b.id ? "results.metric-rebuilt" : "results.metric-built", g.proto.name,
         `${label} = ${armEvents.length ? armEvents.map((a) => `${a.variationId}:[${a.events.join(" + ")}]`).join(" vs ") : events.join(" + ")}`.slice(0, 400));
@@ -617,7 +617,7 @@ export async function POST(req: NextRequest) {
       const { system } = await analystSkill(g.orgId);
 
       const observation = await deepObservation({
-        measureKey: key, proto: g.proto, results: bundle.results, map, stats, verdict,
+        metricKey: key, proto: g.proto, results: bundle.results, map, stats, verdict,
         variationJs, system, basisKey: basis,
       });
       await store.setFlag(cacheKey, JSON.stringify({ ...cached, [key]: observation })).catch(() => {});
@@ -642,7 +642,7 @@ export async function POST(req: NextRequest) {
     if (body.observeMetric) {
       const rowKey = String(body.observeMetric.key ?? "").slice(0, 220);
       const on = Boolean(body.observeMetric.on);
-      if (!rowKey) return NextResponse.json({ error: "An observation needs the measure key." }, { status: 400 });
+      if (!rowKey) return NextResponse.json({ error: "An observation needs the metric key." }, { status: 400 });
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const base = cur ?? { composites: [], confirmed: false };
         const set = new Set(base.observed ?? []);
@@ -657,7 +657,7 @@ export async function POST(req: NextRequest) {
     if (body.hideMetric) {
       const rowKey = String(body.hideMetric.key ?? "").slice(0, 220);
       const wantHidden = Boolean(body.hideMetric.hidden);
-      if (!rowKey) return NextResponse.json({ error: "A hide needs the measure key." }, { status: 400 });
+      if (!rowKey) return NextResponse.json({ error: "A hide needs the metric key." }, { status: 400 });
       let refused = false;
       let label = rowKey.startsWith("metric:") ? rowKey.slice(7) : rowKey;
       const map = await mutateMetricMap(g.proto.key, (cur) => {
@@ -723,7 +723,7 @@ export async function POST(req: NextRequest) {
           confirmedBy: cur.confirmed ? actor : cur.confirmedBy,
           confirmedAt: cur.confirmed ? new Date().toISOString() : cur.confirmedAt,
           primaryHistory: [...(cur.primaryHistory ?? []), { from: fromLabel, to: toLabel, at: new Date().toISOString(), by: actor }].slice(-8),
-          // The decision metric is never hidden — promoting a hidden measure
+          // The decision metric is never hidden — promoting a hidden metric
           // clears its flag, or it would silently vanish on the next swap.
           hiddenMeasures: (cur.hiddenMeasures ?? []).filter((k) => k !== `composite:${id}`),
         };
@@ -743,7 +743,7 @@ export async function POST(req: NextRequest) {
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const target = cur?.composites.find((c) => c.id === id);
         if (!cur || !target) return null;
-        // The decision measure is the one thing that cannot just vanish —
+        // The decision metric is the one thing that cannot just vanish —
         // stand it down first, so the change is recorded as a change.
         if (target.role === "primary") { refusedPrimary = true; return null; }
         removed = target.label;
@@ -766,8 +766,8 @@ export async function POST(req: NextRequest) {
             : {}),
         });
       });
-      if (refusedPrimary) return NextResponse.json({ error: "That is the decision measure. Stand it down with its toggle first, then remove it." }, { status: 400 });
-      if (!removed) return NextResponse.json({ error: "No such measure." }, { status: 400 });
+      if (refusedPrimary) return NextResponse.json({ error: "That is the decision metric. Stand it down with its toggle first, then remove it." }, { status: 400 });
+      if (!removed) return NextResponse.json({ error: "No such metric." }, { status: 400 });
       await audit(g.orgId, actor, planOwned ? "results.plan-metric-removed" : "results.custom-metric-removed", g.proto.name,
         planOwned ? `${removed} — removed from the measurement plan; plan is now unconfirmed` : removed);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
@@ -779,7 +779,7 @@ export async function POST(req: NextRequest) {
     if (body.renameMetric) {
       const id = String(body.renameMetric.id ?? "");
       const label = String(body.renameMetric.label ?? "").trim().slice(0, 120);
-      if (!id || !label) return NextResponse.json({ error: "A rename needs the measure and its new name." }, { status: 400 });
+      if (!id || !label) return NextResponse.json({ error: "A rename needs the metric and its new name." }, { status: 400 });
       let renamed = false;
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const target = cur?.composites.find((c) => c.id === id);
@@ -787,22 +787,22 @@ export async function POST(req: NextRequest) {
         renamed = true;
         return { ...cur, composites: cur.composites.map((c) => (c.id === id ? { ...c, label } : c)) };
       });
-      if (!renamed) return NextResponse.json({ error: "Only custom console measures can be renamed here — plan measures are managed in the Measurement plan." }, { status: 400 });
+      if (!renamed) return NextResponse.json({ error: "Only custom console metrics can be renamed here — plan metrics are managed in the Measurement plan." }, { status: 400 });
       await audit(g.orgId, actor, "results.custom-metric-renamed", g.proto.name, `→ ${label}`);
       return NextResponse.json({ metricMap: map });
     }
 
     if (body.defineMetric) {
       const desc = String(body.defineMetric).trim().slice(0, 600);
-      if (!desc) return NextResponse.json({ error: "Describe the measure first." }, { status: 400 });
+      if (!desc) return NextResponse.json({ error: "Describe the metric first." }, { status: 400 });
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "Custom measures need live results first." }, { status: 400 });
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "Custom metrics need live results first." }, { status: 400 });
       const { composite, explanation } = await defineCustomMetric({
         orgId: g.orgId, proto: g.proto, description: desc,
         eventNames: bundle.results.metrics.map((m) => m.name),
       });
       if (!composite) return NextResponse.json({ error: explanation }, { status: 400 });
-      // Appending an INFO measure never touches the plan's confirmation or
+      // Appending an INFO metric never touches the plan's confirmation or
       // the primary — the verdict is unaffected by construction.
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const composites = [...(cur?.composites ?? [])];
@@ -814,7 +814,7 @@ export async function POST(req: NextRequest) {
       // The conversation is the record of what was created — a "note" entry
       // (an existing kind renderNotebook already attributes correctly).
       const protoNbAfter = await appendNotebook(g.proto.key, [
-        { kind: "note", text: `Added console measure “${composite.label}” = ${composite.events.join(" + ")}. ${explanation}` },
+        { kind: "note", text: `Added console metric “${composite.label}” = ${composite.events.join(" + ")}. ${explanation}` },
       ]);
       const orgNbNow = await getOrgNotebook(g.orgId);
       const { stats, verdict } = await analyze(g.proto, bundle);

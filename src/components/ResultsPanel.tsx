@@ -165,7 +165,7 @@ function MetricTrend({ days, metricName, focusId, baseId, focusName, baseName }:
 const SHOW_ATTENTION = false;
 const SHOW_EXPLORATORY = false;
 /** The comparison bars + day-by-day card. Hidden on request: the decision
- *  measure's own observation now carries the same story in words, and its
+ *  metric's own observation now carries the same story in words, and its
  *  numbers are in the tiles directly above. */
 const SHOW_PROOF = false;
 
@@ -213,7 +213,7 @@ function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" 
  *
  *  The line is split at every zero crossing so the part above the line and the
  *  part below carry different colour. CHROMA IS STILL EARNED: colour appears
- *  only when the measure's interval excludes zero. A gap that luck could still
+ *  only when the metric's interval excludes zero. A gap that luck could still
  *  produce draws neutral, because a green line is a claim.
  */
 function MicroTrend({ trend, earned }: { trend: TrendPoint[]; earned: boolean }) {
@@ -346,7 +346,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [deleteArmId, setDeleteArmId] = useState<string | null>(null);
-  // Drag-to-reorder the All-measures index — presentation only, persisted on
+  // Drag-to-reorder the All-metrics index — presentation only, persisted on
   // the metric map. The decision metric is pinned to the top and never drags.
   const [orderLocal, setOrderLocal] = useState<string[] | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -355,14 +355,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [showAcked, setShowAcked] = useState(false);
-  // The full read of one measure, fetched on demand and cached server-side.
+  // The full read of one metric, fetched on demand and cached server-side.
   const [openObs, setOpenObs] = useState<string | null>(null);
   const [deepObs, setDeepObs] = useState<Record<string, DeepObservation>>({});
   const [obsBusy, setObsBusy] = useState<string | null>(null);
   const [threadOpen, setThreadOpen] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
   // Ask vs Challenge are different INSTRUCTIONS, not different destinations —
-  // measure-building left the chat entirely when the builder arrived.
+  // metric-building left the chat entirely when the builder arrived.
   const [composerMode, setComposerMode] = useState<"ask" | "challenge" | "reply">("ask");
   const [analystOpen, setAnalystOpen] = useState(false);
   const [clearArmed, setClearArmed] = useState(false);
@@ -490,7 +490,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
         body: JSON.stringify({ key: prototypeKey, deepDive: { key } }),
       });
       const data = await res.json();
-      if (!res.ok) { setErr(data.error ?? "Couldn't read that measure."); return; }
+      if (!res.ok) { setErr(data.error ?? "Couldn't read that metric."); return; }
       if (data.observation) setDeepObs((cur) => ({ ...cur, [key]: data.observation }));
     } catch {
       setErr("Network hiccup — the full read didn't load.");
@@ -969,7 +969,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     : "border-l-border-strong";
 
   // The analyst writes the WORDS; every number is resolved here, live, from
-  // the measure a beat names. A number copied into saved prose goes stale the
+  // the metric a beat names. A number copied into saved prose goes stale the
   // moment the counts move.
   const figureFor = (key?: string): string | undefined =>
     key && live ? figureValue(key, { results: live, stats: statsEff }) : undefined;
@@ -1003,7 +1003,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const story = (() => {
     if (reading?.headline || reading?.beats?.length) {
       const picked = (reading.beats ?? []).map(beatFor).filter(Boolean) as Beat[];
-      // The decision measure always reads first — it is the one the verdict
+      // The decision metric always reads first — it is the one the verdict
       // adjudicates, so it cannot appear third behind a secondary.
       picked.sort((a, b) => Number(b.key === statsEff?.primaryKey) - Number(a.key === statsEff?.primaryKey));
       return { headline: reading.headline, lede: reading.lede, beats: picked };
@@ -1013,12 +1013,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     return { headline: t.headline, lede: t.lede, beats: t.beats.map(beatFor).filter(Boolean) as Beat[] };
   })();
 
-  // WATCHED measures get an observation: the arithmetic in a sentence, plus
+  // WATCHED metrics get an observation: the arithmetic in a sentence, plus
   // at most one line of the analyst's own about the mechanism. Observing
   // something never makes it adjudicable — the verdict reads the primary.
   // Optimizely's own primary is ALWAYS at the top, watched or not — whoever
   // opens Optimizely sees that number, so the console shows it beside its own
-  // decision measure rather than letting the two disagree in different tools.
+  // decision metric rather than letting the two disagree in different tools.
   const optiPrimaryKey = live?.metrics[0] ? `metric:${live.metrics[0].name}` : "";
   // Pinned rows read in the SAME order as the index: reordering the table
   // reorders what is pinned above it, so there is one ordering to think about.
@@ -1037,7 +1037,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   ])]
     .filter((k) => statsEff?.metrics.some((m) => m.key === k))
     .sort((a, b) => indexRank(a) - indexRank(b));
-  // What this measure has actually DONE, day by day, from the console's own
+  // What this metric has actually DONE, day by day, from the console's own
   // snapshots — the same source the primary's trend line uses. Deterministic:
   // an observation should never depend on the analyst noticing a shape.
   const seriesFor = (key: string): TrendPoint[] => {
@@ -1118,7 +1118,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
 
   // ── THE ANALYST THREAD — one conversation, hydrated from the notebook so it
-  // survives reloads. Asks, measure definitions, and the analyst's own
+  // survives reloads. Asks, metric definitions, and the analyst's own
   // question all land here; nothing about it prints.
   const entries = notebook?.proto.entries ?? [];
   const lastAnswerIdx = entries.map((e) => e.kind).lastIndexOf("analyst-answer");
@@ -1367,11 +1367,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             );
           })()}
 
-          {/* ── OBSERVATIONS — watched measures. Noticed, never judged. ──── */}
+          {/* ── OBSERVATIONS — watched metrics. Noticed, never judged. ──── */}
           {observed.length > 0 && (
             <div>
               {zoneHeader("Observations",
-                <span className="ml-auto text-[12.5px] text-muted-2">watched, not judged — the verdict reads the decision measure alone</span>,
+                <span className="ml-auto text-[12.5px] text-muted-2">watched, not judged — the verdict reads the decision metric alone</span>,
                 "observations")}
               <div className="divide-y divide-border/40">
                 {observed.map((key) => {
@@ -1388,14 +1388,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         <span className="text-[14px] font-semibold">{o.label}</span>
                         {key === optiPrimaryKey && (
                           <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
-                            title="The metric Optimizely reports as this experiment's primary. The console adjudicates its own decision measure — the two may legitimately differ, which is why both are read here.">
+                            title="The metric Optimizely reports as this experiment's primary. The console adjudicates its own decision metric — the two may legitimately differ, which is why both are read here.">
                             optimizely&rsquo;s primary
                           </span>
                         )}
                         {key === statsEff?.primaryKey && (
                           <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-ok/40 text-ok rounded px-1 align-middle"
-                            title="The console's decision measure — the one the verdict adjudicates, and the one the summary above is about.">
-                            decision measure
+                            title="The console's decision metric — the one the verdict adjudicates, and the one the summary above is about.">
+                            decision metric
                           </span>
                         )}
                         <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
@@ -1410,14 +1410,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — both primaries are read here whether or not anyone pinned them">always pinned</span>
                       ) : (
                         <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
-                          title="Unpin this measure"
+                          title="Unpin this metric"
                           className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">unpin</button>
                       )}
                     </div>
 
                     {openObs === key && (
                       <div className="mt-2 rounded-lg border border-border bg-background/50 px-5 py-4 space-y-2.5">
-                        {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this measure against the brief and what was built…</p>}
+                        {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this metric against the brief and what was built…</p>}
                         {deepObs[key] && (
                           <>
                             <p className="text-[17px] font-bold leading-snug max-w-[90ch]">{deepObs[key].headline}</p>
@@ -1462,7 +1462,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     {/* No q-values on a leadership surface — the strength of
                         the signal in words. The number stays in The numbers. */}
                     <span className="min-w-0">{d.label} <span className={`tabular-nums ${liftClass(d.lift)} opacity-70`}>{pctS(d.lift)}</span> on {d.variationName}{" "}
-                      <span className="text-muted-2" title={`False-discovery rate q=${(d.q * 100).toFixed(1)}% after correcting for the number of measures swept`}>
+                      <span className="text-muted-2" title={`False-discovery rate q=${(d.q * 100).toFixed(1)}% after correcting for the number of metrics swept`}>
                         {d.q <= 0.01 ? "· very unlikely to be noise" : d.q <= 0.05 ? "· unlikely to be noise" : "· worth a look"}
                       </span>
                     </span>
@@ -1479,16 +1479,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             </details>
           )}
 
-          {/* ── Z(G) · ALL MEASURES — every measure, the user's own order ── */}
+          {/* ── Z(G) · ALL MEASURES — every metric, the user's own order ── */}
           <div>
-            {zoneHeader("All measures",
+            {zoneHeader("All metrics",
               <span className="ml-auto flex items-center gap-4 print:hidden">
                 <button onClick={() => setBuilder({ editing: null })} disabled={!live}
-                  className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover disabled:opacity-40">+ Build a measure</button>
+                  className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover disabled:opacity-40">+ Build a metric</button>
                 <a href="#numbers" onClick={(e) => { e.preventDefault(); window.location.hash = "numbers"; }} className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover">Open the numbers →</a>
               </span>,
-              "measures")}
-          {/* ── the metric INDEX: every measure × every arm, named columns,
+              "metrics")}
+          {/* ── the metric INDEX: every metric × every arm, named columns,
                  half-width — the decision metric pinned on top, everything else
                  in the user’s drag-saved order ── */}
           {live && (() => {
@@ -1504,7 +1504,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             const primaryComp = composites.find((cc) => cc.role === "primary");
 
             // Pinned primary first; the rest in the user’s saved order — new
-            // measures append in default order (composites, then raw events).
+            // metrics append in default order (composites, then raw events).
             const orderPref = orderLocal ?? map?.measureOrder ?? [];
             const posOf = new Map(orderPref.map((k, i2) => [k, i2] as const));
             const keyed = [
@@ -1547,7 +1547,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               return (
                 <button onClick={() => !full && void post("observe", { observeMetric: { key: rowKey, on: !on } })}
                   disabled={busy !== null || full}
-                  title={on ? "Pinned to the top — unpin to remove its observation" : full ? "Six pinned measures is the cap — unpin one first" : "Pin this measure to the top, with an observation of how it is doing"}
+                  title={on ? "Pinned to the top — unpin to remove its observation" : full ? "Six pinned metrics is the cap — unpin one first" : "Pin this metric to the top, with an observation of how it is doing"}
                   className={on ? "text-accent" : full ? "text-muted-2/30 cursor-not-allowed" : "text-muted-2 hover:text-foreground"}>
                   <Glyph kind={on ? "watchOn" : "watch"} />
                 </button>
@@ -1555,7 +1555,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             };
             const eye = (rowKey: string, isHidden: boolean) => (
               <button onClick={() => saveHidden(rowKey, !isHidden)}
-                title={isHidden ? "Show this measure again" : "Hide from the index (display only — plan measures still feed the verdict)"}
+                title={isHidden ? "Show this metric again" : "Hide from the index (display only — plan metrics still feed the verdict)"}
                 className="text-muted-2 hover:text-foreground">
                 <Glyph kind={isHidden ? "eyeOff" : "eye"} />
               </button>
@@ -1641,12 +1641,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-[left] ${c.role === "primary" ? "left-3.5" : "left-0.5"}`} />
                         </button>
                         {c.source === "custom"
-                          ? <button onClick={() => setBuilder({ editing: c })} title="Edit this measure" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
-                          : <a href="?tab=analytics#measurement" title="This measure belongs to the measurement plan — edit it there. Removing plan measures here would unwind the contract the verdict adjudicates." className="text-muted-2/50 hover:text-foreground"><Glyph kind="pencil" /></a>}
+                          ? <button onClick={() => setBuilder({ editing: c })} title="Edit this metric" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
+                          : <a href="?tab=analytics#measurement" title="This metric belongs to the measurement plan — edit it there. Removing plan metrics here would unwind the contract the verdict adjudicates." className="text-muted-2/50 hover:text-foreground"><Glyph kind="pencil" /></a>}
                         {c.role === "primary"
-                          ? <span title="The decision measure — stand it down with its toggle first, then remove it" className="text-muted-2/25 cursor-not-allowed"><Glyph kind="trash" /></span>
+                          ? <span title="The decision metric — stand it down with its toggle first, then remove it" className="text-muted-2/25 cursor-not-allowed"><Glyph kind="trash" /></span>
                           : <button onClick={() => setDeleteArmId(c.id)}
-                              title={c.source === "custom" ? "Remove this measure" : "Remove it from the measurement plan — the plan drops to unconfirmed and the change is disclosed"}
+                              title={c.source === "custom" ? "Remove this metric" : "Remove it from the measurement plan — the plan drops to unconfirmed and the change is disclosed"}
                               className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>}
                         {pinned ? <span /> : eye(rowKey, isHidden)}
                       </span>
@@ -1698,7 +1698,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     <thead>
                       <tr className="text-[10.5px] text-muted-2 text-left">
                         <th className="w-5 print:hidden" />
-                        <th className="font-medium py-1 pr-2">Measure</th>
+                        <th className="font-medium py-1 pr-2">Metric</th>
                         <th className="font-medium py-1 pr-2 w-24">Source</th>
                         {ordered.map((v) => (
                           <th key={v.variationId} className="font-medium py-1 px-1.5 text-right max-w-24">
@@ -1720,7 +1720,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 </div>
                 {hiddenRows.length > 0 && (
                   <button onClick={() => setShowHidden((h) => !h)} className="mt-1 text-[11px] text-muted-2 hover:text-foreground print:hidden">
-                    {showHidden ? "Collapse" : "Show"} {plural(hiddenRows.length, "hidden measure")}
+                    {showHidden ? "Collapse" : "Show"} {plural(hiddenRows.length, "hidden metric")}
                   </button>
                 )}
               </div>
@@ -1799,7 +1799,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3">
               {entries.length === 0 && !busy && (
                 <div className="space-y-2">
-                  <p className="text-[14px] text-muted-2 leading-snug">Ask anything about this experiment, or describe a measure you want tracked.</p>
+                  <p className="text-[14px] text-muted-2 leading-snug">Ask anything about this experiment, or describe a metric you want tracked.</p>
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       verdict?.verdict === "not_adjudicable" ? "What’s blocking the call?" : "Why isn’t this ready to call?",
@@ -1874,7 +1874,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             </div>
 
             {/* composer — the MODE CHIP routes the action, never the text. A
-                question can't silently create a measure. */}
+                question can't silently create a metric. */}
             <div className="shrink-0 border-t border-border p-3 space-y-2">
               <div className="flex items-center gap-1.5">
                 {([["ask", "Ask"], ["challenge", "Challenge this"]] as const).map(([m, label]) => (

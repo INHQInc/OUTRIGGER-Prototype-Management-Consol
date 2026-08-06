@@ -137,7 +137,7 @@ export interface CompositeMetric {
   direction?: "increase" | "decrease";
   note?: string;
   // ── measurement-plan understanding (authored at the interview) ──
-  /** What this measures, in the team's own words. */
+  /** What this metrics, in the team's own words. */
   definition?: string;
   /** Which UI surfaces express it, and in which arm each exists. */
   surfaces?: { arm: "both" | "variation" | "baseline"; description: string }[];
@@ -184,7 +184,7 @@ export interface MetricMap {
   /** Primary swaps, in order — a post-observation change of the decision
    *  metric is legitimate but must be DISCLOSED, never silent. */
   primaryHistory?: { from: string; to: string; at: string; by: string }[];
-  /** User-chosen display order of the All-measures index — row keys
+  /** User-chosen display order of the All-metrics index — row keys
    *  ("composite:<id>" / "metric:<name>"). Presentation only. */
   measureOrder?: string[];
   /** Attention rows the team has SEEN and accepted. Acknowledged is not
@@ -192,10 +192,10 @@ export interface MetricMap {
    *  leadership PDF that omits "the decision metric changed mid-run" is worse
    *  than one that admits it. */
   acknowledged?: string[];
-  /** Measures the reader wants an OBSERVATION for — watched, never
-   *  adjudicated. The verdict still reads the decision measure alone. */
+  /** Metrics the reader wants an OBSERVATION for — watched, never
+   *  adjudicated. The verdict still reads the decision metric alone. */
   observed?: string[];
-  /** Measures hidden from the index (same key space). Presentation only —
+  /** Metrics hidden from the index (same key space). Presentation only —
    *  a hidden guardrail still feeds the verdict; the primary can't hide. */
   hiddenMeasures?: string[];
   /** Confirmation stamps a Re-plan replaced — the EARLIEST pre-observation
@@ -231,7 +231,7 @@ export async function setMetricMap(prototypeKey: string, map: MetricMap): Promis
  *  null to keep the current (no write). */
 /** Drop presentation keys pointing at composites that no longer exist. Ids are
  *  slugified from labels and therefore RE-USED — without this, a re-created
- *  measure inherits the deleted one's hidden flag and is born invisible. */
+ *  metric inherits the deleted one's hidden flag and is born invisible. */
 export function pruneMeasureKeys(map: MetricMap): MetricMap {
   const live = new Set(map.composites.map((c) => `composite:${c.id}`));
   const keep = (k: string) => !k.startsWith("composite:") || live.has(k);

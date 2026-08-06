@@ -45,7 +45,7 @@ const planTool = (eventNames: string[]) => ({
           properties: {
             id: { type: "string" as const, description: "kebab-case slug" },
             label: { type: "string" as const, description: "business name, e.g. 'Total booking intent'" },
-            definition: { type: "string" as const, description: "one sentence: what this measures, in the team's words" },
+            definition: { type: "string" as const, description: "one sentence: what this metrics, in the team's words" },
             events: { type: "array" as const, items: { type: "string" as const, enum: eventNames } },
             role: { type: "string" as const, enum: ["primary", "guardrail", "info"] },
             direction: { type: "string" as const, enum: ["increase", "decrease"] },
