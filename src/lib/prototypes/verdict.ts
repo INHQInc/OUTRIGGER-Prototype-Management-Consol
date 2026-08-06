@@ -75,6 +75,14 @@ export interface PreRegistration {
   /** A post-observation re-confirm changed the frozen brief — the verdict
    *  adjudicates the EARLIEST stamp; the edit is disclosed, never laundered. */
   briefRefrozenAfterObservation?: boolean;
+  /** WHERE the decision metric was declared. "optimizely" = the experiment's
+   *  own primary metric, adjudicated because it was declared in the system of
+   *  record before traffic — the console authored nothing. Frozen onto the
+   *  stamp so a printed record always says what it judged. */
+  primarySource?: "console" | "optimizely";
+  /** True when the console adjudicated a nomination the team never ratified
+   *  (no confirmed measurement plan). Judged, and said out loud. */
+  primaryUnratified?: boolean;
   /** The decision metric was SWAPPED after observation began. */
   primaryChangedAfterObservation?: { was: string; at: string };
 }
@@ -234,11 +242,16 @@ export function deriveVerdict(opts: {
   const gates: VerdictGate[] = [];
   const snap = opts.pushedVersion?.briefSnapshot;
   const lateSwap = (map?.primaryHistory ?? []).filter((h) => opts.firstObservedDate && h.at.slice(0, 10) > opts.firstObservedDate).pop();
+  // WHERE the decision metric came from rides with every disclosure: a record
+  // that judged Optimizely's own primary must say so wherever it is read.
+  const primaryDecl = map?.composites.find((c) => c.role === "primary");
   const mapDisclosure = {
     mapConfirmedAt: opts.mapConfirmedAt,
     mapConfirmedAfterObservation:
       Boolean(opts.mapConfirmedAt && opts.firstObservedDate && opts.mapConfirmedAt.slice(0, 10) > opts.firstObservedDate),
     primaryChangedAfterObservation: lateSwap ? { was: lateSwap.from, at: lateSwap.at } : undefined,
+    primarySource: primaryDecl ? (primaryDecl.source === "optimizely" ? "optimizely" as const : "console" as const) : undefined,
+    primaryUnratified: primaryDecl && primaryDecl.source !== "optimizely" && !map?.confirmed ? true : undefined,
   };
 
   // The pre-registration anchor: console-built prototypes freeze the brief
@@ -308,18 +321,32 @@ export function deriveVerdict(opts: {
       note: `Exploratory (FDR q${r.q * 100 < 0.5 ? "<1" : `=${(r.q * 100).toFixed(0)}`}%): not pre-registered, so it can never be "confirmed" here — it's a hypothesis for the NEXT experiment.`,
     }));
 
-  // Gate 1: an adjudicable mapping — confirmed primary composite.
+  // Gate 1: A DECLARED DECISION METRIC — provenance, not presence.
+  //
+  // A declaration made in Optimizely counts. Someone attached that metric to
+  // the experiment in the system of record before traffic began; that IS
+  // pre-registration, and refusing to judge because it was not re-typed here
+  // left running experiments permanently "not adjudicable". What changes with
+  // provenance is the WORDING and the disclosure, never whether we judge.
   const primary = map?.composites.find((c) => c.role === "primary");
-  if (!primary || !map?.confirmed) {
+  if (!primary) {
     gates.push({
       id: "mapping",
-      title: "Confirmed decision metric",
+      title: "A declared decision metric",
       pass: false,
-      detail: primary ? "The metric mapping is proposed but not human-confirmed — confirm it to make the experiment adjudicable." : "No primary composite mapped yet — map the decision metric first.",
+      detail: "Neither Optimizely nor this console has a primary metric for this experiment — there is nothing to judge the run against.",
     });
-    return finish("not_adjudicable", "Not adjudicable yet — the decision metric needs a confirmed mapping.", [], discoveries);
+    return finish("not_adjudicable", "Not adjudicable — no decision metric is declared in either system.", [], discoveries);
   }
-  gates.push({ id: "mapping", title: "Confirmed decision metric", pass: true, detail: `“${primary.label}” = ${primary.events.join(" + ")}, human-confirmed.` });
+  const fromOpti = primary.source === "optimizely";
+  gates.push({
+    id: "mapping",
+    title: fromOpti ? "Decision metric: Optimizely's primary" : "A declared decision metric",
+    pass: true,
+    detail: fromOpti
+      ? `“${primary.label}” — the experiment's own primary metric, as attached in Optimizely. The console did not author it and cannot timestamp the attachment. ${primary.direction ? `Optimizely declares ${primary.direction === "decrease" ? "DOWN" : "UP"} as the winning direction.` : "Optimizely did not declare a winning direction, so UP is ASSUMED — if down is good on this metric, nominate your own decision metric."} Confirm a measurement plan to adjudicate against your own definition instead.`
+      : `“${primary.label}” = ${primary.events.join(" + ")}, nominated in the console${map?.confirmed ? " and human-confirmed" : " — the measurement plan has NOT been confirmed since it last changed, so the definition is one person's nomination rather than a ratified contract"}.`,
+  });
 
   // The bound variation must actually be IN the results — adjudicating a
   // substitute arm because the binding is stale would be an identity swap.
@@ -397,7 +424,9 @@ export function deriveVerdict(opts: {
   gates.push({ id: "sample", title: `Sample ≥ ${T.minPerArm}/arm`, pass: true, detail: `${perArm.toLocaleString()} visitors in the smallest arm.` });
 
   // Guardrails (computed before the primary so a breach can veto).
-  const guardrails: GuardrailVerdict[] = (map.composites ?? [])
+  // (`map` is no longer narrowed by gate 1: a decision metric can now be
+  // declared in Optimizely with no console plan at all.)
+  const guardrails: GuardrailVerdict[] = (map?.composites ?? [])
     .filter((c) => c.role === "guardrail")
     .map((c) => {
       const ms = stats.metrics.find((m) => m.key === `composite:${c.id}`);

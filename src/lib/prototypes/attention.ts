@@ -97,8 +97,30 @@ export function deriveAttention(opts: {
   if (mappingGate && mappingGate.pass === false) {
     attention.push({
       id: "mapping-unconfirmed", severity: "attention",
-      title: "Decision metric not confirmed",
+      title: "No decision metric declared",
       detail: mappingGate.detail,
+      actionLabel: "Confirm the plan", actionHref: "?tab=analytics#measurement",
+    });
+  }
+  // Judged on Optimizely's declaration rather than the team's own — a real
+  // verdict, and the reader is told which definition produced it. Only when a
+  // verdict was actually REACHED: preRegistration is assembled before any gate
+  // can refuse, so it exists on records that were never adjudicated.
+  const adjudicated = verdict && !["not_adjudicable", "invalid"].includes(verdict.verdict);
+  if (adjudicated && verdict?.preRegistration?.primarySource === "optimizely") {
+    attention.push({
+      id: "primary-inherited", severity: "attention",
+      title: "Judged on Optimizely's primary",
+      detail: "This run is being adjudicated against the experiment's own primary metric, declared in Optimizely. Confirm a measurement plan to judge against your own definition.",
+      actionLabel: "Confirm the plan", actionHref: "?tab=analytics#measurement",
+    });
+  }
+
+  if (verdict?.preRegistration?.primaryUnratified) {
+    attention.push({
+      id: "mapping-unratified", severity: "attention",
+      title: "Decision metric not ratified",
+      detail: "The decision metric was nominated but the measurement plan has never been confirmed, so the definition being judged is one person's choice rather than an agreed contract.",
       actionLabel: "Confirm the plan", actionHref: "?tab=analytics#measurement",
     });
   }

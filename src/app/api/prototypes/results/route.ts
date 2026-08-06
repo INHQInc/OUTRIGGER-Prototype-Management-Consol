@@ -4,7 +4,7 @@ import { getOptimizelyClientForOrg } from "@/lib/experimentation";
 import {
   normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
   type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys, clearMetricMap, clearResultsHistory,
-  supportingKeys, optiPrimaryKeyOf, SUPPORTING_CAP } from "@/lib/prototypes/results";
+  supportingKeys, optiPrimaryKeyOf, SUPPORTING_CAP, resolveDecisionMap, OPTI_PRIMARY_ID } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
 import { deriveAttention } from "@/lib/prototypes/attention";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, clearVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
@@ -49,6 +49,10 @@ interface Bundle {
   error?: string;
   experimentStatus?: string;
   weights?: Record<string, number>;
+  /** Which way is GOOD on Optimizely's own primary metric, when the experiment
+   *  definition declares it. Only consulted when the console adjudicates that
+   *  metric — absent means undeclared, and the readout says "assumed". */
+  primaryDirection?: "increase" | "decrease";
 }
 
 async function fetchResults(orgId: string, experimentId?: string): Promise<Bundle> {
@@ -64,19 +68,36 @@ async function fetchResults(orgId: string, experimentId?: string): Promise<Bundl
     const weights: Record<string, number> = {};
     for (const v of exp?.variations ?? []) if (typeof v.weight === "number" && v.weight > 0) weights[String(v.variation_id)] = v.weight;
     if (!results) return { results: null, error: "Optimizely returned no readable results yet — usually means no traffic so far.", experimentStatus: exp?.status };
-    return { results, experimentStatus: exp?.status, weights: Object.keys(weights).length ? weights : undefined };
+    // Polarity is joined by EVENT ID, never by array position: the experiment
+    // definition and the results payload are two different lists, and reading
+    // "down is good" off the wrong metric would invert a verdict silently.
+    // No confident match ⇒ undefined ⇒ every surface says UP is assumed.
+    const primaryEventId = results.metrics[0]?.eventId;
+    const wd = primaryEventId !== undefined
+      ? exp?.metrics?.find((m) => m.event_id === primaryEventId)?.winning_direction
+      : undefined;
+    const primaryDirection = wd === "decreasing" ? "decrease" as const : wd === "increasing" ? "increase" as const : undefined;
+    return { results, experimentStatus: exp?.status, weights: Object.keys(weights).length ? weights : undefined, primaryDirection };
   } catch (e) {
     return { results: null, error: e instanceof Error ? e.message : "Couldn't reach Optimizely results." };
   }
 }
 
 /** stats + draft verdict, derived fresh from a results bundle. */
-async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats: StatsReport | null; verdict: VerdictRecord | null; history: ResultsHistory }> {
+async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats: StatsReport | null; verdict: VerdictRecord | null; history: ResultsHistory; map: MetricMap | null }> {
   const existing = await getVerdict(proto.key);
-  if (!bundle.results) return { stats: null, verdict: existing, history: { days: [] } };
+  // The RESOLVED map is what every reader downstream must use — the stored
+  // one is what every WRITER mutates. Mixing them would let the page and the
+  // engines disagree about which metric the run is being judged on.
+  if (!bundle.results) return { stats: null, verdict: existing, history: { days: [] }, map: await getMetricMap(proto.key) };
 
   const history = await recordDailySnapshot(proto.key, bundle.results);
-  const map = await getMetricMap(proto.key);
+  const stored = await getMetricMap(proto.key);
+  // THE DECISION METRIC IS RESOLVED BEFORE ANYTHING IS COMPUTED. With no
+  // console nomination, Optimizely's own primary becomes the decision metric
+  // — derived here, never written back, so the stored plan stays exactly what
+  // a human authored. Both engines see the same resolved map.
+  const { map } = resolveDecisionMap(stored, bundle.results, bundle.primaryDirection);
   const stats = computeStatsReport({
     results: bundle.results,
     map,
@@ -86,7 +107,7 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
     experimentStart: bundle.results.startTime,
   });
 
-  if (existing?.state === "stamped") return { stats, verdict: existing, history };
+  if (existing?.state === "stamped") return { stats, verdict: existing, history, map };
 
   // The pre-registration anchor follows the BUILD MODE, never push-presence:
   // console-built → the pushed version's briefSnapshot; externally-built →
@@ -111,7 +132,7 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
     mapConfirmedAt: [...(map?.priorConfirmations?.map((p) => p.confirmedAt) ?? []), ...(map?.confirmedAt ? [map.confirmedAt] : [])].sort()[0],
   });
   const saved = await saveDraftVerdict(proto.key, draft);
-  return { stats, verdict: saved, history };
+  return { stats, verdict: saved, history, map };
 }
 
 /** Attention rows for a freshly-analyzed bundle — POST responses carry them
@@ -127,6 +148,23 @@ function attentionFor(opts: {
     verdict: opts.verdict, stats: opts.stats, map: opts.map, planDrift,
     resultsError: opts.resultsError, experimentStatus: opts.experimentStatus,
   });
+}
+
+
+/** The decision metric as the PAGE needs it: a read-only descriptor, never a
+ *  composite the client could post back. */
+function decisionOf(map: MetricMap | null, stats: StatsReport | null): {
+  key: string; label: string; source: "console" | "optimizely"; direction?: "increase" | "decrease"; directionDeclared: boolean;
+} | null {
+  const c = map?.composites.find((x) => x.role === "primary");
+  if (!c || !stats?.primaryKey) return null;
+  return {
+    key: stats.primaryKey,
+    label: c.label,
+    source: c.source === "optimizely" ? "optimizely" : "console",
+    direction: c.direction,
+    directionDeclared: Boolean(c.direction),
+  };
 }
 
 type BasisInput = {
@@ -180,7 +218,10 @@ export async function GET(req: NextRequest) {
     getProtoNotebook(g.proto.key),
     getReading(g.proto.key),
   ]);
-  const { stats, verdict, history } = await analyze(g.proto, bundle);
+  // `effMap` carries the RESOLVED decision metric (Optimizely's own primary
+  // when the console has no nomination). Every reader below uses it; the
+  // stored `metricMap` is only what writes mutate.
+  const { stats, verdict, history, map: effMap } = await analyze(g.proto, bundle);
   // Measurement drift: results reporting EVENTS the stamped plan never
   // reviewed = the build (or Opti config) moved past the plan. Compared in
   // ONE namespace: a row's baseName (registry name) counts as known — the
@@ -201,7 +242,7 @@ export async function GET(req: NextRequest) {
     if (windowView) {
       windowStats = computeStatsReport({
         results: windowView.results,
-        map: metricMap,
+        map: effMap,
         focusVariationId: g.proto.experiment?.variationId,
         weights: bundle.weights,
         history: [],
@@ -209,13 +250,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const basisIn = { history, verdict, map: metricMap, orgNb, protoNb, stats, results: bundle.results };
+  const basisIn = { history, verdict, map: effMap, orgNb, protoNb, stats, results: bundle.results };
   const basis = basisFor(basisIn);
   const deepCache = JSON.parse((await (await getContentStore()).getFlag(`observations:${g.proto.key}`)) || "{}") as Record<string, { basisKey?: string }>;
   const obsBasis = obsBasisFor(basisIn);
   const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => v?.basisKey === `${obsBasis}|obs2`));
   const attention = deriveAttention({
-    verdict, stats, map: metricMap, planDrift,
+    verdict, stats, map: effMap, planDrift,
     resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
   });
   return NextResponse.json({
@@ -235,7 +276,13 @@ export async function GET(req: NextRequest) {
     results: bundle.results,
     resultsError: bundle.error,
     experimentStatus: bundle.experimentStatus,
+    // The STORED map — never the resolved one. The page round-trips this
+    // object through confirm/propose/buildMetric, so handing it a composite
+    // that exists only in memory would launder Optimizely's declaration into
+    // the team's authored plan as though a human had written and ratified it.
     metricMap,
+    // The decision metric travels as its own read-only descriptor instead.
+    decision: decisionOf(effMap, stats),
     stats,
     verdict,
     planDrift,
@@ -536,7 +583,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "With per-version events, every version needs its own list (or a shared fallback list)." }, { status: 400 });
       }
 
-      const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "metric";
+      let slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "metric";
+      // OPTI_PRIMARY_ID is reserved for the read-time synthesis of Optimizely's
+      // own primary. A metric a user happens to call "Opti primary" would
+      // otherwise slug straight onto it and collide with the decision metric.
+      if (slug === OPTI_PRIMARY_ID) slug = `${slug}-custom`;
       let saved: CompositeMetric | null = null;
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const composites = [...(cur?.composites ?? [])];
@@ -635,8 +686,7 @@ export async function POST(req: NextRequest) {
       const key = String(body.deepDive.key).slice(0, 220);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
-      const map = await getMetricMap(g.proto.key);
-      const { stats, verdict, history } = await analyze(g.proto, bundle);
+      const { stats, verdict, history, map } = await analyze(g.proto, bundle);
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
       const basis = obsBasisFor({ history, verdict, map, orgNb, protoNb });
 
@@ -744,6 +794,18 @@ export async function POST(req: NextRequest) {
       const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict,
         attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
+    }
+
+    // Optimizely's own primary is SYNTHESIZED at read time and has nothing to
+    // mutate. A client holding the resolved map could otherwise ask to rename,
+    // remove or re-nominate a composite that does not exist in storage.
+    const touchedId = String(
+      (typeof body.setPrimary === "string" ? body.setPrimary : "")
+      || (typeof body.removeMetric === "string" ? body.removeMetric : "")
+      || (body.renameMetric?.id ?? ""),
+    );
+    if (touchedId === OPTI_PRIMARY_ID) {
+      return NextResponse.json({ error: "That's Optimizely's own primary metric — change it in Optimizely, or nominate a different decision metric here." }, { status: 400 });
     }
 
     if (body.setPrimary) {
@@ -875,8 +937,7 @@ export async function POST(req: NextRequest) {
       // for N generations of the same basis.
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
-      const map = await getMetricMap(g.proto.key);
-      const { stats, verdict, history } = await analyze(g.proto, bundle);
+      const { stats, verdict, history, map } = await analyze(g.proto, bundle);
       const [orgNb, protoNb, cached] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key), getReading(g.proto.key)]);
       const basis = basisFor({ history, verdict, map, orgNb, protoNb, stats, results: bundle.results });
       if (!body.force && cached?.basisKey === basis) {
@@ -945,8 +1006,7 @@ export async function POST(req: NextRequest) {
     if (body.ask !== undefined || body.explain) {
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results yet." }, { status: 400 });
-      const map = await getMetricMap(g.proto.key);
-      const { stats, verdict } = await analyze(g.proto, bundle);
+      const { stats, verdict, map } = await analyze(g.proto, bundle);
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
       const question = body.explain ? undefined : String(body.ask ?? "");
       const answer = await analyzeResults({

@@ -35,6 +35,10 @@ export interface MetricResult {
    *  plan binds to registry names before traffic exists, so joins must accept
    *  either namespace — set whenever disambiguation renamed this row. */
   baseName?: string;
+  /** Optimizely's event id. Kept so polarity (winning_direction) can be joined
+   *  from the EXPERIMENT payload by identity instead of by array position —
+   *  two payloads, two orderings, and a wrong join flips a verdict. */
+  eventId?: number;
   aggregator?: string;
   perVariation: VariationResult[];
 }
@@ -92,7 +96,7 @@ export function normalizeResults(raw: unknown): ExperimentResults | null {
     }
     const name = str(mo.name ?? mo.event_id ?? "").trim();
     if (!name || !perVariation.length) continue;
-    metrics.push({ name: name.slice(0, 200), aggregator: typeof mo.aggregator === "string" ? mo.aggregator : undefined, perVariation });
+    metrics.push({ name: name.slice(0, 200), eventId: num(mo.event_id), aggregator: typeof mo.aggregator === "string" ? mo.aggregator : undefined, perVariation });
   }
 
   // NAME is the join key for composites, the proposal enum, and React keys —
@@ -149,8 +153,10 @@ export interface CompositeMetric {
    *  "days until YOUR effect is detectable", not a generic one. */
   mdeRel?: number;
   /** "custom" = user-described, console-computed — badged everywhere as
-   *  NOT an Optimizely metric. Absent = authored by the measurement plan. */
-  source?: "custom";
+   *  NOT an Optimizely metric. "optimizely" = the experiment's OWN primary,
+   *  synthesized at read time and never stored. Absent = authored by the
+   *  measurement plan. */
+  source?: "custom" | "optimizely";
   /** PER-ARM event sets. A surface that exists in only one arm can't be
    *  compared to itself; this is how the variation's new CTA is paired with
    *  the control's equivalent action so both arms can express the same
@@ -258,6 +264,81 @@ export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined):
 /** Six marked + both primaries. The beats row is one line, not a table. */
 export const SUPPORTING_CAP = 8;
 
+/** The reserved id of Optimizely's own primary, expressed as a composite. */
+export const OPTI_PRIMARY_ID = "opti-primary";
+
+/**
+ * THE DECISION METRIC, resolved — the one rule, in one place.
+ *
+ * Optimizely's primary IS a pre-registration: a human attached it in the
+ * system of record before the experiment started. Refusing to adjudicate
+ * because that declaration lives in the other system is bureaucracy, not
+ * rigour — and it is why a running experiment with real traffic used to read
+ * "the console has nothing to judge the run against".
+ *
+ * So: the console's own nomination wins when there is one; otherwise the
+ * experiment's own primary metric is the decision metric, expressed as the
+ * one-event composite the stats and verdict engines already understand.
+ * Provenance travels with it and is disclosed everywhere — never laundered.
+ *
+ * The synthesized composite is DERIVED AT READ TIME and never written to the
+ * metric map: the plan stays exactly what a human authored.
+ */
+export function resolveDecisionMap(
+  map: MetricMap | null,
+  results: ExperimentResults | null,
+  /** Optimizely's declared winning direction for its primary metric, when the
+   *  experiment payload carries one. UNDEFINED means undeclared — and the
+   *  surfaces say "assumed" rather than presenting a default as a fact. */
+  optiDirection?: "increase" | "decrease",
+): {
+  map: MetricMap | null;
+  source: "console" | "optimizely" | "none";
+  /** True when the row the raw index shows IS the decision metric, so the
+   *  readout must not print the same number twice under two names. */
+  optiRowIsDecision: boolean;
+} {
+  // A console primary only outranks Optimizely's when a HUMAN put it there:
+  // the plan was confirmed, or someone nominated it (which `primaryHistory`
+  // records). `propose` writes a role:"primary" composite with
+  // `confirmed:false` straight from the model — adjudicating THAT would let
+  // the console return CONFIRMED against a definition nobody ever approved.
+  // Optimizely's primary is a real human declaration; an unratified proposal
+  // is not, so the declaration wins.
+  const own = map?.composites.find((c) => c.role === "primary" && c.source !== "optimizely");
+  const ratified = Boolean(map?.confirmed) || (map?.primaryHistory ?? []).some((h) => h.to === own?.label);
+  if (own && ratified) return { map, source: "console", optiRowIsDecision: false };
+
+  const name = results?.metrics[0]?.name;
+  if (!name) return { map, source: "none", optiRowIsDecision: false };
+
+  const opti: CompositeMetric = {
+    id: OPTI_PRIMARY_ID,
+    label: name,
+    events: [name],
+    role: "primary",
+    source: "optimizely",
+    // Direction of good is DATA when Optimizely declares it, and ABSENT when
+    // it does not — never a default dressed as a declaration. The engines
+    // already treat absent as "up"; the difference is that every surface can
+    // tell the reader which of the two it was.
+    ...(optiDirection ? { direction: optiDirection } : {}),
+    definition: "Optimizely's own primary metric for this experiment, read from the experiment definition.",
+  };
+  return {
+    map: {
+      ...(map ?? { composites: [], confirmed: false }),
+      // EXACTLY ONE PRIMARY in the resolved map. An unratified console
+      // nomination is demoted here (in memory only — the stored plan keeps it)
+      // so no reader can pick a different "first primary" than another and
+      // adjudicate a metric the rest of the page isn't showing.
+      composites: [opti, ...(map?.composites ?? []).map((c) => (c.role === "primary" ? { ...c, role: "info" as const } : c))],
+    },
+    source: "optimizely",
+    optiRowIsDecision: true,
+  };
+}
+
 /** THE SUPPORTING SET — the metrics the readout promotes and the analyst is
  *  asked to reason about: Optimizely's primary, the console's decision metric,
  *  and whatever the team marked as supporting the hypothesis.
@@ -286,20 +367,25 @@ export function supportingKeys(opts: {
   const hidden = new Set(opts.map?.hiddenMeasures ?? []);
   const avail = new Set(opts.available);
   const rank = new Map((opts.order ?? opts.map?.measureOrder ?? []).map((k, i) => [k, i] as const));
+  // When the DECISION METRIC *is* Optimizely's primary, the raw index row is
+  // the same number under a second name. Printing both would put one metric on
+  // the readout twice and invite the reader to reconcile it with itself.
+  const decidesOnOpti = opts.map?.composites.some((c) => c.role === "primary" && c.source === "optimizely");
+  const optiPrimaryKey = decidesOnOpti ? undefined : opts.optiPrimaryKey;
   // Optimizely's primary leads, then the decision metric, then the team's own
   // row order — ONE ordering to think about across every surface.
   const rankOf = (k: string) =>
-    k === opts.optiPrimaryKey ? -2
+    k === optiPrimaryKey ? -2
       : k === opts.decisionKey ? -1
       : rank.get(k) ?? Number.MAX_SAFE_INTEGER;
   return [...new Set([
-    ...(opts.optiPrimaryKey ? [opts.optiPrimaryKey] : []),
+    ...(optiPrimaryKey ? [optiPrimaryKey] : []),
     ...(opts.decisionKey ? [opts.decisionKey] : []),
     ...(opts.map?.observed ?? []),
   ])]
     // A hidden row is hidden everywhere — except the two primaries, which
     // refuse to hide and are read whether or not anyone asked.
-    .filter((k) => avail.has(k) && (!hidden.has(k) || k === opts.optiPrimaryKey || k === opts.decisionKey))
+    .filter((k) => avail.has(k) && (!hidden.has(k) || k === optiPrimaryKey || k === opts.decisionKey))
     .sort((a, b) => rankOf(a) - rankOf(b))
     .slice(0, SUPPORTING_CAP);
 }
@@ -383,7 +469,12 @@ export function compositeMembers(c: CompositeMetric, results: ExperimentResults)
       continue;
     }
     used.add(row);
-    if (row.aggregator && !["unique", "count"].includes(row.aggregator)) excluded.push(row.name);
+    // The exclusion exists to stop cents being summed into clicks. With a
+    // SINGLE event there is nothing to mix, so a lone total/value metric is
+    // the composite rather than being excluded out of existence — which is
+    // what left Optimizely's revenue-style primary computing nothing at all.
+    const lone = allCompositeEvents(c).length === 1;
+    if (!lone && row.aggregator && !["unique", "count"].includes(row.aggregator)) excluded.push(row.name);
     else members.push(row);
   }
   return { members, missing, excluded };

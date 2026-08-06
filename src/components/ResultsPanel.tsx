@@ -180,9 +180,12 @@ const SHOW_TILES = false;
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
   if (kind === "watch" || kind === "watchOn") {
     return (
-      <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill={kind === "watchOn" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round">
-        <path d="M7.2 1.2 10.8 4.8 9.1 5.2a2 2 0 0 0-1 .55L6.2 7.6 4.4 5.8l1.85-1.9a2 2 0 0 0 .55-1Z" />
-        <path d="M4.4 5.8 1.4 10.6l4.8-3" />
+      // A THUMBTACK seen head-on — flat cap, shaft, flared collar, needle.
+      // The old angled shape read as a syringe at 12px.
+      <svg viewBox="0 0 24 24" className="inline-block w-3.5 h-3.5" fill={kind === "watchOn" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round">
+        <path d="M9 4h6" />
+        <path d="M10 4v5.2a2 2 0 0 1-.72 1.54l-2 1.66A2 2 0 0 0 6.5 14h11a2 2 0 0 0-.78-1.6l-2-1.66A2 2 0 0 1 14 9.2V4" />
+        <path d="M12 14v6" />
       </svg>
     );
   }
@@ -456,6 +459,13 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // an optimistic order is dropped the moment the server refuses it.
   const quietChain = useRef<Promise<unknown>>(Promise.resolve());
   const pendingOrder = useRef<string[] | null>(null);
+  // OPTIMISTIC SUPPORTING SET. The mark used to ride the analyst busy gate,
+  // which a background reading holds for tens of seconds — so a click during
+  // one was silently DROPPED (`if (busy) return`) and the row appeared to do
+  // nothing until a later click happened to land. It is a presentation-layer
+  // write like order and hide: it goes on the quiet chain, and the row answers
+  // the click on the same frame.
+  const [observedLocal, setObservedLocal] = useState<string[] | null>(null);
 
   async function quietPost(body: Record<string, unknown>): Promise<boolean> {
     try {
@@ -487,13 +497,29 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     });
   }
 
+  function toggleSupporting(rowKey: string, on: boolean) {
+    const base = observedLocal ?? map?.observed ?? [];
+    const next = on ? [...base, rowKey] : base.filter((k) => k !== rowKey);
+    setObservedLocal(next);
+    quietChain.current = quietChain.current.then(async () => {
+      const ok = await quietPost({ observeMetric: { key: rowKey, on } });
+      // The stored map wins either way: on success it mirrors this, on failure
+      // the row stops asserting a mark the server never took.
+      setObservedLocal(null);
+      // What the reading is ABOUT just changed, and the observe route answers
+      // with the map alone — so the staleness has to be raised here.
+      if (ok) { autoReadRef.current = null; setReadingStale(true); }
+      return ok;
+    });
+  }
+
   function saveHidden(rowKey: string, hidden: boolean) {
     quietChain.current = quietChain.current.then(async () => {
       const ok = await quietPost({ hideMetric: { key: rowKey, hidden } });
       // Hiding a SUPPORTING metric releases the mark server-side, so what the
       // reading is about just changed — say so, or the summary keeps
       // describing a row that is no longer on the readout.
-      if (ok && (map?.observed ?? []).includes(rowKey)) { autoReadRef.current = null; setReadingStale(true); }
+      if (ok && (observedLocal ?? map?.observed ?? []).includes(rowKey)) { autoReadRef.current = null; setReadingStale(true); }
       return ok;
     });
   }
@@ -547,16 +573,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       // A primary swap re-derives the verdict, banner, and tiles server-side —
       // reload the readout in place so a page refresh is never needed.
       if (action === "setPrimary") await load();
-      // CHANGING THE SUPPORTING SET CHANGES WHAT THE READING IS ABOUT. These
-      // routes answer with the metric map alone, so the server's new basis
-      // never reaches the client and the auto-regeneration would never fire —
-      // the summary would keep describing the old set and the toggle would
-      // look broken. Marking it stale here starts the regeneration; the row
-      // itself has already changed, because it is built from the set.
-      if (action === "observe" || action === "hide") {
-        autoReadRef.current = null;
-        setReadingStale(true);
-      }
+
     } catch {
       if (action === "reading") autoReadRef.current = null;
       setErr("Network hiccup — try again.");
@@ -1040,8 +1057,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // function the reading generator and the cache basis use, so what the
   // analyst was asked about and what the page shows can never drift apart.
   const optiPrimaryKey = optiPrimaryKeyOf(live);
+  // The optimistic list overrides the stored one until the write lands, so the
+  // beats row, the observations and the toggle all move together on click.
+  const observedEff = observedLocal ?? map?.observed ?? [];
+  const mapEff = map ? { ...map, observed: observedEff } : null;
   const supporting = supportingKeys({
-    map: map ?? null,
+    map: mapEff,
     optiPrimaryKey,
     decisionKey: statsEff?.primaryKey,
     available: (statsEff?.metrics ?? []).map((m) => m.key),
@@ -1547,7 +1568,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       {(key === optiPrimaryKey || key === statsEff?.primaryKey) && !(map?.observed ?? []).includes(key) ? (
                         <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always supporting — both primaries are read here whether or not anyone marked them">always supporting</span>
                       ) : (
-                        <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
+                        <button onClick={() => toggleSupporting(key, false)}
                           title="Unpin this metric"
                           className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">unpin</button>
                       )}
@@ -1711,11 +1732,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             // observation. Marking promotes; it never suppresses, so an
             // unmarked metric can still be raised as a contradiction.
             const watch = (rowKey: string) => {
-              const on = (map?.observed ?? []).includes(rowKey);
-              const full = (map?.observed ?? []).length >= SUPPORTING_CAP - 2 && !on;
+              const on = observedEff.includes(rowKey);
+              const full = observedEff.length >= SUPPORTING_CAP - 2 && !on;
               return (
-                <button onClick={() => !full && void post("observe", { observeMetric: { key: rowKey, on: !on } })}
-                  disabled={busy !== null || full}
+                <button onClick={() => !full && toggleSupporting(rowKey, !on)}
+                  disabled={full}
                   title={on
                     ? "Supporting the hypothesis — the summary is written about this metric. Click to drop it back to context."
                     : full ? `${SUPPORTING_CAP - 2} supporting metrics is the cap — drop one first`
@@ -1740,6 +1761,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
             const compositeTr = (c: MetricMap["composites"][number], pinned: boolean, isHidden = false) => {
               const rowKey = `composite:${c.id}`;
+              // Optimizely's own primary is synthesized at read time and has no
+              // stored record, so nothing here may try to edit or delete it.
+              const inherited = c.source === "optimizely";
               const cell = cellFor(rowKey, statsEff?.focusVariationId ?? "");
               const rowsC = computeComposite(c, live);
               return (
@@ -1781,7 +1805,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     ) : null}
                   </td>
                   <td className="py-1.5 pr-2">
-                    {c.source === "custom" ? (
+                    {c.source === "optimizely" ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2"
+                        title="This experiment's own primary metric, declared in Optimizely. The console adjudicates it because it was declared there before traffic — nominate your own metric to judge against a different definition.">
+                        optimizely
+                      </span>
+                    ) : c.source === "custom" ? (
                       <span className="text-[9px] font-bold uppercase tracking-wide border border-accent/40 text-accent rounded px-1"
                         title={`Built here from Optimizely events: ${(c.armEvents?.length ? c.armEvents.flatMap((a) => a.events) : c.events).join(" + ")}`}>
                         console
@@ -1813,15 +1842,22 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                             flipping another on moves it (the server keeps exactly one) */}
                         <button
                           onClick={() => {
+                            if (inherited) return; // nothing to stand down — it is Optimizely's declaration
                             if (c.role === "primary") void post("setPrimary", { clearPrimary: true });
                             else if (!c.expectedOneArm) void post("setPrimary", { setPrimary: c.id });
                           }}
-                          disabled={Boolean(c.expectedOneArm) || busy !== null}
-                          title={c.role === "primary" ? "The console’s decision metric. Flip it off to stand it down — the experiment then has no decision metric until you pick one." : c.expectedOneArm ? "Fires in only one arm — can’t be the decision metric" : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
-                          className={`relative w-7 h-4 rounded-full transition-colors ${c.role === "primary" ? "bg-ok" : c.expectedOneArm ? "bg-border opacity-40 cursor-not-allowed" : "bg-border-strong hover:bg-accent/60"}`}>
-                          <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-[left] ${c.role === "primary" ? "left-3.5" : "left-0.5"}`} />
+                          disabled={inherited || Boolean(c.expectedOneArm) || busy !== null}
+                          title={inherited
+                            ? "INHERITED — Optimizely's own primary metric is the decision metric while the console has no nomination of its own. You can't switch it off; flip another metric on to override it."
+                            : c.role === "primary" ? "The console’s decision metric. Flip it off to stand it down — Optimizely's own primary takes over again."
+                            : c.expectedOneArm ? "Fires in only one arm — can’t be the decision metric"
+                            : "Make this the decision metric (recorded; disclosed if changed after traffic began)"}
+                          className={`relative w-7 h-4 rounded-full transition-colors ${inherited ? "bg-border-strong ring-1 ring-inset ring-ok/50 cursor-default" : c.role === "primary" ? "bg-ok" : c.expectedOneArm ? "bg-border opacity-40 cursor-not-allowed" : "bg-border-strong hover:bg-accent/60"}`}>
+                          <span className={`absolute top-0.5 h-3 w-3 rounded-full shadow-sm transition-[left] ${inherited ? "bg-muted-2 left-3.5" : "bg-white " + (c.role === "primary" ? "left-3.5" : "left-0.5")}`} />
                         </button>
-                        {c.source === "custom"
+                        {inherited
+                          ? <span title="Declared in Optimizely — change it there, or nominate your own decision metric here." className="text-muted-2/25 cursor-not-allowed"><Glyph kind="pencil" /></span>
+                          : c.source === "custom"
                           ? <button onClick={() => setBuilder({ editing: c })} title="Edit this metric" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
                           : <a href="?tab=analytics#measurement" title="This metric belongs to the measurement plan — edit it there. Removing plan metrics here would unwind the contract the verdict adjudicates." className="text-muted-2/50 hover:text-foreground"><Glyph kind="pencil" /></a>}
                         {c.role === "primary"

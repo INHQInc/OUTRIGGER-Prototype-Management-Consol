@@ -289,12 +289,21 @@ function renderContext(results: ExperimentResults, map: MetricMap | null): strin
   const fmt = (r: { name: string; conversions: number; rate?: number; lift?: number; significance?: number; isBaseline?: boolean }) =>
     `${r.name}${r.isBaseline ? " (baseline)" : ""}: ${r.conversions.toLocaleString()} conv${r.rate !== undefined ? ` · rate ${(r.rate * 100).toFixed(2)}%` : ""}${r.lift !== undefined ? ` · lift ${(r.lift * 100).toFixed(1)}%` : ""}${r.significance !== undefined ? ` · Optimizely significance ${(r.significance * 100).toFixed(0)}%` : ""}`;
   if (map?.composites.length) {
-    const provenance = map.confirmed
-      ? `CONFIRMED by ${map.confirmedBy ?? "a human"}`
-      : "PROPOSED by Claude, NOT human-confirmed — treat the mapping itself as provisional";
+    const authored = map.composites.filter((c) => c.source !== "optimizely").length;
+    const provenance = !authored
+      ? "no console mapping exists — the decision metric below is Optimizely's own"
+      : map.confirmed
+        ? `CONFIRMED by ${map.confirmedBy ?? "a human"}`
+        : "PROPOSED by Claude, NOT human-confirmed — treat the mapping itself as provisional";
     lines.push(`\nCOMPOSITE METRICS (${provenance}; summed ACTION totals, not unique visitors — a guest converting on two member events counts twice, so rates are actions-per-visitor and can exceed 100%):`);
     for (const c of map.composites) {
-      lines.push(`[${c.role.toUpperCase()}${c.direction === "decrease" ? " · decrease-is-good" : ""}] ${c.label} = ${c.events.join(" + ")}${c.note ? ` — ${c.note}` : ""}`);
+      // PER-COMPOSITE provenance. One sentence for the whole block described
+      // Optimizely's own declared primary as "proposed by Claude", which is
+      // both false and the opposite of reassuring.
+      const from = c.source === "optimizely"
+        ? " · DECLARED IN OPTIMIZELY as this experiment's primary metric — not authored here"
+        : c.source === "custom" ? " · built in the console by the team" : "";
+      lines.push(`[${c.role.toUpperCase()}${c.direction === "decrease" ? " · decrease-is-good" : c.source === "optimizely" ? " · direction of good not declared, UP assumed" : ""}${from}] ${c.label} = ${c.events.join(" + ")}${c.note ? ` — ${c.note}` : ""}`);
       const { missing, excluded } = compositeMembers(c, results);
       if (missing.length) lines.push(`  ⚠ STALE: ${missing.join(", ")} not reporting from Optimizely — composite is ${computeComposite(c, results).length ? "partial" : "not computable"}`);
       if (excluded.length) lines.push(`  ⚠ excluded from sum (value-style aggregator): ${excluded.join(", ")}`);
@@ -493,9 +502,16 @@ export function templateStory(opts: {
 
   const lede =
     verdict?.verdict === "not_adjudicable"
-      ? `${stats?.primaryKey
-          ? "The decision metric is set but the measurement plan has not been confirmed since it last changed, so the console will not judge the run yet"
-          : "No metric has been nominated as the decision metric, so the console has nothing to judge the run against"} — the numbers below are real and everything already collected still counts. ${stats?.primaryKey ? "Confirm the plan and the verdict follows." : "Nominate one in All metrics, then confirm the plan."}`
+      // FIVE different gates return not_adjudicable and only one of them is a
+      // missing metric — the readout must name the one that actually fired,
+      // or it denies a decision metric the gate trace on the same screen names.
+      ? `${(() => {
+          const failed = verdict.gates.find((g) => g.pass === false);
+          if (!failed || failed.id === "mapping") return "Neither Optimizely nor this console has a primary metric for this experiment, so there is nothing to judge the run against";
+          if (failed.id === "focus") return "The variation this prototype is bound to isn't in the results, so the console won't read a verdict off a substitute arm";
+          if (failed.id === "runtime" || failed.id === "sample") return "The run hasn't collected enough to be judged yet";
+          return "The decision metric is set, but the console can't compute a comparable number from it yet";
+        })()} — the numbers below are real and everything already collected still counts.`
       : lift === undefined
         ? "The decision metric has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
         : !sig
@@ -700,8 +716,11 @@ ${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
 }).join("\n")}\n` : ""}
 ${opts.stats?.primaryKey
-  ? `THE HEADLINE METRIC (the story is ABOUT this one — it is the decision metric the verdict adjudicates): ${opts.stats.metrics.find((m) => m.key === opts.stats!.primaryKey)?.label ?? opts.stats.primaryKey}`
-  : `NO DECISION METRIC IS SET, so the story is about OPTIMIZELY'S OWN PRIMARY: ${opts.results.metrics[0]?.name ?? "(none reporting)"}. Say plainly that nothing has been nominated as the decision metric yet — do not silently treat another metric as the headline.`}
+  ? `THE HEADLINE METRIC (the story is ABOUT this one — it is the decision metric the verdict adjudicates): ${opts.stats.metrics.find((m) => m.key === opts.stats!.primaryKey)?.label ?? opts.stats.primaryKey}${
+      opts.map?.composites.find((c) => `composite:${c.id}` === opts.stats!.primaryKey)?.source === "optimizely"
+        ? ". It is the experiment's OWN primary metric, declared in Optimizely — a real decision metric, so read it as one. Do not describe the experiment as unmeasured or undefined."
+        : ""}`
+  : `NO DECISION METRIC IS DECLARED — not in this console and not in Optimizely. Say plainly that there is nothing to judge the run against yet; do not silently treat another metric as the headline.`}
 
 THE PATH, in the order the team laid it out — these are the steps that lead to the headline metric, and the story should follow them rather than list whichever moved most:
 ${pathLines || "(no metrics reporting)"}

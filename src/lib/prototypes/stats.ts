@@ -593,15 +593,24 @@ export function computeStatsReport(opts: {
 
   for (const c of composites) {
     const counts = compositeCounts(c, results);
-    const { missing } = compositeMembers(c, results);
+    const { missing, members } = compositeMembers(c, results);
+    // A ONE-EVENT composite is not an action TOTAL — it is the very same
+    // series as the raw row beneath it, so it must be scored the same way.
+    // Optimizely's own primary arrives here as a one-event composite; scoring
+    // a unique-conversion metric with the action-rate test would print a
+    // different CI and p-value for the identical counts two rows apart.
+    const single = members.length === 1 && allCompositeEvents(c).length === 1 ? members[0] : undefined;
+    const test: MetricStats["test"] = single
+      ? (single.aggregator && !["unique", "count", "total"].includes(single.aggregator) ? "none" : single.aggregator === "unique" ? "proportion" : "actions")
+      : "actions";
     metrics.push({
       key: `composite:${c.id}`,
       label: c.label,
       kind: "composite",
       ...(missing.length ? { missingEvents: missing } : {}),
-      test: "actions",
+      test,
       role: c.role,
-      cells: metricCells({ key: c.id, counts, results, test: "actions", baselineId, withBayes: false }),
+      cells: metricCells({ key: c.id, counts, results, test, baselineId, withBayes: false }),
     });
   }
   if (composites.length) {

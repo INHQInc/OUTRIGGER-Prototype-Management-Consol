@@ -47,7 +47,13 @@ export interface OptiExperiment {
   /** Metrics attached to the experiment DEFINITION — readable with zero
    *  traffic (unlike results), which is what lets the measurement plan be
    *  authored and stamped BEFORE the experiment starts. */
-  metrics?: { event_id?: number; aggregator?: string; field?: string; scope?: string }[];
+  metrics?: {
+    event_id?: number; aggregator?: string; field?: string; scope?: string;
+    /** "increasing" | "decreasing" — which way is GOOD, per Optimizely. Read
+     *  when the console adjudicates the experiment's own primary metric so
+     *  polarity is DATA rather than an assumption. Absent on older payloads. */
+    winning_direction?: string;
+  }[];
 }
 
 export interface OptiEvent {
