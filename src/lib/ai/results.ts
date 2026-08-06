@@ -627,6 +627,8 @@ ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${
 
 Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and 3-4 BEATS naming the metrics worth putting in front of a leader, decision metric first.
 
+THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric in this reading is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
+
 THE LEDE IS THE WHOLE POINT. Two or three sentences that name the ACTUAL SURFACES and say what is happening between them — the mechanism, not the status. Write about the overlay, the room-card CTA, the booking widget, whatever this experiment actually touches, by name, in the words a hotel executive would use. If some metrics rose while others fell, say whether the gain looks like new demand or like behaviour that moved from one surface to another. End with what has not answered yet.
 NEVER write a sentence like "the variant is ahead of the control on the decision metric" — that is the verdict restated, and the console has already printed it.
 NO DIGITS in the headline, the lede, or a beat label — the numbers are printed for you. No statistics vocabulary anywhere: no p-values, no q-values, no "significance"; say "beyond what luck explains".
@@ -691,6 +693,24 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     beats.push({ measureKey: key, label });
     if (beats.length === 4) break;
   }
+  // THE HEADLINE METRIC IS ALWAYS THE FIRST BEAT. The story is about it —
+  // the decision metric when one is nominated, Optimizely's own primary when
+  // none is. A model that wrote about something else gets corrected here
+  // rather than asked again.
+  const headKey = opts.stats?.primaryKey ?? (opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : undefined);
+  if (headKey && measureKeys.includes(headKey)) {
+    const existing = beats.findIndex((b) => b.measureKey === headKey);
+    if (existing > 0) {
+      const [b] = beats.splice(existing, 1);
+      beats.unshift(b);
+    } else if (existing < 0) {
+      const label = opts.stats?.metrics.find((m) => m.key === headKey)?.label ?? "the headline metric";
+      beats.unshift({ measureKey: headKey, label: label.replace(/\s*\([^)]*\)\s*$/, "").trim().slice(0, 34) });
+      seenMeasures.add(headKey);
+      if (beats.length > 4) beats.pop();
+    }
+  }
+
   // Never fewer than three: top up from the computed order, skipping repeats.
   for (const b of fallback.beats) {
     if (beats.length >= 3) break;
