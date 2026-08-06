@@ -1460,9 +1460,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           {/* ── OBSERVATIONS — watched metrics. Noticed, never judged. ──── */}
           {observed.length > 0 && (
             <div>
-              {zoneHeader("Observations",
-                <span className="ml-auto text-[12.5px] text-muted-2">watched, not judged — the verdict reads the decision metric alone</span>,
-                "observations")}
+              {zoneHeader("Observations", undefined, "observations")}
               <div className="divide-y divide-border/40">
                 {observed.map((key) => {
                   const o = observationFor(key);
