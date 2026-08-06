@@ -4,7 +4,7 @@ import { getOptimizelyClientForOrg } from "@/lib/experimentation";
 import {
   normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
   type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys, clearMetricMap, clearResultsHistory,
-  supportingKeys, optiPrimaryKeyOf, SUPPORTING_CAP, resolveDecisionMap, OPTI_PRIMARY_ID } from "@/lib/prototypes/results";
+  supportingKeys, optiPrimaryKeyOf, METRIC_KEY_STORAGE_CAP, resolveDecisionMap, OPTI_PRIMARY_ID } from "@/lib/prototypes/results";
 import { computeStatsReport, type StatsReport } from "@/lib/prototypes/stats";
 import { deriveAttention } from "@/lib/prototypes/attention";
 import { deriveVerdict, getVerdict, saveDraftVerdict, mutateVerdict, clearVerdict, type VerdictRecord } from "@/lib/prototypes/verdict";
@@ -809,9 +809,9 @@ export async function POST(req: NextRequest) {
         // metrics, so the alternative is a lit toggle that consumes a slot and
         // does nothing — a control that lies about what it did.
         const hidden = on ? (base.hiddenMeasures ?? []).filter((k) => k !== rowKey) : base.hiddenMeasures;
-        // Six marked is the point where a list of observations becomes the
-        // wall this readout exists to avoid (both primaries ride free).
-        return { ...base, observed: [...set].slice(0, SUPPORTING_CAP - 2), ...(hidden ? { hiddenMeasures: hidden } : {}) };
+        // No product cap: how many metrics are worth observing is the team's
+        // judgement, not the console's. The bound here is storage hygiene.
+        return { ...base, observed: [...set].slice(0, METRIC_KEY_STORAGE_CAP), ...(hidden ? { hiddenMeasures: hidden } : {}) };
       });
       await audit(g.orgId, actor, on ? "results.metric-supporting" : "results.metric-context", g.proto.name, rowKey);
       return NextResponse.json({ metricMap: map });

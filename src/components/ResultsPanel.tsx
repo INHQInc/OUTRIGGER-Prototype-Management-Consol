@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
-import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, SUPPORTING_CAP, type MetricRole } from "@/lib/prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, type MetricRole } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
@@ -1838,15 +1838,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             // unmarked metric can still be raised as a contradiction.
             const watch = (rowKey: string) => {
               const on = observedEff.includes(rowKey);
-              const full = observedEff.length >= SUPPORTING_CAP - 2 && !on;
               return (
-                <button onClick={() => !full && toggleSupporting(rowKey, !on)}
-                  disabled={full}
+                <button onClick={() => toggleSupporting(rowKey, !on)}
                   title={on
                     ? "Observed — this metric gets a written read of what guests are doing. Click to stop observing it."
-                    : full ? `${SUPPORTING_CAP - 2} observations is the cap — unpin one first`
                     : "Observe this metric: it gets a written read in Observations. (What the SUMMARY is about is the Type column.)"}
-                  className={on ? "text-accent" : full ? "text-muted-2/30 cursor-not-allowed" : "text-muted-2 hover:text-foreground"}>
+                  className={on ? "text-accent" : "text-muted-2 hover:text-foreground"}>
                   <Glyph kind={on ? "watchOn" : "watch"} />
                 </button>
               );

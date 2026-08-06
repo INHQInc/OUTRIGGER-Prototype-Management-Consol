@@ -21,7 +21,7 @@ import type { ExperimentResults, MetricMap, CompositeMetric } from "../prototype
 import type { StatsReport } from "../prototypes/stats";
 import type { VerdictRecord } from "../prototypes/verdict";
 import type { OrgNotebook, ProtoNotebook, Reading } from "../prototypes/notebook";
-import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, SUPPORTING_CAP } from "../prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys } from "../prototypes/results";
 import { STAT_NOISE, type AttentionItem } from "../prototypes/attention";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
@@ -726,8 +726,8 @@ export async function generateReading(opts: {
     // Exactly one beat per supporting metric. A floor of three when only two
     // are marked would force the model to pad from an enum that cannot supply
     // a third — an unsatisfiable schema, not a stricter one.
-    beatsSchema.minItems = Math.min(beatEnum.length, SUPPORTING_CAP);
-    beatsSchema.maxItems = Math.min(beatEnum.length, SUPPORTING_CAP);
+    beatsSchema.minItems = beatEnum.length;
+    beatsSchema.maxItems = beatEnum.length;
   }
   // The same set is what gets an OBSERVATION — one act, one meaning: this
   // metric is part of the story. BOTH primaries are in it whether or not
@@ -737,19 +737,26 @@ export async function generateReading(opts: {
   // needs its own read.
   const watched = supporting;
   if (watched.length) {
-    (tool.input_schema.properties.observations as { items: { properties: { measure: Record<string, unknown> } } }).items.properties.measure = {
+    const obsSchema = tool.input_schema.properties.observations as {
+      maxItems: number; items: { properties: { measure: Record<string, unknown> } };
+    };
+    obsSchema.items.properties.measure = {
       type: "string", enum: watched, description: "the watched metric you are observing",
     };
+    // The team decides how many metrics are worth observing; a fixed maxItems
+    // would silently drop the tail of their own list.
+    obsSchema.maxItems = watched.length;
   } else {
     delete (tool.input_schema.properties as Record<string, unknown>).observations;
   }
 
   const res = await client.messages.create({
     model: "claude-opus-4-8",
-    // The mandated output scales with the team's set — up to eight beats AND
-    // eight observations, where it used to be four and six. A truncated tool
-    // call returns nothing usable and falls back to the computed story.
-    max_tokens: 2400,
+    // The mandated output scales with the TEAM'S set, which has no cap: one
+    // beat per supporting metric and one observation per watched metric. A
+    // truncated tool call returns nothing usable and falls back to the
+    // computed story, so the budget is derived rather than guessed.
+    max_tokens: Math.min(8000, 1200 + (beatEnum.length + watched.length) * 130),
     system,
     messages: [{
       role: "user",
@@ -885,7 +892,6 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   const headKey = opts.stats?.primaryKey ?? (optiPrimaryKeyOf(opts.results) || undefined);
   const at = headKey ? beats.findIndex((b) => b.measureKey === headKey) : -1;
   if (at > 0) beats.unshift(...beats.splice(at, 1));
-  beats.length = Math.min(beats.length, SUPPORTING_CAP);
 
   // A prototype with nothing marked and nothing reporting still gets a row.
   if (!beats.length) beats.push(...fallback.beats);

@@ -268,8 +268,10 @@ export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined):
   return results?.metrics[0] ? `metric:${results.metrics[0].name}` : "";
 }
 
-/** Six supporting + the decision metric. The beats row is one line. */
-export const SUPPORTING_CAP = 8;
+/** Storage guard only — not a product rule. How many metrics belong on the
+ *  readout is the team's call, so nothing here caps it; this exists so a
+ *  corrupted or scripted write can't grow the flag without bound. */
+export const METRIC_KEY_STORAGE_CAP = 100;
 
 /** What a metric is FOR. `decision` is resolved, never stored. */
 export type MetricRole = "decision" | "supporting" | "guardrail" | "exploratory";
@@ -428,8 +430,7 @@ export function supportingKeys(opts: {
     // A hidden row is hidden everywhere — except the two primaries, which
     // refuse to hide and are read whether or not anyone asked.
     .filter((k) => avail.has(k) && (!hidden.has(k) || k === optiPrimaryKey || k === opts.decisionKey))
-    .sort((a, b) => rankOf(a) - rankOf(b))
-    .slice(0, SUPPORTING_CAP);
+    .sort((a, b) => rankOf(a) - rankOf(b));
 }
 
 /** Blank the metric map. The store has no delete; every reader treats an
