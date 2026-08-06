@@ -498,8 +498,17 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         )}
 
         {tab === "analytics" && (
-          <Room title="Analytics" sub="Live from Optimizely, judged against the pre-registered plan. Readout for the room, The numbers for the analyst, the plan for how it's judged." wide>
-            <AnalyticsView prototypeKey={key} bound={Boolean(p.experiment)} running={experimentStatus === "running"} />
+          <Room title="Analytics" sub="" wide>
+            <AnalyticsView
+              prototypeKey={key}
+              bound={Boolean(p.experiment)}
+              running={experimentStatus === "running"}
+              experimentName={p.experiment?.experimentName}
+              experimentId={p.experiment?.experimentId}
+              variationName={p.experiment?.variationName}
+              boundAt={p.experiment?.boundAt}
+              experimentStatus={experimentStatus ?? undefined}
+            />
           </Room>
         )}
 
@@ -578,7 +587,7 @@ function Room({ title, sub, wide = false, children }: { title: string; sub: stri
   return (
     <div className={wide ? "" : "max-w-4xl"}>
       <h2 className="text-[16px] font-semibold tracking-tight">{title}</h2>
-      <p className="text-[13px] text-muted-2 mt-0.5 mb-4 max-w-[80ch]">{sub}</p>
+      {sub ? <p className="text-[13px] text-muted-2 mt-0.5 mb-4 max-w-[80ch]">{sub}</p> : <div className="mb-3" />}
       {children}
     </div>
   );

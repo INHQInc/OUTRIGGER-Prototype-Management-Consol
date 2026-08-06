@@ -15,10 +15,17 @@ type View = "readout" | "numbers" | "evidence" | "plan";
  * refetches or loses in-progress state; #measurement / #results deep
  * links land on the right view.
  */
-export function AnalyticsView({ prototypeKey, bound, running }: {
+export function AnalyticsView({ prototypeKey, bound, running, experimentName, experimentId, variationName, boundAt, experimentStatus }: {
   prototypeKey: string;
   bound: boolean;
   running: boolean;
+  /** Identity of the experiment these numbers come from — the one thing that
+   *  is true in every view here, and is stated nowhere else in the room. */
+  experimentName?: string;
+  experimentId?: string;
+  variationName?: string;
+  boundAt?: string;
+  experimentStatus?: string;
 }) {
   const [view, setView] = useState<View>("readout");
   const [planPending, setPlanPending] = useState(0);
@@ -44,8 +51,34 @@ export function AnalyticsView({ prototypeKey, bound, running }: {
     { id: "plan", label: "Measurement plan", sub: "how this experiment is judged" },
   ];
 
+  const statusTone =
+    experimentStatus === "running" ? "border-ok/40 text-ok"
+    : experimentStatus === "paused" ? "border-warn/50 text-warn"
+    : experimentStatus ? "border-border-strong text-foreground" : "border-border text-muted-2";
+
   return (
     <div className="space-y-4">
+      {bound ? (
+        <div className="flex items-center gap-2.5 flex-wrap text-[13px] text-muted -mt-1">
+          <span className="font-semibold text-foreground">{experimentName ?? "Bound experiment"}</span>
+          {experimentStatus && (
+            <span className={`text-[11px] font-bold uppercase tracking-[0.07em] border rounded px-1.5 ${statusTone}`}>{experimentStatus}</span>
+          )}
+          {variationName && <span>judging <span className="text-foreground/80">{variationName}</span> against control</span>}
+          {boundAt && <span className="text-muted-2">bound {boundAt.slice(0, 10)}</span>}
+          {experimentId && (
+            <a href={`https://app.optimizely.com/v2/projects/_/experiments/${encodeURIComponent(experimentId)}`}
+              target="_blank" rel="noopener noreferrer"
+              className="ml-auto text-[12.5px] font-semibold text-accent hover:text-accent-hover">
+              Open in Optimizely &#8599;
+            </a>
+          )}
+        </div>
+      ) : (
+        <p className="text-[13px] text-muted-2 -mt-1">
+          No experiment is bound yet — bind one in the Experiment room and these views fill in.
+        </p>
+      )}
       <div className="flex items-center gap-1 border-b border-border print:hidden">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setView(t.id)} title={t.sub}
