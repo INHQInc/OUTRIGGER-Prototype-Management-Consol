@@ -699,15 +699,42 @@ export async function POST(req: NextRequest) {
     if (body.removeMetric) {
       const id = String(body.removeMetric);
       let removed: string | null = null;
+      let planOwned = false;
+      let refusedPrimary = false;
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const target = cur?.composites.find((c) => c.id === id);
-        if (!cur || !target || target.source !== "custom") return null;
+        if (!cur || !target) return null;
+        // The decision measure is the one thing that cannot just vanish —
+        // stand it down first, so the change is recorded as a change.
+        if (target.role === "primary") { refusedPrimary = true; return null; }
         removed = target.label;
-        return pruneMeasureKeys({ ...cur, composites: cur.composites.filter((c) => c.id !== id) });
+        planOwned = target.source !== "custom";
+        return pruneMeasureKeys({
+          ...cur,
+          composites: cur.composites.filter((c) => c.id !== id),
+          // Removing something the PLAN authored edits the pre-registered
+          // contract. It is allowed — the plan may simply be wrong — but the
+          // plan drops to unconfirmed and the old stamp is archived, so the
+          // verdict discloses that the contract moved instead of quietly
+          // adjudicating a plan nobody agreed to.
+          ...(planOwned
+            ? {
+                confirmed: false,
+                priorConfirmations: cur.confirmed && cur.confirmedAt
+                  ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt, briefAtConfirm: cur.briefAtConfirm }]
+                  : cur.priorConfirmations,
+              }
+            : {}),
+        });
       });
-      if (!removed) return NextResponse.json({ error: "Only custom console measures can be deleted here — plan measures are managed in the Measurement plan." }, { status: 400 });
-      await audit(g.orgId, actor, "results.custom-metric-removed", g.proto.name, removed);
-      return NextResponse.json({ metricMap: map });
+      if (refusedPrimary) return NextResponse.json({ error: "That is the decision measure. Stand it down with its toggle first, then remove it." }, { status: 400 });
+      if (!removed) return NextResponse.json({ error: "No such measure." }, { status: 400 });
+      await audit(g.orgId, actor, planOwned ? "results.plan-metric-removed" : "results.custom-metric-removed", g.proto.name,
+        planOwned ? `${removed} — removed from the measurement plan; plan is now unconfirmed` : removed);
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, planUnconfirmed: planOwned,
+        attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.renameMetric) {

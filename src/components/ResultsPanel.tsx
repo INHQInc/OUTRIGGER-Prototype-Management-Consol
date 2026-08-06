@@ -1550,9 +1550,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {c.source === "custom"
                           ? <button onClick={() => setBuilder({ editing: c })} title="Edit this measure" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
                           : <a href="?tab=analytics#measurement" title="This measure belongs to the measurement plan — edit it there. Removing plan measures here would unwind the contract the verdict adjudicates." className="text-muted-2/50 hover:text-foreground"><Glyph kind="pencil" /></a>}
-                        {c.source === "custom"
-                          ? <button onClick={() => setDeleteArmId(c.id)} title="Delete" className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>
-                          : <span title="Plan measures are removed in the Measurement plan (Re-plan), so the pre-registered contract changes on the record" className="text-muted-2/25 cursor-not-allowed"><Glyph kind="trash" /></span>}
+                        {c.role === "primary"
+                          ? <span title="The decision measure — stand it down with its toggle first, then remove it" className="text-muted-2/25 cursor-not-allowed"><Glyph kind="trash" /></span>
+                          : <button onClick={() => setDeleteArmId(c.id)}
+                              title={c.source === "custom" ? "Remove this measure" : "Remove it from the measurement plan — the plan drops to unconfirmed and the change is disclosed"}
+                              className="text-muted-2 hover:text-danger"><Glyph kind="trash" /></button>}
                         {pinned ? <span /> : eye(rowKey, isHidden)}
                       </span>
                     )}
