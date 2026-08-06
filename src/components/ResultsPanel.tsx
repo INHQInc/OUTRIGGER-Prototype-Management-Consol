@@ -1183,27 +1183,44 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       <div className="print-report">
         <div className="min-w-0 space-y-5">
 
-          {/* ── THE QUESTION — what this experiment set out to prove. It leads
-                 the page: a result means nothing without the claim it tests. ── */}
+          {/* ── THE EXPERIMENT — the claim being tested. It leads the page:
+                 a result means nothing without the question it answers. ── */}
           {(protoName || pr?.hypothesis || liveHypothesis) && (
-            <div className="border-l-2 border-border-strong pl-4">
-              {protoName && <div className={`${ZH} mb-1`}>{protoName}</div>}
+            <div className="rounded-xl border border-border bg-surface px-5 py-4">
+              <div className={ZH}>The experiment</div>
+              {protoName && <h2 className="text-[19px] font-bold tracking-[-0.01em] mt-1">{protoName}</h2>}
               {(pr?.hypothesis || liveHypothesis) && (
-                <p className="text-[16px] leading-relaxed max-w-[92ch] text-foreground/90">{pr?.hypothesis ?? liveHypothesis}</p>
+                <div className="mt-3">
+                  <div className={ZH}>
+                    Hypothesis
+                    <span className={`ml-2 normal-case tracking-normal font-semibold ${pr?.hypothesis ? "text-ok" : "text-warn"}`}>
+                      {pr?.hypothesis
+                        ? `frozen ${pr.anchor === "cut" ? `at v${pr.version}` : "with the plan"}${pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""}`
+                        : "not frozen yet"}
+                    </span>
+                  </div>
+                  <p className="text-[16px] leading-relaxed max-w-[92ch] mt-1">{pr?.hypothesis ?? liveHypothesis}</p>
+                </div>
               )}
-              <div className="text-[12.5px] text-muted-2 mt-1.5">
-                {pr?.hypothesis
-                  ? `Frozen ${pr.anchor === "cut" ? `at v${pr.version}` : "with the measurement plan"}${pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""} — this is the claim the verdict adjudicates`
-                  : "Not frozen yet — confirm the measurement plan and this becomes the contract the verdict judges"}
-              </div>
             </div>
           )}
 
           {/* ── Z(A) · DECISION ─────────────────────────────────────────── */}
           <div className={`rounded-xl border border-border border-l-4 ${edge} bg-surface px-5 py-4 flex items-start gap-4 flex-wrap`}>
             <div className="min-w-0 flex-1">
+              {/* The call names WHAT IT JUDGES — a verdict with no metric
+                  beside it is an opinion about nothing in particular. */}
+              <div className={ZH}>
+                The call
+                {primaryStats && (
+                  <span className="ml-2 normal-case tracking-normal text-muted">
+                    judged on <span className="font-semibold text-foreground/90">{primaryStats.label}</span>
+                    {headlineIsOpti && <span className="text-warn"> · Optimizely&rsquo;s primary, because no decision metric is set</span>}
+                  </span>
+                )}
+              </div>
               {/* SUPREMACY: 26px, exactly once on the page. */}
-              {look && <div className={`text-[26px] font-extrabold tracking-[-0.02em] leading-tight ${look.cls}`}>{look.label}</div>}
+              {look && <div className={`text-[26px] font-extrabold tracking-[-0.02em] leading-tight mt-1 ${look.cls}`}>{look.label}</div>}
               {verdict && <p className="text-[15px] text-muted mt-1 leading-snug max-w-[76ch]">{verdict.headline}</p>}
               {(() => {
                 const chip = actionChip();
@@ -1213,34 +1230,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   ? <a href={chip.href} className={`${cls} text-accent hover:border-accent`}>{chip.label}</a>
                   : <span className={`${cls} text-muted-2`}>{chip.label}</span>;
               })()}
-              {headlineIsOpti && live && (
-                <div className="mt-2 text-[12.5px] text-warn">
-                  No decision metric is set, so this reads <span className="font-semibold">{primaryStats?.label ?? "Optimizely's primary"}</span> — Optimizely&rsquo;s own primary. Pick one in All metrics to judge something else.
-                </div>
-              )}
-              {live && (
-                <div className="border-t border-border/70 mt-3.5 pt-3 space-y-2">
-                  {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance">{story.headline}</p>}
-                  {story.lede && <p className="text-[15px] leading-relaxed max-w-[76ch] text-foreground/90">{story.lede}</p>}
-                  {story.beats.length > 0 && (
-                    <ul className={`flex flex-wrap gap-x-7 gap-y-1.5 mt-1 ${busy === "reading" ? "opacity-60" : ""}`}>
-                      {story.beats.map((b) => (
-                        <li key={b.key} className="text-[14px] text-muted">
-                          <span className={`font-extrabold tabular-nums mr-1.5 ${b.tone}`}>{b.value}</span>
-                          {b.label}
-                          {b.qualifier && <span className="text-muted-2"> — {b.qualifier}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="text-[12.5px] text-muted-2 print:hidden">
-                    {reading ? `read ${reading.generatedAt.slice(11, 16)}` : "no reading yet"} ·{" "}
-                    <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
-                      {busy === "reading" ? "re-reading…" : "re-read"}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="shrink-0 text-right space-y-1.5">
               {statsEff && (
@@ -1283,6 +1272,36 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </span>
             </div>
           </div>
+
+
+          {/* ── WHAT WE'RE SEEING — the analyst's voice, kept apart from the
+                 computed call above it so the two are never confused. ── */}
+          {live && (story.headline || story.lede) && (
+            <div>
+              {zoneHeader("What we're seeing",
+                <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
+                  {reading ? `read ${reading.generatedAt.slice(11, 16)}` : "no reading yet"} ·{" "}
+                  <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
+                    {busy === "reading" ? "re-reading…" : "re-read"}
+                  </button>
+                </span>)}
+              <div className={`space-y-2 ${busy === "reading" ? "opacity-60" : ""}`}>
+                {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
+                {story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>}
+                {story.beats.length > 0 && (
+                  <ul className="flex flex-wrap gap-x-7 gap-y-1.5 pt-1">
+                    {story.beats.map((b) => (
+                      <li key={b.key} className="text-[14px] text-muted">
+                        <span className={`font-extrabold tabular-nums mr-1.5 ${b.tone}`}>{b.value}</span>
+                        {b.label}
+                        {b.qualifier && <span className="text-muted-2"> — {b.qualifier}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── Z(B) · THE NUMBERS — four tiles, hard cap ─────────────────── */}
           {tiles.length > 0 && (
