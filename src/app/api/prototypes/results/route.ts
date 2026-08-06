@@ -11,6 +11,7 @@ import {
   getOrgNotebook, getProtoNotebook, addOrgPreference, removeOrgPreference, appendNotebook,
   getReading, saveReading, readingBasisKey, clearReading, clearNotebookEntries, clearProtoNotebook } from "@/lib/prototypes/notebook";
 import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
+import { deepObservation, type DeepObservation } from "@/lib/ai/observation";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { lastPush } from "@/lib/prototypes/ship";
@@ -236,6 +237,8 @@ export async function POST(req: NextRequest) {
     clearPrimary?: boolean;
     /** Persist the All-measures display order (row keys). Presentation only. */
     orderMetrics?: string[];
+    /** The full read of ONE measure, generated on demand and cached. */
+    deepDive?: { key?: string; force?: boolean };
     /** Mark an attention row as seen — it collapses on screen, still prints. */
     acknowledge?: { id?: string; on?: boolean };
     /** Watch a measure: it gets an observation under the decision summary.
@@ -584,6 +587,39 @@ export async function POST(req: NextRequest) {
       const map = await mutateMetricMap(g.proto.key, (cur) =>
         cur ? { ...cur, measureOrder: order } : { composites: [], confirmed: false, measureOrder: order });
       return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.deepDive?.key) {
+      const key = String(body.deepDive.key).slice(0, 220);
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
+      const map = await getMetricMap(g.proto.key);
+      const { stats, verdict, history } = await analyze(g.proto, bundle);
+      const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
+      const basis = basisFor({ history, verdict, map, orgNb, protoNb });
+
+      const store = await getContentStore();
+      const cacheKey = `observations:${g.proto.key}`;
+      const cached = JSON.parse((await store.getFlag(cacheKey)) || "{}") as Record<string, DeepObservation>;
+      // The read is expensive and rarely changes — serve the cached one until
+      // the same basis that retires the reading retires this too.
+      if (!body.deepDive.force && cached[key]?.basisKey === basis) {
+        return NextResponse.json({ observation: cached[key] });
+      }
+
+      const source = isExternalBuild(g.proto) ? null : await resolveRepoSource(g.proto.key).catch(() => null);
+      const variationJs = isExternalBuild(g.proto)
+        ? null
+        : source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
+      const { system } = await analystSkill(g.orgId);
+
+      const observation = await deepObservation({
+        measureKey: key, proto: g.proto, results: bundle.results, map, stats, verdict,
+        variationJs, system, basisKey: basis,
+      });
+      await store.setFlag(cacheKey, JSON.stringify({ ...cached, [key]: observation })).catch(() => {});
+      await audit(g.orgId, actor, "results.observation-read", g.proto.name, observation.headline.slice(0, 200));
+      return NextResponse.json({ observation });
     }
 
     if (body.acknowledge) {

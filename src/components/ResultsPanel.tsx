@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
 import { computeComposite, compositeMembers } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
+import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
 import { figureValue, templateStory } from "@/lib/ai/results";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
@@ -163,6 +164,10 @@ function MetricTrend({ days, metricName, focusId, baseId, focusName, baseName }:
  *  restoring either is this one line. */
 const SHOW_ATTENTION = false;
 const SHOW_EXPLORATORY = false;
+/** The comparison bars + day-by-day card. Hidden on request: the decision
+ *  measure's own observation now carries the same story in words, and its
+ *  numbers are in the tiles directly above. */
+const SHOW_PROOF = false;
 
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
   if (kind === "watch" || kind === "watchOn") {
@@ -322,6 +327,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [attention, setAttention] = useState<AttentionItem[]>([]);
   const [showAllAttention, setShowAllAttention] = useState(false);
   const [showAcked, setShowAcked] = useState(false);
+  // The full read of one measure, fetched on demand and cached server-side.
+  const [openObs, setOpenObs] = useState<string | null>(null);
+  const [deepObs, setDeepObs] = useState<Record<string, DeepObservation>>({});
+  const [obsBusy, setObsBusy] = useState<string | null>(null);
   const [threadOpen, setThreadOpen] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
   // Ask vs Challenge are different INSTRUCTIONS, not different destinations —
@@ -439,6 +448,24 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
   function saveHidden(rowKey: string, hidden: boolean) {
     quietChain.current = quietChain.current.then(() => quietPost({ hideMetric: { key: rowKey, hidden } }));
+  }
+
+  async function openObservation(key: string) {
+    if (openObs === key) { setOpenObs(null); return; }
+    setOpenObs(key);
+    if (deepObs[key] || obsBusy) return;
+    setObsBusy(key); setErr(null);
+    try {
+      const res = await fetch("/api/prototypes/results", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, deepDive: { key } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error ?? "Couldn't read that measure."); return; }
+      if (data.observation) setDeepObs((cur) => ({ ...cur, [key]: data.observation }));
+    } catch {
+      setErr("Network hiccup — the full read didn't load.");
+    } finally { setObsBusy(null); }
   }
 
   async function post(action: string, body: Record<string, unknown>) {
@@ -1270,7 +1297,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           })()}
 
           {/* ── Z(E) · PROOF — see it, don't read it ──────────────────────── */}
-          {(() => {
+          {SHOW_PROOF && (() => {
             const pts = (statsEff?.trend ?? []).filter((t) => t.lift !== undefined);
             const bars = primaryStats && primaryFocus?.rate !== undefined && primaryBase?.rate !== undefined;
             if (!bars && pts.length < 3) return null;
@@ -1319,7 +1346,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   const o = observationFor(key);
                   if (!o) return null;
                   return (
-                    <div key={key} className="flex items-baseline gap-3 py-2">
+                    <div key={key} className="py-2">
+                    <div className="flex items-baseline gap-3">
                       <span className={`text-[15px] font-bold tabular-nums w-20 shrink-0 text-right ${o.tone}`}>{o.value}</span>
                       {o.points.length >= 3 && (
                         <span className="hidden md:block w-20 shrink-0 self-center text-muted-2"><MicroTrend trend={o.points} /></span>
@@ -1342,6 +1370,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         <span className="block text-[14px] text-foreground/85 leading-snug">{o.gloss ?? o.computedLine}</span>
                         {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
                       </span>
+                      <button onClick={() => void openObservation(key)}
+                        className="shrink-0 text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover print:hidden">
+                        {obsBusy === key ? "reading…" : openObs === key ? "close" : "read the full observation"}
+                      </button>
                       {(key === optiPrimaryKey || key === statsEff?.primaryKey) && !(map?.observed ?? []).includes(key) ? (
                         <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — both primaries are read here whether or not anyone pinned them">always pinned</span>
                       ) : (
@@ -1349,6 +1381,35 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           title="Unpin this measure"
                           className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">unpin</button>
                       )}
+                    </div>
+
+                    {openObs === key && (
+                      <div className="mt-2 ml-[6.5rem] max-w-[80ch] rounded-lg border border-border bg-background/50 px-4 py-3 space-y-2">
+                        {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this measure against the brief and what was built…</p>}
+                        {deepObs[key] && (
+                          <>
+                            <p className="text-[15px] font-semibold leading-snug">{deepObs[key].headline}</p>
+                            <p className="text-[14px] leading-relaxed text-foreground/90">{deepObs[key].read}</p>
+                            <p className="text-[14px] leading-relaxed text-muted">{deepObs[key].context}</p>
+                            {deepObs[key].caution && (
+                              <p className="text-[14px] leading-relaxed text-warn">
+                                <span className="font-semibold">What would make this wrong: </span>{deepObs[key].caution}
+                              </p>
+                            )}
+                            {deepObs[key].watch && (
+                              <p className="text-[14px] leading-relaxed text-muted">
+                                <span className="font-semibold text-foreground/80">Watch next: </span>{deepObs[key].watch}
+                              </p>
+                            )}
+                            <div className="text-[12.5px] text-muted-2 print:hidden">
+                              read {deepObs[key].generatedAt.slice(11, 16)} ·{" "}
+                              <button onClick={() => { setDeepObs((c) => { const n = { ...c }; delete n[key]; return n; }); void openObservation(key); void openObservation(key); }}
+                                className="text-accent hover:text-accent-hover font-medium">re-read</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                     </div>
                   );
                 })}
