@@ -1957,7 +1957,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     ) : (
                       <a href="?tab=analytics#measurement"
                         className="text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 hover:text-foreground hover:border-border-strong"
-                        title={`Part of the measurement plan — the contract the verdict adjudicates. Edit or remove it in the Measurement plan, not here. = ${(c.armEvents?.length ? c.armEvents.flatMap((a) => a.events) : c.events).join(" + ")}`}>
+                        title={`Written by the measurement planner, not by hand. Editable here — redefining it drops the plan to unconfirmed and the change is recorded. = ${(c.armEvents?.length ? c.armEvents.flatMap((a) => a.events) : c.events).join(" + ")}`}>
                         plan →
                       </a>
                     )}
@@ -1996,9 +1996,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         </button>
                         {inherited
                           ? <span title="Declared in Optimizely — change it there, or nominate your own decision metric here." className="text-muted-2/25 cursor-not-allowed"><Glyph kind="pencil" /></span>
-                          : c.source === "custom"
-                          ? <button onClick={() => setBuilder({ editing: c })} title="Edit this metric" className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>
-                          : <a href="?tab=analytics#measurement" title="This metric belongs to the measurement plan — edit it there. Removing plan metrics here would unwind the contract the verdict adjudicates." className="text-muted-2/50 hover:text-foreground"><Glyph kind="pencil" /></a>}
+                          : <button onClick={(e) => { e.stopPropagation(); setBuilder({ editing: c }); }}
+                              title={c.source === "custom"
+                                ? "Edit this metric"
+                                : "Edit this metric. The planner wrote it, so redefining it moves the contract — the plan drops to unconfirmed and the change is recorded."}
+                              className="text-muted-2 hover:text-foreground"><Glyph kind="pencil" /></button>}
                         {c.role === "primary"
                           ? <span title="The decision metric — stand it down with its toggle first, then remove it" className="text-muted-2/25 cursor-not-allowed"><Glyph kind="trash" /></span>
                           : <button onClick={() => setDeleteArmId(c.id)}

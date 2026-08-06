@@ -609,9 +609,16 @@ export async function POST(req: NextRequest) {
       const map = await mutateMetricMap(g.proto.key, (cur) => {
         const composites = [...(cur?.composites ?? [])];
         const existingIdx = b.id ? composites.findIndex((c) => c.id === b.id) : -1;
-        // Editing a plan-authored metric would rewrite the pre-registered
-        // contract behind the verdict's back — the builder owns custom only.
-        if (existingIdx >= 0 && composites[existingIdx].source !== "custom") return null;
+        const editing = existingIdx >= 0 ? composites[existingIdx] : null;
+        // Optimizely's own primary is synthesized at read time — there is no
+        // stored record to edit, and it isn't ours to change.
+        if (editing?.source === "optimizely") return null;
+        // A PLAN-AUTHORED metric is editable here. It used to be refused and
+        // the user sent to the measurement plan, which is no longer part of the
+        // flow — so the refusal became a dead end on metrics the planner wrote
+        // and the user never did. Redefining one DOES change the contract, so
+        // it is disclosed below rather than forbidden.
+        const wasPlanAuthored = Boolean(editing && editing.source !== "custom");
         let id = b.id && existingIdx >= 0 ? composites[existingIdx].id : slug;
         if (existingIdx < 0) {
           let n = 2;
@@ -625,14 +632,36 @@ export async function POST(req: NextRequest) {
           role: existingIdx >= 0 ? composites[existingIdx].role : (b.role === "guardrail" ? "guardrail" : "info"),
           direction: b.direction === "decrease" ? "decrease" : "increase",
           definition: typeof b.definition === "string" ? b.definition.slice(0, 400) : composites[existingIdx]?.definition,
-          source: "custom",
+          // Lineage is kept: a metric the plan authored still reads as the
+          // plan's on the record, even after the team redefined it.
+          ...(editing?.source ? { source: editing.source } : { source: "custom" as const }),
         };
+        // Editing a PER-VERSION metric back to shared events must CLEAR the
+        // per-arm lists. Spreading the old record and conditionally re-adding
+        // armEvents left the previous definition in place, so the saved metric
+        // quietly disagreed with the preview the user just approved.
+        if (!armEvents.length) delete next.armEvents;
         saved = next;
         if (existingIdx >= 0) composites[existingIdx] = next;
         else composites.push(next);
-        return { confirmed: false, ...(cur ?? {}), composites: composites.slice(0, 24) };
+        const base = { ...(cur ?? { composites: [], confirmed: false }) };
+        const out: MetricMap = { ...base, composites: composites.slice(0, 24) };
+        // REDEFINING A PLAN METRIC MOVES THE CONTRACT. The stamp is archived
+        // and the plan drops to unconfirmed — the same treatment removing one
+        // already gets. (Adding a NEW metric changes nothing that was agreed,
+        // so it leaves the confirmation alone. The old code meant to do this
+        // and couldn't: `{ confirmed: false, ...cur }` put the spread last, so
+        // a confirmed plan overwrote the false every time.)
+        if (wasPlanAuthored && base.confirmed) {
+          out.confirmed = false;
+          out.priorConfirmations = [
+            ...(base.priorConfirmations ?? []),
+            { confirmedBy: base.confirmedBy ?? "?", confirmedAt: base.confirmedAt ?? new Date().toISOString(), briefAtConfirm: base.briefAtConfirm },
+          ];
+        }
+        return out;
       });
-      if (!saved) return NextResponse.json({ error: "That metric is part of the confirmed measurement plan — edit it there, not here." }, { status: 400 });
+      if (!saved) return NextResponse.json({ error: "That's Optimizely's own primary metric — it's read from Optimizely, not stored here, so there's nothing to edit." }, { status: 400 });
 
       await audit(g.orgId, actor, b.id ? "results.metric-rebuilt" : "results.metric-built", g.proto.name,
         `${label} = ${armEvents.length ? armEvents.map((a) => `${a.variationId}:[${a.events.join(" + ")}]`).join(" vs ") : events.join(" + ")}`.slice(0, 400));
