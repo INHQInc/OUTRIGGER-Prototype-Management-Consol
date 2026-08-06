@@ -1108,9 +1108,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       trend: m.featureOnly ? null : trendSentence(pts, sig),
       value: m.featureOnly ? rate(focus?.rate) : pctS(focus?.lift),
       tone: m.featureOnly || !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
-      rates: m.featureOnly
-        ? `${rate(focus?.rate)} in ${focus?.name ?? "the variation"} · nothing equivalent in the control`
-        : `${rate(focus?.rate)} vs ${rate(base?.rate)} control`,
+      focusRate: rate(focus?.rate),
+      baseRate: m.featureOnly ? null : rate(base?.rate),
       computedLine,
       // Collapsed, the row says WHAT IS BEING OBSERVED — the behaviour. The
       // headline is a claim and belongs to the open panel, where it leads;
@@ -1412,7 +1411,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                             decision metric
                           </span>
                         )}
-                        <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
+                        {/* The rates are the thing being compared, so they read
+                            like it. Colour stays on the effect: the variant's
+                            number takes the earned tone, the control never does,
+                            and an unsettled metric stays neutral in both. */}
+                        <span className="text-[13.5px] tabular-nums ml-2.5 whitespace-nowrap">
+                          <span className={`font-bold ${o.earned ? o.tone : "text-foreground/85"}`}>{o.focusRate}</span>
+                          {o.baseRate
+                            ? <span className="text-muted"> vs <span className="font-semibold text-foreground/70">{o.baseRate}</span> control</span>
+                            : <span className="text-muted-2"> &middot; nothing equivalent in the control</span>}
+                        </span>
                         <span className="block text-[14px] text-foreground/85 leading-snug line-clamp-2">{o.gloss ?? o.computedLine}</span>
                         {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
                       </span>
