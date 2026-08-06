@@ -177,23 +177,6 @@ const SHOW_CALL = false;
  *  which say what they mean as well as what they are. */
 const SHOW_TILES = false;
 
-/** The reading rewrites itself in the background whenever the team changes
- *  what the readout is about. A dimmed block alone read as "broken", so the
- *  region says what it is doing. */
-function Working({ label }: { label: string }) {
-  return (
-    <div className="absolute -inset-x-3 -inset-y-2 z-20 flex items-start justify-center pt-7 rounded-xl bg-background/92 backdrop-blur-[3px] print:hidden" role="status" aria-live="polite">
-      <span className="flex items-center gap-2.5 rounded-full border border-accent/40 bg-surface px-4 py-2 shadow-xl ring-1 ring-accent/10">
-        <svg viewBox="0 0 16 16" className="w-4 h-4 animate-spin motion-reduce:animate-none text-accent" fill="none" stroke="currentColor" strokeWidth={2.2}>
-          <circle cx="8" cy="8" r="6" className="opacity-20" />
-          <path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" />
-        </svg>
-        <span className="text-[13.5px] font-semibold text-foreground">{label}</span>
-      </span>
-    </div>
-  );
-}
-
 /** Confirmation that the background work finished. Auto-dismisses; polite for
  *  screen readers; never covers the metric index. */
 function Toast({ text, onDone }: { text: string; onDone: () => void }) {
@@ -1042,9 +1025,22 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // values · 15px findings + answer headlines · 14px body · 12.5px labels.
   const ZH = "text-[12.5px] font-bold uppercase tracking-[0.08em] text-muted-2";
 
-  const zoneHeader = (label: string, right?: React.ReactNode, id?: string) => (
-    <div id={id} className="flex items-baseline gap-2 border-b border-border pb-1.5 mb-2.5">
+  // A zone being REFRESHED is not a zone that is broken: the content on screen
+  // is still true, so it is never dimmed or covered. The header says the
+  // section is updating and the rule under it pulses — in flow, no scrim, no
+  // floating pill, nothing to read around.
+  const zoneHeader = (label: string, right?: React.ReactNode, id?: string, busyLabel?: string) => (
+    <div id={id} className={`flex items-baseline gap-2 border-b pb-1.5 mb-2.5 ${busyLabel ? "border-accent/60 animate-pulse motion-reduce:animate-none" : "border-border"}`}>
       <span className={ZH}>{label}</span>
+      {busyLabel && (
+        <span className="flex items-center gap-1.5 text-[11px] font-medium normal-case tracking-normal text-accent print:hidden" role="status" aria-live="polite">
+          <svg viewBox="0 0 16 16" className="w-3 h-3 animate-spin motion-reduce:animate-none" fill="none" stroke="currentColor" strokeWidth={2.2}>
+            <circle cx="8" cy="8" r="6" className="opacity-20" />
+            <path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" />
+          </svg>
+          {busyLabel}
+        </span>
+      )}
       {right}
     </div>
   );
@@ -1448,8 +1444,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           {/* ── WHAT WE'RE SEEING — the analyst's voice, kept apart from the
                  computed call above it so the two are never confused. ── */}
           {live && (story.headline || story.lede) && (
-            <div className="relative">
-              {busy === "reading" && <Working label="Rewriting the summary…" />}
+            <div>
               {zoneHeader("What we're seeing",
                 <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
                   {reading?.ledeComputed && (
@@ -1461,7 +1456,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
                     {busy === "reading" ? "re-reading…" : "re-read"}
                   </button>
-                </span>)}
+                </span>, undefined, busy === "reading" ? "rewriting" : undefined)}
               <div className="space-y-2">
                 {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
                 {story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>}
@@ -1607,9 +1602,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
           {/* ── OBSERVATIONS — the supporting metrics. Noticed, never judged. ── */}
           {observed.length > 0 && (
-            <div className="relative">
-              {busy === "reading" && <Working label="Re-reading these metrics…" />}
-              {zoneHeader("Observations", undefined, "observations")}
+            <div>
+              {zoneHeader("Observations", undefined, "observations", busy === "reading" ? "updating" : undefined)}
               <div className="divide-y divide-border/40">
                 {observed.map((key) => {
                   const o = observationFor(key);
@@ -2033,7 +2027,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <td className="py-1.5 pr-2">{typeChip(rowKey)}</td>
                   <td className="py-1.5 pr-2">
                     <span className="text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2" title="Reported by Optimizely exactly as it fires">optimizely</span>
-                    {mi === 0 && <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-muted-2" title="Optimizely’s own primary metric (first on its experiment). The console adjudicates its composed decision metric instead — the two may legitimately differ.">· primary</span>}
+                    {/* IDENTITY, never array position. This was `mi === 0`, so
+                        once the inherited decision metric was pulled out of the
+                        raw list the badge slid onto whatever row happened to
+                        land in slot zero. */}
+                    {rowKey === optiPrimaryKey && <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-muted-2" title="Optimizely’s own primary metric for this experiment. The console adjudicates its own decision metric when one is nominated — the two may legitimately differ.">· primary</span>}
                   </td>
                   {ordered.map((v) => {
                     const r = m.perVariation.find((x) => x.variationId === v.variationId);
