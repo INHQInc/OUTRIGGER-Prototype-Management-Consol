@@ -209,19 +209,47 @@ function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" 
 }
 
 /** Geometry only — no labels, no dot. The observation rows put this beside
- *  running text, and the full Sparkline's HTML overlays land on top of it. */
-function MicroTrend({ trend }: { trend: TrendPoint[] }) {
-  const pts = trend.filter((t) => t.lift !== undefined);
+ *  running text, and the full Sparkline's HTML overlays land on top of it.
+ *
+ *  The line is split at every zero crossing so the part above the line and the
+ *  part below carry different colour. CHROMA IS STILL EARNED: colour appears
+ *  only when the measure's interval excludes zero. A gap that luck could still
+ *  produce draws neutral, because a green line is a claim.
+ */
+function MicroTrend({ trend, earned }: { trend: TrendPoint[]; earned: boolean }) {
+  const pts = trend.filter((t) => t.lift !== undefined).map((t) => t.lift!);
   if (pts.length < 3) return null;
-  const ys = pts.map((p) => p.lift!);
-  const lo = Math.min(...ys, 0), hi = Math.max(...ys, 0);
+  const lo = Math.min(...pts, 0), hi = Math.max(...pts, 0);
   const span = hi - lo || 1;
-  const d = pts.map((p, i) => `${(i / (pts.length - 1)) * 100},${28 - ((p.lift! - lo) / span) * 24 - 2}`).join(" ");
-  const zero = 28 - ((0 - lo) / span) * 24 - 2;
+  const X = (i: number) => (i / (pts.length - 1)) * 100;
+  const Y = (v: number) => 28 - ((v - lo) / span) * 24 - 2;
+
+  // Walk the series, cutting a new segment wherever it crosses zero.
+  type Seg = { pos: boolean; d: string[] };
+  const segs: Seg[] = [];
+  let cur: Seg = { pos: pts[0] >= 0, d: [`${X(0)},${Y(pts[0])}`] };
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    if ((a >= 0) !== (b >= 0)) {
+      const t = Math.abs(a) / (Math.abs(a) + Math.abs(b) || 1);      // where it crosses
+      const cx = X(i - 1) + (X(i) - X(i - 1)) * t;
+      cur.d.push(`${cx},${Y(0)}`);
+      segs.push(cur);
+      cur = { pos: b >= 0, d: [`${cx},${Y(0)}`] };
+    }
+    cur.d.push(`${X(i)},${Y(b)}`);
+  }
+  segs.push(cur);
+
   return (
     <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="w-full h-6 overflow-visible" aria-hidden>
-      <line x1="0" y1={zero} x2="100" y2={zero} stroke="currentColor" strokeOpacity=".18" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-      <polyline points={d} fill="none" stroke="currentColor" strokeOpacity=".55" strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+      <line x1="0" y1={Y(0)} x2="100" y2={Y(0)} stroke="currentColor" strokeOpacity=".2" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      {segs.map((sg, i) => (
+        <polyline key={i} points={sg.d.join(" ")} fill="none" vectorEffect="non-scaling-stroke"
+          strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round"
+          className={earned ? (sg.pos ? "text-ok" : "text-danger") : ""}
+          stroke="currentColor" strokeOpacity={earned ? 0.95 : 0.5} />
+      ))}
     </svg>
   );
 }
@@ -1073,6 +1101,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     return {
       key, label: m.label,
       points: pts,
+      earned: sig && !m.featureOnly,
       trend: m.featureOnly ? null : trendSentence(pts, sig),
       value: m.featureOnly ? rate(focus?.rate) : pctS(focus?.lift),
       tone: m.featureOnly || !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
@@ -1350,7 +1379,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     <div className="flex items-baseline gap-3">
                       <span className={`text-[15px] font-bold tabular-nums w-20 shrink-0 text-right ${o.tone}`}>{o.value}</span>
                       {o.points.length >= 3 && (
-                        <span className="hidden md:block w-20 shrink-0 self-center text-muted-2"><MicroTrend trend={o.points} /></span>
+                        <span className="hidden md:block w-20 shrink-0 self-center text-muted-2"><MicroTrend trend={o.points} earned={o.earned} /></span>
                       )}
                       <span className="min-w-0 flex-1">
                         <span className="text-[14px] font-semibold">{o.label}</span>
