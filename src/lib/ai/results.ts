@@ -557,7 +557,9 @@ export async function generateReading(opts: {
     .map((m) => {
       const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
       const comp = opts.map?.composites.find((x) => `composite:${x.id}` === m.key);
-      const state = m.featureOnly ? "one version only"
+      const state = m.missingEvents?.length
+        ? `MISNAMED — this metric's definition names ${m.missingEvents.map((e) => `"${e}"`).join(", ")}, which Optimizely is not reporting under that name, so it computes as nothing`
+        : m.featureOnly ? "one version only"
         : c?.lift === undefined ? "not reporting"
         : `${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%${c.liftCi && c.liftCi.lo * c.liftCi.hi > 0 ? ", beyond luck" : ", not settled"}`;
       return `- ${m.label} (${state})${comp?.definition ? ` — ${comp.definition}` : ""}${comp?.role === "guardrail" ? " [GUARDRAIL: must not drop]" : ""}`;
@@ -647,7 +649,7 @@ Give the READING for hotel executives: a HEADLINE (the story in one line), a LED
 
 THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
 
-TRACE THE PATH TO IT. The experiment's own hypothesis names the steps: clicks lead somewhere, that somewhere leads to the outcome. So say where guests are being gained and where they are being lost ALONG THAT PATH, and finish on what it means for the headline metric — "the shortcut wins the click, the click is not reaching the booking engine" is the shape. If a step on the path is not reporting at all, say so plainly: a broken step is the most important thing on the page, because everything downstream of it is unmeasurable. If a guardrail is dropping, name it — the team said in advance it must not.
+TRACE THE PATH TO IT. The experiment's own hypothesis names the steps: clicks lead somewhere, that somewhere leads to the outcome. So say where guests are being gained and where they are being lost ALONG THAT PATH, and finish on what it means for the headline metric — "the shortcut wins the click, the click is not reaching the booking engine" is the shape. A metric marked MISNAMED is a BROKEN DEFINITION, not a result: the console cannot compute it because the event name in the plan does not match anything Optimizely reports. Say exactly that — "the plan's version of this step names an event that isn't reporting under that name" — and if ANOTHER metric on the path measures the same step and IS reporting, say so and read that one instead. NEVER describe a metric as unwired when it is reporting numbers: check the path above before making that claim. If a guardrail is dropping, name it — the team said in advance it must not.
 
 THE LEDE IS THE WHOLE POINT. Two or three sentences that name the ACTUAL SURFACES and say what is happening between them — the mechanism, not the status. Write about the overlay, the room-card CTA, the booking widget, whatever this experiment actually touches, by name, in the words a hotel executive would use. If some metrics rose while others fell, say whether the gain looks like new demand or like behaviour that moved from one surface to another. End with what has not answered yet.
 NEVER write a sentence like "the variant is ahead of the control on the decision metric" — that is the verdict restated, and the console has already printed it.

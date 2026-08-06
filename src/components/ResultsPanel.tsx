@@ -1113,9 +1113,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           ? comp2.armEvents.map((a) => `${live?.variations.find((v) => v.variationId === a.variationId)?.name ?? "a version"}: ${a.events.join(" + ")}`).join(" · ")
           : comp2.events.join(" + "))
       : key.startsWith("metric:") ? key.slice(7) : m.label;
-    const computedLine = comp2
-      ? `Counts ${eventList}, per visitor.`
-      : `Counts every ${eventList}, per visitor.`;
+    const computedLine = m.missingEvents?.length
+      ? `Not computing: this metric's definition names ${m.missingEvents.map((e) => `“${e}”`).join(", ")}, which Optimizely isn't reporting under that name.`
+      : comp2
+        ? `Counts ${eventList}, per visitor.`
+        : `Counts every ${eventList}, per visitor.`;
     const oneArmNote = m.featureOnly ? ` Only ${focusLabel} has this surface, so it shows take-up rather than a gap.` : "";
 
     const pts = m.featureOnly ? [] : seriesFor(key);
@@ -1716,6 +1718,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.role === "primary" ? "border-ok/40 text-ok" : c.role === "guardrail" ? "border-warn/40 text-warn" : "border-border text-muted-2"}`}>
                       {c.role}
                     </span>
+                    {(() => {
+                      const miss = statsEff?.metrics.find((x) => x.key === `composite:${c.id}`)?.missingEvents;
+                      return miss?.length ? (
+                        <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-danger/50 text-danger rounded px-1 align-middle"
+                          title={`This metric's definition names ${miss.map((e) => `“${e}”`).join(", ")}, which Optimizely is not reporting under that name. Edit it, or remove it if another metric already measures this step.`}>
+                          misnamed
+                        </span>
+                      ) : null;
+                    })()}
                     {c.armEvents?.length ? (
                       <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
                         title={c.armEvents.map((a) => `${live.variations.find((v) => v.variationId === a.variationId)?.name ?? a.variationId}: ${a.events.join(" + ")}`).join(" · ")}>

@@ -332,6 +332,10 @@ export interface MetricStats {
    *  structurally cannot convert — so lift/p are stripped and the metric is
    *  an ADOPTION view, excluded from the discovery sweep. */
   featureOnly?: "variation" | "baseline";
+  /** Member events this composite names that Optimizely is NOT reporting.
+   *  A composite with any of these is MISNAMED, not "not moving" — and the
+   *  difference matters: one is a broken definition, the other is a result. */
+  missingEvents?: string[];
   cells: CellStats[];
 }
 
@@ -589,10 +593,12 @@ export function computeStatsReport(opts: {
 
   for (const c of composites) {
     const counts = compositeCounts(c, results);
+    const { missing } = compositeMembers(c, results);
     metrics.push({
       key: `composite:${c.id}`,
       label: c.label,
       kind: "composite",
+      ...(missing.length ? { missingEvents: missing } : {}),
       test: "actions",
       role: c.role,
       cells: metricCells({ key: c.id, counts, results, test: "actions", baselineId, withBayes: false }),
