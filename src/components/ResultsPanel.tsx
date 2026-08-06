@@ -673,6 +673,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const look = verdict ? VERDICT_LOOK[verdict.verdict] ?? VERDICT_LOOK.not_adjudicable : null;
   const stamped = verdict?.state === "stamped";
   const stoppable = expStatus !== null && expStatus !== "running" && expStatus !== "not_started";
+  // ONE WORD. "Live · 2m ago · RUNNING" said the same thing twice — but the
+  // word can't just be hardcoded to LIVE either, because a paused or finished
+  // run's numbers are exactly what "live" would be lying about. So the state
+  // names itself, and LIVE is what a running experiment is called.
+  const freshWord =
+    !expStatus || expStatus === "running" ? "LIVE"
+      : expStatus === "not_started" ? "NOT STARTED"
+      : expStatus.replace(/_/g, " ").toUpperCase();
   const pr = verdict?.preRegistration;
 
   // ── tiles: the numbers a deck leads with, computed not narrated ──
@@ -1330,8 +1338,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 </span>
               )}
               <span className="text-muted-2 tabular-nums">
-                {stamped ? `Official — ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}` : `Live · ${relTime(statsEff?.computedAt) || "—"}`}
-                {expStatus ? ` · ${expStatus.toUpperCase()}` : ""}
+                {stamped ? `Official — ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}` : `${freshWord} · ${relTime(statsEff?.computedAt) || "—"}`}
+
               </span>
               <span className="ml-auto flex items-center gap-3">
                 {verdict && !stamped && stoppable && (
@@ -1407,8 +1415,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               <div className="text-[12.5px] text-muted-2 tabular-nums">
                 {stamped
                   ? `Official — ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}`
-                  : `Live · ${relTime(statsEff?.computedAt) || "—"}`}
-                {expStatus ? ` · ${expStatus.toUpperCase()}` : ""}
+                  : `${freshWord} · ${relTime(statsEff?.computedAt) || "—"}`}
+
               </div>
               <span className="flex items-center gap-2 justify-end print:hidden">
                 {verdict && !stamped && stoppable && (confirmAction === "stamp" ? (
