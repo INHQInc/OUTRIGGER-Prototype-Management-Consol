@@ -394,7 +394,7 @@ const readingTool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
-      lede: { type: "string" as const, description: "<=360 chars, NO DIGITS, two or three sentences of plain business English. What happened, what the trade-off is, and what has not answered yet. No statistics vocabulary." },
+      lede: { type: "string" as const, description: "<=620 chars, three to five sentences, NO DIGITS, two or three sentences of plain business English. What happened, what the trade-off is, and what has not answered yet. No statistics vocabulary." },
       beats: {
         type: "array" as const, minItems: 3, maxItems: 4,
         items: {
@@ -472,7 +472,9 @@ export function templateStory(opts: {
 
   const lede =
     verdict?.verdict === "not_adjudicable"
-      ? "Guests are moving through both versions and the events are reporting, but the console has no confirmed definition of what counts as success here, so nothing below is a result yet. Confirm the measurement plan and everything already collected still counts."
+      ? `${stats?.primaryKey
+          ? "The decision metric is set but the measurement plan has not been confirmed since it last changed, so the console will not judge the run yet"
+          : "No metric has been nominated as the decision metric, so the console has nothing to judge the run against"} — the numbers below are real and everything already collected still counts. ${stats?.primaryKey ? "Confirm the plan and the verdict follows." : "Nominate one in All metrics, then confirm the plan."}`
       : lift === undefined
         ? "The decision metric has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
         : !sig
@@ -675,7 +677,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   };
 
   let headline = clean(raw.headline, 80);
-  let lede = clean(raw.lede, 360);
+  let lede = clean(raw.lede, 620);
   // A digit or an over-long sentence used to swap the analyst's paragraph for
   // a generic template silently. Ask once for a repair, in the same call
   // shape, before settling for the computed story.
@@ -688,7 +690,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
         messages: [
           { role: "user", content: res.content.map((c) => (c.type === "text" ? c.text : "")).join("") || "(see below)" },
           { role: "assistant", content: JSON.stringify({ headline: raw.headline, lede: raw.lede }) },
-          { role: "user", content: `That ${!headline && !lede ? "headline and lede were" : !headline ? "headline was" : "lede was"} rejected. Rules: NO DIGITS anywhere in the words, headline <=80 characters, lede <=360 characters, no statistics vocabulary. Rewrite them about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "lede": "..."}` },
+          { role: "user", content: `That ${!headline && !lede ? "headline and lede were" : !headline ? "headline was" : "lede was"} rejected${typeof raw.lede === "string" && raw.lede.length > 620 ? ` (the lede ran to ${raw.lede.length} characters — the limit is 620, so cut it down)` : /\d/.test(String(raw.lede ?? "")) ? " (it contained a digit — every number is printed for you)" : ""}. Rules: NO DIGITS anywhere in the words, headline <=80 characters, lede <=620 characters, no statistics vocabulary. Rewrite them about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "lede": "..."}` },
         ],
       });
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
@@ -696,7 +698,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       if (m) {
         const parsed = JSON.parse(m[0]) as { headline?: string; lede?: string };
         headline = headline || clean(parsed.headline, 80);
-        lede = lede || clean(parsed.lede, 360);
+        lede = lede || clean(parsed.lede, 620);
       }
     } catch { /* the computed story is the floor */ }
   }
