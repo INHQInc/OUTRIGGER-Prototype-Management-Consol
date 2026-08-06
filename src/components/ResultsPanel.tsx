@@ -404,6 +404,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setPlanDrift(data.planDrift ?? []);
       setHistoryDays(data.historyDays ?? []);
       setAttention(data.attention ?? []);
+      if (data.deepObservations) setDeepObs(data.deepObservations);
       setOrderLocal(null);
       if (data.experimentStatus) setExpStatus(data.experimentStatus);
     } catch {
@@ -1109,7 +1110,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
         ? `${rate(focus?.rate)} in ${focus?.name ?? "the variation"} · nothing equivalent in the control`
         : `${rate(focus?.rate)} vs ${rate(base?.rate)} control`,
       computedLine,
-      gloss: reading?.observations?.find((o) => o.measureKey === key)?.note,
+      // A full read, once generated, writes the collapsed line too — its
+      // headline is the sharper sentence, and it is already paid for.
+      gloss: deepObs[key]?.headline ?? reading?.observations?.find((o) => o.measureKey === key)?.note,
     };
   };
   const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
@@ -1413,13 +1416,13 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     </div>
 
                     {openObs === key && (
-                      <div className="mt-2 ml-[6.5rem] max-w-[80ch] rounded-lg border border-border bg-background/50 px-4 py-3 space-y-2">
+                      <div className="mt-2 rounded-lg border border-border bg-background/50 px-5 py-4 space-y-2.5">
                         {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this measure against the brief and what was built…</p>}
                         {deepObs[key] && (
                           <>
-                            <p className="text-[15px] font-semibold leading-snug">{deepObs[key].headline}</p>
-                            <p className="text-[14px] leading-relaxed text-foreground/90">{deepObs[key].read}</p>
-                            <p className="text-[14px] leading-relaxed text-muted">{deepObs[key].context}</p>
+                            <p className="text-[17px] font-bold leading-snug max-w-[90ch]">{deepObs[key].headline}</p>
+                            <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].read}</p>
+                            <p className="text-[15px] leading-relaxed text-muted max-w-[110ch]">{deepObs[key].context}</p>
                             {deepObs[key].caution && (
                               <p className="text-[14px] leading-relaxed text-warn">
                                 <span className="font-semibold">What would make this wrong: </span>{deepObs[key].caution}

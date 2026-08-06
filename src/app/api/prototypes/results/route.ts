@@ -179,12 +179,15 @@ export async function GET(req: NextRequest) {
   }
 
   const basis = basisFor({ history, verdict, map: metricMap, orgNb, protoNb });
+  const deepCache = JSON.parse((await (await getContentStore()).getFlag(`observations:${g.proto.key}`)) || "{}") as Record<string, { basisKey?: string }>;
+  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => v?.basisKey === basis));
   const attention = deriveAttention({
     verdict, stats, map: metricMap, planDrift,
     resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
   });
   return NextResponse.json({
     attention,
+    deepObservations,
     windowResults: windowView?.results ?? null,
     windowStats,
     windowRange: windowView ? { from: windowView.from, to: windowView.to } : null,

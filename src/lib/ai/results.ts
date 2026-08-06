@@ -424,7 +424,7 @@ const readingTool = {
           type: "object" as const,
           properties: {
             measure: { type: "string" as const, description: "a measure from the WATCHED list — you may not observe anything else" },
-            note: { type: "string" as const, description: "<=180 chars, NO DIGITS. Answer the only question the business is asking: WHAT DOES THIS TELL US? What guests are doing differently on this surface, and what it means for the booking path — where intent is being created, where it is leaking, what it implies about the next move. Name the surface in the reader's words. e.g. 'Guests reach for availability far more often once the overlay puts it in front of them — the intent was there, the old layout was burying it.' NEVER write about significance, sample size, confidence, or how long the test needs." },
+            note: { type: "string" as const, description: "<=180 chars, NO DIGITS. A CLAIM WITH ITS TENSION, in the shape 'More visitors reach the booking step, but the gap is still too faint to lean on' — say what happened AND what qualifies it, in one sentence. Never a status line like 'guests behave about the same'. Answer the only question the business is asking: WHAT DOES THIS TELL US? What guests are doing differently on this surface, and what it means for the booking path — where intent is being created, where it is leaking, what it implies about the next move. Name the surface in the reader's words. e.g. 'Guests reach for availability far more often once the overlay puts it in front of them — the intent was there, the old layout was burying it.' NEVER write about significance, sample size, confidence, or how long the test needs." },
           },
           required: ["measure", "note"],
         },
