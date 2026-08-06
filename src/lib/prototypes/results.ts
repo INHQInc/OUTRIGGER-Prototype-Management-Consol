@@ -363,14 +363,17 @@ export function supportingKeys(opts: {
   available: string[];
   /** Row order; the client passes its in-flight local order while a drag saves. */
   order?: string[];
+  /** The decision metric IS Optimizely's primary, so the raw index row is the
+   *  same number under a second name. Passed explicitly rather than sniffed
+   *  from the map — the PAGE holds the stored map (no synthesized composite in
+   *  it) and would otherwise reach the opposite conclusion from the server. */
+  optiRowIsDecision?: boolean;
 }): string[] {
   const hidden = new Set(opts.map?.hiddenMeasures ?? []);
   const avail = new Set(opts.available);
   const rank = new Map((opts.order ?? opts.map?.measureOrder ?? []).map((k, i) => [k, i] as const));
-  // When the DECISION METRIC *is* Optimizely's primary, the raw index row is
-  // the same number under a second name. Printing both would put one metric on
-  // the readout twice and invite the reader to reconcile it with itself.
-  const decidesOnOpti = opts.map?.composites.some((c) => c.role === "primary" && c.source === "optimizely");
+  const decidesOnOpti = opts.optiRowIsDecision
+    ?? opts.map?.composites.some((c) => c.role === "primary" && c.source === "optimizely");
   const optiPrimaryKey = decidesOnOpti ? undefined : opts.optiPrimaryKey;
   // Optimizely's primary leads, then the decision metric, then the team's own
   // row order — ONE ordering to think about across every surface.

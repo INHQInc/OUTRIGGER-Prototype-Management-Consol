@@ -180,6 +180,7 @@ function supportingFor(opts: BasisInput): string[] {
     optiPrimaryKey: optiPrimaryKeyOf(opts.results),
     decisionKey: opts.stats?.primaryKey,
     available: (opts.stats?.metrics ?? []).map((m) => m.key),
+    optiRowIsDecision: opts.map?.composites.some((c) => c.role === "primary" && c.source === "optimizely"),
   });
 }
 
@@ -392,6 +393,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
+    if (Array.isArray(body.confirm?.composites) && body.confirm.composites.some((c: { id?: string }) => c?.id === OPTI_PRIMARY_ID)) {
+      return NextResponse.json({ error: "Optimizely's own primary metric can't be confirmed into the plan — it is read from Optimizely, not authored here. Build your own decision metric if you want one." }, { status: 400 });
+    }
     if (body.confirm) {
       const raw = Array.isArray(body.confirm.composites) ? body.confirm.composites : [];
       const priorMap = await getMetricMap(g.proto.key);

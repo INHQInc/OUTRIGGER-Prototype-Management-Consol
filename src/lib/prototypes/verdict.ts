@@ -474,10 +474,19 @@ export function deriveVerdict(opts: {
   }
   if (significant && movedGoodWay) {
     const decayNote = stats.novelty?.decayed ? " Caveat: the lift is decaying (novelty flag) — roll out with monitoring, don't extrapolate the cumulative number." : "";
-    return finish("confirmed", `HYPOTHESIS CONFIRMED — “${preRegistration.primaryMetric}” moved ${pct(cell.lift)} as predicted before the run (p=${cell.p < 0.0001 ? "<0.0001" : cell.p.toFixed(4)}), guardrails hold.${decayNote}`, guardrails, discoveries);
+    // NAME THE METRIC THAT WAS MEASURED. `preRegistration.primaryMetric` is
+    // the brief's primary IN WORDS; the number beside it came from whatever
+    // metric actually adjudicated. When they differ — which is exactly the
+    // case when Optimizely's own primary is the decision metric — printing
+    // the brief's words attributes a lift to a metric nobody measured.
+    const judged = primary.label;
+    const named = preRegistration.primaryMetric && preRegistration.primaryMetric !== judged
+      ? `“${judged}” (the brief's decision metric reads “${preRegistration.primaryMetric}”)`
+      : `“${judged}”`;
+    return finish("confirmed", `HYPOTHESIS CONFIRMED — ${named} moved ${pct(cell.lift)} as predicted before the run (p=${cell.p < 0.0001 ? "<0.0001" : cell.p.toFixed(4)}), guardrails hold.${decayNote}`, guardrails, discoveries);
   }
   if (significant && !movedGoodWay) {
-    return finish("refuted", `HYPOTHESIS REFUTED — the primary moved ${pct(cell.lift)}, significantly ${dir === 1 ? "DOWN" : "UP"} when the pre-registered prediction said ${primary.direction ?? "increase"} (p=${cell.p.toFixed(4)}). A clean, honest negative: the record is the value.`, guardrails, discoveries);
+    return finish("refuted", `HYPOTHESIS REFUTED — “${primary.label}” moved ${pct(cell.lift)}, significantly ${dir === 1 ? "DOWN" : "UP"} when the prediction said ${primary.direction ?? "increase (assumed — no direction was declared)"} (p=${cell.p.toFixed(4)}). A clean, honest negative: the record is the value.`, guardrails, discoveries);
   }
 
   // Not significant → keep running vs underpowered, decided by projection.

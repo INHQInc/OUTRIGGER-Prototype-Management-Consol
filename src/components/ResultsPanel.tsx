@@ -385,6 +385,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
+  // The DECISION METRIC as the server resolved it. Read-only on purpose: the
+  // page must never hold Optimizely's synthesized composite, because it
+  // round-trips its map through confirm/propose and would persist it.
+  const [decision, setDecision] = useState<{ key: string; label: string; source: "console" | "optimizely"; direction?: "increase" | "decrease"; directionDeclared: boolean } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [answer, setAnswer] = useState<AnalystAnswer | string | null>(null);
   const [showGates, setShowGates] = useState(false);
@@ -408,6 +412,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setResults(data.results ?? null);
       setResultsError(data.resultsError ?? null);
       setMap(data.metricMap ?? null);
+      setDecision(data.decision ?? null);
       setStats(data.stats ?? null);
       setVerdict(data.verdict ?? null);
       setReading(data.reading ?? null);
@@ -553,6 +558,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       const data = await res.json();
       // Conflict responses (409) ship the fresh record — apply before erroring.
       if (data.metricMap) setMap(data.metricMap);
+      if (data.decision !== undefined) setDecision(data.decision);
       if (data.results) setResults(data.results);
       if (data.stats) setStats(data.stats);
       if (data.verdict) setVerdict(data.verdict);
@@ -1061,12 +1067,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // beats row, the observations and the toggle all move together on click.
   const observedEff = observedLocal ?? map?.observed ?? [];
   const mapEff = map ? { ...map, observed: observedEff } : null;
+  const inheritedPrimary = decision?.source === "optimizely";
   const supporting = supportingKeys({
     map: mapEff,
     optiPrimaryKey,
     decisionKey: statsEff?.primaryKey,
     available: (statsEff?.metrics ?? []).map((m) => m.key),
     order: orderLocal ?? map?.measureOrder ?? [],
+    // The page holds the STORED map, which has no synthesized composite in it,
+    // so it cannot work this out for itself.
+    optiRowIsDecision: inheritedPrimary,
   });
 
   const story = (() => {
@@ -1687,7 +1697,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             const isCtl = (id: string) => id === statsEff?.baselineVariationId;
 
             const composites = map?.composites ?? [];
-            const primaryComp = composites.find((cc) => cc.role === "primary");
+            // DISPLAY-ONLY row for Optimizely's own primary. It is not in the
+            // stored map (deliberately — the page must never be able to post
+            // it back), so without this the decision metric the verdict card
+            // names would have no row in the table at all.
+            const inheritedRow: MetricMap["composites"][number] | null = inheritedPrimary && decision
+              ? { id: decision.key.replace(/^composite:/, ""), label: decision.label, events: [decision.label], role: "primary", source: "optimizely", ...(decision.direction ? { direction: decision.direction } : {}) }
+              : null;
+            const primaryComp = inheritedRow ?? composites.find((cc) => cc.role === "primary");
 
             // Pinned primary first; the rest in the user’s saved order — new
             // metrics append in default order (composites, then raw events).
@@ -1695,7 +1712,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             const posOf = new Map(orderPref.map((k, i2) => [k, i2] as const));
             const keyed = [
               ...composites.filter((cc) => cc !== primaryComp).map((cc) => ({ kind: "c" as const, c: cc, mi: 0, key: `composite:${cc.id}` })),
-              ...live.metrics.map((m, mi) => ({ kind: "m" as const, m, mi, key: `metric:${m.name}` })),
+              ...live.metrics
+                .filter((m) => !(inheritedRow && `metric:${m.name}` === optiPrimaryKey))
+                .map((m, mi) => ({ kind: "m" as const, m, mi, key: `metric:${m.name}` })),
             ].sort((a, b) => (posOf.get(a.key) ?? Number.MAX_SAFE_INTEGER) - (posOf.get(b.key) ?? Number.MAX_SAFE_INTEGER));
 
             const hiddenSet = new Set(map?.hiddenMeasures ?? []);

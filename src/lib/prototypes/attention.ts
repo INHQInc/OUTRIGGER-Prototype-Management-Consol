@@ -223,6 +223,20 @@ export function deriveAttention(opts: {
     });
   }
 
+  // ANY failed gate must leave a row. Gate 1 passing no longer implies the
+  // verdict was reached, and an all-clear beside "NOT READY TO JUDGE YET" is
+  // the readout contradicting itself on one screen.
+  const failed = (verdict?.gates ?? []).find((g) => g.pass === false);
+  if (failed && !attention.some((a) => a.id === "mapping-unconfirmed") && !critical.length
+      && (verdict?.verdict === "not_adjudicable" || verdict?.verdict === "invalid")) {
+    attention.push({
+      id: `gate-failed:${failed.id}`, severity: "attention",
+      title: failed.title.slice(0, 34),
+      detail: failed.detail,
+      actionLabel: "See the method", actionHref: "#method",
+    });
+  }
+
   const items = [...critical, ...attention];
   if (items.length) return items;
 
