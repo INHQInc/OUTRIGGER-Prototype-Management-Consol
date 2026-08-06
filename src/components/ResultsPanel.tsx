@@ -1193,7 +1193,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
           {/* ── the controls the call card used to hold ── */}
           {!SHOW_CALL && live && (
-            <div className="flex items-center gap-3 flex-wrap text-[12.5px] print:hidden -mb-1">
+            <div className="flex items-center gap-3 flex-wrap text-[12.5px] print:hidden pb-1">
               {statsEff && (
                 <span className={`font-bold uppercase tracking-[0.08em] ${statsEff.validity.status === "ok" ? "text-ok" : statsEff.validity.status === "unknown" ? "text-muted-2" : statsEff.validity.status === "warn" ? "text-warn" : "text-danger"}`} title={statsEff.validity.detail}>
                   {statsEff.validity.status === "ok" ? "✓ health" : statsEff.validity.status === "unknown" ? "health unchecked" : "⚠ health"}
@@ -1227,20 +1227,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                  a result means nothing without the question it answers. ── */}
           {(protoName || pr?.hypothesis || liveHypothesis) && (
             <div className="rounded-xl border border-border bg-surface px-5 py-4">
-              <div className={ZH}>The experiment</div>
-              {protoName && <h2 className="text-[19px] font-bold tracking-[-0.01em] mt-1">{protoName}</h2>}
+              <h2 className="text-[19px] font-bold tracking-[-0.01em]">
+                Hypothesis: {protoName ?? "this experiment"}
+                <span className={`ml-2.5 align-middle text-[11px] font-bold uppercase tracking-[0.07em] border rounded px-1.5 py-0.5 ${pr?.hypothesis ? "border-ok/40 text-ok" : "border-warn/40 text-warn"}`}>
+                  {pr?.hypothesis
+                    ? `frozen${pr.cutAt ? ` ${pr.cutAt.slice(0, 10)}` : ""}`
+                    : "not frozen"}
+                </span>
+              </h2>
               {(pr?.hypothesis || liveHypothesis) && (
-                <div className="mt-3">
-                  <div className={ZH}>
-                    Hypothesis
-                    <span className={`ml-2 normal-case tracking-normal font-semibold ${pr?.hypothesis ? "text-ok" : "text-warn"}`}>
-                      {pr?.hypothesis
-                        ? `frozen ${pr.anchor === "cut" ? `at v${pr.version}` : "with the plan"}${pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""}`
-                        : "not frozen yet"}
-                    </span>
-                  </div>
-                  <p className="text-[16px] leading-relaxed max-w-[92ch] mt-1">{pr?.hypothesis ?? liveHypothesis}</p>
-                </div>
+                <p className="text-[16px] leading-relaxed max-w-[92ch] mt-2">{pr?.hypothesis ?? liveHypothesis}</p>
               )}
             </div>
           )}
