@@ -969,7 +969,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const orderPrefTop = orderLocal ?? map?.measureOrder ?? [];
   const rankOf = new Map(orderPrefTop.map((k, i) => [k, i] as const));
   const indexRank = (key: string) =>
-    key === statsEff?.primaryKey ? -1 : rankOf.get(key) ?? Number.MAX_SAFE_INTEGER;
+    // Optimizely's primary leads the observations, always — it is the number
+    // the client sees in their own tool, so it is read first here too.
+    key === optiPrimaryKey ? -2
+      : key === statsEff?.primaryKey ? -1
+      : rankOf.get(key) ?? Number.MAX_SAFE_INTEGER;
   const observed = [...new Set([
     ...(optiPrimaryKey && optiPrimaryKey !== statsEff?.primaryKey ? [optiPrimaryKey] : []),
     ...(map?.observed ?? []),
