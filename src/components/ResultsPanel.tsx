@@ -182,13 +182,13 @@ const SHOW_TILES = false;
  *  region says what it is doing. */
 function Working({ label }: { label: string }) {
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/65 backdrop-blur-[1px]" role="status" aria-live="polite">
-      <span className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5 shadow-sm">
-        <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 animate-spin motion-reduce:animate-none text-accent" fill="none" stroke="currentColor" strokeWidth={2}>
-          <circle cx="8" cy="8" r="6" className="opacity-25" />
+    <div className="absolute -inset-x-3 -inset-y-2 z-20 flex items-start justify-center pt-7 rounded-xl bg-background/92 backdrop-blur-[3px] print:hidden" role="status" aria-live="polite">
+      <span className="flex items-center gap-2.5 rounded-full border border-accent/40 bg-surface px-4 py-2 shadow-xl ring-1 ring-accent/10">
+        <svg viewBox="0 0 16 16" className="w-4 h-4 animate-spin motion-reduce:animate-none text-accent" fill="none" stroke="currentColor" strokeWidth={2.2}>
+          <circle cx="8" cy="8" r="6" className="opacity-20" />
           <path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" />
         </svg>
-        <span className="text-[12.5px] font-medium text-muted">{label}</span>
+        <span className="text-[13.5px] font-semibold text-foreground">{label}</span>
       </span>
     </div>
   );
@@ -213,7 +213,14 @@ function Toast({ text, onDone }: { text: string; onDone: () => void }) {
   );
 }
 
-function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
+function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" | "chevron" }) {
+  if (kind === "chevron") {
+    return (
+      <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4.5 2.5 8 6l-3.5 3.5" />
+      </svg>
+    );
+  }
   if (kind === "watch" || kind === "watchOn") {
     return (
       // A THUMBTACK seen head-on — flat cap, shaft, flared collar, needle.
@@ -1441,7 +1448,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           {/* ── WHAT WE'RE SEEING — the analyst's voice, kept apart from the
                  computed call above it so the two are never confused. ── */}
           {live && (story.headline || story.lede) && (
-            <div>
+            <div className="relative">
+              {busy === "reading" && <Working label="Rewriting the summary…" />}
               {zoneHeader("What we're seeing",
                 <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
                   {reading ? `read ${reading.generatedAt.slice(11, 16)}` : "no reading yet"} ·{" "}
@@ -1449,8 +1457,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     {busy === "reading" ? "re-reading…" : "re-read"}
                   </button>
                 </span>)}
-              <div className={`relative space-y-2 ${busy === "reading" ? "opacity-60" : ""}`}>
-                {busy === "reading" && <Working label="Rewriting the summary…" />}
+              <div className="space-y-2">
                 {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
                 {story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>}
                 {story.beats.length > 0 && (
@@ -1595,16 +1602,23 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
           {/* ── OBSERVATIONS — the supporting metrics. Noticed, never judged. ── */}
           {observed.length > 0 && (
-            <div>
+            <div className="relative">
+              {busy === "reading" && <Working label="Re-reading these metrics…" />}
               {zoneHeader("Observations", undefined, "observations")}
-              <div className={`relative divide-y divide-border/40 ${busy === "reading" ? "opacity-60" : ""}`}>
-                {busy === "reading" && <Working label="Re-reading these metrics…" />}
+              <div className="divide-y divide-border/40">
                 {observed.map((key) => {
                   const o = observationFor(key);
                   if (!o) return null;
                   return (
                     <div key={key} className="py-2">
-                    <div className="flex items-baseline gap-3">
+                    {/* THE WHOLE ROW IS THE CONTROL. A shouty uppercase link on
+                        every row was five calls to action competing with the
+                        numbers; the row itself opens, and one chevron says so. */}
+                    <div role="button" tabIndex={0}
+                      aria-expanded={openObs === key}
+                      onClick={() => void openObservation(key)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void openObservation(key); } }}
+                      className="group flex items-baseline gap-3 cursor-pointer rounded-lg -mx-2 px-2 py-1 transition-colors hover:bg-foreground/[0.035] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/60">
                       <span className={`text-[15px] font-bold tabular-nums w-20 shrink-0 text-right ${o.tone}`}>{o.value}</span>
                       {o.points.length >= 3 && (
                         <span className="hidden md:block w-20 shrink-0 self-center text-muted-2"><MicroTrend trend={o.points} earned={o.earned} /></span>
@@ -1636,17 +1650,25 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         <span className="block text-[14px] text-foreground/85 leading-snug line-clamp-2">{o.gloss ?? o.computedLine}</span>
                         {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
                       </span>
-                      <button onClick={() => void openObservation(key)}
-                        className="shrink-0 text-[12.5px] font-bold uppercase tracking-[0.08em] text-accent hover:text-accent-hover print:hidden">
-                        {obsBusy === key ? "reading…" : openObs === key ? "close" : "read the full observation"}
-                      </button>
                       {(key === optiPrimaryKey || key === statsEff?.primaryKey) && !(map?.observed ?? []).includes(key) ? (
-                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always supporting — both primaries are read here whether or not anyone marked them">always supporting</span>
+                        <span className="shrink-0 self-center text-muted-2/40 print:hidden" title="Always observed — the decision metric is read here whether or not anyone pinned it">
+                          <Glyph kind="watchOn" />
+                        </span>
                       ) : (
-                        <button onClick={() => toggleSupporting(key, false)}
-                          title="Unpin this metric"
-                          className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">unpin</button>
+                        <button onClick={(e) => { e.stopPropagation(); toggleSupporting(key, false); }}
+                          title="Stop observing this metric"
+                          aria-label="Stop observing this metric"
+                          className="shrink-0 self-center text-muted-2/70 hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity print:hidden">
+                          <Glyph kind="watchOn" />
+                        </button>
                       )}
+                      <span aria-hidden
+                        title={openObs === key ? "Close" : "Read the full observation"}
+                        className={`shrink-0 self-center grid place-items-center w-6 h-6 rounded-full border border-border text-muted-2 transition-all group-hover:border-accent/60 group-hover:text-accent motion-reduce:transition-none print:hidden ${openObs === key ? "rotate-90 border-accent/60 text-accent" : ""}`}>
+                        {obsBusy === key
+                          ? <svg viewBox="0 0 16 16" className="w-3 h-3 animate-spin motion-reduce:animate-none" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="8" cy="8" r="6" className="opacity-25" /><path d="M14 8a6 6 0 0 0-6-6" strokeLinecap="round" /></svg>
+                          : <Glyph kind="chevron" />}
+                      </span>
                     </div>
 
                     {openObs === key && (
