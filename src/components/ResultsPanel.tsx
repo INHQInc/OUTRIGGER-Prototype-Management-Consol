@@ -1112,9 +1112,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
         ? `${rate(focus?.rate)} in ${focus?.name ?? "the variation"} · nothing equivalent in the control`
         : `${rate(focus?.rate)} vs ${rate(base?.rate)} control`,
       computedLine,
-      // A full read, once generated, writes the collapsed line too — its
-      // headline is the sharper sentence, and it is already paid for.
-      gloss: deepObs[key]?.headline ?? reading?.observations?.find((o) => o.measureKey === key)?.note,
+      // Collapsed, the row says WHAT IS BEING OBSERVED — the behaviour. The
+      // headline is a claim and belongs to the open panel, where it leads;
+      // repeating it in both places said the same thing twice.
+      gloss: deepObs[key]?.observation ?? deepObs[key]?.headline
+        ?? reading?.observations?.find((o) => o.measureKey === key)?.note,
     };
   };
   const riskNote = (id: string) => reading?.riskNotes?.find((r) => r.code === id)?.note;
@@ -1411,7 +1413,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           </span>
                         )}
                         <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
-                        <span className="block text-[14px] text-foreground/85 leading-snug">{o.gloss ?? o.computedLine}</span>
+                        <span className="block text-[14px] text-foreground/85 leading-snug line-clamp-2">{o.gloss ?? o.computedLine}</span>
                         {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
                       </span>
                       <button onClick={() => void openObservation(key)}
