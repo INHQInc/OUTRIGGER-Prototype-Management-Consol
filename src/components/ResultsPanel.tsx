@@ -975,7 +975,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       : key === statsEff?.primaryKey ? -1
       : rankOf.get(key) ?? Number.MAX_SAFE_INTEGER;
   const observed = [...new Set([
-    ...(optiPrimaryKey && optiPrimaryKey !== statsEff?.primaryKey ? [optiPrimaryKey] : []),
+    ...(optiPrimaryKey ? [optiPrimaryKey] : []),
+    ...(statsEff?.primaryKey ? [statsEff.primaryKey] : []),
     ...(map?.observed ?? []),
   ])]
     .filter((k) => statsEff?.metrics.some((m) => m.key === k))
@@ -1327,16 +1328,22 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         <span className="text-[14px] font-semibold">{o.label}</span>
                         {key === optiPrimaryKey && (
                           <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
-                            title="Optimizely's own primary metric. The console adjudicates its composed decision measure instead — the two may legitimately differ, which is exactly why both are shown.">
+                            title="The metric Optimizely reports as this experiment's primary. The console adjudicates its own decision measure — the two may legitimately differ, which is why both are read here.">
                             optimizely&rsquo;s primary
+                          </span>
+                        )}
+                        {key === statsEff?.primaryKey && (
+                          <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-ok/40 text-ok rounded px-1 align-middle"
+                            title="The console's decision measure — the one the verdict adjudicates, and the one the summary above is about.">
+                            decision measure
                           </span>
                         )}
                         <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
                         <span className="block text-[14px] text-foreground/85 leading-snug">{o.gloss ?? o.computedLine}</span>
                         {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
                       </span>
-                      {key === optiPrimaryKey && !(map?.observed ?? []).includes(key) ? (
-                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — it is the number Optimizely reports as this experiment's primary">always pinned</span>
+                      {(key === optiPrimaryKey || key === statsEff?.primaryKey) && !(map?.observed ?? []).includes(key) ? (
+                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — both primaries are read here whether or not anyone pinned them">always pinned</span>
                       ) : (
                         <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
                           title="Unpin this measure"

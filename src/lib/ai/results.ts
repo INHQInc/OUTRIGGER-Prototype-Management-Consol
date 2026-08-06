@@ -572,9 +572,14 @@ export async function generateReading(opts: {
   // Optimizely's own primary is watched whether or not anyone asked: it is the
   // number the client reads in THEIR tool, and the console must never quietly
   // disagree with it.
+  // BOTH primaries are always observed: Optimizely's, because it is the number
+  // the client reads in their own tool, and the console's decision measure,
+  // because it is the one being adjudicated. They may disagree — that is
+  // exactly why each needs its own read.
   const optiPrimaryKey = opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : "";
   const watched = [...new Set([
-    ...(optiPrimaryKey && measureKeys.includes(optiPrimaryKey) ? [optiPrimaryKey] : []),
+    ...(optiPrimaryKey ? [optiPrimaryKey] : []),
+    ...(opts.stats?.primaryKey ? [opts.stats.primaryKey] : []),
     ...(opts.map?.observed ?? []),
   ])].filter((k) => measureKeys.includes(k));
   if (watched.length) {
