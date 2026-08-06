@@ -127,11 +127,20 @@ export async function POST(req: NextRequest) {
       const source = isExternalBuild(g.proto) ? null : await resolveRepoSource(g.proto.key).catch(() => null);
       const variationJs = isExternalBuild(g.proto) ? null : source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
 
+      // ONLY events ATTACHED to this experiment can be bound — those are the
+      // ones it reports. Every other project event is a candidate to ASK
+      // about: binding one silently produces a metric that computes as
+      // nothing, which is exactly how "booking engine visits" became a metric
+      // that read as a dash while Optimizely's own primary was reporting fine.
+      const bindable = enumerated.attachedNames.length ? enumerated.attachedNames : enumerated.eventNames;
+      const askable = enumerated.eventNames;
       const draft = await planMeasurement({
         orgId: g.orgId,
         proto: g.proto,
         variationJs,
-        eventNames: enumerated.eventNames,
+        eventNames: bindable,
+        reportingNames: enumerated.attachedNames,
+        askableNames: askable,
         priorPlan: prior,
         answers,
       });
@@ -156,6 +165,7 @@ export async function POST(req: NextRequest) {
         // becomes the drift baseline. New names later = the build moved.
         known: enumerated.eventNames,
         pendingQuestions: draft.questions.length ? draft.questions : undefined,
+        pendingChoices: draft.metricChoices?.length ? draft.metricChoices : undefined,
         plannedAt: new Date().toISOString(),
         priorConfirmations: cur?.confirmed && cur.confirmedAt
           ? [...(cur.priorConfirmations ?? []), { confirmedBy: cur.confirmedBy ?? "?", confirmedAt: cur.confirmedAt, briefAtConfirm: cur.briefAtConfirm }]

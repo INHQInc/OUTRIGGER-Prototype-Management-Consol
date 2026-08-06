@@ -242,14 +242,32 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
                   {pending.length === 1 ? "One answer" : `${pending.length} answers`} needed before this plan can be confirmed
                 </span>
               </div>
-              {pending.map((q) => (
+              {pending.map((q) => {
+                const choice = plan.pendingChoices?.find((c) => c.question === q);
+                return (
                 <div key={q} className="space-y-1">
                   <div className="text-[13px] text-muted">{q}</div>
+                  {/* When the answer is "which event means this", the reader
+                      picks from what the project actually has — the planner is
+                      not allowed to bind one it cannot verify. */}
+                  {choice && (
+                    <div className="flex flex-wrap gap-1.5 pb-0.5">
+                      {choice.options.map((o) => (
+                        <button key={o} type="button"
+                          onClick={() => setAnswers((a) => ({ ...a, [q]: o }))}
+                          className={`h-7 px-2.5 rounded-full border text-[12.5px] font-medium ${answers[q] === o ? "border-accent text-accent" : "border-border text-muted hover:text-foreground hover:border-border-strong"}`}>
+                          {o}
+                        </button>
+                      ))}
+                      <span className="self-center text-[12px] text-muted-2">or describe it below</span>
+                    </div>
+                  )}
                   <input value={answers[q] ?? ""} onChange={(e) => setAnswers((a) => ({ ...a, [q]: e.target.value }))}
                     placeholder="Your answer…"
                     className="w-full h-9 px-3 rounded-lg border border-border bg-background text-[13.5px] placeholder:text-muted-2 focus:border-accent focus:outline-none" />
                 </div>
-              ))}
+                );
+              })}
               <button onClick={() => post("plan", { plan: true, answers: pending.map((q) => ({ question: q, answer: answers[q] ?? "" })) })}
                 disabled={busy !== null || !allAnswered}
                 className="h-9 px-3.5 rounded-lg bg-accent text-accent-fg text-[13.5px] font-semibold hover:bg-accent-hover disabled:opacity-40">

@@ -23,16 +23,19 @@ import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
 
 const FALLBACK_SYSTEM =
-  "You turn an experiment brief's outcome-in-words into a MEASUREMENT PLAN over the experiment's real instrumented events. Decompose the outcome into intents: ONE primary decision composite both arms can convert on, guardrails from the brief, adoption/info views for variation-only surfaces. Declare per-surface arm presence; a variation-only event never stands alone as the primary — pair it with the control's equivalent. Ask at most TWO questions, only when the answer changes the plan (arm presence you can't infer, person-vs-action unit, the smallest lift worth shipping, what would veto a win). List wanted-but-uninstrumented measurements as gaps. Use ONLY the provided event names.";
+  "You turn an experiment brief's outcome-in-words into a MEASUREMENT PLAN over the experiment's real instrumented events. Decompose the outcome into intents: ONE primary decision composite both arms can convert on, guardrails from the brief, adoption/info views for variation-only surfaces. Declare per-surface arm presence; a variation-only event never stands alone as the primary — pair it with the control's equivalent. Ask at most TWO questions, only when the answer changes the plan (arm presence you can't infer, person-vs-action unit, the smallest lift worth shipping, what would veto a win). List wanted-but-uninstrumented measurements as gaps. Use ONLY the provided event names. If the brief's outcome does not map to an event this experiment REPORTS, do not compose one anyway and do not pick a similarly-named project event: ask which event means it, with candidates, using metricChoices. A plan that quietly binds an outcome to an event the experiment never reports produces a metric that reads as nothing and a verdict that cannot be given.";
 
 export interface MeasurementDraft {
   composites: CompositeMetric[];
   questions: string[];
+  /** Questions that come with candidate events to pick from — the answer to
+   *  "which metric means this?" is a choice, not an essay. */
+  metricChoices: { question: string; options: string[] }[];
   understanding: number;
   gaps: string[];
 }
 
-const planTool = (eventNames: string[]) => ({
+const planTool = (eventNames: string[], askable: string[]) => ({
   name: "propose_measurement_plan",
   description: "Propose the measurement plan: composites over real events, clarifying questions (if any genuinely change the plan), an honest understanding score, and instrumentation gaps.",
   input_schema: {
@@ -68,6 +71,18 @@ const planTool = (eventNames: string[]) => ({
         },
       },
       questions: { type: "array" as const, items: { type: "string" as const }, description: "at most 2; EMPTY when understanding ≥ 90 or when answers were provided" },
+      metricChoices: {
+        type: "array" as const, maxItems: 2,
+        items: {
+          type: "object" as const,
+          properties: {
+            question: { type: "string" as const, description: "e.g. 'Which event marks a booking-engine visit for this experiment?'" },
+            options: { type: "array" as const, items: { type: "string" as const, enum: askable }, description: "the candidate events, best first — the reader picks one" },
+          },
+          required: ["question", "options"],
+        },
+        description: "USE THIS INSTEAD OF GUESSING. When the outcome names something you cannot bind to an event this experiment reports, ask which event means it and offer the closest candidates. Never invent a composite over an event the experiment does not report.",
+      },
       understanding: { type: "number" as const, description: "0-100 honest confidence you know what the team is measuring" },
       gaps: { type: "array" as const, items: { type: "string" as const }, description: "wanted measurements nothing currently fires an event for" },
     },
@@ -85,6 +100,12 @@ export async function planMeasurement(opts: {
   proto: PrototypeRecord;
   variationJs: string | null;
   eventNames: string[];
+  /** Events the experiment actually REPORTS — the only bindable ones. */
+  reportingNames?: string[];
+  /** Everything else in the project: offerable as a CHOICE, never bound
+   *  silently, because binding one produces a metric that computes as
+   *  nothing until someone attaches it in Optimizely. */
+  askableNames?: string[];
   priorPlan?: MetricMap | null;
   answers?: { question: string; answer: string }[];
 }): Promise<MeasurementDraft> {
@@ -131,7 +152,7 @@ ${trimCode(opts.variationJs)}
 
 Propose the measurement plan.`,
     }],
-    tools: [planTool(opts.eventNames)],
+    tools: [planTool(opts.eventNames, opts.askableNames?.length ? opts.askableNames : opts.eventNames)],
     tool_choice: { type: "tool", name: "propose_measurement_plan" },
   });
 
@@ -192,6 +213,23 @@ Propose the measurement plan.`,
   )].slice(0, 2);
   if (finalPass || understanding >= 90) questions = [];
 
+  // Choices survive the understanding gate: "which event means this" is not a
+  // preference the model can resolve by being more confident.
+  const metricChoices = (Array.isArray((raw as { metricChoices?: unknown }).metricChoices) ? (raw as { metricChoices: unknown[] }).metricChoices : [])
+    .map((c) => c as { question?: unknown; options?: unknown })
+    .map((c) => ({
+      question: typeof c.question === "string" ? c.question.trim().slice(0, 300) : "",
+      options: (Array.isArray(c.options) ? c.options : [])
+        .filter((o): o is string => typeof o === "string" && (opts.askableNames ?? opts.eventNames).includes(o))
+        .slice(0, 8),
+    }))
+    .filter((c) => c.question && c.options.length)
+    .slice(0, 2);
+  if (metricChoices.length) {
+    // A choice IS an open question — the plan is not finished while one stands.
+    questions = [...new Set([...questions, ...metricChoices.map((c) => c.question)])].slice(0, 3);
+  }
+
   const gaps = (Array.isArray(raw.gaps) ? raw.gaps : []).filter((g): g is string => typeof g === "string" && g.trim().length > 0).map((g) => g.trim().slice(0, 240)).slice(0, 8);
   // The demotion must never be a silent dead-end: no primary left → say
   // exactly what unblocks it (instrument the control's equivalent).
@@ -206,6 +244,7 @@ Propose the measurement plan.`,
   return {
     composites,
     questions,
+    metricChoices,
     // First pass: score and questions must agree (questions ⇔ <90). The
     // TERMINAL pass keeps the model's honest score — forcing 90 because we
     // forced zero questions would fake understanding it doesn't have.

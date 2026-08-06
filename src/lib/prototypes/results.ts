@@ -180,6 +180,9 @@ export interface MetricMap {
   /** Unanswered interview questions — persisted so navigating away doesn't
    *  lose them; emptied on the terminal answers pass. */
   pendingQuestions?: string[];
+  /** Questions whose answer is a CHOICE of event — the planner offers
+   *  candidates rather than binding one it cannot verify. */
+  pendingChoices?: { question: string; options: string[] }[];
   plannedAt?: string;
   /** Primary swaps, in order — a post-observation change of the decision
    *  metric is legitimate but must be DISCLOSED, never silent. */
