@@ -172,6 +172,10 @@ const SHOW_PROOF = false;
  *  unconfirmed plan it only ever says "not ready", which the experiment block
  *  and the story already convey. Its controls move to the toolbar. */
 const SHOW_CALL = false;
+/** The four tiles. Hidden on request: visitors, the headline metric's
+ *  conversions and its lift are all carried by the beats and the observations,
+ *  which say what they mean as well as what they are. */
+const SHOW_TILES = false;
 
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
   if (kind === "watch" || kind === "watchOn") {
@@ -1341,7 +1345,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           )}
 
           {/* ── Z(B) · THE NUMBERS — four tiles, hard cap ─────────────────── */}
-          {tiles.length > 0 && (
+          {SHOW_TILES && tiles.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {tiles.map((t) => (
                 <div key={t.label} className="rounded-xl border border-border bg-surface px-3.5 py-2.5 min-h-[92px] flex flex-col">
