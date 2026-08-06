@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
-import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, SUPPORTING_CAP } from "@/lib/prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, SUPPORTING_CAP, type MetricRole } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
@@ -471,6 +471,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // write like order and hide: it goes on the quiet chain, and the row answers
   // the click on the same frame.
   const [observedLocal, setObservedLocal] = useState<string[] | null>(null);
+  const [rolesLocal, setRolesLocal] = useState<Record<string, "supporting" | "guardrail" | "exploratory"> | null>(null);
 
   async function quietPost(body: Record<string, unknown>): Promise<boolean> {
     try {
@@ -513,6 +514,19 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setObservedLocal(null);
       // What the reading is ABOUT just changed, and the observe route answers
       // with the map alone — so the staleness has to be raised here.
+      if (ok) { autoReadRef.current = null; setReadingStale(true); }
+      return ok;
+    });
+  }
+
+  function setMetricRole(rowKey: string, role: "supporting" | "guardrail" | "exploratory") {
+    const next = { ...(rolesLocal ?? map?.roles ?? {}), [rowKey]: role };
+    setRolesLocal(next);
+    quietChain.current = quietChain.current.then(async () => {
+      const ok = await quietPost({ setMetricRole: { key: rowKey, role } });
+      setRolesLocal(null);
+      // TYPE decides what the summary is written about, so changing one
+      // retires the cached reading exactly as marking used to.
       if (ok) { autoReadRef.current = null; setReadingStale(true); }
       return ok;
     });
@@ -1066,7 +1080,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // The optimistic list overrides the stored one until the write lands, so the
   // beats row, the observations and the toggle all move together on click.
   const observedEff = observedLocal ?? map?.observed ?? [];
-  const mapEff = map ? { ...map, observed: observedEff } : null;
+  const rolesEff = rolesLocal ?? map?.roles ?? {};
+  const mapEff = map ? { ...map, observed: observedEff, roles: rolesEff } : null;
   const inheritedPrimary = decision?.source === "optimizely";
   const supporting = supportingKeys({
     map: mapEff,
@@ -1113,9 +1128,18 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // Optimizely's own primary is ALWAYS at the top, watched or not — whoever
   // opens Optimizely sees that number, so the console shows it beside its own
   // decision metric rather than letting the two disagree in different tools.
-  // Supporting rows read in the SAME order as the index: reordering the table
-  // reorders what sits above it, so there is one ordering to think about.
-  const observed = supporting;
+  // OBSERVATIONS = the pin, plus the decision metric (the run is being judged
+  // on it, so the readout always explains it). TYPE decides what the SUMMARY
+  // is about; these two were one control and are now separate, by request.
+  const obsRank = new Map((orderLocal ?? map?.measureOrder ?? []).map((k, i) => [k, i] as const));
+  const observed = [...new Set([
+    ...(statsEff?.primaryKey ? [statsEff.primaryKey] : []),
+    ...observedEff,
+  ])]
+    .filter((k) => statsEff?.metrics.some((m) => m.key === k))
+    .sort((a, b) =>
+      (a === statsEff?.primaryKey ? -1 : obsRank.get(a) ?? Number.MAX_SAFE_INTEGER)
+      - (b === statsEff?.primaryKey ? -1 : obsRank.get(b) ?? Number.MAX_SAFE_INTEGER));
   // What this metric has actually DONE, day by day, from the console's own
   // snapshots — the same source the primary's trend line uses. Deterministic:
   // an observation should never depend on the analyst noticing a shape.
@@ -1403,9 +1427,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 {/* The row is the team's set, so a SHORT row is a statement:
                     nothing else has been declared to support the hypothesis.
                     Said out loud, it reads as a choice rather than a gap. */}
-                {!(map?.observed ?? []).length && (
+                {supporting.length <= 1 && (
                   <p className="text-[12.5px] text-muted-2 pt-0.5 print:hidden">
-                    Only the primaries are declared. Mark a metric as supporting in All metrics to add it here and have the summary written about it.
+                    Only the decision metric is declared. Set a metric's Type to SUPPORTING in All metrics to add it here and have the summary written about it.
                   </p>
                 )}
               </div>
@@ -1757,12 +1781,48 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 <button onClick={() => !full && toggleSupporting(rowKey, !on)}
                   disabled={full}
                   title={on
-                    ? "Supporting the hypothesis — the summary is written about this metric. Click to drop it back to context."
-                    : full ? `${SUPPORTING_CAP - 2} supporting metrics is the cap — drop one first`
-                    : "Mark as SUPPORTING: it joins the top line of the readout and the summary is written about it"}
+                    ? "Observed — this metric gets a written read of what guests are doing. Click to stop observing it."
+                    : full ? `${SUPPORTING_CAP - 2} observations is the cap — unpin one first`
+                    : "Observe this metric: it gets a written read in Observations. (What the SUMMARY is about is the Type column.)"}
                   className={on ? "text-accent" : full ? "text-muted-2/30 cursor-not-allowed" : "text-muted-2 hover:text-foreground"}>
                   <Glyph kind={on ? "watchOn" : "watch"} />
                 </button>
+              );
+            };
+            // TYPE — what the metric is FOR. Supporting metrics are what the
+            // summary is written about; the pin is a separate question (does
+            // this one get a written observation). Decision is not selectable
+            // here: it is set with the toggle, and there is only ever one.
+            const TYPE_STYLE: Record<MetricRole, string> = {
+              decision: "border-ok/50 text-ok",
+              supporting: "border-accent/50 text-accent",
+              guardrail: "border-warn/50 text-warn",
+              exploratory: "border-border text-muted-2",
+            };
+            const typeChip = (rowKey: string) => {
+              const role = roleOf(rowKey, { map: mapEff, decisionKey: statsEff?.primaryKey, optiPrimaryKey });
+              if (role === "decision") {
+                return (
+                  <span className={`inline-block text-[9px] font-bold uppercase tracking-wide border rounded px-1 ${TYPE_STYLE.decision}`}
+                    title="The decision metric — the one the verdict adjudicates. Set it with the toggle; there is only ever one.">
+                    decision
+                  </span>
+                );
+              }
+              return (
+                <span className={`relative inline-flex items-center text-[9px] font-bold uppercase tracking-wide border rounded px-1 ${TYPE_STYLE[role]}`}>
+                  {role}
+                  <select
+                    value={role}
+                    onChange={(e) => setMetricRole(rowKey, e.target.value as "supporting" | "guardrail" | "exploratory")}
+                    aria-label={`Type of ${rowKey.replace(/^(metric|composite):/, "")}`}
+                    title="SUPPORTING — the summary is written about it · GUARDRAIL — must not drop · EXPLORATORY — watched, never evidence"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    <option value="supporting">supporting</option>
+                    <option value="guardrail">guardrail</option>
+                    <option value="exploratory">exploratory</option>
+                  </select>
+                </span>
               );
             };
             const eye = (rowKey: string, isHidden: boolean) => (
@@ -1804,9 +1864,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     ) : (
                       <span className="font-medium text-[12.5px]">{c.label}</span>
                     )}{" "}
-                    <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1 align-middle ${c.role === "primary" ? "border-ok/40 text-ok" : c.role === "guardrail" ? "border-warn/40 text-warn" : "border-border text-muted-2"}`}>
-                      {c.role}
-                    </span>
                     {(() => {
                       const miss = statsEff?.metrics.find((x) => x.key === `composite:${c.id}`)?.missingEvents;
                       return miss?.length ? (
@@ -1823,6 +1880,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </span>
                     ) : null}
                   </td>
+                  <td className="py-1.5 pr-2">{typeChip(rowKey)}</td>
                   <td className="py-1.5 pr-2">
                     {c.source === "optimizely" ? (
                       <span className="text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2"
@@ -1904,6 +1962,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     {m.name}
                     {ms?.featureOnly && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle">{ms.featureOnly}-only</span>}
                   </td>
+                  <td className="py-1.5 pr-2">{typeChip(rowKey)}</td>
                   <td className="py-1.5 pr-2">
                     <span className="text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2" title="Reported by Optimizely exactly as it fires">optimizely</span>
                     {mi === 0 && <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-muted-2" title="Optimizely’s own primary metric (first on its experiment). The console adjudicates its composed decision metric instead — the two may legitimately differ.">· primary</span>}
@@ -1935,6 +1994,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       <tr className="text-[10.5px] text-muted-2 text-left">
                         <th className="w-5 print:hidden" />
                         <th className="font-medium py-1 pr-2">Metric</th>
+                        <th className="font-medium py-1 pr-2 w-24">Type</th>
                         <th className="font-medium py-1 pr-2 w-24">Source</th>
                         {ordered.map((v) => (
                           <th key={v.variationId} className="font-medium py-1 px-1.5 text-right max-w-24">

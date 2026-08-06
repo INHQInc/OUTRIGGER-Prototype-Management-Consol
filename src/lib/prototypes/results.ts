@@ -202,8 +202,14 @@ export interface MetricMap {
    *  than one that admits it. */
   acknowledged?: string[];
   /** Metrics the reader wants an OBSERVATION for — watched, never
-   *  adjudicated. The verdict still reads the decision metric alone. */
+   *  adjudicated. The verdict still reads the decision metric alone.
+   *  OBSERVATIONS ONLY: what the readout's summary is ABOUT is `roles`. */
   observed?: string[];
+  /** THE TYPE OF EACH METRIC, by row key ("metric:<name>" / "composite:<id>").
+   *  Decision is not stored here — it is resolved from the primary. This is
+   *  what the team says each metric is FOR, and it decides what the summary
+   *  is written about. */
+  roles?: Record<string, "supporting" | "guardrail" | "exploratory">;
   /** Metrics hidden from the index (same key space). Presentation only —
    *  a hidden guardrail still feeds the verdict; the primary can't hide. */
   hiddenMeasures?: string[];
@@ -251,6 +257,7 @@ export function pruneMeasureKeys(map: MetricMap): MetricMap {
   // pointing at a deleted composite would promote a metric that no longer
   // exists into the readout's top line.
   if (next.observed) next.observed = next.observed.filter(keep);
+  if (next.roles) next.roles = Object.fromEntries(Object.entries(next.roles).filter(([k]) => keep(k)));
   return next;
 }
 
@@ -261,8 +268,38 @@ export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined):
   return results?.metrics[0] ? `metric:${results.metrics[0].name}` : "";
 }
 
-/** Six marked + both primaries. The beats row is one line, not a table. */
+/** Six supporting + the decision metric. The beats row is one line. */
 export const SUPPORTING_CAP = 8;
+
+/** What a metric is FOR. `decision` is resolved, never stored. */
+export type MetricRole = "decision" | "supporting" | "guardrail" | "exploratory";
+
+/**
+ * THE TYPE OF A METRIC — one rule, one place.
+ *
+ * `supporting` is what the readout's summary is written about; `guardrail` is
+ * a must-not-drop; `exploratory` is watched and never evidence. Whether a
+ * metric gets a written OBSERVATION is a separate choice (the pin) — the two
+ * were one control and had to be pulled apart.
+ */
+export function roleOf(rowKey: string, opts: {
+  map: MetricMap | null;
+  decisionKey?: string | null;
+  optiPrimaryKey?: string | null;
+}): MetricRole {
+  if (opts.decisionKey && rowKey === opts.decisionKey) return "decision";
+  const explicit = opts.map?.roles?.[rowKey];
+  if (explicit) return explicit;
+  const comp = rowKey.startsWith("composite:")
+    ? opts.map?.composites.find((c) => `composite:${c.id}` === rowKey)
+    : undefined;
+  if (comp?.role === "guardrail") return "guardrail";
+  // Optimizely's own primary defaults to SUPPORTING when it isn't the decision
+  // metric: it is the number the client reads in their own tool, so it should
+  // not silently fall off the readout until someone says otherwise.
+  if (opts.optiPrimaryKey && rowKey === opts.optiPrimaryKey) return "supporting";
+  return "exploratory";
+}
 
 /** The reserved id of Optimizely's own primary, expressed as a composite. */
 export const OPTI_PRIMARY_ID = "opti-primary";
@@ -381,10 +418,12 @@ export function supportingKeys(opts: {
     k === optiPrimaryKey ? -2
       : k === opts.decisionKey ? -1
       : rank.get(k) ?? Number.MAX_SAFE_INTEGER;
+  const typed = opts.available.filter((k) =>
+    roleOf(k, { map: opts.map, decisionKey: opts.decisionKey, optiPrimaryKey }) === "supporting");
   return [...new Set([
     ...(optiPrimaryKey ? [optiPrimaryKey] : []),
     ...(opts.decisionKey ? [opts.decisionKey] : []),
-    ...(opts.map?.observed ?? []),
+    ...typed,
   ])]
     // A hidden row is hidden everywhere — except the two primaries, which
     // refuse to hide and are read whether or not anyone asked.

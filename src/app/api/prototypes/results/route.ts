@@ -334,6 +334,7 @@ export async function POST(req: NextRequest) {
     /** Watch a measure: it gets an observation under the decision summary.
      *  Display only — observing something never makes it adjudicable. */
     observeMetric?: { key?: string; on?: boolean };
+    setMetricRole?: { key?: string; role?: string };
     /** Hide/show a metric in the index. Display only — plan metrics keep
      *  feeding the verdict; the primary refuses. */
     hideMetric?: { key?: string; hidden?: boolean };
@@ -729,6 +730,29 @@ export async function POST(req: NextRequest) {
         return { ...base, acknowledged: [...set].slice(0, 40) };
       });
       await audit(g.orgId, actor, on ? "results.attention-acknowledged" : "results.attention-restored", g.proto.name, id);
+      return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.setMetricRole) {
+      const rowKey = String(body.setMetricRole.key ?? "").slice(0, 220);
+      const want = String(body.setMetricRole.role ?? "");
+      if (!rowKey) return NextResponse.json({ error: "A type needs the metric key." }, { status: 400 });
+      if (!["supporting", "guardrail", "exploratory"].includes(want)) {
+        return NextResponse.json({ error: "That isn't a metric type. The decision metric is set with its own toggle." }, { status: 400 });
+      }
+      const role = want as "supporting" | "guardrail" | "exploratory";
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const base = cur ?? { composites: [], confirmed: false };
+        // Typing a HIDDEN row shows it again — a type that changes nothing
+        // visible is a control that lies about what it did.
+        const hidden = (base.hiddenMeasures ?? []).filter((k) => k !== rowKey);
+        return {
+          ...base,
+          roles: { ...(base.roles ?? {}), [rowKey]: role },
+          ...(hidden.length !== (base.hiddenMeasures ?? []).length ? { hiddenMeasures: hidden } : {}),
+        };
+      });
+      await audit(g.orgId, actor, "results.metric-type", g.proto.name, `${rowKey} → ${role}`);
       return NextResponse.json({ metricMap: map });
     }
 

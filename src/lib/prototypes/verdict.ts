@@ -35,7 +35,7 @@ export type VerdictState =
   | "not_adjudicable";
 
 export interface VerdictGate {
-  id: "mapping" | "focus" | "validity" | "runtime" | "sample" | "direction" | "significance" | "guardrails";
+  id: "mapping" | "focus" | "prereg" | "validity" | "runtime" | "sample" | "direction" | "significance" | "guardrails";
   title: string;
   /** true = pass · false = fail · null = can't be evaluated (stated why). */
   pass: boolean | null;
@@ -357,7 +357,7 @@ export function deriveVerdict(opts: {
 
   if (!preRegistration) {
     const legacyPlan = Boolean(map?.confirmed && !map.briefAtConfirm);
-    gates.push({ id: "validity", title: "Pre-registration resolved", pass: false, detail: legacyPlan
+    gates.push({ id: "prereg", title: "Pre-registration resolved", pass: false, detail: legacyPlan
       ? "The plan was confirmed before the console froze the brief with it — open the Measurement section and Re-confirm once to freeze the contract."
       : "No pre-registration anchor — console-built prototypes freeze the brief at cut/push; externally-built ones freeze it when the measurement plan is CONFIRMED. Confirm the plan to make this adjudicable." });
     return finish("not_adjudicable", legacyPlan

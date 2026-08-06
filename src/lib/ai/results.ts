@@ -502,16 +502,12 @@ export function templateStory(opts: {
 
   const lede =
     verdict?.verdict === "not_adjudicable"
-      // FIVE different gates return not_adjudicable and only one of them is a
-      // missing metric — the readout must name the one that actually fired,
-      // or it denies a decision metric the gate trace on the same screen names.
-      ? `${(() => {
-          const failed = verdict.gates.find((g) => g.pass === false);
-          if (!failed || failed.id === "mapping") return "Neither Optimizely nor this console has a primary metric for this experiment, so there is nothing to judge the run against";
-          if (failed.id === "focus") return "The variation this prototype is bound to isn't in the results, so the console won't read a verdict off a substitute arm";
-          if (failed.id === "runtime" || failed.id === "sample") return "The run hasn't collected enough to be judged yet";
-          return "The decision metric is set, but the console can't compute a comparable number from it yet";
-        })()} — the numbers below are real and everything already collected still counts.`
+      // THE GATE OWNS THE REASON. Five different gates return not_adjudicable
+      // and each already states its own cause in plain words; paraphrasing
+      // them here produced a vague line that contradicted the gate trace on
+      // the same screen. Quote the gate that actually failed.
+      ? `${(verdict.gates.find((g) => g.pass === false)?.detail
+          ?? "The console can't adjudicate this run yet.").replace(/\s+/g, " ").trim()} The numbers below are real and everything already collected still counts.`
       : lift === undefined
         ? "The decision metric has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
         : !sig
