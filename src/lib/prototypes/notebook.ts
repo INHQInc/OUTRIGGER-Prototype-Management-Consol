@@ -50,6 +50,10 @@ export interface Reading {
    *  so the narrative can never drift from the data beside it. */
   headline?: string;
   lede?: string;
+  /** The analyst's paragraph was rejected (digits, over-length, statistics
+   *  vocabulary) and the COMPUTED floor is what is rendering. Silent fallback
+   *  made a validator bug look like a quality problem for a whole session. */
+  ledeComputed?: boolean;
   beats?: { measureKey: string; label: string }[];
   /** One line per WATCHED metric — an observation, never a decision. */
   observations?: { measureKey: string; note: string }[];
@@ -184,7 +188,7 @@ export function readingBasisKey(parts: {
   // — presentation — cannot retire the reading and buy a fresh Opus call for
   // words that would come out the same.
   const sup = parts.supporting?.length ? [...parts.supporting].sort().join(",") : "";
-  return ["fmt8", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
+  return ["fmt9", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
     sup ? `sup:${sup}` : "-"].join("|");
 }
 

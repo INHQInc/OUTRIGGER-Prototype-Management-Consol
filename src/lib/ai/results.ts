@@ -403,7 +403,7 @@ const readingTool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
-      lede: { type: "string" as const, description: "<=620 chars, three to five sentences, NO DIGITS, two or three sentences of plain business English. What happened, what the trade-off is, and what has not answered yet. No statistics vocabulary." },
+      lede: { type: "string" as const, description: "<=900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what guests are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary." },
       beats: {
         // Bounds are set at call time from the team's supporting set — this
         // pair is only the shape for a run with nothing marked.
@@ -519,7 +519,11 @@ export function templateStory(opts: {
       : lift === undefined
         ? "The decision metric has not produced a comparable number yet, so there is nothing to read into. The run needs either more traffic or a mapping that both versions can convert on."
         : !sig
-          ? "Both versions are still trading places on the decision metric. The gap is small enough that ordinary variation could produce it either way, so there is nothing here to ship or kill on yet."
+          ? (moved.up.length
+            ? `${moved.up[0]} is clearly ahead in the new version, but ${primary?.label ?? "the decision metric"} has not followed it yet — the interest is being created and is not yet arriving at the outcome.${moved.down.length ? ` ${moved.down[0]} is going the other way, which is worth watching: some of this may be behaviour moving between surfaces rather than new demand.` : ""}`
+            : moved.down.length
+              ? `${moved.down[0]} is down in the new version while ${primary?.label ?? "the decision metric"} has not moved — the change is costing something without yet returning anything.`
+              : `Nothing has separated the two versions yet, on ${primary?.label ?? "the decision metric"} or on the steps that lead to it.`)
           : lift > 0
             ? `${primary?.label ?? "The decision metric"} is ahead by more than luck explains${moved.down.length ? `, while ${moved.down[0]} moved the other way — part of the gain may be behaviour shifting between surfaces rather than new demand` : ""}. ${moved.flat.length ? `${moved.flat[0]} has not answered yet.` : "The downstream metrics have not answered yet."}`
             : `${primary?.label ?? "The decision metric"} is behind by more than luck explains${moved.up.length ? `, even though ${moved.up[0]} is up` : ""}. The idea as built is costing something rather than adding it.`;
@@ -643,6 +647,49 @@ export async function generateReading(opts: {
 
   // The beat menu is the SUPPORTING SET ONLY — showing the analyst metrics it
   // is not allowed to name would be an invitation to argue with the enum.
+  // THE CHAIN — the computed arithmetic BETWEEN the steps, which is where the
+  // insight actually lives. "Room detail views up a lot, booking-engine
+  // arrivals up a little" is only interesting once someone says the second
+  // number should have followed the first and didn't. The model cannot be
+  // trusted to do this subtraction, and it should not have to: the console
+  // computes each step's lift, the GAP to the step after it, and whether the
+  // gain is being carried forward or lost — and hands over the conclusions.
+  const chainRows = supporting
+    .map((k) => {
+      const m = narratable.find((x) => x.key === k);
+      const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
+      return m && c?.lift !== undefined
+        ? { key: k, label: m.label, lift: c.lift, sig: Boolean(c.liftCi && c.liftCi.lo * c.liftCi.hi > 0), oneArm: Boolean(m.featureOnly) }
+        : null;
+    })
+    .filter((r): r is NonNullable<typeof r> => Boolean(r) && !r!.oneArm);
+  const headKeyForChain = opts.stats?.primaryKey ?? optiPrimaryKeyOf(opts.results);
+  const decisionRow = chainRows.find((r) => r.key === headKeyForChain);
+  const upstream = chainRows.filter((r) => r.key !== headKeyForChain);
+  const chainLines: string[] = [];
+  if (decisionRow && upstream.length) {
+    for (const u of upstream) {
+      const gap = u.lift - decisionRow.lift;
+      const pctOf = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+      // A step far ahead of the outcome is intent that is NOT arriving. A step
+      // moving the other way while the outcome rises is substitution.
+      const verdictLine =
+        u.lift > 0 && decisionRow.lift <= 0
+          ? "guests are taking this step MORE and the outcome is still flat or down — the intent is being created and then lost before it arrives"
+          : u.lift > 0 && gap > 0.1
+            ? `this step is running FAR ahead of the outcome (a gap of ${pctOf(gap)}) — the interest is real but most of it is not arriving at the outcome`
+            : u.lift > 0 && gap > 0
+              ? "this step is a little ahead of the outcome — some of the gain is carrying through, not all of it"
+              : u.lift < 0 && decisionRow.lift > 0
+                ? "this step is DOWN while the outcome is up — behaviour looks like it MOVED here from somewhere else rather than being new"
+                : "this step is moving with the outcome";
+      chainLines.push(`- ${u.label} ${pctOf(u.lift)}${u.sig ? "" : " (not settled)"} → ${decisionRow.label} ${pctOf(decisionRow.lift)}${decisionRow.sig ? "" : " (not settled)"}: ${verdictLine}`);
+    }
+  }
+  const chain = chainLines.length
+    ? `THE CHAIN — what each supporting step is doing TO the decision metric. These comparisons are computed; build the story out of them and do not restate them as a list:\n${chainLines.join("\n")}`
+    : "";
+
   const measureMenu = supporting.map((k) => {
     const m = narratable.find((x) => x.key === k);
     if (!m) return "";
@@ -732,6 +779,8 @@ ${pathLines || "(no metrics reporting)"}
 WHAT MOVED (write about THESE, by name, in the reader's words):
 ${whatMoved || "(nothing has moved beyond luck yet)"}
 
+${chain}
+
 THE ONLY METRICS YOU MAY PUT IN A BEAT — write one beat for EACH of them, in
 this order, and no others. These are the team's choice, not yours: a metric
 that moved spectacularly and is not on this list does not belong in the top
@@ -750,7 +799,13 @@ THE TEAM CHOSE WHAT THIS READOUT IS ABOUT. The supporting metrics are the steps 
 
 TRACE THE PATH TO IT. The experiment's own hypothesis names the steps: clicks lead somewhere, that somewhere leads to the outcome. So say where guests are being gained and where they are being lost ALONG THAT PATH, and finish on what it means for the headline metric — "the shortcut wins the click, the click is not reaching the booking engine" is the shape. A metric marked MISNAMED is a BROKEN DEFINITION, not a result: the console cannot compute it because the event name in the plan does not match anything Optimizely reports. Say exactly that — "the plan's version of this step names an event that isn't reporting under that name" — and if ANOTHER metric on the path measures the same step and IS reporting, say so and read that one instead. NEVER describe a metric as unwired when it is reporting numbers: check the path above before making that claim. If a guardrail is dropping, name it — the team said in advance it must not.
 
-THE LEDE IS THE WHOLE POINT. Two or three sentences that name the ACTUAL SURFACES and say what is happening between them — the mechanism, not the status. Write about the overlay, the room-card CTA, the booking widget, whatever this experiment actually touches, by name, in the words a hotel executive would use. If some metrics rose while others fell, say whether the gain looks like new demand or like behaviour that moved from one surface to another. End with what has not answered yet.
+THE LEDE IS THE WHOLE POINT, AND IT IS AN OBSERVATION — NOT A STATUS REPORT.
+A status report says "the two versions are close and nothing is settled". Nobody needs you for that; the console prints it. An OBSERVATION says WHAT GUESTS ARE DOING DIFFERENTLY and WHERE THAT BEHAVIOUR IS GOING. Build it from THE CHAIN above, in this shape:
+1. What changed in guest behaviour, named by surface — what are they reaching for that they weren't before.
+2. WHERE IT GOES, or where it stops. This is the sentence that matters: the chain tells you whether the extra intent is arriving at the outcome, leaking before it, or simply moving from one surface to another. Say which, and name the step where it stops.
+3. What that implies — the mechanism a person could act on ("the modal is winning the click and then handing off to a page that isn't converting it"), not a recommendation and not a summary of the numbers.
+If the outcome is still unsettled, that is a fact about the OUTCOME, not the whole story: an unsettled decision metric sitting behind a large, settled gain upstream is itself the finding — say so, and say what it means.
+Never write "the gap is small enough that ordinary variation could produce it", "nothing to ship or kill on yet", or any sentence that would be true of any experiment. If your lede would fit another test unchanged, it is wrong.
 NEVER write a sentence like "the variant is ahead of the control on the decision metric" — that is the verdict restated, and the console has already printed it.
 NO DIGITS in the headline, the lede, or a beat label — the numbers are printed for you. No statistics vocabulary anywhere: no p-values, no q-values, no "significance"; say "beyond what luck explains".
 When nothing is settled yet, SAY THAT plainly — do not manufacture a story out of movement that luck could produce.`,
@@ -774,7 +829,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   };
 
   let headline = clean(raw.headline, 80);
-  let lede = clean(raw.lede, 620);
+  let lede = clean(raw.lede, 900);
   // A digit or an over-long sentence used to swap the analyst's paragraph for
   // a generic template silently. Ask once for a repair, in the same call
   // shape, before settling for the computed story.
@@ -787,7 +842,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
         messages: [
           { role: "user", content: res.content.map((c) => (c.type === "text" ? c.text : "")).join("") || "(see below)" },
           { role: "assistant", content: JSON.stringify({ headline: raw.headline, lede: raw.lede }) },
-          { role: "user", content: `That ${!headline && !lede ? "headline and lede were" : !headline ? "headline was" : "lede was"} rejected${typeof raw.lede === "string" && raw.lede.length > 620 ? ` (the lede ran to ${raw.lede.length} characters — the limit is 620, so cut it down)` : /\d/.test(String(raw.lede ?? "")) ? " (it contained a digit — every number is printed for you)" : ""}. Rules: NO DIGITS anywhere in the words, headline <=80 characters, lede <=620 characters, no statistics vocabulary. Rewrite them about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "lede": "..."}` },
+          { role: "user", content: `That ${!headline && !lede ? "headline and lede were" : !headline ? "headline was" : "lede was"} rejected${typeof raw.lede === "string" && raw.lede.length > 900 ? ` (the lede ran to ${raw.lede.length} characters — the limit is 900, so cut it down)` : /\d/.test(String(raw.lede ?? "")) ? " (it contained a digit — every number is printed for you)" : ""}. Rules: NO DIGITS anywhere in the words, headline <=80 characters, lede <=900 characters, no statistics vocabulary. Rewrite them about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "lede": "..."}` },
         ],
       });
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
@@ -795,10 +850,11 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       if (m) {
         const parsed = JSON.parse(m[0]) as { headline?: string; lede?: string };
         headline = headline || clean(parsed.headline, 80);
-        lede = lede || clean(parsed.lede, 620);
+        lede = lede || clean(parsed.lede, 900);
       }
     } catch { /* the computed story is the floor */ }
   }
+  const ledeComputed = !lede;
   headline = headline || fallback.headline;
   lede = lede || fallback.lede;
 
@@ -875,6 +931,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     reading: {
       headline,
       lede,
+      ...(ledeComputed ? { ledeComputed: true } : {}),
       beats,
       observations,
       riskNotes,

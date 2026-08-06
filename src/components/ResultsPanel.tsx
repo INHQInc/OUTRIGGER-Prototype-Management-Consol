@@ -1452,6 +1452,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               {busy === "reading" && <Working label="Rewriting the summary…" />}
               {zoneHeader("What we're seeing",
                 <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
+                  {reading?.ledeComputed && (
+                    <span className="text-warn/80 mr-2" title="The analyst's paragraph was rejected by the format rules (a digit, over-length, or statistics vocabulary) and the console's computed summary is showing instead. Re-read to try again.">
+                      computed summary
+                    </span>
+                  )}
                   {reading ? `read ${reading.generatedAt.slice(11, 16)}` : "no reading yet"} ·{" "}
                   <button onClick={() => post("reading", { reading: true, force: true })} disabled={busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">
                     {busy === "reading" ? "re-reading…" : "re-read"}
