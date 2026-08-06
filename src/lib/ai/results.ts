@@ -448,6 +448,19 @@ export function templateStory(opts: {
   const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
   const sig = Boolean(focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0);
   const lift = focus?.lift;
+  // Even the computed floor names real measures — a template that says
+  // "the decision measure" tells the reader nothing they didn't know.
+  const others2 = (stats?.metrics ?? []).filter((m) => m.key !== stats?.primaryKey);
+  const cellOf = (m: (typeof others2)[number]) => m.cells.find((c) => c.variationId === stats?.focusVariationId);
+  const sigOf2 = (m: (typeof others2)[number]) => {
+    const c = cellOf(m);
+    return Boolean(c?.liftCi && c.liftCi.lo * c.liftCi.hi > 0);
+  };
+  const moved = {
+    up: others2.filter((m) => !m.featureOnly && sigOf2(m) && (cellOf(m)?.lift ?? 0) > 0).map((m) => m.label),
+    down: others2.filter((m) => !m.featureOnly && sigOf2(m) && (cellOf(m)?.lift ?? 0) < 0).map((m) => m.label),
+    flat: others2.filter((m) => !m.featureOnly && !sigOf2(m)).map((m) => m.label),
+  };
 
   const headline =
     verdict?.verdict === "not_adjudicable" ? "The traffic is real; the definition is not settled"
@@ -464,8 +477,8 @@ export function templateStory(opts: {
         : !sig
           ? "Both versions are still trading places on the decision measure. The gap is small enough that ordinary variation could produce it either way, so there is nothing here to ship or kill on yet."
           : lift > 0
-            ? "The variant is ahead of the control on the decision measure by a margin wider than luck explains. Read it next to the guardrails and the downstream measures before treating it as money in the bank."
-            : "The variant is behind the control on the decision measure by a margin wider than luck explains. The idea as built is costing something rather than adding it.";
+            ? `${primary?.label ?? "The decision measure"} is ahead by more than luck explains${moved.down.length ? `, while ${moved.down[0]} moved the other way — part of the gain may be behaviour shifting between surfaces rather than new demand` : ""}. ${moved.flat.length ? `${moved.flat[0]} has not answered yet.` : "The downstream measures have not answered yet."}`
+            : `${primary?.label ?? "The decision measure"} is behind by more than luck explains${moved.up.length ? `, even though ${moved.up[0]} is up` : ""}. The idea as built is costing something rather than adding it.`;
 
   // Beats: the decision measure first, then the biggest movers that have
   // actually earned their number, then anything else reporting.
@@ -513,6 +526,27 @@ export async function generateReading(opts: {
   // The measures a beat may name, with what each reads right now. Shown so
   // the analyst picks the right one — never copied into the words.
   const measureKeys = (opts.stats?.metrics ?? []).map((m) => m.key);
+  // WHAT MOVED — the raw material for a mechanism sentence. Without this the
+  // analyst can only write "the decision measure is ahead", which is a
+  // restatement of the verdict rather than an observation of the experiment.
+  const focusName = opts.results.variations.find((v) => v.variationId === opts.stats?.focusVariationId)?.name ?? "the variant";
+  const movers = (opts.stats?.metrics ?? []).map((m) => {
+    const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
+    const sig = Boolean(c?.liftCi && c.liftCi.lo * c.liftCi.hi > 0);
+    return { label: m.label, lift: c?.lift, sig, oneArm: Boolean(m.featureOnly), role: m.role, key: m.key };
+  });
+  const up = movers.filter((m) => m.sig && (m.lift ?? 0) > 0);
+  const down = movers.filter((m) => m.sig && (m.lift ?? 0) < 0);
+  const flat = movers.filter((m) => !m.sig && !m.oneArm);
+  const newSurfaces = movers.filter((m) => m.oneArm);
+  const whatMoved = [
+    up.length ? `UP beyond luck: ${up.map((m) => m.label).join(", ")}` : "",
+    down.length ? `DOWN beyond luck: ${down.map((m) => m.label).join(", ")}` : "",
+    newSurfaces.length ? `ONLY EXISTS IN ${focusName.toUpperCase()}: ${newSurfaces.map((m) => m.label).join(", ")}` : "",
+    flat.length ? `NOT SETTLED EITHER WAY: ${flat.map((m) => m.label).join(", ")}` : "",
+    up.length && down.length ? `TENSION: things moved BOTH ways — say whether the gain looks like new behaviour or behaviour that moved from one surface to another.` : "",
+  ].filter(Boolean).join("\n");
+
   const measureMenu = (opts.stats?.metrics ?? []).map((m) => {
     const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
     const delta = m.featureOnly ? "variation-only" : c?.lift === undefined ? "not computing" : `${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%`;
@@ -570,6 +604,9 @@ ${watched.length ? `WATCHED — the reader asked for an observation on each of t
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
 }).join("\n")}\n` : ""}
+WHAT MOVED (write about THESE, by name, in the reader's words):
+${whatMoved || "(nothing has moved beyond luck yet)"}
+
 MEASURES you may put in a beat — name one per beat. NEVER type a number
 anywhere: the page prints the live value, so a number you copy would be stale
 the moment the counts move.
@@ -578,7 +615,10 @@ ${measureMenu}
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE (two or three sentences — what happened, the trade-off, and what hasn't answered yet), and 3-4 BEATS naming the measures worth putting in front of a leader, decision measure first.
+Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and 3-4 BEATS naming the measures worth putting in front of a leader, decision measure first.
+
+THE LEDE IS THE WHOLE POINT. Two or three sentences that name the ACTUAL SURFACES and say what is happening between them — the mechanism, not the status. Write about the overlay, the room-card CTA, the booking widget, whatever this experiment actually touches, by name, in the words a hotel executive would use. If some measures rose while others fell, say whether the gain looks like new demand or like behaviour that moved from one surface to another. End with what has not answered yet.
+NEVER write a sentence like "the variant is ahead of the control on the decision measure" — that is the verdict restated, and the console has already printed it.
 NO DIGITS in the headline, the lede, or a beat label — the numbers are printed for you. No statistics vocabulary anywhere: no p-values, no q-values, no "significance"; say "beyond what luck explains".
 When nothing is settled yet, SAY THAT plainly — do not manufacture a story out of movement that luck could produce.`,
     }],
@@ -600,8 +640,34 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     return t;
   };
 
-  const headline = clean(raw.headline, 80) || fallback.headline;
-  const lede = clean(raw.lede, 360) || fallback.lede;
+  let headline = clean(raw.headline, 80);
+  let lede = clean(raw.lede, 360);
+  // A digit or an over-long sentence used to swap the analyst's paragraph for
+  // a generic template silently. Ask once for a repair, in the same call
+  // shape, before settling for the computed story.
+  if (!headline || !lede) {
+    try {
+      const fix = await client.messages.create({
+        model: "claude-opus-4-8",
+        max_tokens: 600,
+        system,
+        messages: [
+          { role: "user", content: res.content.map((c) => (c.type === "text" ? c.text : "")).join("") || "(see below)" },
+          { role: "assistant", content: JSON.stringify({ headline: raw.headline, lede: raw.lede }) },
+          { role: "user", content: `That ${!headline && !lede ? "headline and lede were" : !headline ? "headline was" : "lede was"} rejected. Rules: NO DIGITS anywhere in the words, headline <=80 characters, lede <=360 characters, no statistics vocabulary. Rewrite them about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "lede": "..."}` },
+        ],
+      });
+      const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
+      const m = /\{[\s\S]*\}/.exec(txt);
+      if (m) {
+        const parsed = JSON.parse(m[0]) as { headline?: string; lede?: string };
+        headline = headline || clean(parsed.headline, 80);
+        lede = lede || clean(parsed.lede, 360);
+      }
+    } catch { /* the computed story is the floor */ }
+  }
+  headline = headline || fallback.headline;
+  lede = lede || fallback.lede;
 
   const known = new Set(measureKeys);
   const seenMeasures = new Set<string>();

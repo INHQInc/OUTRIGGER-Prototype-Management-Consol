@@ -157,11 +157,19 @@ function MetricTrend({ days, metricName, focusId, baseId, focusName, baseName }:
 
 /** One glyph set — inline SVG, currentColor. The ⚠ character risks
  *  rendering as a color emoji outside the palette, so it's banned here. */
+/** HIDDEN ON REQUEST while the measurement plan is being rebuilt: mid-rebuild
+ *  these fire on every load and drown the readout. The derivations still run
+ *  (attention is returned by the API, discoveries by the verdict engine), so
+ *  restoring either is this one line. */
+const SHOW_ATTENTION = false;
+const SHOW_EXPLORATORY = false;
+
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
   if (kind === "watch" || kind === "watchOn") {
     return (
-      <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill={kind === "watchOn" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round">
-        <path d="M6 1.3 7.45 4.4 10.7 4.8 8.3 7.05 8.95 10.3 6 8.75 3.05 10.3 3.7 7.05 1.3 4.8 4.55 4.4Z" />
+      <svg viewBox="0 0 12 12" className="inline-block w-3 h-3" fill={kind === "watchOn" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round">
+        <path d="M7.2 1.2 10.8 4.8 9.1 5.2a2 2 0 0 0-1 .55L6.2 7.6 4.4 5.8l1.85-1.9a2 2 0 0 0 .55-1Z" />
+        <path d="M4.4 5.8 1.4 10.6l4.8-3" />
       </svg>
     );
   }
@@ -938,10 +946,57 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // opens Optimizely sees that number, so the console shows it beside its own
   // decision measure rather than letting the two disagree in different tools.
   const optiPrimaryKey = live?.metrics[0] ? `metric:${live.metrics[0].name}` : "";
+  // Pinned rows read in the SAME order as the index: reordering the table
+  // reorders what is pinned above it, so there is one ordering to think about.
+  const orderPrefTop = orderLocal ?? map?.measureOrder ?? [];
+  const rankOf = new Map(orderPrefTop.map((k, i) => [k, i] as const));
+  const indexRank = (key: string) =>
+    key === statsEff?.primaryKey ? -1 : rankOf.get(key) ?? Number.MAX_SAFE_INTEGER;
   const observed = [...new Set([
     ...(optiPrimaryKey && optiPrimaryKey !== statsEff?.primaryKey ? [optiPrimaryKey] : []),
     ...(map?.observed ?? []),
-  ])].filter((k) => statsEff?.metrics.some((m) => m.key === k));
+  ])]
+    .filter((k) => statsEff?.metrics.some((m) => m.key === k))
+    .sort((a, b) => indexRank(a) - indexRank(b));
+  // What this measure has actually DONE, day by day, from the console's own
+  // snapshots — the same source the primary's trend line uses. Deterministic:
+  // an observation should never depend on the analyst noticing a shape.
+  const seriesFor = (key: string): TrendPoint[] => {
+    if (!statsEff?.focusVariationId || !statsEff?.baselineVariationId || historyDays.length < 2) return [];
+    const comp = map?.composites.find((c) => `composite:${c.id}` === key);
+    const rawName = key.startsWith("metric:") ? key.slice(7) : null;
+    const out: TrendPoint[] = [];
+    for (const day of historyDays) {
+      const visitors = (id: string) => day.variations.find((v) => v.variationId === id)?.visitors ?? 0;
+      const conv = (id: string) => {
+        const names = comp
+          ? (comp.armEvents?.find((a) => a.variationId === id)?.events ?? comp.events)
+          : rawName ? [rawName] : [];
+        return names.reduce((sum, n) => sum + (day.metrics.find((m) => m.name === n)?.perVariation.find((r) => r.variationId === id)?.conversions ?? 0), 0);
+      };
+      const fN = visitors(statsEff.focusVariationId!), bN = visitors(statsEff.baselineVariationId!);
+      if (!fN || !bN) continue;
+      const fRate = conv(statsEff.focusVariationId!) / fN;
+      const bRate = conv(statsEff.baselineVariationId!) / bN;
+      out.push({ date: day.date, lift: bRate > 0 ? fRate / bRate - 1 : undefined, partial: false } as TrendPoint);
+    }
+    return out.filter((p) => p.lift !== undefined);
+  };
+
+  /** The shape of the run, in a sentence. Thresholds, not adjectives. */
+  const trendSentence = (pts: TrendPoint[], sig: boolean): string | null => {
+    if (pts.length < 3) return pts.length ? `Only ${plural(pts.length, "day")} of day-by-day data so far.` : null;
+    const first = pts[0].lift!, last = pts[pts.length - 1].lift!;
+    const flipped = first * last < 0;
+    const change = Math.abs(last) - Math.abs(first);
+    const rel = Math.abs(first) > 0.01 ? change / Math.abs(first) : change;
+    const dir = last >= 0 ? "ahead" : "behind";
+    if (flipped) return `It has changed direction since the run began — ${dir} now, the other way at the start.`;
+    if (rel > 0.25) return `The gap has widened since the run began, and it is ${dir} on every day of data.`;
+    if (rel < -0.25) return `The gap has narrowed since the run began${sig ? ", though it still holds" : ""}.`;
+    return `It has held about the same gap every day since the run began.`;
+  };
+
   const observationFor = (key: string) => {
     const m = statsEff?.metrics.find((x) => x.key === key);
     if (!m || !live) return null;
@@ -964,8 +1019,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             ? `Still inside the range luck could produce — about ${plural(days, "more day")} at this traffic.`
             : "Still inside the range luck could produce.";
 
+    const pts = m.featureOnly ? [] : seriesFor(key);
     return {
       key, label: m.label,
+      points: pts,
+      trend: m.featureOnly ? null : trendSentence(pts, sig),
       value: m.featureOnly ? rate(focus?.rate) : pctS(focus?.lift),
       tone: m.featureOnly || !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
       rates: m.featureOnly
@@ -1123,6 +1181,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   return (
                     <div key={key} className="flex items-baseline gap-3 py-2">
                       <span className={`text-[15px] font-bold tabular-nums w-20 shrink-0 text-right ${o.tone}`}>{o.value}</span>
+                      {o.points.length >= 3 && (
+                        <span className="hidden md:block w-28 shrink-0 self-center opacity-80"><Sparkline trend={o.points} significant={false} /></span>
+                      )}
                       <span className="min-w-0 flex-1">
                         <span className="text-[14px] font-semibold">{o.label}</span>
                         {key === optiPrimaryKey && (
@@ -1132,14 +1193,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           </span>
                         )}
                         <span className="text-[12.5px] text-muted-2 tabular-nums ml-2">{o.rates}</span>
-                        <span className="block text-[14px] text-muted leading-snug">{o.gloss ?? o.computedLine}</span>
+                        <span className="block text-[14px] text-muted leading-snug">
+                          {o.computedLine}{o.trend ? ` ${o.trend}` : ""}
+                        </span>
+                        {o.gloss && <span className="block text-[14px] text-foreground/80 leading-snug mt-0.5">{o.gloss}</span>}
                       </span>
                       {key === optiPrimaryKey && !(map?.observed ?? []).includes(key) ? (
-                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always shown — it is the number Optimizely reports as this experiment's primary">always shown</span>
+                        <span className="shrink-0 text-[12.5px] text-muted-2/70 print:hidden" title="Always pinned — it is the number Optimizely reports as this experiment's primary">always pinned</span>
                       ) : (
                         <button onClick={() => void post("observe", { observeMetric: { key, on: false } })}
-                          title="Stop watching this measure"
-                          className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">stop watching</button>
+                          title="Unpin this measure"
+                          className="shrink-0 text-[12.5px] text-muted-2 hover:text-foreground print:hidden">unpin</button>
                       )}
                     </div>
                   );
@@ -1163,7 +1227,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           )}
 
           {/* ── Z(C) · NEEDS ATTENTION — 100% computed ─────────────────────── */}
-          {attention.length > 0 && (() => {
+          {SHOW_ATTENTION && attention.length > 0 && (() => {
             const ackSet = new Set(map?.acknowledged ?? []);
             // Acknowledged rows leave the WORKING view and still print: the
             // reader has seen them, the record has not lost them.
@@ -1266,7 +1330,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           })()}
 
           {/* ── Z(F) · EXPLORATORY — never confirmation ───────────────────── */}
-          {verdict && verdict.discoveries.length > 0 && (
+          {SHOW_EXPLORATORY && verdict && verdict.discoveries.length > 0 && (
             <details>
               <summary className="cursor-pointer select-none border-b border-border pb-1.5">
                 <span className={ZH}>Exploratory signals ({verdict.discoveries.length})</span>
@@ -1363,7 +1427,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               return (
                 <button onClick={() => !full && void post("observe", { observeMetric: { key: rowKey, on: !on } })}
                   disabled={busy !== null || full}
-                  title={on ? "Watched — it has an observation at the top" : full ? "Six observations is the cap — stop watching one first" : "Watch this measure: it gets an observation at the top"}
+                  title={on ? "Pinned to the top — unpin to remove its observation" : full ? "Six pinned measures is the cap — unpin one first" : "Pin this measure to the top, with an observation of how it is doing"}
                   className={on ? "text-accent" : full ? "text-muted-2/30 cursor-not-allowed" : "text-muted-2 hover:text-foreground"}>
                   <Glyph kind={on ? "watchOn" : "watch"} />
                 </button>
