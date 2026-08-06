@@ -444,13 +444,14 @@ export function templateStory(opts: {
   results: ExperimentResults; stats: StatsReport | null; verdict: VerdictRecord | null;
 }): { headline: string; lede: string; beats: { measureKey: string; label: string }[] } {
   const { stats, verdict } = opts;
-  const primary = stats?.metrics.find((m) => m.key === stats.primaryKey);
+  const headlineKey = stats?.primaryKey ?? (opts.results.metrics[0] ? `metric:${opts.results.metrics[0].name}` : undefined);
+  const primary = stats?.metrics.find((m) => m.key === headlineKey);
   const focus = primary?.cells.find((c) => c.variationId === stats?.focusVariationId);
   const sig = Boolean(focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0);
   const lift = focus?.lift;
   // Even the computed floor names real metrics — a template that says
   // "the decision metric" tells the reader nothing they didn't know.
-  const others2 = (stats?.metrics ?? []).filter((m) => m.key !== stats?.primaryKey);
+  const others2 = (stats?.metrics ?? []).filter((m) => m.key !== headlineKey);
   const cellOf = (m: (typeof others2)[number]) => m.cells.find((c) => c.variationId === stats?.focusVariationId);
   const sigOf2 = (m: (typeof others2)[number]) => {
     const c = cellOf(m);
@@ -482,7 +483,7 @@ export function templateStory(opts: {
 
   // Beats: the decision metric first, then the biggest movers that have
   // actually earned their number, then anything else reporting.
-  const others = (stats?.metrics ?? []).filter((m) => m.key !== stats?.primaryKey);
+  const others = (stats?.metrics ?? []).filter((m) => m.key !== headlineKey);
   const scored = others.map((m) => {
     const c = m.cells.find((x) => x.variationId === stats?.focusVariationId);
     const s2 = Boolean(c?.liftCi && c.liftCi.lo * c.liftCi.hi > 0);
@@ -609,6 +610,10 @@ ${watched.length ? `PINNED — write ONE observation for EVERY metric below, no 
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
 }).join("\n")}\n` : ""}
+${opts.stats?.primaryKey
+  ? `THE HEADLINE METRIC (the story is ABOUT this one — it is the decision metric the verdict adjudicates): ${opts.stats.metrics.find((m) => m.key === opts.stats!.primaryKey)?.label ?? opts.stats.primaryKey}`
+  : `NO DECISION METRIC IS SET, so the story is about OPTIMIZELY'S OWN PRIMARY: ${opts.results.metrics[0]?.name ?? "(none reporting)"}. Say plainly that nothing has been nominated as the decision metric yet — do not silently treat another metric as the headline.`}
+
 WHAT MOVED (write about THESE, by name, in the reader's words):
 ${whatMoved || "(nothing has moved beyond luck yet)"}
 

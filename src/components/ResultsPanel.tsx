@@ -589,7 +589,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // FOUR TILES IS A HARD CAP, FOREVER. Fact routing (say-it-once): visitors →
   // tile 1 · conversion counts → tile 2 · relative effect + certainty →
   // tile 3 · time → tile 4 · RATES live in the comparison bars only.
-  const primaryStats = statsEff?.metrics.find((m) => m.key === statsEff.primaryKey);
+  // With no decision metric set, the readout does NOT quietly pick one: it
+  // reads Optimizely's primary and says that is what it is doing.
+  const optiKey = live?.metrics[0] ? `metric:${live.metrics[0].name}` : undefined;
+  const headlineKey = statsEff?.primaryKey ?? optiKey;
+  const headlineIsOpti = !statsEff?.primaryKey && Boolean(optiKey);
+  const primaryStats = statsEff?.metrics.find((m) => m.key === headlineKey);
   const primaryFocus = primaryStats?.cells.find((c) => c.variationId === statsEff?.focusVariationId);
   const primaryBase = primaryStats?.cells.find((c) => c.variationId === statsEff?.baselineVariationId);
   const focusVar = live?.variations.find((v) => v.variationId === statsEff?.focusVariationId);
@@ -1009,7 +1014,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       const picked = (reading.beats ?? []).map(beatFor).filter(Boolean) as Beat[];
       // The decision metric always reads first — it is the one the verdict
       // adjudicates, so it cannot appear third behind a secondary.
-      picked.sort((a, b) => Number(b.key === statsEff?.primaryKey) - Number(a.key === statsEff?.primaryKey));
+      picked.sort((a, b) => Number(b.key === headlineKey) - Number(a.key === headlineKey));
       return { headline: reading.headline, lede: reading.lede, beats: picked };
     }
     // No reading yet (or a cached one in the old shape): the computed story.
@@ -1178,6 +1183,22 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       <div className="print-report">
         <div className="min-w-0 space-y-5">
 
+          {/* ── THE QUESTION — what this experiment set out to prove. It leads
+                 the page: a result means nothing without the claim it tests. ── */}
+          {(protoName || pr?.hypothesis || liveHypothesis) && (
+            <div className="border-l-2 border-border-strong pl-4">
+              {protoName && <div className={`${ZH} mb-1`}>{protoName}</div>}
+              {(pr?.hypothesis || liveHypothesis) && (
+                <p className="text-[16px] leading-relaxed max-w-[92ch] text-foreground/90">{pr?.hypothesis ?? liveHypothesis}</p>
+              )}
+              <div className="text-[12.5px] text-muted-2 mt-1.5">
+                {pr?.hypothesis
+                  ? `Frozen ${pr.anchor === "cut" ? `at v${pr.version}` : "with the measurement plan"}${pr.cutAt ? ` · ${pr.cutAt.slice(0, 10)}` : ""} — this is the claim the verdict adjudicates`
+                  : "Not frozen yet — confirm the measurement plan and this becomes the contract the verdict judges"}
+              </div>
+            </div>
+          )}
+
           {/* ── Z(A) · DECISION ─────────────────────────────────────────── */}
           <div className={`rounded-xl border border-border border-l-4 ${edge} bg-surface px-5 py-4 flex items-start gap-4 flex-wrap`}>
             <div className="min-w-0 flex-1">
@@ -1192,18 +1213,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   ? <a href={chip.href} className={`${cls} text-accent hover:border-accent`}>{chip.label}</a>
                   : <span className={`${cls} text-muted-2`}>{chip.label}</span>;
               })()}
-              {(protoName || pr?.hypothesis || liveHypothesis) && (
-                <div className="mt-1 space-y-0.5">
-                  {protoName && <div className="text-[14px] font-semibold text-foreground/90">{protoName}</div>}
-                  {/* The FROZEN hypothesis when one exists — that is the contract
-                      the verdict adjudicates. Otherwise the live one, said to be
-                      live, because "no hypothesis" is never the honest answer. */}
-                  {(pr?.hypothesis || liveHypothesis) && (
-                    <p className="text-[13.5px] text-muted-2 leading-snug max-w-[100ch]">
-                      <span className="font-semibold">{pr?.hypothesis ? "Hypothesis: " : "Hypothesis (not frozen yet): "}</span>
-                      {pr?.hypothesis ?? liveHypothesis}
-                    </p>
-                  )}
+              {headlineIsOpti && live && (
+                <div className="mt-2 text-[12.5px] text-warn">
+                  No decision metric is set, so this reads <span className="font-semibold">{primaryStats?.label ?? "Optimizely's primary"}</span> — Optimizely&rsquo;s own primary. Pick one in All metrics to judge something else.
                 </div>
               )}
               {live && (
