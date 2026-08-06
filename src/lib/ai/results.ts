@@ -562,6 +562,72 @@ export function templateStory(opts: {
   return { headline, lede, beats };
 }
 
+
+/**
+ * THE READOUT'S STRUCTURE, derived once — what the team said this experiment
+ * is ABOUT, and the arithmetic between those metrics.
+ *
+ * ONE DERIVATION: the standing reading and the analyst's answers must reason
+ * over the SAME decision metric, the SAME supporting set and the SAME chain.
+ * They used to differ — the reading knew the team's structure and the ask box
+ * was handed an undifferentiated pile of numbers, so asking a question got a
+ * worse answer than not asking one.
+ */
+export function readoutStructure(opts: {
+  results: ExperimentResults;
+  map: MetricMap | null;
+  stats: StatsReport | null;
+}): { supporting: string[]; decisionLabel: string; supportingBlock: string; chain: string } {
+  const allKeys = (opts.stats?.metrics ?? []).map((m) => m.key);
+  const supporting = supportingKeys({
+    map: opts.map,
+    optiPrimaryKey: optiPrimaryKeyOf(opts.results),
+    decisionKey: opts.stats?.primaryKey,
+    available: allKeys,
+    optiRowIsDecision: opts.map?.composites.some((c) => c.role === "primary" && c.source === "optimizely"),
+  });
+  const focusId = opts.stats?.focusVariationId;
+  const rowOf = (k: string) => {
+    const m = opts.stats?.metrics.find((x) => x.key === k);
+    const c = m?.cells.find((x) => x.variationId === focusId);
+    return m && c?.lift !== undefined
+      ? { key: k, label: m.label, lift: c.lift, sig: Boolean(c.liftCi && c.liftCi.lo * c.liftCi.hi > 0), oneArm: Boolean(m.featureOnly) }
+      : null;
+  };
+  const headKey = opts.stats?.primaryKey ?? optiPrimaryKeyOf(opts.results);
+  const decisionLabel = opts.stats?.metrics.find((m) => m.key === headKey)?.label ?? "(none)";
+  const rows = supporting.map(rowOf).filter((r): r is NonNullable<typeof r> => Boolean(r) && !r!.oneArm);
+  const decisionRow = rows.find((r) => r.key === headKey);
+  const upstream = rows.filter((r) => r.key !== headKey);
+  const pct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+
+  const supportingBlock = supporting.length
+    ? `WHAT THIS EXPERIMENT IS ABOUT — the team's own structure. Answer in terms of THESE; a metric that is not here is background and may only be raised as a caution.\nDECISION METRIC: ${decisionLabel}\nSUPPORTING: ${supporting.filter((k) => k !== headKey).map((k) => opts.stats?.metrics.find((m) => m.key === k)?.label ?? k).join(" · ") || "(none declared)"}`
+    : "";
+
+  const lines: string[] = [];
+  if (decisionRow && upstream.length) {
+    for (const u of upstream) {
+      const gap = u.lift - decisionRow.lift;
+      const read =
+        u.lift > 0 && decisionRow.lift <= 0
+          ? "guests take this step MORE and the outcome is still flat or down — intent is being created and then lost before it arrives"
+          : u.lift > 0 && gap > 0.1
+            ? `this step runs FAR ahead of the outcome (a gap of ${pct(gap)}) — the interest is real but most of it is not arriving`
+            : u.lift > 0 && gap > 0
+              ? "this step is a little ahead of the outcome — some of the gain carries through, not all of it"
+              : u.lift < 0 && decisionRow.lift > 0
+                ? "this step is DOWN while the outcome is up — behaviour looks like it MOVED here from somewhere else rather than being new"
+                : "this step moves with the outcome";
+      lines.push(`- ${u.label} ${pct(u.lift)}${u.sig ? "" : " (not settled)"} → ${decisionRow.label} ${pct(decisionRow.lift)}${decisionRow.sig ? "" : " (not settled)"}: ${read}`);
+    }
+  }
+  const chain = lines.length
+    ? `THE CHAIN — what each supporting step is doing TO the decision metric. These comparisons are computed; build the answer out of them and do not restate them as a list:\n${lines.join("\n")}`
+    : "";
+  return { supporting, decisionLabel, supportingBlock, chain };
+}
+
 /** The standing narrative — exec voice, three cited rows, cache-friendly. */
 export async function generateReading(opts: {
   orgId: string;
@@ -647,48 +713,7 @@ export async function generateReading(opts: {
 
   // The beat menu is the SUPPORTING SET ONLY — showing the analyst metrics it
   // is not allowed to name would be an invitation to argue with the enum.
-  // THE CHAIN — the computed arithmetic BETWEEN the steps, which is where the
-  // insight actually lives. "Room detail views up a lot, booking-engine
-  // arrivals up a little" is only interesting once someone says the second
-  // number should have followed the first and didn't. The model cannot be
-  // trusted to do this subtraction, and it should not have to: the console
-  // computes each step's lift, the GAP to the step after it, and whether the
-  // gain is being carried forward or lost — and hands over the conclusions.
-  const chainRows = supporting
-    .map((k) => {
-      const m = narratable.find((x) => x.key === k);
-      const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
-      return m && c?.lift !== undefined
-        ? { key: k, label: m.label, lift: c.lift, sig: Boolean(c.liftCi && c.liftCi.lo * c.liftCi.hi > 0), oneArm: Boolean(m.featureOnly) }
-        : null;
-    })
-    .filter((r): r is NonNullable<typeof r> => Boolean(r) && !r!.oneArm);
-  const headKeyForChain = opts.stats?.primaryKey ?? optiPrimaryKeyOf(opts.results);
-  const decisionRow = chainRows.find((r) => r.key === headKeyForChain);
-  const upstream = chainRows.filter((r) => r.key !== headKeyForChain);
-  const chainLines: string[] = [];
-  if (decisionRow && upstream.length) {
-    for (const u of upstream) {
-      const gap = u.lift - decisionRow.lift;
-      const pctOf = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
-      // A step far ahead of the outcome is intent that is NOT arriving. A step
-      // moving the other way while the outcome rises is substitution.
-      const verdictLine =
-        u.lift > 0 && decisionRow.lift <= 0
-          ? "guests are taking this step MORE and the outcome is still flat or down — the intent is being created and then lost before it arrives"
-          : u.lift > 0 && gap > 0.1
-            ? `this step is running FAR ahead of the outcome (a gap of ${pctOf(gap)}) — the interest is real but most of it is not arriving at the outcome`
-            : u.lift > 0 && gap > 0
-              ? "this step is a little ahead of the outcome — some of the gain is carrying through, not all of it"
-              : u.lift < 0 && decisionRow.lift > 0
-                ? "this step is DOWN while the outcome is up — behaviour looks like it MOVED here from somewhere else rather than being new"
-                : "this step is moving with the outcome";
-      chainLines.push(`- ${u.label} ${pctOf(u.lift)}${u.sig ? "" : " (not settled)"} → ${decisionRow.label} ${pctOf(decisionRow.lift)}${decisionRow.sig ? "" : " (not settled)"}: ${verdictLine}`);
-    }
-  }
-  const chain = chainLines.length
-    ? `THE CHAIN — what each supporting step is doing TO the decision metric. These comparisons are computed; build the story out of them and do not restate them as a list:\n${chainLines.join("\n")}`
-    : "";
+  const { chain } = readoutStructure({ results: opts.results, map: opts.map, stats: opts.stats ?? null });
 
   const measureMenu = supporting.map((k) => {
     const m = narratable.find((x) => x.key === k);
@@ -992,6 +1017,12 @@ export async function analyzeResults(opts: {
   requireKey();
   const client = new Anthropic();
   const { system } = await analystSkill(opts.orgId);
+  // The SAME structure the standing reading is built from. Without it the ask
+  // box got an undifferentiated pile of metrics, so asking the analyst a
+  // question produced a worse answer than not asking one.
+  const { supportingBlock, chain, decisionLabel } = readoutStructure({
+    results: opts.results, map: opts.map, stats: opts.stats ?? null,
+  });
   const res = await client.messages.create({
     model: "claude-opus-4-8",
     max_tokens: 1500,
@@ -1000,6 +1031,9 @@ export async function analyzeResults(opts: {
       role: "user",
       content: `EXPERIMENT: ${opts.proto.name}
 LIVE BRIEF HYPOTHESIS (may have evolved since the push — the PRE-REGISTERED one in the verdict block is the adjudication contract): We believe ${opts.proto.hypothesis.change || "…"} for ${opts.proto.hypothesis.audience || "…"} will cause ${opts.proto.hypothesis.outcome || "…"}.
+${supportingBlock}
+
+${chain}
 ${renderNotebook(opts.orgNotebook ?? null, opts.protoNotebook ?? null)}
 ${renderVerdict(opts.verdict ?? null)}
 ${renderStats(opts.stats ?? null)}
@@ -1010,8 +1044,10 @@ ${renderContext(opts.results, opts.map)}
 ${opts.stance === "challenge"
   ? `CHALLENGE THIS RESULT. Argue the strongest honest case that the current call is WRONG, from these same numbers. Name the weakest link in the chain, what would have to be true for the reading to be mistaken, and what evidence would settle it. Do not invent numbers, do not manufacture doubt where the data is genuinely clean — if the call holds up, say plainly which part is actually solid and where the remaining exposure is.${opts.question?.trim() ? `\nThe reader also asked: ${opts.question.trim().slice(0, 600)}` : ""}`
   : opts.question?.trim()
-    ? `QUESTION: ${opts.question.trim().slice(0, 1000)}`
-    : "Give the readout: the verdict as the headline, then the numbers that matter as bullets, a caveat if honesty demands one, and the recommendation."}`,
+    ? `QUESTION: ${opts.question.trim().slice(0, 1000)}
+
+ANSWER IT THROUGH THE TEAM'S OWN METRICS. The decision metric is ${decisionLabel}, and the supporting metrics above are the steps this team believes lead to it — several are COMPOSITES they defined themselves, which exist precisely because no single Optimizely event expresses what they mean. Reason with those, and with THE CHAIN, rather than reaching for whichever raw event happens to be nearest the question. A background metric may be raised as a caution; it is never the answer. If the honest answer is that their metrics cannot settle the question, say so and say what would.`
+    : "Give the readout: the verdict as the headline, then the numbers that matter as bullets, a caveat if honesty demands one, and the recommendation. Build it from the decision metric and the supporting metrics above."}`,
     }],
     tools: [answerTool],
     tool_choice: { type: "tool", name: "give_answer" },
