@@ -548,6 +548,21 @@ export async function generateReading(opts: {
     up.length && down.length ? `TENSION: things moved BOTH ways — say whether the gain looks like new behaviour or behaviour that moved from one surface to another.` : "",
   ].filter(Boolean).join("\n");
 
+  // THE PATH. The team's own row order (dragged in All metrics) is the funnel
+  // as they understand it, so the story can trace steps instead of listing
+  // movers. Plan definitions ride along — they say what each step IS.
+  const orderRank = new Map((opts.map?.measureOrder ?? []).map((k, i) => [k, i] as const));
+  const pathLines = [...(opts.stats?.metrics ?? [])]
+    .sort((a, b) => (orderRank.get(a.key) ?? 999) - (orderRank.get(b.key) ?? 999))
+    .map((m) => {
+      const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
+      const comp = opts.map?.composites.find((x) => `composite:${x.id}` === m.key);
+      const state = m.featureOnly ? "one version only"
+        : c?.lift === undefined ? "not reporting"
+        : `${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%${c.liftCi && c.liftCi.lo * c.liftCi.hi > 0 ? ", beyond luck" : ", not settled"}`;
+      return `- ${m.label} (${state})${comp?.definition ? ` — ${comp.definition}` : ""}${comp?.role === "guardrail" ? " [GUARDRAIL: must not drop]" : ""}`;
+    }).join("\n");
+
   const measureMenu = (opts.stats?.metrics ?? []).map((m) => {
     const c = m.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
     const delta = m.featureOnly ? "variation-only" : c?.lift === undefined ? "not computing" : `${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%`;
@@ -614,6 +629,9 @@ ${opts.stats?.primaryKey
   ? `THE HEADLINE METRIC (the story is ABOUT this one — it is the decision metric the verdict adjudicates): ${opts.stats.metrics.find((m) => m.key === opts.stats!.primaryKey)?.label ?? opts.stats.primaryKey}`
   : `NO DECISION METRIC IS SET, so the story is about OPTIMIZELY'S OWN PRIMARY: ${opts.results.metrics[0]?.name ?? "(none reporting)"}. Say plainly that nothing has been nominated as the decision metric yet — do not silently treat another metric as the headline.`}
 
+THE PATH, in the order the team laid it out — these are the steps that lead to the headline metric, and the story should follow them rather than list whichever moved most:
+${pathLines || "(no metrics reporting)"}
+
 WHAT MOVED (write about THESE, by name, in the reader's words):
 ${whatMoved || "(nothing has moved beyond luck yet)"}
 
@@ -627,7 +645,9 @@ ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${
 
 Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and 3-4 BEATS naming the metrics worth putting in front of a leader, decision metric first.
 
-THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric in this reading is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
+THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
+
+TRACE THE PATH TO IT. The experiment's own hypothesis names the steps: clicks lead somewhere, that somewhere leads to the outcome. So say where guests are being gained and where they are being lost ALONG THAT PATH, and finish on what it means for the headline metric — "the shortcut wins the click, the click is not reaching the booking engine" is the shape. If a step on the path is not reporting at all, say so plainly: a broken step is the most important thing on the page, because everything downstream of it is unmeasurable. If a guardrail is dropping, name it — the team said in advance it must not.
 
 THE LEDE IS THE WHOLE POINT. Two or three sentences that name the ACTUAL SURFACES and say what is happening between them — the mechanism, not the status. Write about the overlay, the room-card CTA, the booking widget, whatever this experiment actually touches, by name, in the words a hotel executive would use. If some metrics rose while others fell, say whether the gain looks like new demand or like behaviour that moved from one surface to another. End with what has not answered yet.
 NEVER write a sentence like "the variant is ahead of the control on the decision metric" — that is the verdict restated, and the console has already printed it.
@@ -710,6 +730,14 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       if (beats.length > 4) beats.pop();
     }
   }
+
+  // Supporting beats read in the team's own order — the funnel as they have
+  // arranged it — so the row of numbers walks the path rather than jumping.
+  const head = beats[0];
+  const rest = beats.slice(1).sort((a, b) => (orderRank.get(a.measureKey) ?? 999) - (orderRank.get(b.measureKey) ?? 999));
+  beats.length = 0;
+  if (head) beats.push(head);
+  beats.push(...rest);
 
   // Never fewer than three: top up from the computed order, skipping repeats.
   for (const b of fallback.beats) {
