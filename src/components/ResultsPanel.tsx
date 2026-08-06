@@ -168,6 +168,10 @@ const SHOW_EXPLORATORY = false;
  *  metric's own observation now carries the same story in words, and its
  *  numbers are in the tiles directly above. */
 const SHOW_PROOF = false;
+/** THE CALL card. Hidden on request: with no decision metric and an
+ *  unconfirmed plan it only ever says "not ready", which the experiment block
+ *  and the story already convey. Its controls move to the toolbar. */
+const SHOW_CALL = false;
 
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" }) {
   if (kind === "watch" || kind === "watchOn") {
@@ -1183,6 +1187,38 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       <div className="print-report">
         <div className="min-w-0 space-y-5">
 
+          {/* ── the controls the call card used to hold ── */}
+          {!SHOW_CALL && live && (
+            <div className="flex items-center gap-3 flex-wrap text-[12.5px] print:hidden -mb-1">
+              {statsEff && (
+                <span className={`font-bold uppercase tracking-[0.08em] ${statsEff.validity.status === "ok" ? "text-ok" : statsEff.validity.status === "unknown" ? "text-muted-2" : statsEff.validity.status === "warn" ? "text-warn" : "text-danger"}`} title={statsEff.validity.detail}>
+                  {statsEff.validity.status === "ok" ? "✓ health" : statsEff.validity.status === "unknown" ? "health unchecked" : "⚠ health"}
+                </span>
+              )}
+              <span className="text-muted-2 tabular-nums">
+                {stamped ? `Official — ${verdict?.stampedBy} · ${verdict?.stampedAt?.slice(0, 10)}` : `Live · ${relTime(statsEff?.computedAt) || "—"}`}
+                {expStatus ? ` · ${expStatus.toUpperCase()}` : ""}
+              </span>
+              <span className="ml-auto flex items-center gap-3">
+                {verdict && !stamped && stoppable && (
+                  <button onClick={() => { if (confirmAction === "stamp") { setConfirmAction(null); post("stamp", { stamp: true, expectVerdict: verdict.verdict }); } else armConfirm("stamp"); }}
+                    disabled={busy !== null}
+                    className="h-7 px-2.5 rounded-md bg-accent text-accent-fg font-semibold hover:bg-accent-hover disabled:opacity-40">
+                    {busy === "stamp" ? "Stamping…" : confirmAction === "stamp" ? "Yes, make it the record" : "Stamp the verdict"}
+                  </button>
+                )}
+                {stamped && (
+                  <button onClick={() => { if (confirmAction === "reopen") { setConfirmAction(null); post("unstamp", { unstamp: true }); } else armConfirm("reopen"); }}
+                    disabled={busy !== null} className="text-muted-2 hover:text-foreground underline underline-offset-2 disabled:opacity-40">
+                    {busy === "unstamp" ? "Reopening…" : confirmAction === "reopen" ? "Yes, reopen (audited)" : "Reopen"}
+                  </button>
+                )}
+                <button onClick={() => void load()} disabled={loading || busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
+                <button onClick={() => window.print()} className="text-accent hover:text-accent-hover font-medium">Print</button>
+              </span>
+            </div>
+          )}
+
           {/* ── THE EXPERIMENT — the claim being tested. It leads the page:
                  a result means nothing without the question it answers. ── */}
           {(protoName || pr?.hypothesis || liveHypothesis) && (
@@ -1206,6 +1242,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           )}
 
           {/* ── Z(A) · DECISION ─────────────────────────────────────────── */}
+          {SHOW_CALL && (
           <div className={`rounded-xl border border-border border-l-4 ${edge} bg-surface px-5 py-4 flex items-start gap-4 flex-wrap`}>
             <div className="min-w-0 flex-1">
               {/* The call names WHAT IT JUDGES — a verdict with no metric
@@ -1272,7 +1309,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </span>
             </div>
           </div>
-
+          )}
 
           {/* ── WHAT WE'RE SEEING — the analyst's voice, kept apart from the
                  computed call above it so the two are never confused. ── */}

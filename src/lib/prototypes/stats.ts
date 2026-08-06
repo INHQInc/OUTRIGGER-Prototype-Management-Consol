@@ -12,7 +12,7 @@
  * (same data → same numbers, always), and power/MDE projection.
  */
 import type { ExperimentResults, MetricMap, CompositeMetric, MetricResult } from "./results";
-import { compositeMembers, resolveMetricRow, armEventsFor } from "./results";
+import { compositeMembers, resolveMetricRow, armEventsFor, allCompositeEvents } from "./results";
 
 // ── numeric primitives ─────────────────────────────────────────────────────
 
@@ -471,14 +471,15 @@ function metricCells(opts: {
 /** Windowed novelty-decay check from daily snapshots: compare the primary
  *  composite's absolute rate difference in the first ≥7-day window against
  *  the latest ≥7-day window. Needs ≥14 days of history to say anything. */
-function noveltyCheck(history: DailySnapshot[], memberNames: string[], focusId: string, baselineId: string): NoveltyBlock | undefined {
+/** Per-arm member names: an arm counts only the events ITS OWN list names. */
+function noveltyCheck(history: DailySnapshot[], memberNamesByArm: Map<string, Set<string>>, focusId: string, baselineId: string): NoveltyBlock | undefined {
   const days = [...history].sort((a, b) => a.date.localeCompare(b.date));
   if (days.length < 3) return undefined;
   const span = (Date.parse(days[days.length - 1].date) - Date.parse(days[0].date)) / 86400000;
   if (!(span >= 14)) return undefined;
 
-  const wanted = new Set(memberNames);
   const at = (snap: DailySnapshot, variationId: string) => {
+    const wanted = memberNamesByArm.get(variationId) ?? new Set<string>();
     const visitors = snap.variations.find((v) => v.variationId === variationId)?.visitors ?? 0;
     let conv = 0;
     for (const m of snap.metrics) {
@@ -687,7 +688,7 @@ export function computeStatsReport(opts: {
   // Member exclusion must speak the RESULTS namespace: plan events are
   // registry names, metric rows may carry disambiguated names — resolve.
   const memberEvents = new Set(
-    composites.flatMap((c) => c.events.flatMap((e) => {
+    composites.flatMap((c) => allCompositeEvents(c).flatMap((e) => {
       const row = resolveMetricRow(e, results);
       return row ? [e, row.name] : [e];
     })),
@@ -766,12 +767,15 @@ export function computeStatsReport(opts: {
 
   // ── cannibalization: computed, not prompted ──
   for (const c of composites) {
-    if (c.events.length < 2) continue;
+    // A per-version composite stores its events per arm, so counting c.events
+    // skipped the very shape this check exists for.
+    const memberList = allCompositeEvents(c);
+    if (memberList.length < 2) continue;
     const ms = metrics.find((x) => x.key === `composite:${c.id}`);
     const cell = ms?.cells.find((x) => x.variationId === focusId);
     if (!cell?.liftCi || !(cell.liftCi.lo < 0 && cell.liftCi.hi > 0)) continue;
     const movers: string[] = [];
-    for (const ev of c.events) {
+    for (const ev of memberList) {
       const rowName = resolveMetricRow(ev, results)?.name ?? ev;
       const raw = metrics.find((x) => x.key === `metric:${rowName}`);
       const rc = raw?.cells.find((x) => x.variationId === focusId);
@@ -790,17 +794,25 @@ export function computeStatsReport(opts: {
   let trend: TrendPoint[] | undefined;
   if (primary && focusId && baselineId && opts.history?.length) {
     // Snapshots store RESULTS-namespace names — resolve the plan's member
-    // events (and the members actually summed, honoring exclusions).
-    const memberNames = compositeMembers(primary, results).members.map((m) => m.name);
-    novelty = noveltyCheck(opts.history, memberNames, focusId, baselineId);
+    // events (and the members actually summed, honoring exclusions). PER ARM:
+    // a per-version composite counts different events on each side, and the
+    // day-by-day series must sum exactly what the headline number sums, or the
+    // trend describes a metric nobody is looking at.
+    const summed = compositeMembers(primary, results).members;
+    const namesForArm = (armId: string) => {
+      const allowed = new Set(armEventsFor(primary, armId).map((e) => resolveMetricRow(e, results)).filter(Boolean).map((r) => r!.name));
+      return new Set(summed.filter((m) => allowed.has(m.name)).map((m) => m.name));
+    };
+    const byArm = new Map<string, Set<string>>([[focusId, namesForArm(focusId)], [baselineId, namesForArm(baselineId)]]);
+    novelty = noveltyCheck(opts.history, byArm, focusId, baselineId);
 
     // The sparkline: cumulative primary lift as of each snapshot day —
-    // deterministic, from the same member resolution as everything else.
-    const wanted = new Set(memberNames);
+    // deterministic, from the same per-arm member resolution as the tiles.
     trend = [...opts.history]
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((day) => {
         const armOf = (id: string) => {
+          const wanted = byArm.get(id) ?? new Set<string>();
           const visitors = day.variations.find((v) => v.variationId === id)?.visitors ?? 0;
           let conv = 0;
           for (const m of day.metrics) {
