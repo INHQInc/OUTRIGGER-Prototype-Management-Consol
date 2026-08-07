@@ -1709,45 +1709,47 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this metric against the brief and what was built…</p>}
                         {deepObs[key] && (
                           <>
-                            <p className="text-[17px] font-bold leading-snug max-w-[90ch]">{deepObs[key].headline}</p>
+                            <p className="text-[17px] font-bold leading-snug max-w-[64ch]">{deepObs[key].headline}</p>
 
-                            {deepObs[key].observation && (
-                              <div>
-                                <div className={`${ZH} mb-0.5`}>What happened</div>
-                                <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].observation}</p>
-                              </div>
-                            )}
-                            {deepObs[key].mechanism && (
-                              <div>
-                                <div className={`${ZH} mb-0.5`}>Why</div>
-                                <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].mechanism}</p>
-                              </div>
-                            )}
-                            {deepObs[key].rival && (
-                              <div>
-                                <div className={`${ZH} mb-0.5`}>Why it might not be that</div>
-                                <p className="text-[15px] leading-relaxed text-muted max-w-[110ch]">{deepObs[key].rival}</p>
-                              </div>
-                            )}
-                            {deepObs[key].implication && (
-                              <div>
-                                <div className={`${ZH} mb-0.5`}>What it means</div>
-                                <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].implication}</p>
-                              </div>
-                            )}
+                            {/* THE SAME TREATMENT AS THE READ. These ran the full
+                                width of the panel — roughly double a readable
+                                measure — so four good paragraphs still landed as
+                                a wall. Two columns puts each at ~55 characters. */}
+                            <div className="grid gap-x-10 gap-y-4 lg:grid-cols-2 pt-1">
+                              {([
+                                ["What happened", deepObs[key].observation, "text-foreground/90"],
+                                ["Why", deepObs[key].mechanism, "text-foreground/90"],
+                                ["Why it might not be that", deepObs[key].rival, "text-muted"],
+                                ["What it means", deepObs[key].implication, "text-foreground/90"],
+                              ] as const).filter(([, text]) => Boolean(text)).map(([label, text, tone]) => (
+                                <div key={label} className="min-w-0">
+                                  <div className={`${ZH} mb-1 text-muted-2`}>{label}</div>
+                                  <p className={`text-[14px] leading-[1.55] ${tone}`}>{text}</p>
+                                </div>
+                              ))}
+                            </div>
                             {/* a cached read from the previous single-paragraph form */}
                             {!deepObs[key].observation && deepObs[key].read && (
-                              <p className="text-[15px] leading-relaxed text-foreground/90 max-w-[110ch]">{deepObs[key].read}</p>
+                              <p className="text-[14px] leading-[1.55] text-foreground/90 max-w-[80ch]">{deepObs[key].read}</p>
                             )}
-                            {deepObs[key].caution && (
-                              <p className="text-[15px] leading-relaxed text-warn max-w-[110ch]">
-                                <span className="font-semibold">What would make this wrong: </span>{deepObs[key].caution}
-                              </p>
-                            )}
-                            {deepObs[key].watch && (
-                              <p className="text-[15px] leading-relaxed text-muted max-w-[110ch]">
-                                <span className="font-semibold text-foreground/80">Watch next: </span>{deepObs[key].watch}
-                              </p>
+                            {/* The caution and the next move are a different KIND
+                                of statement from the analysis — they sit below a
+                                rule rather than reading as a fifth paragraph. */}
+                            {(deepObs[key].caution || deepObs[key].watch) && (
+                              <div className="grid gap-x-10 gap-y-2.5 lg:grid-cols-2 pt-3 mt-1 border-t border-border/50">
+                                {deepObs[key].caution && (
+                                  <div className="min-w-0">
+                                    <div className={`${ZH} mb-1 text-warn/80`}>What would make this wrong</div>
+                                    <p className="text-[14px] leading-[1.55] text-warn">{deepObs[key].caution}</p>
+                                  </div>
+                                )}
+                                {deepObs[key].watch && (
+                                  <div className="min-w-0">
+                                    <div className={`${ZH} mb-1 text-muted-2`}>Watch next</div>
+                                    <p className="text-[14px] leading-[1.55] text-muted">{deepObs[key].watch}</p>
+                                  </div>
+                                )}
+                              </div>
                             )}
                             <div className="text-[12.5px] text-muted-2 print:hidden">
                               read {deepObs[key].generatedAt.slice(11, 16)} ·{" "}
