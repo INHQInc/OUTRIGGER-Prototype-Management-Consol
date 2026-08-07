@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
-import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, type MetricRole } from "@/lib/prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, featuredKeys, roleOf, type MetricRole } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
@@ -499,6 +499,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // the click on the same frame.
   const [observedLocal, setObservedLocal] = useState<string[] | null>(null);
   const [rolesLocal, setRolesLocal] = useState<Record<string, "supporting" | "guardrail" | "exploratory"> | null>(null);
+  const [unfeaturedLocal, setUnfeaturedLocal] = useState<string[] | null>(null);
+  const [showAllBeats, setShowAllBeats] = useState(false);
 
   async function quietPost(body: Record<string, unknown>): Promise<boolean> {
     try {
@@ -543,6 +545,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       // with the map alone — so the staleness has to be raised here.
       if (ok) { autoReadRef.current = null; setReadingStale(true); }
       return ok;
+    });
+  }
+
+  function setFeatured(rowKey: string, on: boolean) {
+    const base = unfeaturedLocal ?? map?.unfeatured ?? [];
+    setUnfeaturedLocal(on ? base.filter((k) => k !== rowKey) : [...base, rowKey]);
+    // Curating the top line is PRESENTATION: the analyst already wrote about
+    // every supporting metric, so nothing is regenerated and nothing waits.
+    quietChain.current = quietChain.current.then(async () => {
+      await quietPost({ featureMetric: { key: rowKey, on } });
+      setUnfeaturedLocal(null);
     });
   }
 
@@ -1130,7 +1143,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // beats row, the observations and the toggle all move together on click.
   const observedEff = observedLocal ?? map?.observed ?? [];
   const rolesEff = rolesLocal ?? map?.roles ?? {};
-  const mapEff = map ? { ...map, observed: observedEff, roles: rolesEff } : null;
+  const unfeaturedEff = unfeaturedLocal ?? map?.unfeatured ?? [];
+  const mapEff = map ? { ...map, observed: observedEff, roles: rolesEff, unfeatured: unfeaturedEff } : null;
   const inheritedPrimary = decision?.source === "optimizely";
   const supporting = supportingKeys({
     map: mapEff,
@@ -1153,7 +1167,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       // labelled from the metric itself. So the top line answers a toggle
       // immediately, while the prose catches up in the background.
       const written = new Map((reading.beats ?? []).map((b) => [b.measureKey, b.label] as const));
-      const rowKeys = supporting.length ? supporting : (reading.beats ?? []).map((b) => b.measureKey);
+      const rowKeys = supporting.length
+        ? (showAllBeats ? supporting : featuredKeys(supporting, mapEff, statsEff?.primaryKey))
+        : (reading.beats ?? []).map((b) => b.measureKey);
       const picked = rowKeys
         .map((k) => beatFor({ measureKey: k, label: written.get(k) ?? shortLabel(statsEff?.metrics.find((m) => m.key === k)?.label ?? k) }))
         .filter(Boolean) as Beat[];
@@ -1163,7 +1179,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       if (picked.length) return { headline: reading.headline, lede: reading.lede, beats: picked };
     }
     // No reading yet (or a cached one in the old shape): the computed story.
-    const t = templateStory({ results: live!, stats: statsEff ?? null, verdict, supporting });
+    const t = templateStory({ results: live!, stats: statsEff ?? null, verdict, supporting: showAllBeats ? supporting : featuredKeys(supporting, mapEff, statsEff?.primaryKey) });
     return {
       headline: reading?.headline || t.headline,
       lede: reading?.lede || t.lede,
@@ -1469,15 +1485,41 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
                 {story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>}
                 {story.beats.length > 0 && (
-                  <ul className="flex flex-wrap gap-x-7 gap-y-1.5 pt-1">
-                    {story.beats.map((b) => (
-                      <li key={b.key} className="text-[14px] text-muted">
-                        <span className={`font-extrabold tabular-nums mr-1.5 ${b.tone}`}>{b.value}</span>
-                        {b.label}
-                        {b.qualifier && <span className="text-muted-2"> — {b.qualifier}</span>}
-                      </li>
-                    ))}
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-1.5 pt-1">
+                    {story.beats.map((b) => {
+                      const isDecision = b.key === statsEff?.primaryKey;
+                      const hidden = unfeaturedEff.includes(b.key);
+                      return (
+                        <li key={b.key} className="group flex items-baseline gap-1.5 text-[14px] text-muted min-w-0">
+                          <span className={`font-extrabold tabular-nums shrink-0 w-[4.5rem] text-right ${hidden ? "opacity-40" : b.tone}`}>{b.value}</span>
+                          <span className={`min-w-0 truncate ${hidden ? "opacity-40" : ""}`} title={b.label}>
+                            {b.label}
+                            {b.qualifier && <span className="text-muted-2"> — {b.qualifier}</span>}
+                          </span>
+                          {/* Curate where you read it: marking a metric supporting
+                              says it is part of the story, not that the summary
+                              owes it a slot. Dropping one costs nothing — the
+                              analyst has already written about all of them. */}
+                          {!isDecision && (
+                            <button onClick={() => setFeatured(b.key, hidden)}
+                              title={hidden ? "Show in the summary" : "Remove from the summary (it stays part of the analysis)"}
+                              aria-label={hidden ? "Show in the summary" : "Remove from the summary"}
+                              className="shrink-0 text-[13px] leading-none text-muted-2/60 hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity print:hidden">
+                              {hidden ? "+" : "×"}
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
+                )}
+                {supporting.length > story.beats.length && !showAllBeats && (
+                  <button onClick={() => setShowAllBeats(true)} className="text-[12.5px] text-accent hover:text-accent-hover print:hidden">
+                    {supporting.length - story.beats.length} more supporting {supporting.length - story.beats.length === 1 ? "metric" : "metrics"} not shown — manage
+                  </button>
+                )}
+                {showAllBeats && (
+                  <button onClick={() => setShowAllBeats(false)} className="text-[12.5px] text-muted-2 hover:text-foreground print:hidden">done curating</button>
                 )}
                 {/* The row is the team's set, so a SHORT row is a statement:
                     nothing else has been declared to support the hypothesis.

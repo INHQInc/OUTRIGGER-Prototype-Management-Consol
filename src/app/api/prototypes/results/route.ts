@@ -347,6 +347,7 @@ export async function POST(req: NextRequest) {
      *  Display only — observing something never makes it adjudicable. */
     observeMetric?: { key?: string; on?: boolean };
     setMetricRole?: { key?: string; role?: string };
+    featureMetric?: { key?: string; on?: boolean };
     /** Hide/show a metric in the index. Display only — plan metrics keep
      *  feeding the verdict; the primary refuses. */
     hideMetric?: { key?: string; hidden?: boolean };
@@ -771,6 +772,19 @@ export async function POST(req: NextRequest) {
         return { ...base, acknowledged: [...set].slice(0, 40) };
       });
       await audit(g.orgId, actor, on ? "results.attention-acknowledged" : "results.attention-restored", g.proto.name, id);
+      return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.featureMetric) {
+      const rowKey = String(body.featureMetric.key ?? "").slice(0, 220);
+      const on = Boolean(body.featureMetric.on);
+      if (!rowKey) return NextResponse.json({ error: "That needs the metric key." }, { status: 400 });
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const base = cur ?? { composites: [], confirmed: false };
+        const set = new Set(base.unfeatured ?? []);
+        if (on) set.delete(rowKey); else set.add(rowKey);
+        return { ...base, unfeatured: [...set].slice(0, METRIC_KEY_STORAGE_CAP) };
+      });
       return NextResponse.json({ metricMap: map });
     }
 

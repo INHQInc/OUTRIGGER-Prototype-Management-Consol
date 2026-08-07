@@ -205,6 +205,11 @@ export interface MetricMap {
    *  adjudicated. The verdict still reads the decision metric alone.
    *  OBSERVATIONS ONLY: what the readout's summary is ABOUT is `roles`. */
   observed?: string[];
+  /** Supporting metrics kept OUT of the readout's top line. They are still
+   *  reasoned about — the analyst chains them and writes their observations —
+   *  they just don't take a slot in the summary. Presentation only, which is
+   *  why curating the row costs nothing and never regenerates the reading. */
+  unfeatured?: string[];
   /** THE TYPE OF EACH METRIC, by row key ("metric:<name>" / "composite:<id>").
    *  Decision is not stored here — it is resolved from the primary. This is
    *  what the team says each metric is FOR, and it decides what the summary
@@ -258,6 +263,7 @@ export function pruneMeasureKeys(map: MetricMap): MetricMap {
   // exists into the readout's top line.
   if (next.observed) next.observed = next.observed.filter(keep);
   if (next.roles) next.roles = Object.fromEntries(Object.entries(next.roles).filter(([k]) => keep(k)));
+  if (next.unfeatured) next.unfeatured = next.unfeatured.filter(keep);
   return next;
 }
 
@@ -266,6 +272,15 @@ export function pruneMeasureKeys(map: MetricMap): MetricMap {
  *  call sites derived this inline; it is one rule, so it lives in one place. */
 export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined): string {
   return results?.metrics[0] ? `metric:${results.metrics[0].name}` : "";
+}
+
+/** THE TOP LINE — the supporting metrics the team chose to SHOW, in their own
+ *  order. Marking a metric supporting says it is part of the story; it does
+ *  not oblige the summary to spend a slot on it. The decision metric is always
+ *  shown: it is what the verdict adjudicates. */
+export function featuredKeys(supporting: string[], map: MetricMap | null, decisionKey?: string | null): string[] {
+  const out = new Set(map?.unfeatured ?? []);
+  return supporting.filter((k) => k === decisionKey || !out.has(k));
 }
 
 /** Storage guard only — not a product rule. How many metrics belong on the
