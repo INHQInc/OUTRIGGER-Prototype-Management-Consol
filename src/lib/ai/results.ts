@@ -403,10 +403,22 @@ const readingTool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
-      effect: { type: "string" as const, description: "<=300 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it. One or two sentences." },
-      shift: { type: "string" as const, description: "<=300 chars, NO DIGITS. WHERE THE BEHAVIOUR WENT — if that intent moved, name the surfaces it moved TO and how far along the path it got. If it simply didn't move, say that plainly." },
-      cost: { type: "string" as const, description: "<=300 chars, NO DIGITS. WHAT IT COST — the step that softened, the trade being made, or the leak between intent and outcome. If nothing measurably gave way, say so rather than inventing a cost." },
-      prediction: { type: "string" as const, description: "<=300 chars, NO DIGITS. AGAINST THE PREDICTION — what the brief said would happen, which half of it is settled, and which half isn't yet. Name the hypothesis's own claim." },
+      effect: { type: "object" as const, properties: {
+        text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it." },
+        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+      }, required: ["text", "measure"] },
+      shift: { type: "object" as const, properties: {
+        text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHERE THE BEHAVIOUR WENT — if that intent moved, name the surfaces it moved TO and how far along the path it got. If it simply didn't move, say that plainly." },
+        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+      }, required: ["text", "measure"] },
+      cost: { type: "object" as const, properties: {
+        text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT IT COST — the step that softened, the trade being made, or the leak between intent and outcome. If nothing measurably gave way, say so rather than inventing a cost." },
+        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+      }, required: ["text", "measure"] },
+      prediction: { type: "object" as const, properties: {
+        text: { type: "string" as const, description: "<=420 chars, NO DIGITS. AGAINST THE PREDICTION — what the brief claimed, which half is settled, and which half is not." },
+        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+      }, required: ["text", "measure"] },
       lede: { type: "string" as const, description: "<=900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what guests are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary." },
       beats: {
         // Bounds are set at call time from the team's supporting set — this
@@ -757,6 +769,11 @@ export async function generateReading(opts: {
     // a third — an unsatisfiable schema, not a stricter one.
     beatsSchema.minItems = beatEnum.length;
     beatsSchema.maxItems = beatEnum.length;
+    // Each movement names the ONE metric that evidences it, from the same set.
+    for (const k of ["effect", "shift", "cost", "prediction"] as const) {
+      const sc = tool.input_schema.properties[k] as { properties: { measure: Record<string, unknown> } } | undefined;
+      if (sc) sc.properties.measure = { type: "string", enum: beatEnum, description: "the metric that evidences this movement" };
+    }
   }
   // The same set is what gets an OBSERVATION — one act, one meaning: this
   // metric is part of the story. BOTH primaries are in it whether or not
@@ -836,6 +853,7 @@ Each section is at most 420 characters and carries NO DIGITS — a section that 
 · cost — what softened, what is being traded, or where intent is leaking. If nothing measurably gave way, say that rather than inventing a cost.
 · prediction — what the brief claimed, which half is settled and which isn't.
 Each is one or two sentences and stands on its own: a reader scanning only "cost" must get a complete thought without having read the others.
+EVERY MOVEMENT ALSO NAMES THE ONE METRIC THAT EVIDENCES IT. The page prints that metric's live value beside your words, so never type a number yourself — pick the metric whose movement your sentences are actually about.
 
 THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
 
@@ -904,7 +922,14 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // digit-bearing section quietly collapsed the whole structure back to a wall
   // of prose — the reader sees a formatting regression and no reason for it.
   // Whatever passed is rendered; only an empty set falls back.
-  const sec = (v: unknown) => clean(v, 420);
+  const allowedMeasures = new Set(beatEnum);
+  const sec = (v: unknown) => {
+    const o = (v ?? {}) as Record<string, unknown>;
+    const text = clean(o.text, 420);
+    if (!text) return undefined;
+    const mk = typeof o.measure === "string" ? o.measure.trim() : "";
+    return { text, ...(allowedMeasures.has(mk) ? { measureKey: mk } : {}) };
+  };
   const read = (() => {
     const r = { effect: sec(raw.effect), shift: sec(raw.shift), cost: sec(raw.cost), prediction: sec(raw.prediction) };
     return Object.values(r).some(Boolean) ? r : undefined;

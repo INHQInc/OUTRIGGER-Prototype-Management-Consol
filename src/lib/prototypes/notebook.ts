@@ -43,6 +43,16 @@ export interface ProtoNotebook {
   updatedAt?: string;
 }
 
+/** One movement of the read: the words, and the ONE metric that evidences
+ *  them. The number lives with the sentence that explains it — a standalone
+ *  row of lifts underneath was a magnitude with no meaning, sitting between
+ *  prose that gave the meaning and a table that gave the context. */
+export interface ReadSection {
+  text: string;
+  /** Resolved to a LIVE value by the page, never a number the model typed. */
+  measureKey?: string;
+}
+
 export interface Reading {
   /** The story in the shape a leader reads: one headline, one short
    *  paragraph, then the numbers as beats. The WORDS carry no digits and a
@@ -58,7 +68,7 @@ export interface Reading {
    *  of good prose is still a wall — you cannot scan back to the part you
    *  half-remember. Fixed sections mean the shape is learned once and every
    *  readout is navigable. Absent on readings written before this. */
-  read?: { effect?: string; shift?: string; cost?: string; prediction?: string };
+  read?: { effect?: ReadSection; shift?: ReadSection; cost?: ReadSection; prediction?: ReadSection };
   beats?: { measureKey: string; label: string }[];
   /** One line per WATCHED metric — an observation, never a decision. */
   observations?: { measureKey: string; note: string }[];
@@ -193,7 +203,7 @@ export function readingBasisKey(parts: {
   // — presentation — cannot retire the reading and buy a fresh Opus call for
   // words that would come out the same.
   const sup = parts.supporting?.length ? [...parts.supporting].sort().join(",") : "";
-  return ["fmt11", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
+  return ["fmt12", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
     sup ? `sup:${sup}` : "-"].join("|");
 }
 
