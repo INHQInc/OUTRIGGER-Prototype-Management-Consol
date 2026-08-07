@@ -530,9 +530,17 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
           its own card so they read as independent parts, not one flowing page. */}
       {!editing && hasContent ? (
         <div className="space-y-3">
+          {(hyp.change || hyp.outcome) && (
+            <div className={`${card} ${refinedCls("hypothesis")}`}>
+              {sectionHead("Hypothesis", "hypothesis")}
+              <p className="text-[15px] leading-relaxed text-foreground/90">
+                We believe <b className="text-foreground">{hyp.change || "[the change]"}</b> for <b className="text-foreground">{hyp.audience || "[audience]"}</b> will cause <b className="text-foreground">{hyp.outcome || "[outcome]"}</b>{hyp.rationale ? <> because {hyp.rationale}</> : null}.
+              </p>
+            </div>
+          )}
           <div className={`${card} ${refinedCls("change")}`}>
             {sectionHead("The change", "change")}
-            <p className="text-[15px] text-foreground leading-relaxed">{brief.change}</p>
+            <p className="text-[14px] text-foreground/90 leading-relaxed">{brief.change}</p>
           </div>
           {brief.where && (
             <div className={`${card} ${refinedCls("where")}`}>
@@ -548,14 +556,6 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
                   <li key={i} className="text-[14px] text-foreground/90 leading-relaxed flex gap-2"><span className="text-ok shrink-0">✓</span><span>{c}</span></li>
                 ))}
               </ul>
-            </div>
-          )}
-          {(hyp.change || hyp.outcome) && (
-            <div className={`${card} ${refinedCls("hypothesis")}`}>
-              {sectionHead("Hypothesis", "hypothesis")}
-              <p className="text-[14px] leading-relaxed text-foreground/90">
-                We believe <b className="text-foreground">{hyp.change || "[the change]"}</b> for <b className="text-foreground">{hyp.audience || "[audience]"}</b> will cause <b className="text-foreground">{hyp.outcome || "[outcome]"}</b>{hyp.rationale ? <> because {hyp.rationale}</> : null}.
-              </p>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
