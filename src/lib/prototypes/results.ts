@@ -274,6 +274,27 @@ export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined):
   return results?.metrics[0] ? `metric:${results.metrics[0].name}` : "";
 }
 
+/** Is this metric COMBINED from more than one Optimizely event? A one-event
+ *  composite is just the event under another name — flagging it would train
+ *  the reader to ignore the flag. */
+export function isCompositeOf(c: CompositeMetric): boolean {
+  return Boolean(c.armEvents?.length) || allCompositeEvents(c).length > 1;
+}
+
+/** What a composite is made of, in one sentence — the ONE description, so the
+ *  index, the readout and the per-metric rows can never disagree about what a
+ *  number is actually counting. */
+export function describeComposite(c: CompositeMetric, armName?: (variationId: string) => string): string {
+  const per = c.armEvents?.length
+    ? c.armEvents.map((a) => `${armName?.(a.variationId) ?? a.variationId}: ${a.events.join(" + ")}`).join("  ·  ")
+    : "";
+  const shared = c.events.length ? c.events.join(" + ") : "";
+  const head = per
+    ? `Combined metric, defined per version — ${per}${shared ? `  ·  any other version: ${shared}` : ""}`
+    : `Combined metric — sums ${c.events.length} Optimizely event${c.events.length === 1 ? "" : "s"}: ${shared}`;
+  return `${head}. Counted as ACTION totals per visitor, so one guest acting on more than one of these counts each time.${c.definition ? ` ${c.definition}` : ""}`;
+}
+
 /** THE TOP LINE — the supporting metrics the team chose to SHOW, in their own
  *  order. Marking a metric supporting says it is part of the story; it does
  *  not oblige the summary to spend a slot on it. The decision metric is always

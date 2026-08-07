@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
-import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, type MetricRole } from "@/lib/prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, isCompositeOf, describeComposite, type MetricRole } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
@@ -1037,6 +1037,26 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // is still true, so it is never dimmed or covered. The header says the
   // section is updating and the rule under it pulses — in flow, no scrim, no
   // floating pill, nothing to read around.
+  // A COMBINED metric is not the same kind of thing as an Optimizely event, and
+  // a reader who doesn't know that will read its rate as a head-count. The flag
+  // says so wherever the metric appears; the hover says exactly what it sums.
+  const compositeFor = (key: string) =>
+    key.startsWith("composite:")
+      ? (map?.composites ?? []).find((c) => `composite:${c.id}` === key)
+      : undefined;
+  const armNameOf = (variationId: string) =>
+    live?.variations.find((v) => v.variationId === variationId)?.name ?? variationId;
+  const compositeFlag = (key: string, cls = "") => {
+    const c = compositeFor(key);
+    if (!c || !isCompositeOf(c)) return null;
+    return (
+      <span className={`ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-accent/50 text-accent rounded px-1 align-middle cursor-help ${cls}`}
+        title={describeComposite(c, armNameOf)}>
+        combined{c.armEvents?.length ? " · per version" : ""}
+      </span>
+    );
+  };
+
   const zoneHeader = (label: string, right?: React.ReactNode, id?: string, busyLabel?: string) => (
     <div id={id} className={`flex items-baseline gap-2 border-b pb-1.5 mb-2.5 ${busyLabel ? "border-accent/60 animate-pulse motion-reduce:animate-none" : "border-border"}`}>
       <span className={ZH}>{label}</span>
@@ -1492,6 +1512,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                               <span className={`text-[19px] font-extrabold tabular-nums leading-none ${b.tone}`}>{b.value}</span>
                               <span className="text-[12.5px] text-muted-2 min-w-0 truncate" title={statsEff?.metrics.find((m) => m.key === b.key)?.label ?? ""}>
                                 {shortLabel(statsEff?.metrics.find((m) => m.key === b.key)?.label ?? "")}
+                                {compositeFlag(b.key)}
                                 {b.key === statsEff?.primaryKey && (
                                   <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-ok/40 text-ok rounded px-1 align-middle">decision</span>
                                 )}
@@ -1658,6 +1679,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       )}
                       <span className="min-w-0 flex-1">
                         <span className="text-[14px] font-semibold">{o.label}</span>
+                        {compositeFlag(key)}
                         {key === optiPrimaryKey && (
                           <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
                             title="The metric Optimizely reports as this experiment's primary. The console adjudicates its own decision metric — the two may legitimately differ, which is why both are read here.">
@@ -1979,12 +2001,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         </span>
                       ) : null;
                     })()}
-                    {c.armEvents?.length ? (
-                      <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-border rounded px-1 text-muted-2 align-middle"
-                        title={c.armEvents.map((a) => `${live.variations.find((v) => v.variationId === a.variationId)?.name ?? a.variationId}: ${a.events.join(" + ")}`).join(" · ")}>
-                        per version
-                      </span>
-                    ) : null}
+                    {compositeFlag(rowKey)}
                   </td>
                   <td className="py-1.5 pr-2">{typeChip(rowKey)}</td>
                   <td className="py-1.5 pr-2">

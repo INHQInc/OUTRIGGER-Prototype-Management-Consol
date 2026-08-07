@@ -201,6 +201,16 @@ prediction — and each stands alone, so scanning one gives a complete thought.
 The cost of a fixed frame is a section with nothing to say; the answer is to say
 that plainly, never to invent content to fill it.
 
+## 14b. Flag what is not what it appears to be
+
+A COMBINED metric is a different kind of thing from an Optimizely event, and a
+reader who doesn't know that reads its rate as a head-count. Anywhere such a
+metric appears — the read, the per-metric rows, the index — it carries the flag,
+and hovering gives the one description of what it sums and how it is counted.
+The flag only fires when the metric genuinely combines more than one event: a
+one-event composite is the event under another name, and flagging it would
+train the reader to ignore the flag.
+
 ## 15. Compute the caveat; never ask for it
 
 If the console can derive a warning, it states it. Action-total composites,
