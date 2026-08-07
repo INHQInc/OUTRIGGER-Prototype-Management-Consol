@@ -198,48 +198,64 @@ function Toast({ text, onDone }: { text: string; onDone: () => void }) {
 
 
 /**
- * THE METRIC ACROSS THE RUN — both arms, day by day.
+ * IMPROVEMENT OVER TIME — one line against a baseline, the shape Optimizely
+ * draws and the one people already read.
  *
- * Replaces the written expansion: a paragraph explaining a shape is worse than
- * the shape. Snapshots are CUMULATIVE, so each day's rate is derived from the
- * DIFFERENCE against the previous day — plotting the cumulative figure draws a
- * smooth curve that flattens by construction and hides exactly the volatility
- * a reader opened the chart to see.
+ * CUMULATIVE is the default: each point is the whole run to that date, so the
+ * line converges on the number in the headline. It settles by construction,
+ * which is exactly why DAY BY DAY is one click away — that view is each day on
+ * its own and shows the volatility the cumulative line smooths out.
+ *
+ * Resolution is DAILY. The console keeps one snapshot per day, so it cannot
+ * draw Optimizely's hourly detail and does not pretend to.
  */
-function MetricChart({ days, focusName, baseName, earned }: {
-  days: { date: string; focusRate: number; baseRate: number }[];
+function MetricChart({ days, focusName, earned }: {
+  days: { date: string; lift: number; dailyLift?: number }[];
   focusName: string;
-  baseName: string;
   earned: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  if (days.length < 2) {
+  const [mode, setMode] = useState<"cumulative" | "daily">("cumulative");
+  const rows = mode === "daily" ? days.filter((d) => d.dailyLift !== undefined) : days;
+  const val = (d: (typeof days)[number]) => (mode === "daily" ? d.dailyLift ?? 0 : d.lift);
+  if (rows.length < 2) {
     return <p className="text-[13px] text-muted-2">Not enough day-by-day data yet to draw the run — the console keeps one snapshot per day.</p>;
   }
-  const W = 1000, H = 200, L = 44, R = 12, T = 12, B = 26;
-  const hi = Math.max(...days.flatMap((d) => [d.focusRate, d.baseRate]), 0.0001);
-  const top = hi * 1.15;
-  const x = (i: number) => L + (i * (W - L - R)) / Math.max(1, days.length - 1);
-  const y = (v: number) => T + (1 - v / top) * (H - T - B);
-  const path = (pick: (d: (typeof days)[number]) => number) =>
-    days.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(pick(d)).toFixed(1)}`).join(" ");
-  const ticks = [0, top / 2, top];
-  const pctOf = (v: number) => `${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}%`;
-  const at = hover !== null ? days[hover] : null;
-  // Nearest-point tracking across the WHOLE plot, not hit-testing the dots: a
-  // 2.5px circle is not a target, and the question being asked is "what was it
-  // on this day", which the x position alone answers.
+  const W = 1000, H = 220, L = 52, R = 14, T = 14, B = 28;
+  const vals = rows.map(val);
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const pad = Math.max((hi - lo) * 0.15, 0.02);
+  const top = hi + pad, bot = lo - pad;
+  const x = (i: number) => L + (i * (W - L - R)) / Math.max(1, rows.length - 1);
+  const y = (v: number) => T + (1 - (v - bot) / (top - bot)) * (H - T - B);
+  const pct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
+  const ticks = [top, (top + bot) / 2, bot].filter((t, i, a) => a.indexOf(t) === i);
+  const at = hover !== null ? rows[hover] : null;
   const track = (clientX: number, el: SVGSVGElement) => {
     const box = el.getBoundingClientRect();
     const vx = ((clientX - box.left) / box.width) * W;
-    const i = Math.round(((vx - L) / (W - L - R)) * (days.length - 1));
-    setHover(Math.max(0, Math.min(days.length - 1, i)));
+    setHover(Math.max(0, Math.min(rows.length - 1, Math.round(((vx - L) / (W - L - R)) * (rows.length - 1)))));
   };
+  const line = rows.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(val(d)).toFixed(1)}`).join(" ");
+  const area = `${line} L${x(rows.length - 1).toFixed(1)} ${y(0).toFixed(1)} L${x(0).toFixed(1)} ${y(0).toFixed(1)} Z`;
+  const stroke = earned ? (vals[vals.length - 1] >= 0 ? "stroke-ok" : "stroke-danger") : "stroke-foreground/60";
+  const fill = earned ? (vals[vals.length - 1] >= 0 ? "fill-ok/10" : "fill-danger/10") : "fill-foreground/[0.06]";
   return (
     <figure className="m-0 relative">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[200px] touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 rounded"
+      <div className="flex items-baseline gap-3 mb-1">
+        <figcaption className="text-[12.5px] font-bold uppercase tracking-[0.08em] text-muted-2">Improvement over time</figcaption>
+        <span className="ml-auto flex items-center gap-1 text-[11px] print:hidden">
+          {(["cumulative", "daily"] as const).map((m) => (
+            <button key={m} onClick={() => { setMode(m); setHover(null); }}
+              className={`px-1.5 py-0.5 rounded ${mode === m ? "bg-foreground/10 text-foreground font-medium" : "text-muted-2 hover:text-foreground"}`}>
+              {m === "cumulative" ? "whole run" : "day by day"}
+            </button>
+          ))}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[220px] touch-none rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/60"
         role="img" tabIndex={0}
-        aria-label={`${focusName} versus ${baseName}, daily rate across the run`}
+        aria-label={`${focusName}: improvement over time against the control`}
         onPointerMove={(e) => track(e.clientX, e.currentTarget)}
         onPointerDown={(e) => track(e.clientX, e.currentTarget)}
         onPointerLeave={() => setHover(null)}
@@ -247,63 +263,45 @@ function MetricChart({ days, focusName, baseName, earned }: {
         onKeyDown={(e) => {
           if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
           e.preventDefault();
-          setHover((h) => {
-            const next = (h ?? days.length - 1) + (e.key === "ArrowRight" ? 1 : -1);
-            return Math.max(0, Math.min(days.length - 1, next));
-          });
+          setHover((h) => Math.max(0, Math.min(rows.length - 1, (h ?? rows.length - 1) + (e.key === "ArrowRight" ? 1 : -1))));
         }}>
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} className="stroke-border/50" strokeWidth={1} />
-            <text x={L - 8} y={y(t) + 4} textAnchor="end" className="fill-muted-2 text-[11px] tabular-nums">{pctOf(t)}</text>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} className="stroke-border/40" strokeWidth={1} />
+            <text x={L - 8} y={y(t) + 4} textAnchor="end" className="fill-muted-2 text-[11px] tabular-nums">{pct(t)}</text>
           </g>
         ))}
-        <path d={path((d) => d.baseRate)} fill="none" strokeWidth={2} className="stroke-muted-2/70" />
-        <path d={path((d) => d.focusRate)} fill="none" strokeWidth={2.5} className={earned ? "stroke-ok" : "stroke-foreground/70"} />
-        {at && (
-          <line x1={x(hover!)} x2={x(hover!)} y1={T} y2={H - B} className="stroke-border-strong" strokeWidth={1} strokeDasharray="3 3" />
-        )}
-        {days.map((d, i) => (
-          <g key={d.date}>
-            <circle cx={x(i)} cy={y(d.focusRate)} r={hover === i ? 4.5 : 2.5} className={earned ? "fill-ok" : "fill-foreground/70"} />
-            <circle cx={x(i)} cy={y(d.baseRate)} r={hover === i ? 4.5 : 2.5} className="fill-muted-2/70" />
-          </g>
-        ))}
-        <text x={L} y={H - 8} className="fill-muted-2 text-[11px] tabular-nums">{days[0].date}</text>
-        <text x={W - R} y={H - 8} textAnchor="end" className="fill-muted-2 text-[11px] tabular-nums">{days[days.length - 1].date}</text>
+        <path d={area} className={fill} stroke="none" />
+        {/* BASELINE — the control. Everything on this chart is relative to it. */}
+        <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} className="stroke-muted-2" strokeWidth={1.5} />
+        <text x={L - 8} y={y(0) + 4} textAnchor="end" className="fill-muted-2 text-[11px]">Baseline</text>
+        <path d={line} fill="none" strokeWidth={2.5} strokeLinejoin="round" className={stroke} />
+        {at && <line x1={x(hover!)} x2={x(hover!)} y1={T} y2={H - B} className="stroke-border-strong" strokeWidth={1} />}
+        {at && <circle cx={x(hover!)} cy={y(val(at))} r={5} className={earned ? (val(at) >= 0 ? "fill-ok" : "fill-danger") : "fill-foreground/60"} />}
+        <text x={L} y={H - 8} className="fill-muted-2 text-[11px] tabular-nums">{rows[0].date}</text>
+        <text x={W - R} y={H - 8} textAnchor="end" className="fill-muted-2 text-[11px] tabular-nums">{rows[rows.length - 1].date}</text>
       </svg>
       {at && (
-        <div className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-md border border-border bg-surface px-2.5 py-1.5 shadow-lg text-[12.5px] whitespace-nowrap"
-          style={{ left: `${Math.min(88, Math.max(12, (x(hover!) / W) * 100))}%` }}>
+        <div className="pointer-events-none absolute top-6 -translate-x-1/2 rounded-md border border-border bg-surface px-3 py-2 shadow-xl text-[12.5px] whitespace-nowrap"
+          style={{ left: `${Math.min(86, Math.max(14, (x(hover!) / W) * 100))}%` }}>
           <div className="font-semibold text-foreground tabular-nums">{at.date}</div>
-          <div className="flex items-center gap-1.5 tabular-nums">
-            <span className={`inline-block w-2.5 h-[2px] ${earned ? "bg-ok" : "bg-foreground/70"}`} />
+          <div className="flex items-center gap-2 tabular-nums">
+            <span className={`inline-block w-2.5 h-[2px] ${earned ? (val(at) >= 0 ? "bg-ok" : "bg-danger") : "bg-foreground/60"}`} />
             <span className="text-muted">{focusName}</span>
-            <span className="font-semibold text-foreground ml-auto">{pctOf(at.focusRate)}</span>
+            <span className="font-semibold text-foreground">{pct(val(at))}</span>
           </div>
-          <div className="flex items-center gap-1.5 tabular-nums">
-            <span className="inline-block w-2.5 h-[2px] bg-muted-2/70" />
-            <span className="text-muted">{baseName}</span>
-            <span className="font-semibold text-foreground ml-auto">{pctOf(at.baseRate)}</span>
-          </div>
-          <div className="text-muted-2 tabular-nums pt-0.5">
-            {at.baseRate > 0
-              ? `${at.focusRate / at.baseRate - 1 >= 0 ? "+" : ""}${(((at.focusRate / at.baseRate) - 1) * 100).toFixed(1)}% that day`
-              : "no control activity that day"}
-          </div>
+          <div className="text-muted-2">{mode === "daily" ? "that day alone" : "whole run to this date"}</div>
         </div>
       )}
-      <figcaption className="flex items-center gap-4 text-[12.5px] text-muted-2 mt-1">
-        <span className="flex items-center gap-1.5">
-          <span className={`inline-block w-3 h-[2px] ${earned ? "bg-ok" : "bg-foreground/70"}`} />{focusName}
-        </span>
-        <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-[2px] bg-muted-2/70" />{baseName}</span>
-        <span className="ml-auto">each point is that day alone, not the running total</span>
-      </figcaption>
+      <p className="text-[12px] text-muted-2 mt-1">
+        {mode === "cumulative"
+          ? "Each point is the whole run to that date, so the line settles as traffic accumulates and ends on the number in the headline."
+          : "Each point is that day on its own — noisier, and the only way to see whether the effect is holding or fading."}
+        {" "}One point per day: the console keeps a daily snapshot.
+      </p>
     </figure>
   );
 }
-
 
 /** The COMPOSITE marker and its description. A native `title` was unreliable —
  *  ancestor rows carry their own titles, and the per-arm event lists collapse
@@ -1356,37 +1354,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // What this metric has actually DONE, day by day, from the console's own
   // snapshots — the same source the primary's trend line uses. Deterministic:
   // an observation should never depend on the analyst noticing a shape.
-  // PER-DAY rates for both arms. Snapshots are cumulative totals, so each day
-  // is the DIFFERENCE from the day before — the honest daily figure. A negative
-  // difference means Optimizely restated its totals; that day is dropped rather
-  // than drawn as a dip that never happened.
-  const dailyRatesFor = (key: string): { date: string; focusRate: number; baseRate: number }[] => {
-    const focusId = statsEff?.focusVariationId, baseId = statsEff?.baselineVariationId;
-    if (!focusId || !baseId || historyDays.length < 2) return [];
-    const comp = map?.composites.find((c) => `composite:${c.id}` === key)
-      ?? (decision && key === decision.key ? { events: decision.events, armEvents: decision.armEvents } : undefined);
-    const rawName = key.startsWith("metric:") ? key.slice(7) : null;
-    const totals = historyDays.map((day) => {
-      const visitors = (id: string) => day.variations.find((v) => v.variationId === id)?.visitors ?? 0;
-      const conv = (id: string) => {
-        const names = comp ? (comp.armEvents?.find((a) => a.variationId === id)?.events ?? comp.events) : rawName ? [rawName] : [];
-        return names.reduce((sum, n) => {
-          const row = resolveMetricRow(n, { metrics: day.metrics } as ExperimentResults);
-          return sum + (row?.perVariation.find((r) => r.variationId === id)?.conversions ?? 0);
-        }, 0);
-      };
-      return { date: day.date, fN: visitors(focusId), bN: visitors(baseId), fC: conv(focusId), bC: conv(baseId) };
-    });
-    const out: { date: string; focusRate: number; baseRate: number }[] = [];
-    for (let i = 1; i < totals.length; i++) {
-      const d = totals[i], p = totals[i - 1];
-      const fN = d.fN - p.fN, bN = d.bN - p.bN, fC = d.fC - p.fC, bC = d.bC - p.bC;
-      if (fN <= 0 || bN <= 0 || fC < 0 || bC < 0) continue;
-      out.push({ date: d.date, focusRate: fC / fN, baseRate: bC / bN });
-    }
-    return out;
-  };
-
   const seriesFor = (key: string): TrendPoint[] => {
     if (!statsEff?.focusVariationId || !statsEff?.baselineVariationId || historyDays.length < 2) return [];
     // The inherited decision metric is synthesized server-side and is NOT in
@@ -1915,7 +1882,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       // shape is worse than the shape; the deep read stays one
                       // click away for the times the shape raises a question
                       // the numbers can't answer.
-                      const rows = dailyRatesFor(key);
+                      const rows = improvementFor(key);
                       const m = statsEff?.metrics.find((x) => x.key === key);
                       const cell = m?.cells.find((c) => c.variationId === statsEff?.focusVariationId);
                       const earned = Boolean(cell?.liftCi && cell.liftCi.lo * cell.liftCi.hi > 0);
@@ -1924,7 +1891,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           <MetricChart
                             days={rows}
                             focusName={live?.variations.find((v) => v.variationId === statsEff?.focusVariationId)?.name ?? "variant"}
-                            baseName={live?.variations.find((v) => v.variationId === statsEff?.baselineVariationId)?.name ?? "control"}
                             earned={earned}
                           />
                           {deepObs[key]?.counting && (
