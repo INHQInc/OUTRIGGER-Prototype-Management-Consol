@@ -113,6 +113,35 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 - **Skill `delivery` scopes**: `"branch"` (default — materialized into prototype repos) vs `"console"` (system prompt for API-side Claude, never delivered to branches). `opmc-brief-author` is the first console skill — edit it in /skills and the drafting behavior follows. One library initializes every Claude in the product.
 - Requires `ANTHROPIC_API_KEY` (Vercel env; set 2026-07-24). Env vars only apply to NEW deployments — see RUNBOOK.
 
+## Which platform built it — ground truth, never the checkbox (2026-08-06)
+
+`buildMode: "console" | "external"` still governs the REPO machinery (provision,
+cut, push, brief-drift). It must NEVER decide what the analyst reads, because it
+is a checkbox someone has to remember to tick — and when it was wrong the
+console handed the analyst the repo's starter stub for an Optimizely-authored
+experiment, which then correctly reported that the variation changes nothing and
+made every mechanism read off it worthless.
+
+**Ask Optimizely what is actually live.** `OptimizelyClient.liveVariationBuild()`
+returns the variation's custom code AND its visual-editor changes. The deep-read
+path resolves in this order:
+
+1. live custom code in Optimizely → `codeSource: "optimizely"` (what guests got)
+2. no custom code but visual-editor changes → those edits ARE the build, and are
+   the only thing the analyst may reason from
+3. nothing in Optimizely and the prototype is console-built → the console's own
+   pushed artifact → `codeSource: "console"`
+4. nothing anywhere → the analyst must say the mechanism can't be read, not
+   invent one
+
+`codeSource` is part of the deep read's cache key, so a read taken from the repo
+stub cannot survive once Optimizely's live code becomes available.
+
+**`inertVariation`** is computed alongside it: code that touches no DOM API is
+flagged in danger tone on the read, because either the experiment measures a
+no-op or the console is looking at the wrong artifact. Both are worth
+interrupting for.
+
 ## Hard rules (invariants)
 
 - **Never hardcode a brand or site.** Everything is per-tenant/per-site config from the store. (Known debt: `lib/sites.ts` and the handoff patch generator still encode Outrigger specifics — the *ship* layer is not yet portable.)
@@ -121,6 +150,15 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 - **Snapshots are immutable** (PageVersion never edited; re-capture = new version). **ArtifactVersions are immutable** (append-only; carry a fixed code snapshot).
 - **Brand-level config, not env vars** for new integrations (Optimizely token/project live on the org).
 - **Schema changes go through `ddl()`** (race-safe).
+- **The analyst reads what is LIVE, not what a flag says.** Never gate the
+  variation code the analyst sees on `buildMode` — resolve it from Optimizely
+  first (see above).
+- **Compute the caveat; never ask a model for it.** Action-total composites,
+  one-armed surfaces, unreported plan events, an unsettled gap — all derived in
+  code. A caveat that depends on the model remembering it will go missing, and
+  two sections asked for "the caveats" write the same sentence twice.
+- **Never silently substitute a computed fallback.** Mark it (`ledeComputed`),
+  or a validator bug reads as a quality problem for a whole session.
 - **Vercel deploys of cloned pages are protected** (password + noindex + robots deny) — brand clones must never be publicly crawlable.
 - **Serverless constraints:** no writable FS (use the store), no `curl` binary, 300s max on capture. NOTE: plain Node `fetch` with a browser UA DOES reach prep.outrigger.com from Vercel (verified in prod — derive.ts fetches its CSS + SSR HTML this way). Firecrawl is still needed for a RENDERED snapshot (JS executed); raw `fetch` gets the SSR HTML, which is where embedded data islands live.
 

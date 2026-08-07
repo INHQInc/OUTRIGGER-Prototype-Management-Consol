@@ -1709,6 +1709,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this metric against the brief and what was built…</p>}
                         {deepObs[key] && (
                           <>
+                            {deepObs[key].inertVariation && (
+                              <div className="rounded-md border border-danger/50 bg-danger/5 px-3 py-2">
+                                <div className={`${ZH} mb-1 text-danger`}>The code this reads doesn&rsquo;t change the page</div>
+                                <p className="text-[14px] leading-[1.55] text-danger/90">
+                                  The variation running on this experiment touches nothing on the screen, so no mechanism can be read from it and any gap between the versions is who landed where rather than anything the change did. Check the variation in Optimizely before reading anything into these numbers.
+                                </p>
+                              </div>
+                            )}
                             {deepObs[key].headline && (
                               <p className="text-[17px] font-bold leading-snug max-w-[64ch]">{deepObs[key].headline}</p>
                             )}

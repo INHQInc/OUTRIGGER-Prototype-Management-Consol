@@ -230,6 +230,38 @@ export class OptimizelyClient {
     return this.getExperiment(experimentId);
   }
 
+  /**
+   * WHAT IS ACTUALLY LIVE on a variation, whoever authored it.
+   *
+   * The console used to decide what the analyst reads from `buildMode` — a
+   * checkbox someone has to remember to tick. When it was wrong, the analyst
+   * was handed the repo's starter stub for an experiment authored in
+   * Optimizely's editor, concluded the variation changes nothing, and every
+   * mechanism read off it was worthless. Ground truth beats a flag: ask
+   * Optimizely what the variation contains.
+   */
+  static liveVariationBuild(exp: OptiExperiment, variationId: string | number): {
+    customCode: string | null;
+    /** Visual-editor edits, summarized — for an editor-built experiment this
+     *  IS what was built, and it is all the analyst can reason from. */
+    editorChanges: string[];
+  } {
+    const v = (exp.variations ?? []).find((x) => Number(x.variation_id) === Number(variationId));
+    let customCode: string | null = null;
+    const editorChanges: string[] = [];
+    for (const a of v?.actions ?? []) {
+      for (const c of a.changes ?? []) {
+        if (c.type === "custom_code") {
+          if (typeof c.value === "string" && c.value.trim()) customCode = c.value;
+        } else {
+          const val = typeof c.value === "string" ? c.value.replace(/\s+/g, " ").trim().slice(0, 160) : "";
+          editorChanges.push(`${c.type}${val ? `: ${val}` : ""}`);
+        }
+      }
+    }
+    return { customCode, editorChanges: editorChanges.slice(0, 24) };
+  }
+
   /** The custom-code value currently on a variation (read-back verification). */
   static customCodeOf(exp: OptiExperiment, variationId: string | number): string | null {
     const v = (exp.variations ?? []).find((x) => Number(x.variation_id) === Number(variationId));

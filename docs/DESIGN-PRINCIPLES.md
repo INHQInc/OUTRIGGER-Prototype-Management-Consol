@@ -163,9 +163,92 @@ verify it, say so honestly ("pre-certification") rather than implying it.
 "Sync brief & skills to the branch", not "Branch content". If a label needs the
 description to be understood, the label is wrong.
 
+## 11. Refreshing is not broken
+
+Content that is being regenerated is still true, so it is never dimmed, covered
+or replaced by a spinner. The zone header says what it is doing and its rule
+pulses; the numbers stay legible the whole time. Two scrims over half a readout
+made a routine background rewrite look like a fault.
+
+*Origin: "this is super strange for the user" · "the overlay is terrible."*
+
+## 12. A readable measure, at any screen width
+
+A section either uses the width it has or holds a comfortable measure — never a
+line that runs the full width of a wide monitor. Prose over ~75 characters
+becomes a wall no matter how good it is, so a wide zone becomes COLUMNS rather
+than longer lines. Corollary: no section may stop two-thirds across while the
+one beneath it spans everything; two widths in one zone read as broken
+alignment.
+
+*Origin: "its a giant read and very hard to find something you read when you
+look back" · "use the space it has optimally."*
+
+## 13. The number lives with the sentence that explains it
+
+A row of lifts under a paragraph is a magnitude with no meaning, sitting between
+prose that gives it meaning and a table that gives it context. Each movement of
+a read carries its own figure. And the words never contain the number: the model
+names a METRIC KEY, the page resolves the live value, so a saved sentence can
+never quote a stale figure.
+
+## 14. Same shape, every time
+
+A readout is read repeatedly, across experiments, by people looking for the part
+they half-remember. The sections are therefore FIXED and identical everywhere —
+What the change did · Where the behaviour went · What it cost · Against the
+prediction — and each stands alone, so scanning one gives a complete thought.
+The cost of a fixed frame is a section with nothing to say; the answer is to say
+that plainly, never to invent content to fill it.
+
+## 15. Compute the caveat; never ask for it
+
+If the console can derive a warning, it states it. Action-total composites,
+one-armed surfaces, events the plan names that Optimizely isn't reporting, a gap
+that hasn't separated from the control — all computed. A caveat that depends on
+a model remembering to write it is a caveat that eventually goes missing, and
+two sections asked to "note the caveats" will write the same sentence twice.
+
+## 16. One control, one meaning
+
+When a control does two jobs, it does neither well and neither can be turned off
+independently. Type says what a metric is FOR (and drives the summary); the pin
+says whether it gets a written observation. Marking PROMOTES; it never
+suppresses — an unmarked metric still feeds the verdict and can still be raised
+as a contradiction, or the control becomes a way to curate a flattering readout
+by omission.
+
+## 17. No caps the product didn't ask for
+
+A limit is a product decision or it is storage hygiene — never a number picked
+for layout. If removing a cap strains something downstream (an LLM's output
+budget, a schema's maxItems), scale the downstream thing; do not clip the user's
+list and say nothing.
+
+*Origin: "the app is limiting the number of items i can pin and that should not
+happen."*
+
+## 18. A user action never rides a background job's gate
+
+Presentation writes — reorder, hide, type, pin — go on their own serialized
+chain with optimistic state, and answer on the same frame. They must never wait
+behind an analyst call: a click silently dropped by a busy gate reads as a
+ten-second lag, then as a broken control.
+
+*Origin: "clicking the pin icon is taking so long, no modality no spinner… BAD
+UX."*
+
+## 19. Never silently substitute the floor
+
+Every generated surface has a computed fallback. When one is used, SAY SO — the
+readout marks a computed summary, a dropped section is visibly absent. A silent
+substitution turns a validator bug into what looks like a quality problem, and
+nobody can tell which they are looking at.
+
 ---
 
 **The test before shipping any screen:** count how many times each fact appears
 (must be 1), check every section has the same card grammar, check every status
-element links somewhere, and read the tab row aloud — it should sound like a
-team describing the thing, not a process chart.
+element links somewhere, read the tab row aloud — it should sound like a team
+describing the thing, not a process chart — and check that no line of prose runs
+wider than about 75 characters.

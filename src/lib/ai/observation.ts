@@ -21,6 +21,14 @@ import { armEventsFor } from "../prototypes/results";
 
 export interface DeepObservation {
   metricKey: string;
+  /** THE CODE THE CONSOLE HOLDS FOR THIS VARIATION CHANGES NOTHING ON THE
+   *  PAGE — computed, not narrated. Either the experiment is measuring a
+   *  no-op, or this prototype was built in Optimizely's editor and never
+   *  marked as externally built, so the console is reading a starter stub and
+   *  every mechanism read from it is worthless. Both are worth interrupting
+   *  for; neither should be left for someone to notice inside one metric's
+   *  expansion. */
+  inertVariation?: boolean;
   /** Legacy fields — cached six-part reads still parse; nothing writes them. */
   headline?: string;
   /** WHAT THIS METRIC CAPTURES — the guest behaviour it counts. A definition,
@@ -86,6 +94,12 @@ export async function deepObservation(opts: {
   verdict: VerdictRecord | null;
   /** The built variation code, when the console built it — the UX itself. */
   variationJs?: string | null;
+  /** Visual-editor edits on the live variation. For an experiment built in
+   *  Optimizely's editor this IS what was built. */
+  editorChanges?: string[];
+  /** WHERE the code came from — what is live in Optimizely, or the console's
+   *  own artifact. Ground truth, not the buildMode checkbox. */
+  codeSource?: "optimizely" | "console" | "none";
   system: string;
   basisKey: string;
 }): Promise<DeepObservation> {
@@ -137,7 +151,13 @@ ${armName(focusId)}: ${rate(cell(focusId)?.rate)} · ${armName(baseId)} (control
 EVERY OTHER MEASURE, so you can place this one in the path:
 ${neighbours || "(none)"}
 
-${opts.variationJs ? `THE CODE THAT WAS ACTUALLY BUILT (read it to explain WHY guests behaved differently — what changed on the screen):\n${opts.variationJs.slice(0, 6000)}` : "(The variation was built in Optimizely, so its code is not available here — reason from the surfaces named above.)"}
+${opts.variationJs
+  ? `${opts.codeSource === "optimizely"
+      ? "THE CODE RUNNING LIVE ON THIS VARIATION IN OPTIMIZELY (this is what guests actually got — read it to explain WHY they behaved differently)"
+      : "THE CODE THIS CONSOLE BUILT AND PUSHED FOR THIS VARIATION (Optimizely reports no custom code of its own, so this is the best available account of what shipped)"}:\n${opts.variationJs.slice(0, 6000)}`
+  : opts.editorChanges?.length
+    ? `WHAT WAS BUILT IN OPTIMIZELY'S VISUAL EDITOR — there is no custom code, these edits ARE the change, and they are all you may reason from:\n${opts.editorChanges.map((c) => `- ${c}`).join("\n")}`
+    : "(Neither Optimizely nor this console holds anything showing what this variation changes, so the mechanism cannot be read off what was built — say so plainly rather than inventing one.)"}
 
 Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed.
 
@@ -188,6 +208,16 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
   // showing an error the reader cannot act on.
   mechanism = mechanism || `The console could not read a mechanism for this metric from what was built. How it is counted: ${howBuilt}`;
 
+  // DOES THE CODE WE HOLD ACTUALLY DO ANYTHING? A real variation touches the
+  // DOM. A starter placeholder writes to window and returns. Deliberately
+  // crude and only ever used to RAISE a question, never to suppress anything.
+  const inertVariation = Boolean(
+    !opts.editorChanges?.length
+    && opts.variationJs
+    && opts.variationJs.length > 40
+    && !/document\.|querySelector|insertAdjacent|innerHTML|appendChild|createElement|classList|setAttribute|\.style\b/.test(opts.variationJs),
+  );
+
   // HOW THIS IS COUNTED — assembled from facts, in the order that matters most
   // to a reader deciding how much weight to put on the number.
   const counting = (() => {
@@ -220,8 +250,11 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
     mechanism,
     rival: rival || undefined,
     counting: counting || undefined,
+    ...(inertVariation ? { inertVariation: true } : {}),
     generatedAt: new Date().toISOString(),
     // obs3: the read is two questions now, so every cached six-part one retires.
-    basisKey: `${opts.basisKey}|obs3`,
+    // obs4: the read now depends on WHICH build it saw, so a cached read from
+    // the repo stub must not survive once Optimizely's live code is available.
+    basisKey: `${opts.basisKey}|obs4|${opts.codeSource ?? "none"}`,
   };
 }

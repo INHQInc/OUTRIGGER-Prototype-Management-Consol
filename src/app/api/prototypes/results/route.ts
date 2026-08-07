@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getOptimizelyClientForOrg } from "@/lib/experimentation";
+import { OptimizelyClient } from "@/lib/optimizely/api";
 import {
   normalizeResults, getMetricMap, mutateMetricMap, recordDailySnapshot, windowedResults,
   type ExperimentResults, type CompositeMetric, type MetricMap, type ResultsHistory, pruneMeasureKeys, clearMetricMap, clearResultsHistory,
@@ -267,7 +268,7 @@ export async function GET(req: NextRequest) {
   const basis = basisFor(basisIn);
   const deepCache = JSON.parse((await (await getContentStore()).getFlag(`observations:${g.proto.key}`)) || "{}") as Record<string, { basisKey?: string }>;
   const obsBasis = obsBasisFor(basisIn);
-  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => v?.basisKey === `${obsBasis}|obs3`));
+  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => typeof v?.basisKey === "string" && v.basisKey.startsWith(`${obsBasis}|obs4`)));
   const attention = deriveAttention({
     verdict, stats, map: effMap, planDrift,
     resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
@@ -742,19 +743,40 @@ export async function POST(req: NextRequest) {
       const cached = JSON.parse((await store.getFlag(cacheKey)) || "{}") as Record<string, DeepObservation>;
       // The read is expensive and rarely changes — serve the cached one until
       // the same basis that retires the reading retires this too.
-      if (!body.deepDive.force && cached[key]?.basisKey === `${basis}|obs3`) {
+      if (!body.deepDive.force && cached[key]?.basisKey?.startsWith(`${basis}|obs4`)) {
         return NextResponse.json({ observation: cached[key] });
       }
 
-      const source = isExternalBuild(g.proto) ? null : await resolveRepoSource(g.proto.key).catch(() => null);
-      const variationJs = isExternalBuild(g.proto)
-        ? null
-        : source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
+      // WHAT THE ANALYST READS IS WHAT IS ACTUALLY LIVE — never a flag's
+      // opinion of who built it. `buildMode` is a checkbox someone has to
+      // remember to tick, and when it was wrong the analyst got the repo's
+      // starter stub for an Optimizely-authored experiment and concluded the
+      // variation changed nothing. Ask Optimizely first; fall back to the repo
+      // only when Optimizely has nothing to show.
+      let variationJs: string | null = null;
+      let editorChanges: string[] = [];
+      let codeSource: "optimizely" | "console" | "none" = "none";
+      const client = await getOptimizelyClientForOrg(g.orgId);
+      const expId = g.proto.experiment?.experimentId;
+      const varId = g.proto.experiment?.variationId;
+      if (client && expId && varId) {
+        const exp = await client.getExperiment(expId).catch(() => null);
+        if (exp) {
+          const live = OptimizelyClient.liveVariationBuild(exp, varId);
+          if (live.customCode) { variationJs = live.customCode; codeSource = "optimizely"; }
+          editorChanges = live.editorChanges;
+        }
+      }
+      if (!variationJs && !editorChanges.length && !isExternalBuild(g.proto)) {
+        const source = await resolveRepoSource(g.proto.key).catch(() => null);
+        variationJs = source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
+        if (variationJs) codeSource = "console";
+      }
       const { system } = await analystSkill(g.orgId);
 
       const observation = await deepObservation({
         metricKey: key, proto: g.proto, results: bundle.results, map, stats, verdict,
-        variationJs, system, basisKey: basis,
+        variationJs, editorChanges, codeSource, system, basisKey: basis,
       });
       await store.setFlag(cacheKey, JSON.stringify({ ...cached, [key]: observation })).catch(() => {});
       await audit(g.orgId, actor, "results.observation-read", g.proto.name, (observation.headline ?? observation.mechanism).slice(0, 200));
