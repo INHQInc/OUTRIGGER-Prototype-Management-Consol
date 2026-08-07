@@ -1450,11 +1450,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           </div>
           )}
 
-          {/* ── WHAT WE'RE SEEING — the analyst's voice, kept apart from the
+          {/* ── THE READ — the analyst's interpretation, kept apart from the
                  computed call above it so the two are never confused. ── */}
           {live && (story.headline || story.lede) && (
             <div>
-              {zoneHeader("What we're seeing",
+              {zoneHeader("The read",
                 <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
                   {reading?.ledeComputed && (
                     <span className="text-warn/80 mr-2" title="The analyst's paragraph was rejected by the format rules (a digit, over-length, or statistics vocabulary) and the console's computed summary is showing instead. Re-read to try again.">
@@ -1633,10 +1633,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             );
           })()}
 
-          {/* ── OBSERVATIONS — the supporting metrics. Noticed, never judged. ── */}
+          {/* ── METRIC BY METRIC — one note per observed metric. Noticed,
+                 never judged: the verdict reads the decision metric alone. ── */}
           {observed.length > 0 && (
             <div>
-              {zoneHeader("Observations", undefined, "observations", busy === "reading" ? "updating" : undefined)}
+              {zoneHeader("Metric by metric", undefined, "observations", busy === "reading" ? "updating" : undefined)}
               <div className="divide-y divide-border/40">
                 {observed.map((key) => {
                   const o = observationFor(key);
