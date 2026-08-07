@@ -1484,7 +1484,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 </span>, undefined, busy === "reading" ? "rewriting" : undefined)}
               <div className="space-y-2">
                 {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
-                {story.read ? (
+                {story.read && Object.values(story.read).some(Boolean) ? (
                   // FIXED SECTIONS, same four every time. The prose was good and
                   // still unscannable: one block you cannot re-enter at the part
                   // you half-remember.
@@ -1494,7 +1494,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       ["Where the behaviour went", story.read.shift],
                       ["What it cost", story.read.cost],
                       ["Against the prediction", story.read.prediction],
-                    ] as const).map(([label, text]) => (
+                    ] as const).filter(([, text]) => Boolean(text)).map(([label, text]) => (
                       <div key={label} className="min-w-0">
                         <div className={`${ZH} mb-1`}>{label}</div>
                         <p className="text-[14.5px] leading-relaxed text-foreground/90">{text}</p>

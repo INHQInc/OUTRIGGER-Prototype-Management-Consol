@@ -831,6 +831,7 @@ Give the READING for hotel executives: a HEADLINE (the story in one line), THE F
 
 THE FOUR MOVEMENTS — the same four in every experiment, so a reader learns the shape once:
 · effect — what the change did to the thing it was aimed at.
+Each section is at most 420 characters and carries NO DIGITS — a section that breaks either rule is dropped from the readout, so keep them short and wordy-not-numeric.
 · shift — where that behaviour went, and how far along the path it got.
 · cost — what softened, what is being traded, or where intent is leaking. If nothing measurably gave way, say that rather than inventing a cost.
 · prediction — what the brief claimed, which half is settled and which isn't.
@@ -899,10 +900,14 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   }
   // THE FOUR MOVEMENTS. Every experiment gets the same shape, so a reader
   // learns it once and can scan straight back to the part they remember.
-  const sec = (v: unknown) => clean(v, 300);
+  // PARTIAL IS FINE. Requiring all four to validate meant one overlong or
+  // digit-bearing section quietly collapsed the whole structure back to a wall
+  // of prose — the reader sees a formatting regression and no reason for it.
+  // Whatever passed is rendered; only an empty set falls back.
+  const sec = (v: unknown) => clean(v, 420);
   const read = (() => {
-    const effect = sec(raw.effect), shift = sec(raw.shift), cost = sec(raw.cost), prediction = sec(raw.prediction);
-    return effect && shift && cost && prediction ? { effect, shift, cost, prediction } : undefined;
+    const r = { effect: sec(raw.effect), shift: sec(raw.shift), cost: sec(raw.cost), prediction: sec(raw.prediction) };
+    return Object.values(r).some(Boolean) ? r : undefined;
   })();
   const ledeComputed = !lede && !read;
   headline = headline || fallback.headline;
