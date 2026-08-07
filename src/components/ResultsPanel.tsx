@@ -196,6 +196,67 @@ function Toast({ text, onDone }: { text: string; onDone: () => void }) {
   );
 }
 
+
+/**
+ * THE METRIC ACROSS THE RUN — both arms, day by day.
+ *
+ * Replaces the written expansion: a paragraph explaining a shape is worse than
+ * the shape. Snapshots are CUMULATIVE, so each day's rate is derived from the
+ * DIFFERENCE against the previous day — plotting the cumulative figure draws a
+ * smooth curve that flattens by construction and hides exactly the volatility
+ * a reader opened the chart to see.
+ */
+function MetricChart({ days, focusName, baseName, earned }: {
+  days: { date: string; focusRate: number; baseRate: number }[];
+  focusName: string;
+  baseName: string;
+  earned: boolean;
+}) {
+  if (days.length < 2) {
+    return <p className="text-[13px] text-muted-2">Not enough day-by-day data yet to draw the run — the console keeps one snapshot per day.</p>;
+  }
+  const W = 1000, H = 200, L = 44, R = 12, T = 12, B = 26;
+  const hi = Math.max(...days.flatMap((d) => [d.focusRate, d.baseRate]), 0.0001);
+  const top = hi * 1.15;
+  const x = (i: number) => L + (i * (W - L - R)) / Math.max(1, days.length - 1);
+  const y = (v: number) => T + (1 - v / top) * (H - T - B);
+  const path = (pick: (d: (typeof days)[number]) => number) =>
+    days.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(pick(d)).toFixed(1)}`).join(" ");
+  const ticks = [0, top / 2, top];
+  const pctOf = (v: number) => `${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}%`;
+  return (
+    <figure className="m-0">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[200px]" role="img"
+        aria-label={`${focusName} versus ${baseName}, daily rate across the run`}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} className="stroke-border/50" strokeWidth={1} />
+            <text x={L - 8} y={y(t) + 4} textAnchor="end" className="fill-muted-2 text-[11px] tabular-nums">{pctOf(t)}</text>
+          </g>
+        ))}
+        <path d={path((d) => d.baseRate)} fill="none" strokeWidth={2} className="stroke-muted-2/70" />
+        <path d={path((d) => d.focusRate)} fill="none" strokeWidth={2.5} className={earned ? "stroke-ok" : "stroke-foreground/70"} />
+        {days.map((d, i) => (
+          <g key={d.date}>
+            <circle cx={x(i)} cy={y(d.focusRate)} r={2.5} className={earned ? "fill-ok" : "fill-foreground/70"} />
+            <circle cx={x(i)} cy={y(d.baseRate)} r={2.5} className="fill-muted-2/70" />
+            <title>{`${d.date} — ${focusName} ${pctOf(d.focusRate)} · ${baseName} ${pctOf(d.baseRate)}`}</title>
+          </g>
+        ))}
+        <text x={L} y={H - 8} className="fill-muted-2 text-[11px] tabular-nums">{days[0].date}</text>
+        <text x={W - R} y={H - 8} textAnchor="end" className="fill-muted-2 text-[11px] tabular-nums">{days[days.length - 1].date}</text>
+      </svg>
+      <figcaption className="flex items-center gap-4 text-[12.5px] text-muted-2 mt-1">
+        <span className="flex items-center gap-1.5">
+          <span className={`inline-block w-3 h-[2px] ${earned ? "bg-ok" : "bg-foreground/70"}`} />{focusName}
+        </span>
+        <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-[2px] bg-muted-2/70" />{baseName}</span>
+        <span className="ml-auto">each point is that day alone, not the running total</span>
+      </figcaption>
+    </figure>
+  );
+}
+
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" | "chevron" }) {
   if (kind === "chevron") {
     return (
@@ -574,10 +635,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     });
   }
 
-  async function openObservation(key: string) {
-    if (openObs === key) { setOpenObs(null); return; }
+  // Opening a row draws its chart — free, from snapshots already in memory.
+  // The written read costs an Opus call, so it is only made when asked for.
+  async function openObservation(key: string, wantRead = false) {
+    if (openObs === key && !wantRead) { setOpenObs(null); return; }
     setOpenObs(key);
-    if (deepObs[key] || obsBusy) return;
+    if (!wantRead || deepObs[key] || obsBusy) return;
     setObsBusy(key); setErr(null);
     try {
       const res = await fetch("/api/prototypes/results", {
@@ -1223,6 +1286,37 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // What this metric has actually DONE, day by day, from the console's own
   // snapshots — the same source the primary's trend line uses. Deterministic:
   // an observation should never depend on the analyst noticing a shape.
+  // PER-DAY rates for both arms. Snapshots are cumulative totals, so each day
+  // is the DIFFERENCE from the day before — the honest daily figure. A negative
+  // difference means Optimizely restated its totals; that day is dropped rather
+  // than drawn as a dip that never happened.
+  const dailyRatesFor = (key: string): { date: string; focusRate: number; baseRate: number }[] => {
+    const focusId = statsEff?.focusVariationId, baseId = statsEff?.baselineVariationId;
+    if (!focusId || !baseId || historyDays.length < 2) return [];
+    const comp = map?.composites.find((c) => `composite:${c.id}` === key)
+      ?? (decision && key === decision.key ? { events: decision.events, armEvents: decision.armEvents } : undefined);
+    const rawName = key.startsWith("metric:") ? key.slice(7) : null;
+    const totals = historyDays.map((day) => {
+      const visitors = (id: string) => day.variations.find((v) => v.variationId === id)?.visitors ?? 0;
+      const conv = (id: string) => {
+        const names = comp ? (comp.armEvents?.find((a) => a.variationId === id)?.events ?? comp.events) : rawName ? [rawName] : [];
+        return names.reduce((sum, n) => {
+          const row = resolveMetricRow(n, { metrics: day.metrics } as ExperimentResults);
+          return sum + (row?.perVariation.find((r) => r.variationId === id)?.conversions ?? 0);
+        }, 0);
+      };
+      return { date: day.date, fN: visitors(focusId), bN: visitors(baseId), fC: conv(focusId), bC: conv(baseId) };
+    });
+    const out: { date: string; focusRate: number; baseRate: number }[] = [];
+    for (let i = 1; i < totals.length; i++) {
+      const d = totals[i], p = totals[i - 1];
+      const fN = d.fN - p.fN, bN = d.bN - p.bN, fC = d.fC - p.fC, bC = d.bC - p.bC;
+      if (fN <= 0 || bN <= 0 || fC < 0 || bC < 0) continue;
+      out.push({ date: d.date, focusRate: fC / fN, baseRate: bC / bN });
+    }
+    return out;
+  };
+
   const seriesFor = (key: string): TrendPoint[] => {
     if (!statsEff?.focusVariationId || !statsEff?.baselineVariationId || historyDays.length < 2) return [];
     // The inherited decision metric is synthesized server-side and is NOT in
@@ -1746,34 +1840,31 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </span>
                     </div>
 
-                    {openObs === key && (
-                      <div className="mt-2 ml-[5.75rem] md:ml-[11.5rem] rounded-lg border border-border bg-background/50 px-5 py-4 space-y-2.5">
-                        {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this metric against the brief and what was built…</p>}
-                        {deepObs[key] && (
-                          <>
-                            {deepObs[key].inertVariation && (
-                              <div className="rounded-md border border-danger/50 bg-danger/5 px-3 py-2">
-                                <div className={`${ZH} mb-1 text-danger`}>The code this reads doesn&rsquo;t change the page</div>
-                                <p className="text-[14px] leading-[1.55] text-danger/90">
-                                  The variation running on this experiment touches nothing on the screen, so no mechanism can be read from it and any gap between the versions is who landed where rather than anything the change did. Check the variation in Optimizely before reading anything into these numbers.
-                                </p>
-                              </div>
-                            )}
-                            {deepObs[key].headline && (
-                              <p className="text-[17px] font-bold leading-snug max-w-[64ch]">{deepObs[key].headline}</p>
-                            )}
-
-                            {/* TWO QUESTIONS the row cannot answer for itself.
-                                What happened, what it means and what to watch
-                                were all on screen already — in the row above, in
-                                THE READ, and in the numbers — so six sections of
-                                prose were mostly the page repeating itself. */}
-                            <div className="grid gap-x-10 gap-y-4 lg:grid-cols-2 pt-1">
+                    {openObs === key && (() => {
+                      // THE EXPANSION IS THE RUN. A written explanation of a
+                      // shape is worse than the shape; the deep read stays one
+                      // click away for the times the shape raises a question
+                      // the numbers can't answer.
+                      const rows = dailyRatesFor(key);
+                      const m = statsEff?.metrics.find((x) => x.key === key);
+                      const cell = m?.cells.find((c) => c.variationId === statsEff?.focusVariationId);
+                      const earned = Boolean(cell?.liftCi && cell.liftCi.lo * cell.liftCi.hi > 0);
+                      return (
+                        <div className="mt-2 ml-[5.75rem] md:ml-[11.5rem] rounded-lg border border-border bg-background/50 px-5 py-4 space-y-3">
+                          <MetricChart
+                            days={rows}
+                            focusName={live?.variations.find((v) => v.variationId === statsEff?.focusVariationId)?.name ?? "variant"}
+                            baseName={live?.variations.find((v) => v.variationId === statsEff?.baselineVariationId)?.name ?? "control"}
+                            earned={earned}
+                          />
+                          {deepObs[key]?.counting && (
+                            <p className="text-[13px] leading-[1.55] text-warn">{deepObs[key].counting}</p>
+                          )}
+                          {deepObs[key] ? (
+                            <div className="grid gap-x-10 gap-y-4 lg:grid-cols-2 pt-1 border-t border-border/50">
                               {([
                                 ["Why", deepObs[key].mechanism, "text-foreground/90"],
                                 ["Why it might not be that", deepObs[key].rival, "text-muted"],
-                                ["What happened", deepObs[key].observation, "text-foreground/90"],
-                                ["What it means", deepObs[key].implication, "text-foreground/90"],
                               ] as const).filter(([, text]) => Boolean(text)).map(([label, text, tone]) => (
                                 <div key={label} className="min-w-0">
                                   <div className={`${ZH} mb-1 text-muted-2`}>{label}</div>
@@ -1781,38 +1872,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                                 </div>
                               ))}
                             </div>
-                            {/* a cached read from the previous single-paragraph form */}
-                            {!deepObs[key].observation && deepObs[key].read && (
-                              <p className="text-[14px] leading-[1.55] text-foreground/90 max-w-[80ch]">{deepObs[key].read}</p>
-                            )}
-                            {/* The caution and the next move are a different KIND
-                                of statement from the analysis — they sit below a
-                                rule rather than reading as a fifth paragraph. */}
-                            {(deepObs[key].counting || deepObs[key].caution || deepObs[key].watch) && (
-                              <div className="grid gap-x-10 gap-y-2.5 lg:grid-cols-2 pt-3 mt-1 border-t border-border/50">
-                                {(deepObs[key].counting || deepObs[key].caution) && (
-                                  <div className="min-w-0">
-                                    <div className={`${ZH} mb-1 text-warn/80`}>How this is counted</div>
-                                    <p className="text-[14px] leading-[1.55] text-warn">{deepObs[key].counting ?? deepObs[key].caution}</p>
-                                  </div>
-                                )}
-                                {deepObs[key].watch && (
-                                  <div className="min-w-0">
-                                    <div className={`${ZH} mb-1 text-muted-2`}>Watch next</div>
-                                    <p className="text-[14px] leading-[1.55] text-muted">{deepObs[key].watch}</p>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            <div className="text-[12.5px] text-muted-2 print:hidden">
-                              read {deepObs[key].generatedAt.slice(11, 16)} ·{" "}
-                              <button onClick={() => { setDeepObs((c) => { const n = { ...c }; delete n[key]; return n; }); void openObservation(key); void openObservation(key); }}
-                                className="text-accent hover:text-accent-hover font-medium">re-read</button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
+                          ) : (
+                            <button onClick={() => void openObservation(key, true)} disabled={obsBusy === key}
+                              className="text-[12.5px] font-medium text-accent hover:text-accent-hover disabled:opacity-50 print:hidden">
+                              {obsBusy === key ? "reading the shipped code…" : "Why did this happen? →"}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                     </div>
                   );
                 })}
