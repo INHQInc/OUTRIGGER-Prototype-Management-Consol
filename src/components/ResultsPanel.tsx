@@ -1354,6 +1354,46 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // What this metric has actually DONE, day by day, from the console's own
   // snapshots — the same source the primary's trend line uses. Deterministic:
   // an observation should never depend on the analyst noticing a shape.
+  // IMPROVEMENT OVER TIME, straight off the cumulative snapshots: each point is
+  // the whole run to that date, so the line ends on the reported lift. Each
+  // day ALONE rides along as dailyLift for the day-by-day view.
+  const improvementFor = (key: string): { date: string; lift: number; dailyLift?: number }[] => {
+    const focusId = statsEff?.focusVariationId, baseId = statsEff?.baselineVariationId;
+    if (!focusId || !baseId || historyDays.length < 2) return [];
+    const comp = map?.composites.find((c) => `composite:${c.id}` === key)
+      ?? (decision && key === decision.key ? { events: decision.events, armEvents: decision.armEvents } : undefined);
+    const rawName = key.startsWith("metric:") ? key.slice(7) : null;
+    const totals = historyDays.map((day) => {
+      const visitors = (id: string) => day.variations.find((v) => v.variationId === id)?.visitors ?? 0;
+      const conv = (id: string) => {
+        const names = comp ? (comp.armEvents?.find((a) => a.variationId === id)?.events ?? comp.events) : rawName ? [rawName] : [];
+        return names.reduce((sum, n) => {
+          const row = resolveMetricRow(n, { metrics: day.metrics } as ExperimentResults);
+          return sum + (row?.perVariation.find((r) => r.variationId === id)?.conversions ?? 0);
+        }, 0);
+      };
+      return { date: day.date, fN: visitors(focusId), bN: visitors(baseId), fC: conv(focusId), bC: conv(baseId) };
+    });
+    const out: { date: string; lift: number; dailyLift?: number }[] = [];
+    for (let i = 0; i < totals.length; i++) {
+      const d = totals[i];
+      if (!d.fN || !d.bN) continue;
+      const bRate = d.bC / d.bN;
+      if (bRate <= 0) continue;
+      const lift = d.fC / d.fN / bRate - 1;
+      // A negative difference means Optimizely restated its totals — that day
+      // is left out rather than drawn as a fall that never happened.
+      let dailyLift: number | undefined;
+      const p = totals[i - 1];
+      if (p) {
+        const fN = d.fN - p.fN, bN = d.bN - p.bN, fC = d.fC - p.fC, bC = d.bC - p.bC;
+        if (fN > 0 && bN > 0 && fC >= 0 && bC >= 0 && bC / bN > 0) dailyLift = fC / fN / (bC / bN) - 1;
+      }
+      out.push({ date: d.date, lift, ...(dailyLift !== undefined ? { dailyLift } : {}) });
+    }
+    return out;
+  };
+
   const seriesFor = (key: string): TrendPoint[] => {
     if (!statsEff?.focusVariationId || !statsEff?.baselineVariationId || historyDays.length < 2) return [];
     // The inherited decision metric is synthesized server-side and is NOT in
