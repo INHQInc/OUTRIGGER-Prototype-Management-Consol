@@ -2007,8 +2007,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             </details>
           )}
 
-          {/* ── Z(G) · ALL MEASURES — every metric, the user's own order ── */}
-          <div>
+          {/* ── Z(G) · ALL MEASURES — every metric, the user's own order.
+                 SCREEN ONLY: it is the operating table (drag, type, pin, hide),
+                 and on paper it added a fourth page of rows nobody reads after
+                 the read and the per-metric notes have already said it. ── */}
+          <div className="print:hidden">
             {zoneHeader("All metrics",
               <span className="ml-auto flex items-center gap-4 print:hidden">
                 <button onClick={() => setBuilder({ editing: null })} disabled={!live}

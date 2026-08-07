@@ -128,11 +128,16 @@ body {
    repeats per sheet, and the @page margin reserves the room for it so it never
    lands on top of content. The screen never shows any of this. */
 @media print {
-  @page { margin: 14mm 12mm 20mm; }
+  /* ZERO PAGE MARGIN kills the browser's own header and footer — the
+     "8/7/26, 2:22 PM" and the document title Chrome draws in the margin box.
+     CSS cannot switch those off directly; leaving no margin to draw them in
+     is what removes them. The report supplies its own padding instead. */
+  @page { margin: 0; }
+  .print-report { padding: 14mm 12mm 20mm !important; }
   .print-legal { display: block !important; }
   .print-legal-footer {
     position: fixed;
-    bottom: 0; left: 0; right: 0;
+    bottom: 6mm; left: 12mm; right: 12mm;
     padding-top: 4px;
     border-top: 1px solid #d5dbe2;
     font-size: 7.5pt;
