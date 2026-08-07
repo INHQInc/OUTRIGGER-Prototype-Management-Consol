@@ -212,6 +212,7 @@ function MetricChart({ days, focusName, baseName, earned }: {
   baseName: string;
   earned: boolean;
 }) {
+  const [hover, setHover] = useState<number | null>(null);
   if (days.length < 2) {
     return <p className="text-[13px] text-muted-2">Not enough day-by-day data yet to draw the run — the console keeps one snapshot per day.</p>;
   }
@@ -224,10 +225,33 @@ function MetricChart({ days, focusName, baseName, earned }: {
     days.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(pick(d)).toFixed(1)}`).join(" ");
   const ticks = [0, top / 2, top];
   const pctOf = (v: number) => `${(v * 100).toFixed(v * 100 < 10 ? 1 : 0)}%`;
+  const at = hover !== null ? days[hover] : null;
+  // Nearest-point tracking across the WHOLE plot, not hit-testing the dots: a
+  // 2.5px circle is not a target, and the question being asked is "what was it
+  // on this day", which the x position alone answers.
+  const track = (clientX: number, el: SVGSVGElement) => {
+    const box = el.getBoundingClientRect();
+    const vx = ((clientX - box.left) / box.width) * W;
+    const i = Math.round(((vx - L) / (W - L - R)) * (days.length - 1));
+    setHover(Math.max(0, Math.min(days.length - 1, i)));
+  };
   return (
-    <figure className="m-0">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[200px]" role="img"
-        aria-label={`${focusName} versus ${baseName}, daily rate across the run`}>
+    <figure className="m-0 relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[200px] touch-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 rounded"
+        role="img" tabIndex={0}
+        aria-label={`${focusName} versus ${baseName}, daily rate across the run`}
+        onPointerMove={(e) => track(e.clientX, e.currentTarget)}
+        onPointerDown={(e) => track(e.clientX, e.currentTarget)}
+        onPointerLeave={() => setHover(null)}
+        onBlur={() => setHover(null)}
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          e.preventDefault();
+          setHover((h) => {
+            const next = (h ?? days.length - 1) + (e.key === "ArrowRight" ? 1 : -1);
+            return Math.max(0, Math.min(days.length - 1, next));
+          });
+        }}>
         {ticks.map((t) => (
           <g key={t}>
             <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} className="stroke-border/50" strokeWidth={1} />
@@ -236,16 +260,39 @@ function MetricChart({ days, focusName, baseName, earned }: {
         ))}
         <path d={path((d) => d.baseRate)} fill="none" strokeWidth={2} className="stroke-muted-2/70" />
         <path d={path((d) => d.focusRate)} fill="none" strokeWidth={2.5} className={earned ? "stroke-ok" : "stroke-foreground/70"} />
+        {at && (
+          <line x1={x(hover!)} x2={x(hover!)} y1={T} y2={H - B} className="stroke-border-strong" strokeWidth={1} strokeDasharray="3 3" />
+        )}
         {days.map((d, i) => (
           <g key={d.date}>
-            <circle cx={x(i)} cy={y(d.focusRate)} r={2.5} className={earned ? "fill-ok" : "fill-foreground/70"} />
-            <circle cx={x(i)} cy={y(d.baseRate)} r={2.5} className="fill-muted-2/70" />
-            <title>{`${d.date} — ${focusName} ${pctOf(d.focusRate)} · ${baseName} ${pctOf(d.baseRate)}`}</title>
+            <circle cx={x(i)} cy={y(d.focusRate)} r={hover === i ? 4.5 : 2.5} className={earned ? "fill-ok" : "fill-foreground/70"} />
+            <circle cx={x(i)} cy={y(d.baseRate)} r={hover === i ? 4.5 : 2.5} className="fill-muted-2/70" />
           </g>
         ))}
         <text x={L} y={H - 8} className="fill-muted-2 text-[11px] tabular-nums">{days[0].date}</text>
         <text x={W - R} y={H - 8} textAnchor="end" className="fill-muted-2 text-[11px] tabular-nums">{days[days.length - 1].date}</text>
       </svg>
+      {at && (
+        <div className="pointer-events-none absolute top-0 -translate-x-1/2 rounded-md border border-border bg-surface px-2.5 py-1.5 shadow-lg text-[12.5px] whitespace-nowrap"
+          style={{ left: `${Math.min(88, Math.max(12, (x(hover!) / W) * 100))}%` }}>
+          <div className="font-semibold text-foreground tabular-nums">{at.date}</div>
+          <div className="flex items-center gap-1.5 tabular-nums">
+            <span className={`inline-block w-2.5 h-[2px] ${earned ? "bg-ok" : "bg-foreground/70"}`} />
+            <span className="text-muted">{focusName}</span>
+            <span className="font-semibold text-foreground ml-auto">{pctOf(at.focusRate)}</span>
+          </div>
+          <div className="flex items-center gap-1.5 tabular-nums">
+            <span className="inline-block w-2.5 h-[2px] bg-muted-2/70" />
+            <span className="text-muted">{baseName}</span>
+            <span className="font-semibold text-foreground ml-auto">{pctOf(at.baseRate)}</span>
+          </div>
+          <div className="text-muted-2 tabular-nums pt-0.5">
+            {at.baseRate > 0
+              ? `${at.focusRate / at.baseRate - 1 >= 0 ? "+" : ""}${(((at.focusRate / at.baseRate) - 1) * 100).toFixed(1)}% that day`
+              : "no control activity that day"}
+          </div>
+        </div>
+      )}
       <figcaption className="flex items-center gap-4 text-[12.5px] text-muted-2 mt-1">
         <span className="flex items-center gap-1.5">
           <span className={`inline-block w-3 h-[2px] ${earned ? "bg-ok" : "bg-foreground/70"}`} />{focusName}
