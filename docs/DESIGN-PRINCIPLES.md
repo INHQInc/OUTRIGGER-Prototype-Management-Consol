@@ -231,6 +231,18 @@ The flag only fires when the metric genuinely combines more than one event: a
 one-event composite is the event under another name, and flagging it would
 train the reader to ignore the flag.
 
+## 14d. The reader never hears about our plumbing
+
+A readout describes the change and what guests did about it. It never mentions
+where the change was authored, which system holds it, or how the console
+obtained it — no visual editor, no custom code, no artifact, no push, no repo.
+Labelling the model's INPUTS by provenance is what invites this: it starts
+reasoning aloud about the scaffolding. Give it one block called "what the new
+version changes on the page" and the tooling disappears from the prose.
+
+*Origin: "we dont care where the change was made this is about the change and
+the impact thats all."*
+
 ## 15. Compute the caveat; never ask for it
 
 If the console can derive a warning, it states it. Action-total composites,

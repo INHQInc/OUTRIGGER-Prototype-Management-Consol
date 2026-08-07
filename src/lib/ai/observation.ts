@@ -152,24 +152,24 @@ EVERY OTHER MEASURE, so you can place this one in the path:
 ${neighbours || "(none)"}
 
 ${[
-  opts.variationJs
-    ? `${opts.codeSource === "optimizely"
-        ? "THE CODE RUNNING LIVE ON THIS VARIATION IN OPTIMIZELY (this is what guests actually got)"
-        : "THE CODE THIS CONSOLE PUSHED AND VERIFIED FOR THIS VARIATION"}:\n${opts.variationJs.slice(0, 6000)}`
-    : "",
-  // A variation can carry BOTH custom code and visual-editor edits. Treating
-  // them as alternatives dropped whichever came second, and for an
-  // editor-built experiment that was the entire change.
-  opts.editorChanges?.length
-    ? `VISUAL-EDITOR EDITS ON THIS VARIATION — these are part of what shipped, and for an editor-built experiment they ARE the change:\n${opts.editorChanges.map((c) => `- ${c}`).join("\n")}`
-    : "",
-].filter(Boolean).join("\n\n") || "(NOTHING VERIFIED IS AVAILABLE about what this variation changes: Optimizely reports no custom code and no editor edits, and this console has no verified push of its own. Say plainly that the mechanism cannot be read because what shipped cannot be confirmed — never guess from the brief, and never describe code you were not shown.)"}
-${opts.variationJs && opts.editorChanges?.length ? "NOTE: the custom code and the editor edits are BOTH live. If the code does nothing, the editor edits are where the change actually is — read those." : ""}
+  // ONE block, whatever the change was authored with. Labelling these
+  // separately taught the model to narrate the plumbing — "read against the
+  // visual-editor edits", "the placeholder describes a different artifact" —
+  // which is the console talking about itself in a readout for a hotel.
+  opts.variationJs ? opts.variationJs.slice(0, 6000) : "",
+  opts.editorChanges?.length ? opts.editorChanges.map((c) => `- ${c}`).join("\n") : "",
+].filter(Boolean).join("\n\n")
+  ? `WHAT THE NEW VERSION CHANGES ON THE PAGE — everything below is live for guests in this version. Some of it may be inert; take the parts that actually alter the screen and ignore the rest.\n${[
+      opts.variationJs ? opts.variationJs.slice(0, 6000) : "",
+      opts.editorChanges?.length ? opts.editorChanges.map((c) => `- ${c}`).join("\n") : "",
+    ].filter(Boolean).join("\n\n")}`
+  : "(Nothing available shows what this version changes on the page. Say plainly that the mechanism cannot be read — never guess from the brief, and never describe a change you were not shown.)"}
 
 Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed.
 
 Then answer ONLY the two questions this metric's own numbers cannot:
-  WHY — the mechanism, read off what was actually built. Name the thing on the screen that changed and how it altered the path. If the code and the surfaces do not support an explanation, say the mechanism is unclear rather than inventing one.
+  WHY — the mechanism, written as a guest's experience of the page. Name the thing ON THE SCREEN that changed and how it altered where they went next. If what you were shown does not support an explanation, say the mechanism is unclear rather than inventing one.
+  NEVER mention HOW OR WHERE the change was made or how this console knows about it: no visual editor, no custom code, no artifact, no placeholder, no push, no repository, no console. A hotel executive is reading this and does not care which tool the change was typed into — only what changed on the page and what guests did about it. A sentence a reader could not act on because it is about our tooling is a failed sentence.
   WHY IT MIGHT NOT BE THAT — the strongest competing explanation for the same behaviour. A mechanism offered without a rival is a story rather than an analysis, so give it unless none is credible.
 Do NOT describe what happened, restate the movement, or say what it means for the business: the console prints the numbers, the trend and the whole-experiment read already, and repeating them is what made this section too long to read.
 NO DIGITS in your words — every number is printed beside your sentences and would go stale the moment the counts move. No statistics vocabulary: no significance, no sample size, no confidence, no days remaining. Do not give a verdict on the experiment; that belongs to the decision metric and the console computes it.`,
@@ -262,6 +262,6 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
     // obs3: the read is two questions now, so every cached six-part one retires.
     // obs4: the read now depends on WHICH build it saw, so a cached read from
     // the repo stub must not survive once Optimizely's live code is available.
-    basisKey: `${opts.basisKey}|obs6|${opts.codeSource ?? "none"}`,
+    basisKey: `${opts.basisKey}|obs7|${opts.codeSource ?? "none"}`,
   };
 }
