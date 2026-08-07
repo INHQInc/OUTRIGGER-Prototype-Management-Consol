@@ -87,6 +87,11 @@ export interface PreRegistration {
   /** True when the console adjudicated a nomination the team never ratified
    *  (no confirmed measurement plan). Judged, and said out loud. */
   primaryUnratified?: boolean;
+  /** WHICH WAY A WIN WAS DECLARED, and whether that was declared after the
+   *  data was already in — flipping it post-hoc turns a refutation into a
+   *  confirmation, so it is disclosed, never silent. */
+  predictedDirection?: "increase" | "decrease";
+  directionChangedAfterObservation?: { was: string; at: string };
   /** The decision metric was SWAPPED after observation began. */
   primaryChangedAfterObservation?: { was: string; at: string };
 }
@@ -253,12 +258,17 @@ export function deriveVerdict(opts: {
   // WHERE the decision metric came from rides with every disclosure: a record
   // that judged Optimizely's own primary must say so wherever it is read.
   const primaryDecl = map?.composites.find((c) => c.role === "primary");
+  const lateDirection = (map?.directionHistory ?? [])
+    .filter((h) => opts.firstObservedDate && h.at.slice(0, 10) > opts.firstObservedDate)
+    .pop();
   const mapDisclosure = {
     mapConfirmedAt: opts.mapConfirmedAt,
     mapConfirmedAfterObservation:
       Boolean(opts.mapConfirmedAt && opts.firstObservedDate && opts.mapConfirmedAt.slice(0, 10) > opts.firstObservedDate),
     primaryChangedAfterObservation: lateSwap ? { was: lateSwap.from, at: lateSwap.at } : undefined,
     primarySource: primaryDecl ? (primaryDecl.source === "optimizely" ? "optimizely" as const : "console" as const) : undefined,
+    predictedDirection: primaryDecl?.direction ?? "increase" as const,
+    directionChangedAfterObservation: lateDirection ? { was: lateDirection.from, at: lateDirection.at } : undefined,
     primaryUnratified: primaryDecl && primaryDecl.source !== "optimizely" && !map?.confirmed ? true : undefined,
   };
 
@@ -481,7 +491,7 @@ export function deriveVerdict(opts: {
   const significant = cell.p < T.alpha;
   gates.push({
     id: "direction",
-    title: `Moved in the predicted direction (${primary.direction ?? "increase"})`,
+    title: `Moved the way the experiment predicted (${primary.direction === "decrease" ? "down" : "up"})`,
     pass: movedGoodWay,
     detail: `Primary lift ${pct(cell.lift)}${cell.liftCi ? ` (CI ${pct(cell.liftCi.lo)} … ${pct(cell.liftCi.hi)})` : ""}.`,
   });

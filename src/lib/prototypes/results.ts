@@ -205,6 +205,16 @@ export interface MetricMap {
    *  adjudicated. The verdict still reads the decision metric alone.
    *  OBSERVATIONS ONLY: what the readout's summary is ABOUT is `roles`. */
   observed?: string[];
+  /** WHICH WAY IS A WIN, per metric row — the team's override of whatever the
+   *  metric or Optimizely says. Some experiments predict a DECREASE and mean
+   *  it (remove a discount shortcut, expect fewer taps on it); without this the
+   *  console adjudicates every decision metric as "up is good" and reads a
+   *  successful test as refuted. */
+  directions?: Record<string, "increase" | "decrease">;
+  /** Direction changes, in order. Setting one AFTER traffic began can turn a
+   *  refutation into a confirmation, so it is recorded and disclosed exactly
+   *  like a mid-run swap of the decision metric itself. */
+  directionHistory?: { key: string; from: string; to: string; at: string; by: string }[];
   /** Supporting metrics kept OUT of the readout's top line. They are still
    *  reasoned about — the analyst chains them and writes their observations —
    *  they just don't take a slot in the summary. Presentation only, which is
@@ -380,6 +390,14 @@ export function resolveDecisionMap(
   // the console return CONFIRMED against a definition nobody ever approved.
   // Optimizely's primary is a real human declaration; an unratified proposal
   // is not, so the declaration wins.
+  // The team's declared direction wins over the metric's own and over
+  // Optimizely's — it is the only one that knows what THIS experiment predicts.
+  const withDirections = (m: MetricMap | null): MetricMap | null =>
+    m && m.directions
+      ? { ...m, composites: m.composites.map((c) => (m.directions![`composite:${c.id}`] ? { ...c, direction: m.directions![`composite:${c.id}`] } : c)) }
+      : m;
+  map = withDirections(map);
+
   const own = map?.composites.find((c) => c.role === "primary" && c.source !== "optimizely");
   const ratified = Boolean(map?.confirmed) || (map?.primaryHistory ?? []).some((h) => h.to === own?.label);
   if (own && ratified) return { map, source: "console", optiRowIsDecision: false };
@@ -397,7 +415,9 @@ export function resolveDecisionMap(
     // it does not — never a default dressed as a declaration. The engines
     // already treat absent as "up"; the difference is that every surface can
     // tell the reader which of the two it was.
-    ...(optiDirection ? { direction: optiDirection } : {}),
+    ...(map?.directions?.[`composite:${OPTI_PRIMARY_ID}`]
+      ? { direction: map.directions[`composite:${OPTI_PRIMARY_ID}`] }
+      : optiDirection ? { direction: optiDirection } : {}),
     definition: "Optimizely's own primary metric for this experiment, read from the experiment definition.",
   };
   return {

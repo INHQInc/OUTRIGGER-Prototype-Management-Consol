@@ -116,6 +116,15 @@ export function deriveAttention(opts: {
     });
   }
 
+  if (verdict?.preRegistration?.directionChangedAfterObservation) {
+    attention.push({
+      id: "direction-changed", severity: "attention",
+      title: "Which way is a win changed",
+      detail: `The decision metric was set to count ${verdict.preRegistration.predictedDirection === "decrease" ? "a fall" : "a rise"} as the win after data was already in — the earlier setting is on the record.`,
+      actionLabel: "See the method", actionHref: "#method",
+    });
+  }
+
   if (verdict?.preRegistration?.hypothesisNotFrozen) {
     attention.push({
       id: "hypothesis-not-frozen", severity: "attention",

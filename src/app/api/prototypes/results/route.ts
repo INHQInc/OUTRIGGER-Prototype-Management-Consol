@@ -358,6 +358,7 @@ export async function POST(req: NextRequest) {
     observeMetric?: { key?: string; on?: boolean };
     setMetricRole?: { key?: string; role?: string };
     featureMetric?: { key?: string; on?: boolean };
+    setDirection?: { key?: string; direction?: string };
     /** Hide/show a metric in the index. Display only — plan metrics keep
      *  feeding the verdict; the primary refuses. */
     hideMetric?: { key?: string; hidden?: boolean };
@@ -814,6 +815,35 @@ export async function POST(req: NextRequest) {
       });
       await audit(g.orgId, actor, on ? "results.attention-acknowledged" : "results.attention-restored", g.proto.name, id);
       return NextResponse.json({ metricMap: map });
+    }
+
+    if (body.setDirection) {
+      const rowKey = String(body.setDirection.key ?? "").slice(0, 220);
+      const want = String(body.setDirection.direction ?? "");
+      if (!rowKey || !["increase", "decrease"].includes(want)) {
+        return NextResponse.json({ error: "A direction is either increase or decrease." }, { status: 400 });
+      }
+      const direction = want as "increase" | "decrease";
+      let from = "increase";
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const base = cur ?? { composites: [], confirmed: false };
+        from = base.directions?.[rowKey]
+          ?? base.composites.find((c) => `composite:${c.id}` === rowKey)?.direction
+          ?? "increase";
+        if (from === direction) return null;
+        return {
+          ...base,
+          directions: { ...(base.directions ?? {}), [rowKey]: direction },
+          // Declaring a direction AFTER traffic can turn a refutation into a
+          // confirmation. It is allowed and it is ON THE RECORD.
+          directionHistory: [...(base.directionHistory ?? []), { key: rowKey, from, to: direction, at: new Date().toISOString(), by: actor }].slice(-12),
+        };
+      });
+      await audit(g.orgId, actor, "results.direction-set", g.proto.name, `${rowKey}: ${from} → ${direction}`);
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: null };
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict,
+        attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.featureMetric) {

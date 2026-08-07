@@ -2058,7 +2058,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </span>
             );
             // toggle · rename · delete · hide — fixed slots, right-aligned.
-            const CLUSTER = "grid grid-cols-[0.9rem_1.75rem_0.9rem_0.9rem_0.9rem] gap-2 items-center justify-items-center ml-auto w-fit";
+            const CLUSTER = "grid grid-cols-[0.7rem_0.9rem_1.75rem_0.9rem_0.9rem_0.9rem] gap-2 items-center justify-items-center ml-auto w-fit";
             // SUPPORTING — the one act that says "this metric is part of the
             // story": it enters the readout's top line AND gets an
             // observation. Marking promotes; it never suppresses, so an
@@ -2195,6 +2195,24 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </span>
                     ) : (
                       <span className={CLUSTER}>
+                        {/* WHICH WAY IS A WIN. Most metrics rise when things go
+                            well, but plenty of experiments predict a fall and
+                            mean it — remove a discount shortcut and expect
+                            fewer taps on it. Without this the console judges
+                            every decision metric as "up is good" and reads a
+                            successful test as refuted. */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void post("direction", { setDirection: { key: rowKey, direction: (c.direction ?? "increase") === "increase" ? "decrease" : "increase" } });
+                          }}
+                          disabled={busy !== null}
+                          title={(c.direction ?? "increase") === "increase"
+                            ? "A WIN IS UP for this metric. Click if this experiment expects it to FALL — removing a shortcut, cutting a step — so the verdict judges it the right way round."
+                            : "A WIN IS DOWN for this metric: the verdict treats a fall as the predicted result. Click to switch back."}
+                          className={`text-[11px] font-bold leading-none ${(c.direction ?? "increase") === "increase" ? "text-muted-2 hover:text-foreground" : "text-warn"}`}>
+                          {(c.direction ?? "increase") === "increase" ? "↑" : "↓"}
+                        </button>
                         {watch(rowKey)}
                         {/* ONE primary — switch semantics: on = the decision metric;
                             flipping another on moves it (the server keeps exactly one) */}
@@ -2262,6 +2280,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
                   <td className="py-1.5 pl-2 print:hidden">
                     <span className={CLUSTER}>
+                      <span />
                       {watch(rowKey)}
                       {/* a raw Optimizely event can't be the console's decision
                           metric — the slot stays empty so the column holds */}
