@@ -34,7 +34,17 @@ export interface OptiPage {
   name: string;
   edit_url: string;
 }
-export interface OptiChange { id?: string; type: string; value?: string; dependencies?: string[]; async?: boolean }
+/** Optimizely's change objects carry their payload in different fields per
+ *  type — `attributes` for an attribute edit, `selector`/`operator` for an
+ *  insert, `src`, `css`, `dest`… Modelling only `value` meant an editor-built
+ *  experiment reached the analyst as "bare attribute changes with no content
+ *  described", so the index signature keeps whatever Optimizely sends. */
+export interface OptiChange {
+  id?: string; type: string; value?: string; dependencies?: string[]; async?: boolean;
+  selector?: string; operator?: string; src?: string; css?: unknown; dest?: string;
+  attributes?: Record<string, unknown>;
+  [k: string]: unknown;
+}
 export interface OptiAction { page_id: number; changes: OptiChange[] }
 export interface OptiVariation { variation_id: number; name: string; weight: number; actions?: OptiAction[]; archived?: boolean; status?: string }
 export interface OptiExperiment {
@@ -254,8 +264,15 @@ export class OptimizelyClient {
         if (c.type === "custom_code") {
           if (typeof c.value === "string" && c.value.trim()) customCode = c.value;
         } else {
-          const val = typeof c.value === "string" ? c.value.replace(/\s+/g, " ").trim().slice(0, 160) : "";
-          editorChanges.push(`${c.type}${val ? `: ${val}` : ""}`);
+          // Pass the PAYLOAD, not a guess at which field holds it: whatever
+          // Optimizely sends for this change type reaches the analyst, minus
+          // the plumbing. Guessing the schema is how the content went missing.
+          const skip = new Set(["id", "type", "dependencies", "async"]);
+          const body = Object.entries(c)
+            .filter(([k, v]) => !skip.has(k) && v !== undefined && v !== null && v !== "")
+            .map(([k, v]) => `${k}=${(typeof v === "string" ? v : JSON.stringify(v)).replace(/\s+/g, " ").trim().slice(0, 300)}`)
+            .join(" · ");
+          editorChanges.push(`${c.type}${body ? ` — ${body}` : " (no detail returned)"}`);
         }
       }
     }

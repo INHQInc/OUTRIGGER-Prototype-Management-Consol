@@ -151,13 +151,20 @@ ${armName(focusId)}: ${rate(cell(focusId)?.rate)} · ${armName(baseId)} (control
 EVERY OTHER MEASURE, so you can place this one in the path:
 ${neighbours || "(none)"}
 
-${opts.variationJs
-  ? `${opts.codeSource === "optimizely"
-      ? "THE CODE RUNNING LIVE ON THIS VARIATION IN OPTIMIZELY (this is what guests actually got — read it to explain WHY they behaved differently)"
-      : "THE CODE THIS CONSOLE BUILT AND PUSHED FOR THIS VARIATION (Optimizely reports no custom code of its own, so this is the best available account of what shipped)"}:\n${opts.variationJs.slice(0, 6000)}`
-  : opts.editorChanges?.length
-    ? `WHAT WAS BUILT IN OPTIMIZELY'S VISUAL EDITOR — there is no custom code, these edits ARE the change, and they are all you may reason from:\n${opts.editorChanges.map((c) => `- ${c}`).join("\n")}`
-    : "(NOTHING VERIFIED IS AVAILABLE about what this variation changes: Optimizely reports no custom code and no editor edits, and this console has no verified push of its own. Say plainly that the mechanism cannot be read because what shipped cannot be confirmed — never guess from the brief, and never describe code you were not shown.)"}
+${[
+  opts.variationJs
+    ? `${opts.codeSource === "optimizely"
+        ? "THE CODE RUNNING LIVE ON THIS VARIATION IN OPTIMIZELY (this is what guests actually got)"
+        : "THE CODE THIS CONSOLE PUSHED AND VERIFIED FOR THIS VARIATION"}:\n${opts.variationJs.slice(0, 6000)}`
+    : "",
+  // A variation can carry BOTH custom code and visual-editor edits. Treating
+  // them as alternatives dropped whichever came second, and for an
+  // editor-built experiment that was the entire change.
+  opts.editorChanges?.length
+    ? `VISUAL-EDITOR EDITS ON THIS VARIATION — these are part of what shipped, and for an editor-built experiment they ARE the change:\n${opts.editorChanges.map((c) => `- ${c}`).join("\n")}`
+    : "",
+].filter(Boolean).join("\n\n") || "(NOTHING VERIFIED IS AVAILABLE about what this variation changes: Optimizely reports no custom code and no editor edits, and this console has no verified push of its own. Say plainly that the mechanism cannot be read because what shipped cannot be confirmed — never guess from the brief, and never describe code you were not shown.)"}
+${opts.variationJs && opts.editorChanges?.length ? "NOTE: the custom code and the editor edits are BOTH live. If the code does nothing, the editor edits are where the change actually is — read those." : ""}
 
 Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed.
 
@@ -255,6 +262,6 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
     // obs3: the read is two questions now, so every cached six-part one retires.
     // obs4: the read now depends on WHICH build it saw, so a cached read from
     // the repo stub must not survive once Optimizely's live code is available.
-    basisKey: `${opts.basisKey}|obs5|${opts.codeSource ?? "none"}`,
+    basisKey: `${opts.basisKey}|obs6|${opts.codeSource ?? "none"}`,
   };
 }
