@@ -21,19 +21,20 @@ import { armEventsFor } from "../prototypes/results";
 
 export interface DeepObservation {
   metricKey: string;
-  headline: string;
+  /** Legacy fields — cached six-part reads still parse; nothing writes them. */
+  headline?: string;
   /** WHAT THIS METRIC CAPTURES — the guest behaviour it counts. A definition,
    *  not a finding: true before the experiment ran and after it ends. */
   captures?: string;
   /** WHAT HAPPENED — the behaviour, not the arithmetic. */
-  observation: string;
+  observation?: string;
   /** WHY — the mechanism, read off what was actually built. */
   mechanism: string;
   /** WHY IT MIGHT NOT BE THAT — the rival explanation for the same numbers.
    *  A mechanism with no stated rival is a story, not an analysis. */
   rival?: string;
   /** What it means for the booking path and the goal of the experiment. */
-  implication: string;
+  implication?: string;
   /** HOW THIS IS COUNTED — COMPUTED, never narrated. The console knows when a
    *  metric is an action total, fires in one arm, has members Optimizely isn't
    *  reporting, or hasn't separated from the control. Asking the model for
@@ -54,20 +55,16 @@ export interface DeepObservation {
 
 const tool = {
   name: "give_observation",
-  description: "A full read of ONE metric in this experiment, broken into the parts an analyst separates: what happened, why, what else could explain it, and what it means.",
+  description: "The two questions a metric's own numbers cannot answer: WHY it moved, read off what was actually built, and what ELSE could explain the same behaviour.",
   input_schema: {
     type: "object" as const,
     properties: {
-      headline: { type: "string" as const, description: "<=110 chars, NO DIGITS. A claim carrying its own qualification, e.g. 'More visitors reach the booking step, but the gap is still too faint to lean on'. Never a status line." },
       captures: { type: "string" as const, description: "<=140 chars, NO DIGITS. WHAT THIS METRIC CAPTURES: the guest behaviour it counts, in plain words — e.g. 'Guests who reach the booking engine's rooms and rates step' or 'Guests opening a room's details, by either route'. A DEFINITION, not a finding: it must read the same whether the metric went up, down or nowhere. Never mention versions, results, or movement." },
-      observation: { type: "string" as const, description: "<=450 chars, NO DIGITS. WHAT HAPPENED, behaviourally: what guests did differently on this surface between the two versions. Describe behaviour, not arithmetic." },
       mechanism: { type: "string" as const, description: "<=500 chars, NO DIGITS. WHY it happened, read off what was actually built — the specific thing on the screen that changed and how it altered the path. If the code or the surfaces do not support an explanation, say that the mechanism is unclear rather than inventing one." },
       rival: { type: "string" as const, description: "<=400 chars, NO DIGITS. WHY IT MIGHT NOT BE THAT: the strongest competing explanation for the same GUEST BEHAVIOUR — attention shifting from another surface rather than new demand, curiosity rather than intent, a difference in who was exposed, a knock-on from a change elsewhere in the path. This is about the world, NOT about the instrument: never write about how the metric is counted, actions-versus-guests, one-armed surfaces or sample size — the console states all of that itself, and repeating it here wastes the one section that can only come from you. Omit ONLY if no credible rival exists." },
-      implication: { type: "string" as const, description: "<=400 chars, NO DIGITS. What it means for the booking path and for what the experiment set out to prove — where intent is created or lost, and what follows for the business." },
 
-      watch: { type: "string" as const, description: "<=300 chars, NO DIGITS. The one thing to watch next on this metric." },
     },
-    required: ["captures", "headline", "observation", "mechanism", "implication"],
+    required: ["captures", "mechanism"],
   },
 };
 
@@ -142,9 +139,12 @@ ${neighbours || "(none)"}
 
 ${opts.variationJs ? `THE CODE THAT WAS ACTUALLY BUILT (read it to explain WHY guests behaved differently — what changed on the screen):\n${opts.variationJs.slice(0, 6000)}` : "(The variation was built in Optimizely, so its code is not available here — reason from the surfaces named above.)"}
 
-Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed. Then write the full read of this ONE metric, for the hotel's team, in the parts an analyst separates:
-  WHAT HAPPENED (behaviour, not arithmetic) · WHY (the mechanism, read off what was built) · WHY IT MIGHT NOT BE THAT (the strongest rival explanation) · WHAT IT MEANS (for the booking path and the goal).
-A mechanism offered without a rival explanation is a story rather than an analysis, so give the rival unless none is credible.
+Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed.
+
+Then answer ONLY the two questions this metric's own numbers cannot:
+  WHY — the mechanism, read off what was actually built. Name the thing on the screen that changed and how it altered the path. If the code and the surfaces do not support an explanation, say the mechanism is unclear rather than inventing one.
+  WHY IT MIGHT NOT BE THAT — the strongest competing explanation for the same behaviour. A mechanism offered without a rival is a story rather than an analysis, so give it unless none is credible.
+Do NOT describe what happened, restate the movement, or say what it means for the business: the console prints the numbers, the trend and the whole-experiment read already, and repeating them is what made this section too long to read.
 NO DIGITS in your words — every number is printed beside your sentences and would go stale the moment the counts move. No statistics vocabulary: no significance, no sample size, no confidence, no days remaining. Do not give a verdict on the experiment; that belongs to the decision metric and the console computes it.`,
     }],
     tools: [tool],
@@ -156,16 +156,12 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
   const raw = (tu.input ?? {}) as Record<string, unknown>;
 
   let captures = clean(raw.captures, 140);
-  let headline = clean(raw.headline, 110);
-  let observation = clean(raw.observation, 450);
   let mechanism = clean(raw.mechanism, 500);
-  let implication = clean(raw.implication, 400);
   let rival = clean(raw.rival, 400);
-  let watch = clean(raw.watch, 300);
 
   // A digit or a statistics word used to fail the whole read with an error the
   // reader could do nothing about. Ask once, quoting the rule that broke.
-  if (!headline || !observation || !mechanism) {
+  if (!mechanism) {
     try {
       const fix = await client.messages.create({
         model: "claude-opus-4-8",
@@ -174,7 +170,7 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
         messages: [
           { role: "user", content: "Rewrite the observation you just gave." },
           { role: "assistant", content: JSON.stringify(raw) },
-          { role: "user", content: `Rejected. Every field must contain NO DIGITS AT ALL (the console prints every number beside your words) and no statistics vocabulary (significance, sample size, confidence, p-values, days remaining). Keep the same substance and the same parts. Return only JSON: {"headline","observation","mechanism","rival","implication","watch"}.` },
+          { role: "user", content: `Rejected. Every field must contain NO DIGITS AT ALL (the console prints every number beside your words) and no statistics vocabulary (significance, sample size, confidence, p-values, days remaining). Keep the same substance and the same parts. Return only JSON: {"captures","mechanism","rival"}.` },
         ],
       });
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
@@ -182,30 +178,15 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
       if (m2) {
         const parsed = JSON.parse(m2[0]) as Record<string, unknown>;
         captures = captures || clean(parsed.captures, 140);
-        headline = headline || clean(parsed.headline, 110);
-        observation = observation || clean(parsed.observation, 450);
         mechanism = mechanism || clean(parsed.mechanism, 500);
-        implication = implication || clean(parsed.implication, 400);
         rival = rival || clean(parsed.rival, 400);
-        watch = watch || clean(parsed.watch, 300);
       }
     } catch { /* the computed floor below */ }
   }
 
   // Never a dead end: say the true thing the console already knows rather than
   // showing an error the reader cannot act on.
-  if (!headline || !observation) {
-    const dir = (cell(focusId)?.lift ?? 0) >= 0 ? "more" : "less";
-    const settled = cell(focusId)?.liftCi && cell(focusId)!.liftCi!.lo * cell(focusId)!.liftCi!.hi > 0;
-    headline = headline || (m.featureOnly
-      ? `${m.label} exists only in ${armName(focusId)}, so it shows take-up rather than a gap`
-      : `Guests do this ${dir} in ${armName(focusId)}${settled ? ", by more than luck explains" : ", though the gap has not settled"}`);
-    observation = observation || (m.featureOnly
-      ? `Guests in ${armName(focusId)} used this surface; there is nothing equivalent in ${armName(baseId)} to compare it against.`
-      : `Guests in ${armName(focusId)} did this ${dir} often than guests in ${armName(baseId)}.`);
-    mechanism = mechanism || `The console could not write a mechanism for this metric. How it is counted: ${howBuilt}`;
-    implication = implication || "Open the numbers view for the full detail on this metric.";
-  }
+  mechanism = mechanism || `The console could not read a mechanism for this metric from what was built. How it is counted: ${howBuilt}`;
 
   // HOW THIS IS COUNTED — assembled from facts, in the order that matters most
   // to a reader deciding how much weight to put on the number.
@@ -236,11 +217,11 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
   return {
     metricKey: opts.metricKey,
     captures: captures || `Counts ${m.label.toLowerCase()}, per visitor.`,
-    headline, observation, mechanism, implication,
+    mechanism,
     rival: rival || undefined,
     counting: counting || undefined,
-    watch: watch || undefined,
     generatedAt: new Date().toISOString(),
-    basisKey: `${opts.basisKey}|obs2`,
+    // obs3: the read is two questions now, so every cached six-part one retires.
+    basisKey: `${opts.basisKey}|obs3`,
   };
 }

@@ -267,7 +267,7 @@ export async function GET(req: NextRequest) {
   const basis = basisFor(basisIn);
   const deepCache = JSON.parse((await (await getContentStore()).getFlag(`observations:${g.proto.key}`)) || "{}") as Record<string, { basisKey?: string }>;
   const obsBasis = obsBasisFor(basisIn);
-  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => v?.basisKey === `${obsBasis}|obs2`));
+  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => v?.basisKey === `${obsBasis}|obs3`));
   const attention = deriveAttention({
     verdict, stats, map: effMap, planDrift,
     resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
@@ -742,7 +742,7 @@ export async function POST(req: NextRequest) {
       const cached = JSON.parse((await store.getFlag(cacheKey)) || "{}") as Record<string, DeepObservation>;
       // The read is expensive and rarely changes — serve the cached one until
       // the same basis that retires the reading retires this too.
-      if (!body.deepDive.force && cached[key]?.basisKey === `${basis}|obs2`) {
+      if (!body.deepDive.force && cached[key]?.basisKey === `${basis}|obs3`) {
         return NextResponse.json({ observation: cached[key] });
       }
 
@@ -757,7 +757,7 @@ export async function POST(req: NextRequest) {
         variationJs, system, basisKey: basis,
       });
       await store.setFlag(cacheKey, JSON.stringify({ ...cached, [key]: observation })).catch(() => {});
-      await audit(g.orgId, actor, "results.observation-read", g.proto.name, observation.headline.slice(0, 200));
+      await audit(g.orgId, actor, "results.observation-read", g.proto.name, (observation.headline ?? observation.mechanism).slice(0, 200));
       return NextResponse.json({ observation });
     }
 

@@ -1709,17 +1709,20 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {obsBusy === key && <p className="text-[14px] text-muted-2">Reading this metric against the brief and what was built…</p>}
                         {deepObs[key] && (
                           <>
-                            <p className="text-[17px] font-bold leading-snug max-w-[64ch]">{deepObs[key].headline}</p>
+                            {deepObs[key].headline && (
+                              <p className="text-[17px] font-bold leading-snug max-w-[64ch]">{deepObs[key].headline}</p>
+                            )}
 
-                            {/* THE SAME TREATMENT AS THE READ. These ran the full
-                                width of the panel — roughly double a readable
-                                measure — so four good paragraphs still landed as
-                                a wall. Two columns puts each at ~55 characters. */}
+                            {/* TWO QUESTIONS the row cannot answer for itself.
+                                What happened, what it means and what to watch
+                                were all on screen already — in the row above, in
+                                THE READ, and in the numbers — so six sections of
+                                prose were mostly the page repeating itself. */}
                             <div className="grid gap-x-10 gap-y-4 lg:grid-cols-2 pt-1">
                               {([
-                                ["What happened", deepObs[key].observation, "text-foreground/90"],
                                 ["Why", deepObs[key].mechanism, "text-foreground/90"],
                                 ["Why it might not be that", deepObs[key].rival, "text-muted"],
+                                ["What happened", deepObs[key].observation, "text-foreground/90"],
                                 ["What it means", deepObs[key].implication, "text-foreground/90"],
                               ] as const).filter(([, text]) => Boolean(text)).map(([label, text, tone]) => (
                                 <div key={label} className="min-w-0">
