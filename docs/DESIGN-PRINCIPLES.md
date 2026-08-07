@@ -209,7 +209,19 @@ prediction — and each stands alone, so scanning one gives a complete thought.
 The cost of a fixed frame is a section with nothing to say; the answer is to say
 that plainly, never to invent content to fill it.
 
-## 14b. Flag what is not what it appears to be
+## 14b. Role owns the colour; kind is set apart by form
+
+The four role chips — decision · supporting · guardrail · exploratory — own the
+colour vocabulary on a metric. Anything that is a different CLASS of fact about
+the same metric (that it is a composite, that it is per-version) must not borrow
+one of those hues: a Σ COMPOSITE chip in accent read as a second SUPPORTING
+badge. Set it apart by FORM instead — filled rather than outlined, with a mark —
+so the reader can tell a kind from a role without learning a fifth colour.
+
+*Origin: "composite needs a different color than supporting metric its
+confusing."*
+
+## 14c. Flag what is not what it appears to be
 
 A COMPOSITE metric is a different kind of thing from an Optimizely event, and a
 reader who doesn't know that reads its rate as a head-count. Anywhere such a

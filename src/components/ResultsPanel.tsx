@@ -1050,8 +1050,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     const c = compositeFor(key);
     if (!c || !isCompositeOf(c)) return null;
     return (
-      <span className={`ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-accent/50 text-accent rounded px-1 align-middle cursor-help ${cls}`}
+      // KIND, not role. The four role chips own the colour vocabulary
+      // (decision · supporting · guardrail · exploratory); a composite is a
+      // different CLASS of fact about the same metric, so it is set apart by
+      // FORM — filled rather than outlined, with a summation mark — instead of
+      // borrowing a colour and colliding with SUPPORTING.
+      <span className={`ml-1.5 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide rounded px-1 py-px align-middle cursor-help bg-foreground/[0.09] text-muted ring-1 ring-inset ring-border ${cls}`}
         title={describeComposite(c, armNameOf)}>
+        <span aria-hidden className="text-[10px] leading-none font-normal">&Sigma;</span>
         composite{c.armEvents?.length ? " · per version" : ""}
       </span>
     );
