@@ -163,6 +163,14 @@ verify it, say so honestly ("pre-certification") rather than implying it.
 "Sync brief & skills to the branch", not "Branch content". If a label needs the
 description to be understood, the label is wrong.
 
+And when the user has a word for something, that word wins — even against a
+plainer one. The chip on a multi-event metric says COMPOSITE, because that is
+what he calls it, what the type is called, and what the builder says. Choosing
+"combined" because it read more simply quietly renamed his vocabulary and gave
+the product two words for one thing.
+
+*Origin: "i said composite you used combined why?"*
+
 ## 11. Refreshing is not broken
 
 Content that is being regenerated is still true, so it is never dimmed, covered
@@ -203,7 +211,7 @@ that plainly, never to invent content to fill it.
 
 ## 14b. Flag what is not what it appears to be
 
-A COMBINED metric is a different kind of thing from an Optimizely event, and a
+A COMPOSITE metric is a different kind of thing from an Optimizely event, and a
 reader who doesn't know that reads its rate as a head-count. Anywhere such a
 metric appears — the read, the per-metric rows, the index — it carries the flag,
 and hovering gives the one description of what it sums and how it is counted.

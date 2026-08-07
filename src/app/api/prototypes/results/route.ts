@@ -268,7 +268,7 @@ export async function GET(req: NextRequest) {
   const basis = basisFor(basisIn);
   const deepCache = JSON.parse((await (await getContentStore()).getFlag(`observations:${g.proto.key}`)) || "{}") as Record<string, { basisKey?: string }>;
   const obsBasis = obsBasisFor(basisIn);
-  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => typeof v?.basisKey === "string" && v.basisKey.startsWith(`${obsBasis}|obs4`)));
+  const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => typeof v?.basisKey === "string" && v.basisKey.startsWith(`${obsBasis}|obs5`)));
   const attention = deriveAttention({
     verdict, stats, map: effMap, planDrift,
     resultsError: bundle.error, experimentStatus: bundle.experimentStatus,
@@ -743,7 +743,7 @@ export async function POST(req: NextRequest) {
       const cached = JSON.parse((await store.getFlag(cacheKey)) || "{}") as Record<string, DeepObservation>;
       // The read is expensive and rarely changes — serve the cached one until
       // the same basis that retires the reading retires this too.
-      if (!body.deepDive.force && cached[key]?.basisKey?.startsWith(`${basis}|obs4`)) {
+      if (!body.deepDive.force && cached[key]?.basisKey?.startsWith(`${basis}|obs5`)) {
         return NextResponse.json({ observation: cached[key] });
       }
 
@@ -767,10 +767,20 @@ export async function POST(req: NextRequest) {
           editorChanges = live.editorChanges;
         }
       }
+      // The console's own artifact is only evidence of what is LIVE when the
+      // console PUSHED it and the read-back verified. Falling back to whatever
+      // sits on the branch is how the analyst ended up reading a starter stub
+      // for an experiment authored in Optimizely and reporting, correctly and
+      // uselessly, that the variation changes nothing. No verified push and
+      // nothing in Optimizely means we genuinely do not know what shipped —
+      // which the analyst must say, not paper over with the wrong file.
       if (!variationJs && !editorChanges.length && !isExternalBuild(g.proto)) {
-        const source = await resolveRepoSource(g.proto.key).catch(() => null);
-        variationJs = source?.found ? source.variationJs ?? null : (await listArtifactVersions(g.proto.key).catch(() => []))[0]?.variationJs ?? null;
-        if (variationJs) codeSource = "console";
+        const push = await lastPush(g.proto.key).catch(() => null);
+        if (push?.verified && push.experimentId === expId && String(push.variationId) === String(varId)) {
+          const versions = await listArtifactVersions(g.proto.key).catch(() => []);
+          variationJs = versions.find((v) => v.version === push.version)?.variationJs ?? null;
+          if (variationJs) codeSource = "console";
+        }
       }
       const { system } = await analystSkill(g.orgId);
 

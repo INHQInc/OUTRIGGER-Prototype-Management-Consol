@@ -274,7 +274,7 @@ export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined):
   return results?.metrics[0] ? `metric:${results.metrics[0].name}` : "";
 }
 
-/** Is this metric COMBINED from more than one Optimizely event? A one-event
+/** Is this metric a COMPOSITE — built from more than one Optimizely event? A one-event
  *  composite is just the event under another name — flagging it would train
  *  the reader to ignore the flag. */
 export function isCompositeOf(c: CompositeMetric): boolean {
@@ -290,8 +290,8 @@ export function describeComposite(c: CompositeMetric, armName?: (variationId: st
     : "";
   const shared = c.events.length ? c.events.join(" + ") : "";
   const head = per
-    ? `Combined metric, defined per version — ${per}${shared ? `  ·  any other version: ${shared}` : ""}`
-    : `Combined metric — sums ${c.events.length} Optimizely event${c.events.length === 1 ? "" : "s"}: ${shared}`;
+    ? `Composite metric, defined per version — ${per}${shared ? `  ·  any other version: ${shared}` : ""}`
+    : `Composite metric — sums ${c.events.length} Optimizely event${c.events.length === 1 ? "" : "s"}: ${shared}`;
   return `${head}. Counted as ACTION totals per visitor, so one guest acting on more than one of these counts each time.${c.definition ? ` ${c.definition}` : ""}`;
 }
 

@@ -157,7 +157,7 @@ ${opts.variationJs
       : "THE CODE THIS CONSOLE BUILT AND PUSHED FOR THIS VARIATION (Optimizely reports no custom code of its own, so this is the best available account of what shipped)"}:\n${opts.variationJs.slice(0, 6000)}`
   : opts.editorChanges?.length
     ? `WHAT WAS BUILT IN OPTIMIZELY'S VISUAL EDITOR — there is no custom code, these edits ARE the change, and they are all you may reason from:\n${opts.editorChanges.map((c) => `- ${c}`).join("\n")}`
-    : "(Neither Optimizely nor this console holds anything showing what this variation changes, so the mechanism cannot be read off what was built — say so plainly rather than inventing one.)"}
+    : "(NOTHING VERIFIED IS AVAILABLE about what this variation changes: Optimizely reports no custom code and no editor edits, and this console has no verified push of its own. Say plainly that the mechanism cannot be read because what shipped cannot be confirmed — never guess from the brief, and never describe code you were not shown.)"}
 
 Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed.
 
@@ -255,6 +255,6 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
     // obs3: the read is two questions now, so every cached six-part one retires.
     // obs4: the read now depends on WHICH build it saw, so a cached read from
     // the repo stub must not survive once Optimizely's live code is available.
-    basisKey: `${opts.basisKey}|obs4|${opts.codeSource ?? "none"}`,
+    basisKey: `${opts.basisKey}|obs5|${opts.codeSource ?? "none"}`,
   };
 }

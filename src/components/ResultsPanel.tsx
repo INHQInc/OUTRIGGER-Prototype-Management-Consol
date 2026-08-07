@@ -1037,7 +1037,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // is still true, so it is never dimmed or covered. The header says the
   // section is updating and the rule under it pulses — in flow, no scrim, no
   // floating pill, nothing to read around.
-  // A COMBINED metric is not the same kind of thing as an Optimizely event, and
+  // A COMPOSITE metric is not the same kind of thing as an Optimizely event, and
   // a reader who doesn't know that will read its rate as a head-count. The flag
   // says so wherever the metric appears; the hover says exactly what it sums.
   const compositeFor = (key: string) =>
@@ -1052,7 +1052,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     return (
       <span className={`ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-accent/50 text-accent rounded px-1 align-middle cursor-help ${cls}`}
         title={describeComposite(c, armNameOf)}>
-        combined{c.armEvents?.length ? " · per version" : ""}
+        composite{c.armEvents?.length ? " · per version" : ""}
       </span>
     );
   };
