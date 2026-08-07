@@ -1735,12 +1735,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                             {/* The caution and the next move are a different KIND
                                 of statement from the analysis — they sit below a
                                 rule rather than reading as a fifth paragraph. */}
-                            {(deepObs[key].caution || deepObs[key].watch) && (
+                            {(deepObs[key].counting || deepObs[key].caution || deepObs[key].watch) && (
                               <div className="grid gap-x-10 gap-y-2.5 lg:grid-cols-2 pt-3 mt-1 border-t border-border/50">
-                                {deepObs[key].caution && (
+                                {(deepObs[key].counting || deepObs[key].caution) && (
                                   <div className="min-w-0">
-                                    <div className={`${ZH} mb-1 text-warn/80`}>What would make this wrong</div>
-                                    <p className="text-[14px] leading-[1.55] text-warn">{deepObs[key].caution}</p>
+                                    <div className={`${ZH} mb-1 text-warn/80`}>How this is counted</div>
+                                    <p className="text-[14px] leading-[1.55] text-warn">{deepObs[key].counting ?? deepObs[key].caution}</p>
                                   </div>
                                 )}
                                 {deepObs[key].watch && (
