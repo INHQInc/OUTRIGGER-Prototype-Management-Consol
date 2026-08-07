@@ -122,3 +122,26 @@ body {
   .print-report [data-viz-fill="danger"] { background: #b02a37 !important; }
   .print-report svg .text-surface { color: #ffffff !important; }
 }
+
+/* OWNERSHIP ON EVERY PAGE. A notice only on page one is a notice that gets
+   separated from the document — `position: fixed` inside a print context
+   repeats per sheet, and the @page margin reserves the room for it so it never
+   lands on top of content. The screen never shows any of this. */
+@media print {
+  @page { margin: 14mm 12mm 20mm; }
+  .print-legal { display: block !important; }
+  .print-legal-footer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    padding-top: 4px;
+    border-top: 1px solid #d5dbe2;
+    font-size: 7.5pt;
+    line-height: 1.35;
+    color: #5c6771 !important;
+    visibility: visible !important;
+  }
+  .print-legal-footer * { visibility: visible !important; color: #5c6771 !important; }
+  /* A page break must never split the notice off from the line above it. */
+  .print-legal-block { break-inside: avoid; page-break-inside: avoid; }
+}
+.print-legal { display: none; }

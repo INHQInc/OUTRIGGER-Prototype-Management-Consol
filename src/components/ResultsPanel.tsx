@@ -7,6 +7,7 @@ import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
 import { figureValue, templateStory, shortLabel } from "@/lib/ai/results";
+import { shortNotice, provenanceLine } from "@/lib/brand";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
@@ -1539,6 +1540,18 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
       {/* ═══ THE READOUT — decision band · numbers · attention · findings ═══ */}
       <div className="print-report">
+        {/* OWNERSHIP, on paper only. The footer repeats on every sheet; the
+            block below the report is the full assertion. A stamped verdict
+            prints its OWN timestamp, never the clock, so the immutable record
+            reads identically however many times it is printed. */}
+        <div className="print-legal print-legal-footer">
+          <div>{shortNotice()}</div>
+          <div>{provenanceLine({
+            experiment: protoName ?? prototypeKey,
+            recordId: stamped ? `stamped ${verdict?.stampedAt?.slice(0, 19)}` : `draft ${statsEff?.computedAt?.slice(0, 19) ?? ""}`,
+            at: stamped ? verdict?.stampedAt : statsEff?.computedAt,
+          })}</div>
+        </div>
         <div className="min-w-0 space-y-5">
 
           {/* ── the controls the call card used to hold ── */}
