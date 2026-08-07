@@ -167,7 +167,14 @@ function attentionFor(opts: {
 /** The decision metric as the PAGE needs it: a read-only descriptor, never a
  *  composite the client could post back. */
 function decisionOf(map: MetricMap | null, stats: StatsReport | null): {
-  key: string; label: string; source: "console" | "optimizely"; direction?: "increase" | "decrease"; directionDeclared: boolean;
+  key: string; label: string; source: "console" | "optimizely"; direction?: "increase" | "decrease";
+  directionDeclared: boolean;
+  /** The member events, so the PAGE can compute this metric's daily series.
+   *  It holds the stored map by design, which contains no synthesized
+   *  composite — without these the decision metric's own sparkline was the one
+   *  trend line missing from the readout. */
+  events: string[];
+  armEvents?: { variationId: string; events: string[] }[];
 } | null {
   const c = map?.composites.find((x) => x.role === "primary");
   if (!c || !stats?.primaryKey) return null;
@@ -177,6 +184,8 @@ function decisionOf(map: MetricMap | null, stats: StatsReport | null): {
     source: c.source === "optimizely" ? "optimizely" : "console",
     direction: c.direction,
     directionDeclared: Boolean(c.direction),
+    events: c.events,
+    ...(c.armEvents?.length ? { armEvents: c.armEvents } : {}),
   };
 }
 

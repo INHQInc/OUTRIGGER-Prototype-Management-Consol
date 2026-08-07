@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
-import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, isCompositeOf, describeComposite, type MetricRole } from "@/lib/prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, isCompositeOf, describeComposite, resolveMetricRow, type MetricRole } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
@@ -415,7 +415,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // page must never hold Optimizely's synthesized composite, because it
   // round-trips its map through confirm/propose and would persist it.
   const [toast, setToast] = useState<string | null>(null);
-  const [decision, setDecision] = useState<{ key: string; label: string; source: "console" | "optimizely"; direction?: "increase" | "decrease"; directionDeclared: boolean } | null>(null);
+  const [decision, setDecision] = useState<{
+    key: string; label: string; source: "console" | "optimizely";
+    direction?: "increase" | "decrease"; directionDeclared: boolean;
+    events: string[]; armEvents?: { variationId: string; events: string[] }[];
+  } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [answer, setAnswer] = useState<AnalystAnswer | string | null>(null);
   const [showGates, setShowGates] = useState(false);
@@ -1221,7 +1225,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // an observation should never depend on the analyst noticing a shape.
   const seriesFor = (key: string): TrendPoint[] => {
     if (!statsEff?.focusVariationId || !statsEff?.baselineVariationId || historyDays.length < 2) return [];
-    const comp = map?.composites.find((c) => `composite:${c.id}` === key);
+    // The inherited decision metric is synthesized server-side and is NOT in
+    // the stored map the page holds, so looking it up here found nothing and
+    // its sparkline — the one line most worth seeing — silently never drew.
+    const comp = map?.composites.find((c) => `composite:${c.id}` === key)
+      ?? (decision && key === decision.key ? { events: decision.events, armEvents: decision.armEvents } : undefined);
     const rawName = key.startsWith("metric:") ? key.slice(7) : null;
     const out: TrendPoint[] = [];
     for (const day of historyDays) {
@@ -1230,7 +1238,13 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
         const names = comp
           ? (comp.armEvents?.find((a) => a.variationId === id)?.events ?? comp.events)
           : rawName ? [rawName] : [];
-        return names.reduce((sum, n) => sum + (day.metrics.find((m) => m.name === n)?.perVariation.find((r) => r.variationId === id)?.conversions ?? 0), 0);
+        // THE join rule, not a raw name match: a plan binds registry names while
+        // the trust boundary disambiguates duplicates ("X (unique)"), so an
+        // exact-name lookup silently returns nothing and the line reads flat.
+        return names.reduce((sum, n) => {
+          const row = resolveMetricRow(n, { metrics: day.metrics } as ExperimentResults);
+          return sum + (row?.perVariation.find((r) => r.variationId === id)?.conversions ?? 0);
+        }, 0);
       };
       const fN = visitors(statsEff.focusVariationId!), bN = visitors(statsEff.baselineVariationId!);
       if (!fN || !bN) continue;
