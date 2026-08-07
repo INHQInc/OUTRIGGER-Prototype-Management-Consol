@@ -304,6 +304,35 @@ function MetricChart({ days, focusName, baseName, earned }: {
   );
 }
 
+
+/** The COMPOSITE marker and its description. A native `title` was unreliable —
+ *  ancestor rows carry their own titles, and the per-arm event lists collapse
+ *  onto one unreadable line — so the hover card is ours. */
+function CompositeChip({ text, perVersion }: { text: string; perVersion: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-block align-middle"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
+      <button type="button"
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        aria-label="What this composite metric sums"
+        className="ml-1.5 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide rounded px-1 py-px cursor-help bg-foreground/[0.09] text-muted ring-1 ring-inset ring-border hover:text-foreground focus-visible:outline-none focus-visible:ring-accent">
+        <span aria-hidden className="text-[10px] leading-none font-normal">&Sigma;</span>
+        composite{perVersion ? " · per version" : ""}
+      </button>
+      {open && (
+        <span role="tooltip"
+          className="absolute left-0 top-[calc(100%+4px)] z-30 w-[min(30rem,70vw)] rounded-md border border-border bg-surface px-3 py-2 shadow-xl text-[12.5px] leading-[1.5] font-normal normal-case tracking-normal text-muted whitespace-normal">
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" | "chevron" }) {
   if (kind === "chevron") {
     return (
@@ -1160,21 +1189,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       : undefined;
   const armNameOf = (variationId: string) =>
     live?.variations.find((v) => v.variationId === variationId)?.name ?? variationId;
-  const compositeFlag = (key: string, cls = "") => {
+  // KIND, not role. The four role chips own the colour vocabulary
+  // (decision · supporting · guardrail · exploratory); a composite is a
+  // different CLASS of fact about the same metric, so it is set apart by FORM —
+  // filled rather than outlined, with a summation mark — instead of borrowing a
+  // colour and colliding with SUPPORTING.
+  const compositeFlag = (key: string) => {
     const c = compositeFor(key);
     if (!c || !isCompositeOf(c)) return null;
-    return (
-      // KIND, not role. The four role chips own the colour vocabulary
-      // (decision · supporting · guardrail · exploratory); a composite is a
-      // different CLASS of fact about the same metric, so it is set apart by
-      // FORM — filled rather than outlined, with a summation mark — instead of
-      // borrowing a colour and colliding with SUPPORTING.
-      <span className={`ml-1.5 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide rounded px-1 py-px align-middle cursor-help bg-foreground/[0.09] text-muted ring-1 ring-inset ring-border ${cls}`}
-        title={describeComposite(c, armNameOf)}>
-        <span aria-hidden className="text-[10px] leading-none font-normal">&Sigma;</span>
-        composite{c.armEvents?.length ? " · per version" : ""}
-      </span>
-    );
+    return <CompositeChip text={describeComposite(c, armNameOf)} perVersion={Boolean(c.armEvents?.length)} />;
   };
 
   const zoneHeader = (label: string, right?: React.ReactNode, id?: string, busyLabel?: string) => (
