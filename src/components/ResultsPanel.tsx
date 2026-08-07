@@ -1176,13 +1176,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       // The decision metric always reads first — it is the one the verdict
       // adjudicates, so it cannot appear third behind a supporting metric.
       picked.sort((a, b) => Number(b.key === headlineKey) - Number(a.key === headlineKey));
-      if (picked.length) return { headline: reading.headline, lede: reading.lede, beats: picked };
+      if (picked.length) return { headline: reading.headline, lede: reading.lede, read: reading.read, beats: picked };
     }
     // No reading yet (or a cached one in the old shape): the computed story.
     const t = templateStory({ results: live!, stats: statsEff ?? null, verdict, supporting: showAllBeats ? supporting : featuredKeys(supporting, mapEff, statsEff?.primaryKey) });
     return {
       headline: reading?.headline || t.headline,
       lede: reading?.lede || t.lede,
+      read: reading?.read,
       beats: t.beats.map(beatFor).filter(Boolean) as Beat[],
     };
   })();
@@ -1483,7 +1484,26 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 </span>, undefined, busy === "reading" ? "rewriting" : undefined)}
               <div className="space-y-2">
                 {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
-                {story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>}
+                {story.read ? (
+                  // FIXED SECTIONS, same four every time. The prose was good and
+                  // still unscannable: one block you cannot re-enter at the part
+                  // you half-remember.
+                  <div className="grid gap-2.5 sm:grid-cols-2 max-w-[104ch] pt-0.5">
+                    {([
+                      ["What the change did", story.read.effect],
+                      ["Where the behaviour went", story.read.shift],
+                      ["What it cost", story.read.cost],
+                      ["Against the prediction", story.read.prediction],
+                    ] as const).map(([label, text]) => (
+                      <div key={label} className="min-w-0">
+                        <div className={`${ZH} mb-1`}>{label}</div>
+                        <p className="text-[14.5px] leading-relaxed text-foreground/90">{text}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>
+                )}
                 {story.beats.length > 0 && (
                   <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-1.5 pt-1">
                     {story.beats.map((b) => {
@@ -1494,6 +1514,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           <span className={`font-extrabold tabular-nums shrink-0 w-[4.5rem] text-right ${hidden ? "opacity-40" : b.tone}`}>{b.value}</span>
                           <span className={`min-w-0 truncate ${hidden ? "opacity-40" : ""}`} title={b.label}>
                             {b.label}
+                            {isDecision && (
+                              <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide border border-ok/40 text-ok rounded px-1 align-middle"
+                                title="The decision metric — the one the verdict adjudicates.">
+                                decision
+                              </span>
+                            )}
                             {b.qualifier && <span className="text-muted-2"> — {b.qualifier}</span>}
                           </span>
                           {/* Curate where you read it: marking a metric supporting

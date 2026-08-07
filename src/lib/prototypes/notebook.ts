@@ -54,6 +54,11 @@ export interface Reading {
    *  vocabulary) and the COMPUTED floor is what is rendering. Silent fallback
    *  made a validator bug look like a quality problem for a whole session. */
   ledeComputed?: boolean;
+  /** THE READ, in the SAME four movements for every experiment. One paragraph
+   *  of good prose is still a wall — you cannot scan back to the part you
+   *  half-remember. Fixed sections mean the shape is learned once and every
+   *  readout is navigable. Absent on readings written before this. */
+  read?: { effect: string; shift: string; cost: string; prediction: string };
   beats?: { measureKey: string; label: string }[];
   /** One line per WATCHED metric — an observation, never a decision. */
   observations?: { measureKey: string; note: string }[];
@@ -188,7 +193,7 @@ export function readingBasisKey(parts: {
   // — presentation — cannot retire the reading and buy a fresh Opus call for
   // words that would come out the same.
   const sup = parts.supporting?.length ? [...parts.supporting].sort().join(",") : "";
-  return ["fmt9", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
+  return ["fmt10", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
     sup ? `sup:${sup}` : "-"].join("|");
 }
 

@@ -429,11 +429,12 @@ export function supportingKeys(opts: {
   const decidesOnOpti = opts.optiRowIsDecision
     ?? opts.map?.composites.some((c) => c.role === "primary" && c.source === "optimizely");
   const optiPrimaryKey = decidesOnOpti ? undefined : opts.optiPrimaryKey;
-  // Optimizely's primary leads, then the decision metric, then the team's own
-  // row order — ONE ordering to think about across every surface.
+  // THE METRIC INDEX IS THE ORDER. The decision metric leads (it is pinned to
+  // the top of that table and undraggable), and everything else follows the
+  // order the team dragged rows into — so the summary reads in the same
+  // sequence as the list they arranged, with no second ordering to learn.
   const rankOf = (k: string) =>
-    k === optiPrimaryKey ? -2
-      : k === opts.decisionKey ? -1
+    k === opts.decisionKey ? -1
       : rank.get(k) ?? Number.MAX_SAFE_INTEGER;
   const typed = opts.available.filter((k) =>
     roleOf(k, { map: opts.map, decisionKey: opts.decisionKey, optiPrimaryKey }) === "supporting");

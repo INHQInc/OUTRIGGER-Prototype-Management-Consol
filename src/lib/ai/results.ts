@@ -403,6 +403,10 @@ const readingTool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
+      effect: { type: "string" as const, description: "<=300 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it. One or two sentences." },
+      shift: { type: "string" as const, description: "<=300 chars, NO DIGITS. WHERE THE BEHAVIOUR WENT — if that intent moved, name the surfaces it moved TO and how far along the path it got. If it simply didn't move, say that plainly." },
+      cost: { type: "string" as const, description: "<=300 chars, NO DIGITS. WHAT IT COST — the step that softened, the trade being made, or the leak between intent and outcome. If nothing measurably gave way, say so rather than inventing a cost." },
+      prediction: { type: "string" as const, description: "<=300 chars, NO DIGITS. AGAINST THE PREDICTION — what the brief said would happen, which half of it is settled, and which half isn't yet. Name the hypothesis's own claim." },
       lede: { type: "string" as const, description: "<=900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what guests are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary." },
       beats: {
         // Bounds are set at call time from the team's supporting set — this
@@ -450,7 +454,7 @@ const readingTool = {
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
       dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data, recorded honestly" },
     },
-    required: ["headline", "lede", "beats"],
+    required: ["headline", "effect", "shift", "cost", "prediction", "beats"],
   },
 };
 
@@ -823,7 +827,14 @@ ${measureMenu}
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING for hotel executives: a HEADLINE (the story in one line), a LEDE, and ONE BEAT FOR EACH metric in the beat list above, in that order, decision metric first.
+Give the READING for hotel executives: a HEADLINE (the story in one line), THE FOUR MOVEMENTS below, a LEDE that is those four run together as one flowing paragraph, and ONE BEAT FOR EACH metric in the beat list above, in that order, decision metric first.
+
+THE FOUR MOVEMENTS — the same four in every experiment, so a reader learns the shape once:
+· effect — what the change did to the thing it was aimed at.
+· shift — where that behaviour went, and how far along the path it got.
+· cost — what softened, what is being traded, or where intent is leaking. If nothing measurably gave way, say that rather than inventing a cost.
+· prediction — what the brief claimed, which half is settled and which isn't.
+Each is one or two sentences and stands on its own: a reader scanning only "cost" must get a complete thought without having read the others.
 
 THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
 
@@ -886,7 +897,14 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       }
     } catch { /* the computed story is the floor */ }
   }
-  const ledeComputed = !lede;
+  // THE FOUR MOVEMENTS. Every experiment gets the same shape, so a reader
+  // learns it once and can scan straight back to the part they remember.
+  const sec = (v: unknown) => clean(v, 300);
+  const read = (() => {
+    const effect = sec(raw.effect), shift = sec(raw.shift), cost = sec(raw.cost), prediction = sec(raw.prediction);
+    return effect && shift && cost && prediction ? { effect, shift, cost, prediction } : undefined;
+  })();
+  const ledeComputed = !lede && !read;
   headline = headline || fallback.headline;
   lede = lede || fallback.lede;
 
@@ -962,6 +980,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     reading: {
       headline,
       lede,
+      ...(read ? { read } : {}),
       ...(ledeComputed ? { ledeComputed: true } : {}),
       beats,
       observations,
