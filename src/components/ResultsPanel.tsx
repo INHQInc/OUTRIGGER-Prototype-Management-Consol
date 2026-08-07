@@ -1483,12 +1483,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   </button>
                 </span>, undefined, busy === "reading" ? "rewriting" : undefined)}
               <div className="space-y-2">
-                {story.headline && <p className="text-[20px] font-bold leading-tight tracking-[-0.01em] text-balance max-w-[90ch]">{story.headline}</p>}
+                {story.headline && <p className="text-[22px] font-bold leading-[1.2] tracking-[-0.015em] text-balance max-w-[64ch]">{story.headline}</p>}
                 {story.read && Object.values(story.read).some(Boolean) ? (
                   // FIXED SECTIONS, same four every time. The prose was good and
                   // still unscannable: one block you cannot re-enter at the part
                   // you half-remember.
-                  <div className="grid gap-2.5 sm:grid-cols-2 max-w-[104ch] pt-0.5">
+                  <div className="grid gap-x-10 gap-y-5 md:grid-cols-2 xl:grid-cols-4 pt-1.5">
                     {([
                       ["What the change did", story.read.effect],
                       ["Where the behaviour went", story.read.shift],
@@ -1496,8 +1496,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       ["Against the prediction", story.read.prediction],
                     ] as const).filter(([, text]) => Boolean(text)).map(([label, text]) => (
                       <div key={label} className="min-w-0">
-                        <div className={`${ZH} mb-1`}>{label}</div>
-                        <p className="text-[14.5px] leading-relaxed text-foreground/90">{text}</p>
+                        <div className={`${ZH} mb-1.5 text-muted-2`}>{label}</div>
+                        <p className="text-[14px] leading-[1.55] text-foreground/90">{text}</p>
                       </div>
                     ))}
                   </div>
@@ -1505,7 +1505,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>
                 )}
                 {story.beats.length > 0 && (
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-1.5 pt-1">
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-10 gap-y-1 mt-4 pt-3.5 border-t border-border/50">
                     {story.beats.map((b) => {
                       const isDecision = b.key === statsEff?.primaryKey;
                       const hidden = unfeaturedEff.includes(b.key);
