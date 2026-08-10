@@ -923,18 +923,55 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // of prose — the reader sees a formatting regression and no reason for it.
   // Whatever passed is rendered; only an empty set falls back.
   const allowedMeasures = new Set(beatEnum);
+  // NORMALIZE THE SHAPE AT THE BOUNDARY. The model returns a section as
+  // {text, measure} most of the time and as a bare string some of the time,
+  // and reading only `.text` silently dropped every string one — which is why
+  // the four sections appeared on one refresh and vanished on the next.
   const sec = (v: unknown) => {
-    const o = (v ?? {}) as Record<string, unknown>;
+    const o = typeof v === "string" ? { text: v } : ((v ?? {}) as Record<string, unknown>);
     const text = clean(o.text, 420);
     if (!text) return undefined;
     const mk = typeof o.measure === "string" ? o.measure.trim() : "";
     return { text, ...(allowedMeasures.has(mk) ? { measureKey: mk } : {}) };
   };
-  const read = (() => {
+  let read = (() => {
     const r = { effect: sec(raw.effect), shift: sec(raw.shift), cost: sec(raw.cost), prediction: sec(raw.prediction) };
     return Object.values(r).some(Boolean) ? r : undefined;
   })();
+
+  // ASK AGAIN FOR WHAT WAS DROPPED. The lede had a repair pass and the
+  // sections did not, so a section that broke a rule just disappeared and the
+  // readout quietly reverted to a paragraph — the exact "sometimes they show,
+  // sometimes they don't" the reader was seeing.
+  const missingSections = (["effect", "shift", "cost", "prediction"] as const)
+    .filter((k) => !read?.[k]);
+  if (missingSections.length) {
+    try {
+      const fix = await client.messages.create({
+        model: "claude-opus-4-8",
+        max_tokens: 1200,
+        system,
+        messages: [
+          { role: "user", content: "Rewrite the sections of the reading you just gave." },
+          { role: "assistant", content: JSON.stringify({ effect: raw.effect, shift: raw.shift, cost: raw.cost, prediction: raw.prediction }) },
+          { role: "user", content: `These sections were rejected: ${missingSections.join(", ")}. Each must be plain text of AT MOST 420 characters with NO DIGITS AT ALL (every number is printed for you) and no statistics vocabulary (significance, sample size, confidence, p-values, days remaining). Keep the same substance. Return only JSON with a string for each: {${missingSections.map((k) => `"${k}": "..."`).join(", ")}}.` },
+        ],
+      });
+      const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
+      const m2 = /\{[\s\S]*\}/.exec(txt);
+      if (m2) {
+        const parsed = JSON.parse(m2[0]) as Record<string, unknown>;
+        const patched = { ...(read ?? {}) } as Record<string, { text: string; measureKey?: string } | undefined>;
+        for (const k of missingSections) patched[k] = patched[k] ?? sec(parsed[k]);
+        read = Object.values(patched).some(Boolean) ? (patched as typeof read) : read;
+      }
+    } catch { /* whatever survived is what renders */ }
+  }
+  // Two different failures, two different admissions: the paragraph fell back
+  // to the computed floor, or the four sections could not be recovered and the
+  // readout is showing prose where it should show structure.
   const ledeComputed = !lede && !read;
+  const sectionsMissing = (["effect", "shift", "cost", "prediction"] as const).some((k) => !read?.[k]);
   headline = headline || fallback.headline;
   lede = lede || fallback.lede;
 
@@ -1012,6 +1049,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       lede,
       ...(read ? { read } : {}),
       ...(ledeComputed ? { ledeComputed: true } : {}),
+      ...(sectionsMissing ? { sectionsMissing: true } : {}),
       beats,
       observations,
       riskNotes,

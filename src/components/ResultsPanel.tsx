@@ -1680,6 +1680,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             <div>
               {zoneHeader("The read",
                 <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
+                  {reading?.sectionsMissing && !reading?.ledeComputed && (
+                    <span className="text-warn/80 mr-2" title="One or more of the four movements was rejected by the format rules (a digit, over-length, or statistics vocabulary) and could not be recovered, so this is showing as prose. Re-read to try again.">
+                      partial structure
+                    </span>
+                  )}
                   {reading?.ledeComputed && (
                     <span className="text-warn/80 mr-2" title="The analyst's paragraph was rejected by the format rules (a digit, over-length, or statistics vocabulary) and the console's computed summary is showing instead. Re-read to try again.">
                       computed summary
