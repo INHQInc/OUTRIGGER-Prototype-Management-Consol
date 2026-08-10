@@ -1553,23 +1553,23 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
       {/* ═══ THE READOUT — decision band · numbers · attention · findings ═══ */}
       <div className="print-report">
+        <div className="print-legal-fixed">
+          <div>{shortNotice()}</div>
+          <div>{provenanceLine({
+            experiment: protoName ?? prototypeKey,
+            recordId: stamped ? `stamped ${verdict?.stampedAt?.slice(0, 19)}` : `draft ${statsEff?.computedAt?.slice(0, 19) ?? ""}`,
+            at: stamped ? verdict?.stampedAt : statsEff?.computedAt,
+          })}</div>
+        </div>
         {/* OWNERSHIP, on paper only, as a TABLE FOOTER — the one construct a
             print engine both repeats on every sheet AND reserves space for.
             As a fixed element it repeated fine and reserved nothing, so the
             report ran underneath it. On screen the table collapses to blocks
             and the footer is hidden, so the layout is untouched. */}
         <table className="print-frame">
+          {/* the tfoot reserves the room; the fixed block below draws in it */}
           <tfoot className="print-legal">
-            <tr><td>
-              <div className="print-legal-footer">
-                <div>{shortNotice()}</div>
-                <div>{provenanceLine({
-                  experiment: protoName ?? prototypeKey,
-                  recordId: stamped ? `stamped ${verdict?.stampedAt?.slice(0, 19)}` : `draft ${statsEff?.computedAt?.slice(0, 19) ?? ""}`,
-                  at: stamped ? verdict?.stampedAt : statsEff?.computedAt,
-                })}</div>
-              </div>
-            </td></tr>
+            <tr><td><div className="print-foot-spacer" /></td></tr>
           </tfoot>
           <tbody><tr><td>
         <div className="min-w-0 space-y-5">
@@ -1962,6 +1962,28 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </span>
                     </div>
 
+                    {deepObs[key] && (
+                      <div className="hidden print:block print-legal-block mt-1.5 ml-[11.5rem] space-y-2">
+                        {deepObs[key].mechanism && (
+                          <div>
+                            <div className={`${ZH} mb-0.5 text-muted-2`}>Why</div>
+                            <p className="text-[13px] leading-[1.5]">{deepObs[key].mechanism}</p>
+                          </div>
+                        )}
+                        {deepObs[key].rival && (
+                          <div>
+                            <div className={`${ZH} mb-0.5 text-muted-2`}>Why it might not be that</div>
+                            <p className="text-[13px] leading-[1.5]">{deepObs[key].rival}</p>
+                          </div>
+                        )}
+                        {(deepObs[key].counting || deepObs[key].caution) && (
+                          <div>
+                            <div className={`${ZH} mb-0.5 text-warn`}>How this is counted</div>
+                            <p className="text-[13px] leading-[1.5] text-warn">{deepObs[key].counting ?? deepObs[key].caution}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {openObs === key && (() => {
                       // THE EXPANSION IS THE RUN. A written explanation of a
                       // shape is worse than the shape; the deep read stays one
@@ -1972,7 +1994,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       const cell = m?.cells.find((c) => c.variationId === statsEff?.focusVariationId);
                       const earned = Boolean(cell?.liftCi && cell.liftCi.lo * cell.liftCi.hi > 0);
                       return (
-                        <div className="mt-2 ml-[5.75rem] md:ml-[11.5rem] rounded-lg border border-border bg-background/50 px-5 py-4 space-y-3">
+                        <div className="mt-2 ml-[5.75rem] md:ml-[11.5rem] rounded-lg border border-border bg-background/50 px-5 py-4 space-y-3 print:hidden">
                           <MetricChart
                             days={rows}
                             focusName={live?.variations.find((v) => v.variationId === statsEff?.focusVariationId)?.name ?? "variant"}

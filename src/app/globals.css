@@ -137,8 +137,26 @@ body {
   /* A repeating TABLE FOOTER is the one construct that both repeats per sheet
      and RESERVES the space it occupies. Fixed positioning repeated fine and
      reserved nothing, so the report ran underneath the notice. */
+  /* SPACE from the table footer, POSITION from a fixed element. A tfoot
+     reserves room on every sheet but draws where the content ends; a fixed
+     element draws at the page edge but reserves nothing. Neither alone is
+     enough, so the tfoot is an empty spacer and the fixed block is what the
+     reader actually sees, pinned to the bottom of every page. */
   .print-frame { display: table !important; width: 100%; }
   .print-frame > tfoot { display: table-footer-group !important; }
+  .print-foot-spacer { height: 16mm; }
+  .print-legal-fixed {
+    display: block !important;
+    position: fixed;
+    bottom: 6mm; left: 12mm; right: 12mm;
+    padding-top: 4px;
+    border-top: 1px solid #d5dbe2;
+    font-size: 7.5pt;
+    line-height: 1.35;
+    color: #5c6771 !important;
+    visibility: visible !important;
+  }
+  .print-legal-fixed * { visibility: visible !important; color: #5c6771 !important; }
   .print-frame > tbody, .print-frame > tbody > tr, .print-frame > tbody > tr > td,
   .print-frame > tfoot > tr, .print-frame > tfoot > tr > td { display: revert !important; }
   .print-legal { display: table-footer-group !important; }
@@ -156,7 +174,7 @@ body {
   /* A page break must never split the notice off from the line above it. */
   .print-legal-block { break-inside: avoid; page-break-inside: avoid; }
 }
-.print-legal { display: none; }
+.print-legal, .print-legal-fixed { display: none; }
 /* SCREEN: the frame is not a table at all — it exists only for paper. */
 .print-frame, .print-frame > tbody, .print-frame > tbody > tr, .print-frame > tbody > tr > td {
   display: block; width: 100%; border: 0; padding: 0; margin: 0;
