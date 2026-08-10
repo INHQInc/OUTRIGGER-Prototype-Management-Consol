@@ -8,6 +8,7 @@ import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
 import { figureValue, templateStory, shortLabel } from "@/lib/ai/results";
 import { shortNotice, provenanceLine } from "@/lib/brand";
+import { SWEEP_HOUR_UTC } from "@/lib/prototypes/report";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
@@ -561,7 +562,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [mailOpen, setMailOpen] = useState(false);
   const [mail, setMail] = useState<{
     recipients: string[];
-    schedule?: { enabled: boolean; day: number; hour: number };
+    schedule?: { enabled: boolean; day: number };
     lastSentAt?: string; lastSentTo?: string[]; lastError?: string;
   } | null>(null);
   const [mailUnavailable, setMailUnavailable] = useState<string | null>(null);
@@ -1659,7 +1660,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   type="checkbox"
                   checked={Boolean(mail?.schedule?.enabled)}
                   disabled={mailBusy || !(mail?.recipients ?? []).length}
-                  onChange={(e) => void mailPost({ schedule: { enabled: e.target.checked, day: mail?.schedule?.day ?? 1, hour: mail?.schedule?.hour ?? 13 } })} />
+                  onChange={(e) => void mailPost({ schedule: { enabled: e.target.checked, day: mail?.schedule?.day ?? 1 } })} />
                 Send it every week
               </label>
               {mail?.schedule?.enabled && (
@@ -1670,12 +1671,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     className="h-8 px-2 rounded-md border border-border bg-background text-[13px]">
                     {DAYNAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}
                   </select>
-                  <select
-                    value={mail.schedule.hour}
-                    onChange={(e) => void mailPost({ schedule: { ...mail.schedule!, hour: Number(e.target.value) } })}
-                    className="h-8 px-2 rounded-md border border-border bg-background text-[13px]">
-                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00 UTC</option>)}
-                  </select>
+                  {/* A day, no time. The sweep runs once daily and lands anywhere
+                      inside its hour, so a time picker here would be a promise
+                      the deployment cannot keep. Say the real window instead. */}
+                  <span className="text-muted-2">around {String(SWEEP_HOUR_UTC).padStart(2, "0")}:00 UTC</span>
                 </div>
               )}
               <p className="text-[12.5px] text-muted-2 leading-snug">

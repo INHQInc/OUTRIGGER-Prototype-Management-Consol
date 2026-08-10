@@ -13,14 +13,27 @@
  */
 import { getContentStore } from "../content/store";
 
+/**
+ * WHEN THE SWEEP RUNS, and the only place that hour is written down.
+ *
+ * The schedule names a DAY, not an hour, because the platform cannot honour an
+ * hour: Vercel's Hobby plan permits one cron run per day (an hourly expression
+ * is rejected at deploy time, which is how this was found) and fires it
+ * anywhere inside the hour. Offering a time picker over that would be a
+ * promise the deployment cannot keep — and worse, a schedule set for any hour
+ * after the sweep would have silently never sent.
+ *
+ * On Pro this becomes per-minute and the hour can come back. Change
+ * `vercel.json` and this constant together; nothing else reads the sweep time.
+ */
+export const SWEEP_HOUR_UTC = 13;
+
 export interface ReportSettings {
   recipients: string[];
   schedule?: {
     enabled: boolean;
-    /** 0 = Sunday. The day the digest goes out. */
+    /** 0 = Sunday. The day the digest goes out, some time around SWEEP_HOUR_UTC. */
     day: number;
-    /** UTC hour, 0–23. Kept in UTC because cron is. */
-    hour: number;
   };
   lastSentAt?: string;
   lastSentTo?: string[];
@@ -66,15 +79,18 @@ export async function mutateReportSettings(
 /**
  * Is this schedule due right now?
  *
- * True only on the right weekday, at or after the chosen hour, and not already
- * sent today. The "already sent today" check is what makes an hourly sweep
- * safe: the job can run sixty times and the report leaves once.
+ * The right weekday, and not already sent today. There is deliberately NO hour
+ * test: the sweep runs once a day, so gating on an hour could only ever make a
+ * report late or — for any hour after the sweep — permanently unsent.
+ *
+ * "Already sent today" survives regardless: retries and a manual send both mean
+ * the job can reach this twice, and nobody forgives a tool that mails the same
+ * report to their leadership twice.
  */
 export function scheduleDue(s: ReportSettings, now: Date): boolean {
   if (!s.schedule?.enabled) return false;
   if (!s.recipients.length) return false;
   if (now.getUTCDay() !== s.schedule.day) return false;
-  if (now.getUTCHours() < s.schedule.hour) return false;
   const today = now.toISOString().slice(0, 10);
   return (s.lastSentAt ?? "").slice(0, 10) !== today;
 }

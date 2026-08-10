@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/reports",
-      "schedule": "0 * * * *"
+      "schedule": "0 13 * * *"
     }
   ]
 }

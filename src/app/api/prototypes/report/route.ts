@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
-import { getReportSettings, mutateReportSettings } from "@/lib/prototypes/report";
+import { getReportSettings, mutateReportSettings, SWEEP_HOUR_UTC } from "@/lib/prototypes/report";
 import { validRecipients, mailUnavailableReason, activeProvider, fromAddress } from "@/lib/email/send";
 import { sendReadoutEmail } from "@/lib/email/report-run";
 import { currentUser } from "@/lib/auth/current";
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as {
     key?: string;
     recipients?: unknown;
-    schedule?: { enabled?: boolean; day?: number; hour?: number };
+    schedule?: { enabled?: boolean; day?: number };
     sendNow?: boolean;
     to?: unknown;
   };
@@ -58,14 +58,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.schedule) {
+      // A DAY, not a time — the sweep runs once daily, so an hour would be a
+      // promise the deployment cannot keep. See SWEEP_HOUR_UTC.
       const day = Math.min(6, Math.max(0, Math.round(Number(body.schedule.day ?? 1))));
-      const hour = Math.min(23, Math.max(0, Math.round(Number(body.schedule.hour ?? 13))));
       const enabled = Boolean(body.schedule.enabled);
       const settings = await mutateReportSettings(g.proto.key, (cur) => {
         if (enabled && !cur.recipients.length) throw new Error("Add at least one recipient before switching the weekly send on.");
-        return { ...cur, schedule: { enabled, day, hour } };
+        return { ...cur, schedule: { enabled, day } };
       });
-      await audit(g.orgId, actor, enabled ? "results.report-scheduled" : "results.report-unscheduled", g.proto.name, `day ${day} · ${hour}:00 UTC`);
+      await audit(g.orgId, actor, enabled ? "results.report-scheduled" : "results.report-unscheduled", g.proto.name, `day ${day} · ~${SWEEP_HOUR_UTC}:00 UTC`);
       return NextResponse.json({ settings });
     }
 
