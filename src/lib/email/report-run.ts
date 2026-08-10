@@ -70,8 +70,9 @@ export async function sendReadoutEmail(opts: {
     results, stats, verdict, reading, map, supporting,
   });
 
+  let out: Awaited<ReturnType<typeof sendEmail>>;
   try {
-    await sendEmail({ to, subject, html, text });
+    out = await sendEmail({ to, subject, html, text });
   } catch (e) {
     // The failure is RECORDED, so a schedule that has been failing for a month
     // is visible in the app rather than only in a log nobody reads.
@@ -79,11 +80,17 @@ export async function sendReadoutEmail(opts: {
     throw e;
   }
 
+  // PARTIAL SUCCESS IS NOT SUCCESS. One bad address among five must not report
+  // a clean send — the person who didn't get it is exactly who nobody notices.
+  const partial = out.failed.length
+    ? `${out.failed.length} of ${to.length} didn't go out — ${out.failed.map((f) => `${f.to}: ${f.error}`).join("; ")}`
+    : undefined;
+
   await mutateReportSettings(opts.proto.key, (cur) => ({
     ...cur,
     lastSentAt: new Date().toISOString(),
-    lastSentTo: to,
-    lastError: undefined,
+    lastSentTo: out.accepted,
+    lastError: partial,
   }));
-  return { sent: to.length, to, subject };
+  return { sent: out.accepted.length, to: out.accepted, subject, ...(partial ? { warning: partial } : {}) };
 }

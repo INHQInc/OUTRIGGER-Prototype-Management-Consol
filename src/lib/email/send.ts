@@ -35,6 +35,9 @@ const ORDER: readonly MailProvider[] = ["mailgun", "resend", "gmail"];
 export interface SendResult {
   id: string;
   accepted: string[];
+  /** Recipients the provider refused, with the reason. Partial success is a
+   *  real outcome and must not be reported as "sent". */
+  failed: { to: string; error: string }[];
   via: MailProvider;
 }
 
@@ -117,12 +120,6 @@ export function fromAddress(): string {
   return process.env.REPORT_FROM_EMAIL ?? "";
 }
 
-/** `Name <a@b.com>` → `a@b.com`. Envelope slots want the address alone. */
-function bareAddress(v: string): string {
-  const m = v.match(/<([^>]+)>/);
-  return (m ? m[1] : v).trim();
-}
-
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /** Addresses that are actually addresses. Anything else never reaches a queue. */
@@ -161,29 +158,67 @@ export async function sendEmail(opts: {
   const subject = opts.subject.slice(0, 200);
   const from = fromAddress();
 
-  // BCC on every path, not To. A weekly digest going to a leadership list must
-  // not publish everyone's address to everyone else, and a reply-all storm on
-  // an automated report helps nobody. The visible To is the sender itself.
-  const envelopeTo = bareAddress(from);
+  // ONE MESSAGE PER RECIPIENT — deliberately not BCC.
+  //
+  // BCC needs something in the visible To, and the only address available is
+  // the sender's own. That address is not necessarily deliverable: send from a
+  // domain whose MX points elsewhere and every message HARD BOUNCES on its own
+  // To header while the BCC copies arrive fine. It looks like it works. It is
+  // not working: SES suspends senders above roughly a 5% bounce rate and this
+  // pattern bounces on ~100% of messages.
+  //
+  // Per-recipient sending also keeps the list private more thoroughly than BCC
+  // ever did — each person's copy names only them — and it gives per-recipient
+  // delivery status instead of one aggregate verdict.
+  const accepted: string[] = [];
+  const failed: { to: string; error: string }[] = [];
+  let firstId = "";
 
-  if (provider === "gmail") {
-    const transport = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: { user: process.env.GMAIL_USER!, pass: process.env.GMAIL_APP_PASSWORD! },
-    });
+  const transport =
+    provider === "gmail"
+      ? nodemailer.createTransport({
+          host: "smtp.gmail.com",
+          port: 465,
+          secure: true,
+          auth: { user: process.env.GMAIL_USER!, pass: process.env.GMAIL_APP_PASSWORD! },
+        })
+      : null;
+
+  for (const recipient of to) {
     try {
-      const info = await transport.sendMail({
-        from,
-        to: process.env.GMAIL_USER!,
-        bcc: to,
-        subject,
-        html: opts.html,
-        text: opts.text,
-        ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+      const id = await sendOne(provider, { from, to: recipient, subject, html: opts.html, text: opts.text, replyTo: opts.replyTo }, transport);
+      if (!firstId) firstId = id;
+      accepted.push(recipient);
+    } catch (e) {
+      failed.push({ to: recipient, error: (e as Error).message.slice(0, 300) });
+    }
+  }
+
+  // Nobody got it => this was a failure, not a partial one. Surface the actual
+  // provider error rather than a count of zero.
+  if (!accepted.length) {
+    throw new Error(failed[0]?.error ?? "The mail provider accepted no recipients.");
+  }
+  return { id: firstId, accepted, failed, via: provider };
+}
+
+/** Deliver to exactly one address. Throws with a provider-specific explanation. */
+async function sendOne(
+  provider: MailProvider,
+  msg: { from: string; to: string; subject: string; html: string; text: string; replyTo?: string },
+  transport: nodemailer.Transporter | null,
+): Promise<string> {
+  if (provider === "gmail") {
+    try {
+      const info = await transport!.sendMail({
+        from: msg.from,
+        to: msg.to,
+        subject: msg.subject,
+        html: msg.html,
+        text: msg.text,
+        ...(msg.replyTo ? { replyTo: msg.replyTo } : {}),
       });
-      return { id: info.messageId ?? "", accepted: to, via: "gmail" };
+      return info.messageId ?? "";
     } catch (e) {
       const m = (e as Error).message;
       // Google's own wording here is famously unhelpful ("Username and Password
@@ -199,13 +234,12 @@ export async function sendEmail(opts: {
   if (provider === "mailgun") {
     const domain = process.env.MAILGUN_DOMAIN!.trim();
     const form = new URLSearchParams();
-    form.set("from", from);
-    form.set("to", envelopeTo);
-    for (const r of to) form.append("bcc", r);
-    form.set("subject", subject);
-    form.set("html", opts.html);
-    form.set("text", opts.text);
-    if (opts.replyTo) form.set("h:Reply-To", opts.replyTo);
+    form.set("from", msg.from);
+    form.set("to", msg.to);
+    form.set("subject", msg.subject);
+    form.set("html", msg.html);
+    form.set("text", msg.text);
+    if (msg.replyTo) form.set("h:Reply-To", msg.replyTo);
 
     const res = await fetch(`${mailgunBase()}/v3/${encodeURIComponent(domain)}/messages`, {
       method: "POST",
@@ -231,7 +265,7 @@ export async function sendEmail(opts: {
       throw new Error(`Mailgun refused it (${res.status}): ${body}`);
     }
     const json = (await res.json().catch(() => ({}))) as { id?: string };
-    return { id: json.id ?? "", accepted: to, via: "mailgun" };
+    return json.id ?? "";
   }
 
   const res = await fetch(RESEND_API, {
@@ -241,19 +275,18 @@ export async function sendEmail(opts: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from,
-      to: [envelopeTo],
-      bcc: to,
-      subject,
-      html: opts.html,
-      text: opts.text,
-      ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
+      from: msg.from,
+      to: [msg.to],
+      subject: msg.subject,
+      html: msg.html,
+      text: msg.text,
+      ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
     }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`The mail provider refused it (${res.status}): ${body.slice(0, 300)}`);
+    throw new Error(`Resend refused it (${res.status}): ${body.slice(0, 300)}`);
   }
   const json = (await res.json().catch(() => ({}))) as { id?: string };
-  return { id: json.id ?? "", accepted: to, via: "resend" };
+  return json.id ?? "";
 }
