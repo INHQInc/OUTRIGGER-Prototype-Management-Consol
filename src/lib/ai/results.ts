@@ -403,7 +403,7 @@ const readingTool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
-      executive: { type: "string" as const, description: "<=420 chars, TWO OR THREE SENTENCES, NO DIGITS. THE EXECUTIVE SUMMARY, for a senior leader who will read this and nothing else on the page. Say (1) what the change actually did to guest behaviour in plain business language, (2) whether that reached the outcome the business cares about, and (3) what decision is now in front of them - ship, keep running, stop, or fix something. No statistics vocabulary: never 'significant', 'confidence', 'p-value', 'power', 'underpowered'. Write as if briefing a CEO in a lift: concrete, unhedged about what is known, honest about what is not." },
+      executive: { type: "string" as const, description: "<=900 chars, FOUR TO SIX SENTENCES, NO DIGITS. THE EXECUTIVE SUMMARY, for a senior leader who will read this and nothing else. Tell the WHOLE story, and build it from the decision metric AND the supporting metrics - walk the chain: what the change did to the surface it touched, where that behaviour went next (name the actual surfaces from the supporting metrics), where it stopped, what it cost, and what that means for the outcome the business cares about. Then say what decision is in front of them - ship, keep running, stop, or fix something. A two-line summary of a run with a dozen metrics is a wasted page: the supporting metrics are where the mechanism is visible, so use them. No statistics vocabulary: never 'significant', 'confidence', 'p-value', 'power', 'underpowered'; say 'beyond what luck explains'. Concrete and unhedged about what is known, explicit about what is not." },
       effect: { type: "object" as const, properties: {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it." },
         measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
@@ -892,7 +892,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   };
 
   let headline = clean(raw.headline, 80);
-  let executive = clean(raw.executive, 420);
+  let executive = clean(raw.executive, 900);
   let lede = clean(raw.lede, 900);
   // A digit or an over-long sentence used to swap the analyst's paragraph for
   // a generic template silently. Ask once for a repair, in the same call
@@ -906,7 +906,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
         messages: [
           { role: "user", content: res.content.map((c) => (c.type === "text" ? c.text : "")).join("") || "(see below)" },
           { role: "assistant", content: JSON.stringify({ headline: raw.headline, executive: raw.executive, lede: raw.lede }) },
-          { role: "user", content: `${[!headline && "headline", !executive && "executive", !lede && "lede"].filter(Boolean).join(", ")} rejected. Rules: NO DIGITS anywhere in the words, headline <=80 characters, executive <=420 characters and two or three sentences, lede <=900 characters, no statistics vocabulary anywhere (never "significant", "confidence", "power", "underpowered"). The executive summary is for a senior leader who reads nothing else: what the change did in business language, whether it reached the outcome the business cares about, and what decision is now in front of them. Rewrite about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "executive": "...", "lede": "..."}` },
+          { role: "user", content: `${[!headline && "headline", !executive && "executive", !lede && "lede"].filter(Boolean).join(", ")} rejected. Rules: NO DIGITS anywhere in the words, headline <=80 characters, executive <=900 characters and four to six sentences telling the whole chain from the change through the supporting metrics to the decision metric, lede <=900 characters, no statistics vocabulary anywhere (never "significant", "confidence", "power", "underpowered"). The executive summary is for a senior leader who reads nothing else: what the change did in business language, whether it reached the outcome the business cares about, and what decision is now in front of them. Rewrite about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "executive": "...", "lede": "..."}` },
         ],
       });
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
@@ -914,7 +914,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       if (m) {
         const parsed = JSON.parse(m[0]) as { headline?: string; executive?: string; lede?: string };
         headline = headline || clean(parsed.headline, 80);
-        executive = executive || clean(parsed.executive, 420);
+        executive = executive || clean(parsed.executive, 900);
         lede = lede || clean(parsed.lede, 900);
       }
     } catch { /* the computed story is the floor */ }

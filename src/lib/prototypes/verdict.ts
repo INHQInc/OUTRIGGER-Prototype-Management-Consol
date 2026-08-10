@@ -101,6 +101,10 @@ export interface PreRegistration {
    *  data was already in — flipping it post-hoc turns a refutation into a
    *  confirmation, so it is disclosed, never silent. */
   predictedDirection?: "increase" | "decrease";
+  /** No winning direction was declared anywhere — not on the console's metric
+   *  and not in Optimizely — so `predictedDirection` is an assumption, and any
+   *  verdict that turns on direction is only as good as that assumption. */
+  directionAssumed?: boolean;
   directionChangedAfterObservation?: { was: string; at: string };
   /** The decision metric was SWAPPED after observation began. */
   primaryChangedAfterObservation?: { was: string; at: string };
@@ -278,6 +282,11 @@ export function deriveVerdict(opts: {
     primaryChangedAfterObservation: lateSwap ? { was: lateSwap.from, at: lateSwap.at } : undefined,
     primarySource: primaryDecl ? (primaryDecl.source === "optimizely" ? "optimizely" as const : "console" as const) : undefined,
     predictedDirection: primaryDecl?.direction ?? "increase" as const,
+    // NOBODY SAID WHICH WAY A WIN LOOKS. "increase" is then an ASSUMPTION, and
+    // on a metric the brief wanted to go DOWN it inverts the verdict outright —
+    // a successful prediction is reported as a refutation. Recorded here so
+    // every surface can disclose it instead of printing a confident wrong word.
+    directionAssumed: primaryDecl && !primaryDecl.direction ? true : undefined,
     directionChangedAfterObservation: lateDirection ? { was: lateDirection.from, at: lateDirection.at } : undefined,
     primaryUnratified: primaryDecl && primaryDecl.source !== "optimizely" && !map?.confirmed ? true : undefined,
   };
@@ -572,6 +581,18 @@ export function nextStep(
 ): { label: string; gateId?: string } {
   if (!verdict) return { label: "Waiting for data" };
   if (verdict.state === "stamped") return { label: "Decision recorded" };
+
+  // An ADJUDICATED run has its answer already; the gates only govern what to do
+  // while it has none. Reading a failing gate over the top of "refuted" is how
+  // a clean negative came out as "Hold the call".
+  const decided: Partial<Record<string, string>> = {
+    confirmed: "Decide whether to ship it",
+    refuted: "Stop it, or redesign the change and retest",
+    guardrail_breach: "Review the breached guardrail before anything else",
+    invalid: "Fix the setup — these numbers cannot be read yet",
+  };
+  const byVerdict = decided[verdict.verdict];
+  if (byVerdict) return { label: byVerdict };
 
   const failing = verdict.gates.find((g) => g.pass === false);
   if (!failing) return { label: "Ready for a decision" };

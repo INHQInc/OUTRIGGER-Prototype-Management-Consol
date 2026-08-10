@@ -10,6 +10,13 @@
  * names a metric key, the code resolves the live value. A number is never
  * copied out of the model's prose, here or anywhere.
  *
+ * NEVER USE THE `font:` SHORTHAND HERE. Outlook renders through Word, which
+ * discards it — so every font-size and font-weight vanishes while the
+ * letter-spacing and text-transform beside them survive. The document arrives
+ * with its entire type hierarchy inverted: the hero number at body size, the
+ * ten-pixel labels at sixteen. Longhand only: font-family, font-size,
+ * line-height, font-weight.
+ *
  * IT USES THE WINDOW. The default email card — 600 to 640px centred on a grey
  * canvas — wastes most of a desktop reading pane. The shell runs to 1280px with
  * a thin margin holding the frame, and prose caps at 900px: wide enough that a
@@ -48,11 +55,12 @@
  * Slate = not yet beyond luck. Sections are told apart by position and label,
  * so hue stays free to mean exactly one thing.
  *
- * ALL METRICS USES THE CONSOLE'S OWN ROW SHAPE: the change first and large,
- * then the metric with its role, both rates, the event counts and the base, and
- * underneath it the analyst's observation of that metric. An earlier version
- * was a spreadsheet with a bar chart; this carries the same numbers and adds
- * the sentence that says what they mean, which is the part a reader keeps.
+ * ALL METRICS IS A GRID WITH THE ANALYST'S SENTENCE IN IT. The change, whether
+ * it settled, and the role each own a fixed column, and the rates and counts are
+ * right-aligned under headings — so the eye lands in the same place on every
+ * row instead of hunting through a sentence for the number. The observation
+ * still sits under the metric it is about, because that is the part a reader
+ * keeps.
  */
 import type { ExperimentResults, MetricMap, MetricRole } from "../prototypes/results";
 import { roleOf, optiPrimaryKeyOf } from "../prototypes/results";
@@ -107,7 +115,7 @@ const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}
 const num = (v?: number) => (v === undefined ? "—" : v.toLocaleString());
 
 const caps = (text: string, color = "#5A6B7A", pb = 7) =>
-  `<div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:${color};padding-bottom:${pb}px;">${esc(text)}</div>`;
+  `<div style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:${color};padding-bottom:${pb}px;">${esc(text)}</div>`;
 
 export function renderReadoutEmail(opts: {
   prototypeName: string;
@@ -153,7 +161,7 @@ export function renderReadoutEmail(opts: {
   const unsettledTag = (k?: string, ml = 8) =>
     isSettled(k)
       ? ""
-      : `<span style="display:inline-block;margin-left:${ml}px;font:700 8.5px/1 ${F};letter-spacing:.08em;text-transform:uppercase;color:${AMBER_INK};background:${AMBER_BG};border:1px solid ${AMBER_RULE};border-radius:3px;padding:3px 5px;vertical-align:middle;">Not settled</span>`;
+      : `<span style="display:inline-block;margin-left:${ml}px;font-family:${F};font-size:8.5px;line-height:1;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${AMBER_INK};background:${AMBER_BG};border:1px solid ${AMBER_RULE};border-radius:3px;padding:3px 5px;vertical-align:middle;">Not settled</span>`;
 
   const shown = opts.supporting.filter((k) => metric(k));
 
@@ -176,6 +184,7 @@ export function renderReadoutEmail(opts: {
   const headline = reading?.headline || verdict?.headline || `${opts.prototypeName} — experiment readout`;
 
   const pre = verdict?.preRegistration;
+
   const frozen = pre && pre.anchor !== "live" && !pre.hypothesisNotFrozen;
 
   const pk = stats?.primaryKey;
@@ -184,6 +193,18 @@ export function renderReadoutEmail(opts: {
   const pbase = pk ? cell(pk, baseId) : undefined;
   const heroSettled = isSettled(pk);
   const heroInk = inkFor(pk);
+
+  // WHICH WAY IS A WIN. If nobody declared it, the engine assumed UP — and on a
+  // metric the brief wanted DOWN that inverts the verdict: the prediction came
+  // true and the readout says it failed. Never print the answer without this.
+  const dirAssumed = Boolean(pre?.directionAssumed) &&
+    (verdict?.verdict === "refuted" || verdict?.verdict === "confirmed");
+  const directionCaveat = dirAssumed
+    ? `<div style="margin-top:12px;padding:11px 13px;background:#FFFFFF;border:1px solid ${AMBER_RULE};border-radius:6px;">
+        <div style="font-family:${F};font-size:9.5px;line-height:1.2;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${AMBER_INK};padding-bottom:5px;">Read this before trusting the verdict</div>
+        <div style="font-family:${F};font-size:13.5px;line-height:1.55;font-weight:400;color:${BODY};${PROSE}">No winning direction was declared for ${esc(pm?.label ?? "the decision metric")}, so this run was judged as though <strong>up is the win</strong>. If the change was meant to push that metric <strong>down</strong>, the verdict above is inverted — the prediction actually held. Set the winning direction on the metric and the call corrects itself.</div>
+      </div>`
+    : "";
 
   // ── EVERYTHING THE SUMMARY SAYS IS COUNTED HERE, NOT WRITTEN ──────────────
   const nShown = shown.length;
@@ -207,8 +228,8 @@ export function renderReadoutEmail(opts: {
     <td width="25%" style="width:25%;padding-right:8px;vertical-align:top;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${TINT};border-radius:8px;">
         <tr><td style="padding:13px 12px;">
-          <div style="font:700 9.5px/1.2 ${F};letter-spacing:.1em;text-transform:uppercase;color:${FAINT};padding-bottom:6px;">${esc(label)}</div>
-          <div style="font:800 19px/1.15 ${F};color:${color};letter-spacing:-.01em;">${esc(value)}</div>
+          <div style="font-family:${F};font-size:9.5px;line-height:1.2;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${FAINT};padding-bottom:6px;">${esc(label)}</div>
+          <div style="font-family:${F};font-size:19px;line-height:1.15;font-weight:800;color:${color};letter-spacing:-.01em;">${esc(value)}</div>
         </td></tr>
       </table>
     </td>`;
@@ -242,7 +263,7 @@ export function renderReadoutEmail(opts: {
   // The inbox preview line. This is the only text most recipients will see
   // before deciding whether to open, so it carries the answer and the action —
   // not the subject repeated back at them.
-  const firstSentence = reading?.executive?.split(/(?<=[.!?])\s+/)[0];
+  const firstSentence = (reading?.executive || reading?.lede)?.split(/(?<=[.!?])\s+/)[0];
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const asOfLabel = (() => {
     const iso = stats?.computedAt;
@@ -260,23 +281,24 @@ export function renderReadoutEmail(opts: {
   /** One row of the answer block: a label, and a value that carries its own colour. */
   const answerRow = (label: string, valueHtml: string, last = false) => `
     <tr>
-      <td width="132" style="width:132px;padding:11px 14px 11px 0;${last ? "" : `border-bottom:1px solid ${RULE};`}vertical-align:top;font:700 9.5px/1.6 ${F};letter-spacing:.1em;text-transform:uppercase;color:${FAINT};">${esc(label)}</td>
+      <td width="132" style="width:132px;padding:11px 14px 11px 0;${last ? "" : `border-bottom:1px solid ${RULE};`}vertical-align:top;font-family:${F};font-size:9.5px;line-height:1.6;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${FAINT};">${esc(label)}</td>
       <td style="padding:11px 0;${last ? "" : `border-bottom:1px solid ${RULE};`}vertical-align:top;">${valueHtml}</td>
     </tr>`;
 
   const movedLine = (k?: string, fallback = "Nothing moved measurably") => {
-    if (!k) return `<span style="font:400 14.5px/1.5 ${F};color:${MUTED};">${esc(fallback)}</span>`;
+    if (!k) return `<span style="font-family:${F};font-size:14.5px;line-height:1.5;font-weight:400;color:${MUTED};">${esc(fallback)}</span>`;
     const m = metric(k)!;
-    return `<span style="font:800 17px/1.45 ${F};color:${inkFor(k)};">${esc(pct(cell(k, focusId)?.lift))}</span>
-      <span style="font:500 14.5px/1.5 ${F};color:${BODY};">&nbsp; ${esc(m.label)}</span>${unsettledTag(k)}`;
+    return `<span style="font-family:${F};font-size:17px;line-height:1.45;font-weight:800;color:${inkFor(k)};">${esc(pct(cell(k, focusId)?.lift))}</span>
+      <span style="font-family:${F};font-size:14.5px;line-height:1.5;font-weight:500;color:${BODY};">&nbsp; ${esc(m.label)}</span>${unsettledTag(k)}`;
   };
 
   // THE ANALYST'S EXECUTIVE SUMMARY. Two or three sentences, digit-free by
   // schema, aimed at someone who reads this and nothing else. It sits above the
   // computed rows because prose answers "so what" and a table never will.
+  const summaryProse = reading?.executive || reading?.lede || "";
   const execBlock = `
-    <div style="font:700 21px/1.35 ${F};color:${INK};${PROSE}padding-bottom:${reading?.executive ? "10" : "0"}px;">${esc(headline)}</div>
-    ${reading?.executive ? `<div style="font:400 16px/1.62 ${F};color:${BODY};${PROSE}">${esc(reading.executive)}</div>` : ""}`;
+    <div style="font-family:${F};font-size:21px;line-height:1.35;font-weight:700;color:${INK};${PROSE}padding-bottom:${summaryProse ? "10" : "0"}px;">${esc(headline)}</div>
+    ${summaryProse ? `<div style="font-family:${F};font-size:16px;line-height:1.62;font-weight:400;color:${BODY};${PROSE}">${esc(summaryProse)}</div>` : ""}`;
 
   const summary = `
     <tr><td style="padding:26px 28px 6px 28px;">
@@ -295,18 +317,18 @@ export function renderReadoutEmail(opts: {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
         <tr><td style="padding-top:24px;">
           ${caps("The decision metric")}
-          <div style="font:600 14.5px/1.35 ${F};color:${BODY};padding-bottom:12px;">${esc(pm.label)}</div>
+          <div style="font-family:${F};font-size:14.5px;line-height:1.35;font-weight:600;color:${BODY};padding-bottom:12px;">${esc(pm.label)}</div>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
             <td style="vertical-align:bottom;padding-right:16px;">
-              <div style="font:800 54px/.92 ${F};color:${heroInk};letter-spacing:-.025em;">${esc(pct(pf?.lift))}</div>
+              <div style="font-family:${F};font-size:54px;line-height:.92;font-weight:800;color:${heroInk};letter-spacing:-.025em;">${esc(pct(pf?.lift))}</div>
             </td>
             <td style="vertical-align:bottom;">
-              <span style="display:inline-block;font:700 9.5px/1 ${F};letter-spacing:.09em;text-transform:uppercase;color:${heroSettled ? heroInk : AMBER_INK};background:${heroSettled ? "#FFFFFF" : AMBER_BG};border:1px solid ${heroSettled ? heroInk : AMBER_RULE};border-radius:3px;padding:6px 8px;">
+              <span style="display:inline-block;font-family:${F};font-size:9.5px;line-height:1;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:${heroSettled ? heroInk : AMBER_INK};background:${heroSettled ? "#FFFFFF" : AMBER_BG};border:1px solid ${heroSettled ? heroInk : AMBER_RULE};border-radius:3px;padding:6px 8px;">
                 ${heroSettled ? "Settled beyond luck" : "Still inside luck"}
               </span>
             </td>
           </tr></table>
-          <div style="font:400 13px/1.6 ${F};color:${MUTED};padding-top:12px;">
+          <div style="font-family:${F};font-size:13px;line-height:1.6;font-weight:400;color:${MUTED};padding-top:12px;">
             ${esc(rate(pf?.rate))} vs ${esc(rate(pbase?.rate))} control
             ${pf?.count !== undefined ? `&nbsp;&middot;&nbsp; ${esc(num(pf.count))} vs ${esc(num(pbase?.count))} events` : ""}
           </div>
@@ -327,14 +349,14 @@ export function renderReadoutEmail(opts: {
           <td width="3" bgcolor="${m ? ink : RULE}" style="width:3px;background:${m ? ink : RULE};font-size:0;border-radius:2px;">&nbsp;</td>
           <td width="14" style="width:14px;font-size:0;">&nbsp;</td>
           <td style="vertical-align:top;">
-            <div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding-bottom:7px;">
+            <div style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding-bottom:7px;">
               <span style="color:#AEBAC5;">${esc(n)}</span>&nbsp;&nbsp;${esc(label)}
             </div>
             ${m ? `<div style="padding-bottom:7px;">
-              <span style="font:800 26px/1.05 ${F};color:${ink};letter-spacing:-.015em;">${esc(pct(c?.lift))}</span>
-              <span style="font:600 13px/1.2 ${F};color:${BODY};">&nbsp;&nbsp;${esc(m.label)}</span>${unsettledTag(sec.measureKey)}
+              <span style="font-family:${F};font-size:26px;line-height:1.05;font-weight:800;color:${ink};letter-spacing:-.015em;">${esc(pct(c?.lift))}</span>
+              <span style="font-family:${F};font-size:13px;line-height:1.2;font-weight:600;color:${BODY};">&nbsp;&nbsp;${esc(m.label)}</span>${unsettledTag(sec.measureKey)}
             </div>` : ""}
-            <div style="font:400 14.5px/1.62 ${F};color:${BODY};${PROSE}">${esc(sec.text)}</div>
+            <div style="font-family:${F};font-size:14.5px;line-height:1.62;font-weight:400;color:${BODY};${PROSE}">${esc(sec.text)}</div>
           </td>
         </tr></table>
       </td></tr>`;
@@ -348,29 +370,60 @@ export function renderReadoutEmail(opts: {
         movement("04", "Against the prediction", reading.read.prediction),
       ].join("")
     : reading?.lede
-      ? `<tr><td style="padding:0 0 22px 0;font:400 14.5px/1.65 ${F};color:${BODY};">${esc(reading.lede)}</td></tr>`
+      ? `<tr><td style="padding:0 0 22px 0;font-family:${F};font-size:14.5px;line-height:1.65;font-weight:400;color:${BODY};">${esc(reading.lede)}</td></tr>`
       : "";
 
   // ── EVERY METRIC: a real table. Columns, headers, one alignment per kind. ──
+  /** ALL METRICS IS A GRID, NOT A SENTENCE.
+   *
+   *  Every indicator sits in a fixed column so the eye lands in the same place
+   *  on every row: the change and whether it settled on the left, the role in
+   *  its own lane, then the two rates and the counts right-aligned under
+   *  headings. Run as prose — "1.6% vs 1.4% control · 154 vs 126 events from
+   *  9,340 visitors" — the same facts are unreadable at a glance, and the
+   *  visitor base repeated on every row is noise: it is one number, and it is
+   *  already in the VISITORS tile at the top. */
+  const COL = { chg: 88, role: 96, rate: 74, ev: 104 };
+  const hcell = (text: string, w?: number, align: "left" | "right" = "left") =>
+    `<td ${w ? `width="${w}" ` : ""}align="${align}" style="${w ? `width:${w}px;` : ""}padding:0 0 8px 0;font-family:${F};font-size:9.5px;line-height:1.2;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${FAINT};">${esc(text)}</td>`;
+
+  const metricHead = `
+    <tr>
+      ${hcell("Change", COL.chg)}
+      ${hcell("Role", COL.role)}
+      ${hcell("Metric")}
+      ${hcell("Variant", COL.rate, "right")}
+      ${hcell("Control", COL.rate, "right")}
+      ${hcell("Events", COL.ev, "right")}
+    </tr>`;
+
   const metricRows = shown.map((k) => {
     const m = metric(k)!;
     const f = cell(k, focusId), b = cell(k, baseId);
     const r = ROLE_CHIP[roleFor(k)];
     const note = reading?.observations?.find((o) => o.measureKey === k)?.note;
+    const top = `padding:13px 0;border-top:1px solid ${RULE};vertical-align:top;`;
     return `
       <tr>
-        <td width="96" align="left" style="width:96px;padding:14px 14px 14px 0;border-top:1px solid ${RULE};vertical-align:top;white-space:nowrap;">
-          <div style="font:800 22px/1.1 ${F};color:${inkFor(k)};letter-spacing:-.015em;">${esc(pct(f?.lift))}</div>
-          ${isSettled(k) ? "" : `<div style="font:700 8px/1.2 ${F};letter-spacing:.07em;text-transform:uppercase;color:${AMBER_INK};padding-top:5px;">Not settled</div>`}
+        <td width="${COL.chg}" style="width:${COL.chg}px;${top}padding-right:12px;">
+          <div style="font-family:${F};font-size:20px;line-height:1.1;font-weight:800;color:${inkFor(k)};letter-spacing:-.015em;">${esc(pct(f?.lift))}</div>
+          <div style="font-family:${F};font-size:9px;line-height:1.3;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${isSettled(k) ? WIN : FAINT};padding-top:4px;">${isSettled(k) ? "Settled" : "Not settled"}</div>
         </td>
-        <td style="padding:14px 0;border-top:1px solid ${RULE};vertical-align:top;">
-          <div style="font:400 13px/1.6 ${F};color:${MUTED};">
-            <span style="font:600 14.5px/1.5 ${F};color:${INK};">${esc(m.label)}</span>
-${roleFor(k) === "exploratory" ? " " : `
-            <span style="display:inline-block;margin:0 8px;font:700 8.5px/1 ${F};letter-spacing:.08em;text-transform:uppercase;color:${r.fg};background:${r.bg};border-radius:3px;padding:3px 5px;vertical-align:middle;">${esc(r.label)}</span>`}
-            <span style="font:600 13px/1.6 ${F};color:${BODY};">${esc(rate(f?.rate))}</span> vs <span style="font:600 13px/1.6 ${F};color:${BODY};">${esc(rate(b?.rate))}</span> control${f?.count !== undefined ? ` &middot; ${esc(num(f.count))} vs ${esc(num(b?.count))} events` : ""}${f?.n ? ` from ${esc(num(f.n))} visitors` : ""}
-          </div>
-          ${note ? `<div style="font:400 14px/1.6 ${F};color:${BODY};${PROSE}padding-top:6px;">${esc(note)}</div>` : ""}
+        <td width="${COL.role}" style="width:${COL.role}px;${top}padding-right:12px;">
+          ${roleFor(k) === "exploratory" ? "" : `<span style="display:inline-block;font-family:${F};font-size:8.5px;line-height:1;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${r.fg};background:${r.bg};border-radius:3px;padding:4px 6px;">${esc(r.label)}</span>`}
+        </td>
+        <td style="${top}padding-right:12px;">
+          <div style="font-family:${F};font-size:14.5px;line-height:1.35;font-weight:600;color:${INK};">${esc(m.label)}</div>
+          ${note ? `<div style="font-family:${F};font-size:13.5px;line-height:1.6;font-weight:400;color:${BODY};${PROSE}padding-top:5px;">${esc(note)}</div>` : ""}
+        </td>
+        <td width="${COL.rate}" align="right" style="width:${COL.rate}px;${top}">
+          <span style="font-family:${F};font-size:14px;line-height:1.2;font-weight:700;color:${INK};">${esc(rate(f?.rate))}</span>
+        </td>
+        <td width="${COL.rate}" align="right" style="width:${COL.rate}px;${top}">
+          <span style="font-family:${F};font-size:14px;line-height:1.2;font-weight:400;color:${MUTED};">${esc(rate(b?.rate))}</span>
+        </td>
+        <td width="${COL.ev}" align="right" style="width:${COL.ev}px;${top}">
+          <span style="font-family:${F};font-size:12.5px;line-height:1.2;font-weight:400;color:${MUTED};">${f?.count !== undefined ? `${esc(num(f.count))} vs ${esc(num(b?.count))}` : "—"}</span>
         </td>
       </tr>`;
   }).join("");
@@ -391,19 +444,18 @@ ${roleFor(k) === "exploratory" ? " " : `
   <!-- 1. WHAT KIND OF DOCUMENT THIS IS, and how far into the run we are. -->
   <tr><td bgcolor="${INK}" style="background:${INK};padding:15px 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td style="font:700 10.5px/1.2 ${F};letter-spacing:.16em;text-transform:uppercase;color:#FFFFFF;">Experiment readout</td>
-      <td align="right" style="font:600 10.5px/1.2 ${F};letter-spacing:.1em;text-transform:uppercase;color:#8DA0B2;">${esc([days !== undefined ? `Day ${days}` : "", asOfLabel].filter(Boolean).join(" · "))}</td>
+      <td style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#FFFFFF;">Experiment readout</td>
+      <td align="right" style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8DA0B2;">${esc([days !== undefined ? `Day ${days}` : "", asOfLabel].filter(Boolean).join(" · "))}</td>
     </tr></table>
   </td></tr>
 
   <!-- 2. WHAT IS BEING TESTED — before any result. A reader who does not know
           what the experiment is cannot use a verdict about it. -->
   <tr><td style="padding:26px 28px 22px 28px;">
-    <div style="font:800 27px/1.2 ${F};color:${INK};letter-spacing:-.02em;">${esc(opts.prototypeName)}</div>
+    <div style="font-family:${F};font-size:27px;line-height:1.2;font-weight:800;color:${INK};letter-spacing:-.02em;">${esc(opts.prototypeName)}</div>
     ${pre?.hypothesis ? `
-      <div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding:16px 0 7px 0;">Hypothesis</div>
-      <div style="font:400 15.5px/1.6 ${F};color:${BODY};${PROSE}">${esc(pre.hypothesis)}</div>
-      ${!frozen ? `<div style="font:400 12px/1.5 ${F};color:${AMBER_INK};padding-top:8px;">This wasn't locked before the traffic arrived, so it is evidence rather than a pre-registered result.</div>` : ""}
+      <div style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding:16px 0 7px 0;">Hypothesis</div>
+      <div style="font-family:${F};font-size:15.5px;line-height:1.6;font-weight:400;color:${BODY};${PROSE}">${esc(pre.hypothesis)}</div>
     ` : ""}
   </td></tr>
 
@@ -415,12 +467,13 @@ ${roleFor(k) === "exploratory" ? " " : `
       <tr>
         <td width="5" bgcolor="${v.rule}" style="width:5px;background:${v.rule};font-size:0;border-radius:8px 0 0 8px;">&nbsp;</td>
         <td style="padding:18px 20px;">
-          <div style="font:700 10px/1.2 ${F};letter-spacing:.13em;text-transform:uppercase;color:${v.text};opacity:.75;padding-bottom:7px;">Status</div>
+          <div style="font-family:${F};font-size:10px;line-height:1.2;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:${v.text};opacity:.75;padding-bottom:7px;">Status</div>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-            <td style="vertical-align:middle;padding-right:10px;font:800 22px/1.25 ${F};color:${v.text};letter-spacing:-.015em;">${esc(v.label)}</td>
-            <td style="vertical-align:middle;"><span style="display:inline-block;font:700 8.5px/1 ${F};letter-spacing:.1em;text-transform:uppercase;color:${v.text};border:1px solid ${v.rule};border-radius:3px;padding:4px 6px;">${esc(v.term)}</span></td>
+            <td style="vertical-align:middle;padding-right:10px;font-family:${F};font-size:22px;line-height:1.25;font-weight:800;color:${v.text};letter-spacing:-.015em;">${esc(v.label)}</td>
+            <td style="vertical-align:middle;"><span style="display:inline-block;font-family:${F};font-size:8.5px;line-height:1;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${v.text};border:1px solid ${v.rule};border-radius:3px;padding:4px 6px;">${esc(v.term)}</span></td>
           </tr></table>
-          <div style="font:600 14px/1.5 ${F};color:${v.text};padding-top:9px;">${esc(step.label)}</div>
+          <div style="font-family:${F};font-size:14px;line-height:1.5;font-weight:600;color:${v.text};padding-top:9px;">${esc(step.label)}</div>
+          ${directionCaveat}
         </td>
       </tr>
     </table>
@@ -449,20 +502,20 @@ ${roleFor(k) === "exploratory" ? " " : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
       <tr><td style="padding-top:24px;">
         ${caps("All metrics", MUTED, 10)}
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${metricRows}</table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${metricHead}${metricRows}</table>
       </td></tr>
     </table>
   </td></tr>` : ""}
 
   ${opts.url ? `<tr><td style="padding:26px 28px 6px 28px;">
-    <a href="${esc(opts.url)}" style="display:inline-block;background:${INK};color:#FFFFFF;text-decoration:none;font:600 14px/1 ${F};padding:13px 20px;border-radius:6px;">Open the full readout &rarr;</a>
+    <a href="${esc(opts.url)}" style="display:inline-block;background:${INK};color:#FFFFFF;text-decoration:none;font-family:${F};font-size:14px;line-height:1;font-weight:600;padding:13px 20px;border-radius:6px;">Open the full readout &rarr;</a>
   </td></tr>` : ""}
 
   <tr><td style="padding:24px 28px 26px 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
       <tr><td style="padding-top:16px;">
-        <div style="font:400 10.5px/1.5 ${F};color:${FAINT};">${esc(shortNotice())}</div>
-        <div style="font:400 10.5px/1.5 ${F};color:${FAINT};">${esc(provenance)}</div>
+        <div style="font-family:${F};font-size:10.5px;line-height:1.5;font-weight:400;color:${FAINT};">${esc(shortNotice())}</div>
+        <div style="font-family:${F};font-size:10.5px;line-height:1.5;font-weight:400;color:${FAINT};">${esc(provenance)}</div>
       </td></tr>
     </table>
   </td></tr>
@@ -472,10 +525,10 @@ ${roleFor(k) === "exploratory" ? " " : `
 
   const text = [
     `${opts.prototypeName.toUpperCase()} — EXPERIMENT READOUT`,
-    pre?.hypothesis ? `\nWHAT WE'RE TESTING\n${pre.hypothesis}${frozen ? "" : "\nNot locked before the traffic arrived — evidence, not a pre-registered result."}` : "",
+    pre?.hypothesis ? `\nHYPOTHESIS\n${pre.hypothesis}` : "",
     v ? `\nSTATUS: ${v.label} (${v.term})\n${step.label}` : "",
     `\n${headline}`,
-    reading?.executive ? `\n${reading.executive}` : "",
+    summaryProse ? `\n${summaryProse}` : "",
     `\nTHE SHORT VERSION`,
     pm ? `The decision step   ${pct(pf?.lift)} ${pm.label}${heroSettled ? "" : " (not settled)"}` : "",
     biggest ? `Biggest gain        ${pct(cell(biggest, focusId)?.lift)} ${metric(biggest)!.label}${isSettled(biggest) ? "" : " (not settled)"}` : "",
