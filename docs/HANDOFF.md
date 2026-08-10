@@ -4,7 +4,7 @@
 
 ---
 
-## ⚠ IN FLIGHT — READOUT MODEL EXTRACTION: email done, page not (2026-08-10)
+## ⚠ IN FLIGHT — READOUT MODEL EXTRACTION: email done, page mostly (2026-08-10)
 
 **Read [`docs/READOUT-MODEL.md`](READOUT-MODEL.md) first.** It holds the
 architecture, the six commitments, the eleven live defects with who-is-right for
@@ -33,22 +33,29 @@ a cron job — no React, no browser — so nothing may depend on component state
   `results.ts`), `composeHypothesis()`, `nextStep()` with the adjudicated
   short-circuit, the direction toggle, and `actionChip` — all fixed and shipped.
 
-### Next: cut the PAGE over
-`ResultsPanel.tsx` is in daily use. **Incrementally, never one rewrite.**
+### Page: two increments in, chrome to go
+`ResultsPanel.tsx` calls `buildReadoutModel()` once, after the frozen-snapshot
+fallback resolves `live`/`statsEff`. **A plain call, not a `useMemo`** — it sits
+below five conditional returns and a hook there changes the hook count between
+renders and throws. Optimistic state is passed IN, never forked.
 
-1. Call `buildReadoutModel()` where the derivations sit today — a plain call, NOT
-   a `useMemo`. Those derivations sit between five conditional returns; a hook
-   there changes the hook count between renders and throws.
-2. Pass optimistic local state as INPUTS: `observedLocal ?? plan.observed`,
-   `rolesLocal`, `orderLocal`. Never fork the builder for the page.
-3. Replace one derivation at a time, checking the screen after each:
-   `toneOf` → `tone` + `confidence`; `liftClass`/`sigClass` → the same pair;
-   `beatFor`/`observationFor` → `MetricView`; the day count → `runtime.dayLabel`.
-4. The page keeps "chroma is earned" (grey when unsettled); the email keeps hue
-   always. That disagreement is deliberate and the model refuses to settle it —
-   map `confidence` yourself in each skin.
-5. Delete each page-local derivation as it is replaced. Leaving both is how this
-   drifted the first time.
+Done: both metric tables' lift colour and beyond-luck word, the decision hero's
+tone (`b35740a`); `beatFor` and `observationFor` (`ded6426`).
+
+Still page-local ON PURPOSE — read the comments before "fixing" them:
+- `sigOf` where the thing coloured IS the interval (CI gauge, sparkline, trend).
+- `toneOf`, one caller: the windowed day-range table. The model does not
+  describe a date slice.
+- `computedLine`'s wording.
+
+Left to do: the page computes its own day count, vitals and verdict wording. It
+is the winner on the day count. The vitals and plain-words verdict have nowhere
+to land while `SHOW_CALL = false` hides the verdict card — that decision comes
+first. The trend sentence and the Σ composite chip are still page-only, so the
+email cannot show them.
+
+Working rule for the next increment: replace one derivation, check the screen,
+delete the page-local version. Leaving both is how this drifted the first time.
 
 ### Verifying the email without sending
 ```

@@ -1,8 +1,8 @@
 # The Readout Model — one derivation, two skins
 
-*Started 2026-08-10. Status: **module written and smoke-tested; the EMAIL is cut
-over, the PAGE is not.** Read this before touching `ResultsPanel.tsx` or
-`lib/email/readout.ts`.*
+*Started 2026-08-10. Status: **module written and smoke-tested; the EMAIL is fully
+cut over, the PAGE is cut over for everything that makes a claim.** Read this
+before touching `ResultsPanel.tsx` or `lib/email/readout.ts`.*
 
 - Design: [`READOUT-MODEL-DESIGN.md`](READOUT-MODEL-DESIGN.md)
 - Module: `src/lib/prototypes/readout-model.ts` — `buildReadoutModel(input)`
@@ -17,7 +17,7 @@ The console renders an experiment readout in two places:
 
 | Surface | File | Technology | Cut over |
 |---|---|---|---|
-| The page | `src/components/ResultsPanel.tsx` | React + Tailwind | not yet |
+| The page | `src/components/ResultsPanel.tsx` | React + Tailwind | claims yes — `b35740a`, `ded6426`; chrome not yet |
 | The email | `src/lib/email/readout.ts` | tables + inline styles, rendered server-side | yes — `97f08e8` |
 
 **The maths has one home. The meaning had two.** Every number is already shared —
@@ -213,3 +213,40 @@ The fixture is the thing to get right first. `docs/dev/preview-email.mts` had no
 p-values, so the model correctly fell back to its degraded path and the diff
 proved nothing — a fixture that under-specifies its input is a strawman. It now
 carries p-values and a Benjamini-Hochberg-corrected exploratory pool.
+
+## The page cutover, increment by increment
+
+The page is in daily use, so it is being cut over in visible steps rather than
+one rewrite. `buildReadoutModel()` is called once, right after the frozen-snapshot
+fallback resolves `live` and `statsEff` — **a plain call, not a `useMemo`**. That
+site sits below five conditional returns, and a hook there changes the hook count
+between renders and throws. Optimistic local state (`observedLocal`, `rolesLocal`,
+`orderLocal`) is passed IN, so a click still answers on the same frame.
+
+| Increment | What moved | Defects closed |
+|---|---|---|
+| `b35740a` | Both metric tables' lift colour and the word beneath it; the decision metric's hero tone | 3, 4, 6, 7 |
+| `ded6426` | `beatFor` and `observationFor` — tone, value, rates | 1, 4, 9 |
+
+### What is deliberately still page-local
+
+- **`sigOf`** where the thing being coloured IS the confidence interval: the CI
+  gauge, the sparkline, the trend sentence. Those are drawings *of* that
+  interval, not claims about it.
+- **`toneOf`** has exactly one caller left — the windowed day-range table, whose
+  cells are recomputed over a slice the model does not describe. The comment on
+  it says so, so the next reader does not read it as a site the extraction
+  missed. **Do not reach for it for a whole-run number.**
+- **`computedLine`** in `observationFor` — "Counts X, per visitor." The model has
+  `describeComposite`'s sentence, which reads differently. Swapping it would
+  change visible copy for no correctness gain.
+
+### What is left
+
+- The page still computes its own **day count**, **vitals**, and **verdict
+  wording**. It is the WINNER on the day count (1-based; the email adopted it),
+  and `SHOW_CALL = false` currently hides the verdict card entirely, so the
+  vitals and plain-words verdict have nowhere to land until that is decided.
+- The **trend sentence** and the **composite Σ chip** are still page-only. The
+  email cannot show what the page computes here — a gap, but a smaller one than
+  a disagreement.
