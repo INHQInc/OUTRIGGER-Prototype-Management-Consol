@@ -38,15 +38,23 @@ export interface SendResult {
   via: MailProvider;
 }
 
+/** What each provider needs. Named here once so the readiness test and the
+ *  operator-facing error cannot disagree about it. */
+const NEEDS: Record<MailProvider, readonly string[]> = {
+  mailgun: ["MAILGUN_API_KEY", "MAILGUN_DOMAIN", "REPORT_FROM_EMAIL"],
+  resend: ["RESEND_API_KEY", "REPORT_FROM_EMAIL"],
+  gmail: ["GMAIL_USER", "GMAIL_APP_PASSWORD"],
+};
+
+/** The variables this provider still wants. Empty means ready.
+ *  A var set to whitespace counts as missing — a blank value in a dashboard
+ *  field looks set and behaves as if it isn't, which is the worst of both. */
+function missingFor(p: MailProvider): string[] {
+  return NEEDS[p].filter((v) => !(process.env[v] ?? "").trim());
+}
+
 function ready(p: MailProvider): boolean {
-  switch (p) {
-    case "gmail":
-      return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
-    case "mailgun":
-      return Boolean(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN && process.env.REPORT_FROM_EMAIL);
-    case "resend":
-      return Boolean(process.env.RESEND_API_KEY && process.env.REPORT_FROM_EMAIL);
-  }
+  return missingFor(p).length === 0;
 }
 
 /** The provider named by MAIL_PROVIDER, or null if unset/unrecognised. */
@@ -72,12 +80,12 @@ export function mailUnavailableReason(): string | null {
 
   const want = pinned();
   if (want) {
-    const missing: Record<MailProvider, string> = {
-      mailgun: "MAILGUN_API_KEY, MAILGUN_DOMAIN and REPORT_FROM_EMAIL",
-      resend: "RESEND_API_KEY and REPORT_FROM_EMAIL",
-      gmail: "GMAIL_USER and GMAIL_APP_PASSWORD",
-    };
-    return `MAIL_PROVIDER is pinned to "${want}", but ${missing[want]} aren't all set. Nothing else will be used in its place.`;
+    // Name the ones ACTUALLY missing. Listing everything the provider needs
+    // tells an operator nothing they didn't already know and sends them
+    // re-checking three variables when one is wrong.
+    const gone = missingFor(want);
+    const list = gone.length === 1 ? gone[0] : `${gone.slice(0, -1).join(", ")} and ${gone[gone.length - 1]}`;
+    return `MAIL_PROVIDER is pinned to "${want}", but ${list} ${gone.length === 1 ? "is" : "are"} missing on this deployment. Note that Vercel only applies an environment variable to deployments created AFTER it was added — if you have just set it, redeploy. Nothing else will be used in its place.`;
   }
   if (process.env.MAIL_PROVIDER?.trim()) {
     return `MAIL_PROVIDER is set to "${process.env.MAIL_PROVIDER.trim()}", which isn't a provider this app knows. Use mailgun, resend or gmail — or leave it unset.`;
