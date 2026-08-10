@@ -1769,7 +1769,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   </button>
                 )}
                 <button onClick={() => void load()} disabled={loading || busy !== null} className="text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
-                <button onClick={() => window.print()} className="text-accent hover:text-accent-hover font-medium">Print</button>
+                {/* printReadout, NOT window.print — the folds have to be opened
+                    before the browser snapshots the page, or the method section
+                    prints as a heading with nothing under it. */}
+                <button onClick={printReadout} className="text-accent hover:text-accent-hover font-medium">Print</button>
+                <button onClick={() => void openMail()} className="text-accent hover:text-accent-hover font-medium">Email</button>
               </span>
             </div>
           )}
@@ -1831,34 +1835,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   : `${freshWord} · ${relTime(statsEff?.computedAt) || "—"}`}
 
               </div>
-              <span className="flex items-center gap-2 justify-end print:hidden">
-                {verdict && !stamped && stoppable && (confirmAction === "stamp" ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-[12.5px] text-muted-2">Make it the record?</span>
-                    <button onClick={() => { setConfirmAction(null); post("stamp", { stamp: true, expectVerdict: verdict.verdict }); }} className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover">Yes, stamp</button>
-                    <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12.5px] text-muted hover:text-foreground">Cancel</button>
-                  </span>
-                ) : (
-                  <button onClick={() => armConfirm("stamp")} disabled={busy !== null}
-                    className="h-7 px-2.5 rounded-md bg-accent text-accent-fg text-[12.5px] font-semibold hover:bg-accent-hover disabled:opacity-40">
-                    {busy === "stamp" ? "Stamping…" : "Stamp the verdict"}
-                  </button>
-                ))}
-                {stamped && (confirmAction === "reopen" ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-[12.5px] text-muted-2">Reopen? (audited)</span>
-                    <button onClick={() => { setConfirmAction(null); post("unstamp", { unstamp: true }); }} className="h-7 px-2 rounded-md border border-danger/50 text-[12.5px] text-danger hover:bg-danger/10">Yes, reopen</button>
-                    <button onClick={() => setConfirmAction(null)} className="h-7 px-2 rounded-md border border-border text-[12.5px] text-muted hover:text-foreground">Cancel</button>
-                  </span>
-                ) : (
-                  <button onClick={() => armConfirm("reopen")} disabled={busy !== null} className="text-[12.5px] text-muted-2 hover:text-foreground underline underline-offset-2 disabled:opacity-40">
-                    {busy === "unstamp" ? "Reopening…" : "Reopen"}
-                  </button>
-                ))}
-                <button onClick={() => void load()} disabled={loading || busy !== null} className="text-[12.5px] text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
-                <button onClick={printReadout} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Print</button>
-                <button onClick={() => void openMail()} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Email</button>
-              </span>
+              {/* NO CONTROLS HERE. This card is behind SHOW_CALL=false and its
+                  controls moved to the toolbar above. A second copy of them is
+                  how the Email button shipped invisible and how Print kept
+                  calling window.print(): the buttons were added to the branch
+                  that never renders. One toolbar, one set of buttons. */}
             </div>
           </div>
           )}
