@@ -50,10 +50,10 @@ server-computable** model that both surfaces render. Email renders in a cron job
 ```
 npx tsx "<scratchpad>/preview-email.mts" out.html     # renders the real renderer against a fixture
 ```
-The harness lives in the session scratchpad (NOT the repo — it breaks `tsc` if
-placed under `src/`). It imports `readout.ts` by absolute path. Recreate it if
-lost: build a StatsReport + VerdictRecord + Reading fixture and call
-`renderReadoutEmail()`.
+The harness is checked in at `docs/dev/preview-email.mts`. `tsconfig.json`
+excludes `docs/dev` — the repo's `include` is `**/*.mts`, so without that exclude
+the fixture's loose types fail `tsc --noEmit`. It imports `readout.ts` by
+absolute path; fix the path for your checkout before running.
 
 ### Also outstanding from this session
 - **`fmt16` cache basis** — readings regenerate with the new `executive` field on
