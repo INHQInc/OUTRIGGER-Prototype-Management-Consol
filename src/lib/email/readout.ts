@@ -313,7 +313,10 @@ export function renderReadoutEmail(opts: {
         <tr>
           <td width="4" bgcolor="${frozen ? INK : "#C9A227"}" style="width:4px;background:${frozen ? INK : "#C9A227"};font-size:0;">&nbsp;</td>
           <td style="padding:16px 18px;">
-            ${caps(frozen ? "The hypothesis · frozen before traffic" : "The hypothesis · never frozen", frozen ? MUTED : AMBER_INK)}
+            ${/* Frozen is the expected case and saying so is reassurance clutter.
+                  NOT frozen still gets disclosed — by the amber note below, which
+                  explains the consequence instead of just flagging it. */ ""}
+            ${caps("The hypothesis", frozen ? MUTED : AMBER_INK)}
             <div style="font:400 15px/1.6 ${F};color:${BODY};">${esc(pre.hypothesis)}</div>
             ${!frozen ? `<div style="font:400 12px/1.5 ${F};color:${AMBER_INK};padding-top:9px;">Judged against the brief as it reads today. It was not locked before the traffic arrived, so this is evidence — not a pre-registered result.</div>` : ""}
           </td>
@@ -485,7 +488,9 @@ export function renderReadoutEmail(opts: {
     `What happens next   ${step.label}`,
     `Visitors ${visitors !== undefined ? num(visitors) : "—"} · ${days !== undefined ? `Day ${days}` : "—"} · Settled ${nSettled} of ${nShown} · Guardrails ${guardWord}`,
     pm ? `\nTHE DECISION METRIC\n${pct(pf?.lift)}  ${pm.label}\n${rate(pf?.rate)} vs ${rate(pbase?.rate)} control · ${num(pf?.count)} vs ${num(pbase?.count)} events\n${heroSettled ? "Settled beyond luck." : "Still inside luck."}` : "",
-    pre?.hypothesis ? `\nTHE HYPOTHESIS${frozen ? " (frozen before traffic)" : " (never frozen)"}\n${pre.hypothesis}` : "",
+    pre?.hypothesis
+      ? `\nTHE HYPOTHESIS\n${pre.hypothesis}${frozen ? "" : "\nNot locked before the traffic arrived — this is evidence, not a pre-registered result."}`
+      : "",
     reading?.read
       ? "\n" + [
           reading.read.effect?.text && `01 WHAT THE CHANGE DID\n${reading.read.effect.text}`,
