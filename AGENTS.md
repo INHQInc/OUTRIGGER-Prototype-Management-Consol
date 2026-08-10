@@ -142,6 +142,27 @@ flagged in danger tone on the read, because either the experiment measures a
 no-op or the console is looking at the wrong artifact. Both are worth
 interrupting for.
 
+## Emailed readouts (2026-08-10)
+
+HTML email, no attachment: `window.print()` hands its PDF to the browser and
+the app never sees the file, so "email the printed PDF" is not a thing that
+can exist without a headless renderer. The body is built by
+`lib/email/readout.ts` from the SAME resolved data the page uses — the analyst
+names a metric key, the code resolves the value, here as everywhere.
+
+- `lib/email/send.ts` — the provider seam (Resend). FAILS LOUD when unconfigured:
+  a mailer that silently no-ops reports "sent" to a room that received nothing.
+  Needs `RESEND_API_KEY` + `REPORT_FROM_EMAIL` (verified domain, SPF/DKIM).
+- `lib/prototypes/report.ts` — recipients + opt-in weekly schedule per prototype
+  (`report:<key>`, CAS). `lastSentAt` is the idempotence guard.
+- `lib/email/report-run.ts` — ONE send path for the button and the sweep, so
+  they cannot drift. Uses the CACHED reading and never generates one: a
+  scheduled job that can trigger an Opus call per prototype is a job that
+  quietly spends money at 6am.
+- `/api/cron/reports` runs HOURLY (so a schedule can name an hour);
+  `scheduleDue()` means the job can run sixty times and the report leaves once.
+  One prototype's failure never stops the sweep.
+
 ## Hard rules (invariants)
 
 - **Never hardcode a brand or site.** Everything is per-tenant/per-site config from the store. (Known debt: `lib/sites.ts` and the handoff patch generator still encode Outrigger specifics — the *ship* layer is not yet portable.)

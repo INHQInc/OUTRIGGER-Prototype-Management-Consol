@@ -1,5 +1,12 @@
 {
   "crons": [
-    { "path": "/api/cron/token-health", "schedule": "0 9 * * *" }
+    {
+      "path": "/api/cron/token-health",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/reports",
+      "schedule": "0 * * * *"
+    }
   ]
 }

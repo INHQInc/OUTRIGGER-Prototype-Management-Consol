@@ -332,6 +332,8 @@ function CompositeChip({ text, perVersion }: { text: string; perVersion: boolean
   );
 }
 
+const DAYNAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 function Glyph({ kind }: { kind: "warn" | "check" | "pencil" | "trash" | "grip" | "eye" | "eyeOff" | "watch" | "watchOn" | "chevron" }) {
   if (kind === "chevron") {
     return (
@@ -556,6 +558,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // page must never hold Optimizely's synthesized composite, because it
   // round-trips its map through confirm/propose and would persist it.
   const [toast, setToast] = useState<string | null>(null);
+  const [mailOpen, setMailOpen] = useState(false);
+  const [mail, setMail] = useState<{
+    recipients: string[];
+    schedule?: { enabled: boolean; day: number; hour: number };
+    lastSentAt?: string; lastSentTo?: string[]; lastError?: string;
+  } | null>(null);
+  const [mailUnavailable, setMailUnavailable] = useState<string | null>(null);
+  const [mailBusy, setMailBusy] = useState(false);
+  const [recipientDraft, setRecipientDraft] = useState("");
   const [decision, setDecision] = useState<{
     key: string; label: string; source: "console" | "optimizely";
     direction?: "increase" | "decrease"; directionDeclared: boolean;
@@ -1524,6 +1535,34 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     setTimeout(restore, 3000);
   };
 
+  async function mailPost(body: Record<string, unknown>) {
+    setMailBusy(true); setErr(null);
+    try {
+      const res = await fetch("/api/prototypes/report", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, ...body }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error ?? "That didn't work."); return null; }
+      if (data.settings) setMail(data.settings);
+      if (data.warning) setToast(data.warning);
+      return data as { sent?: number; to?: string[] };
+    } catch {
+      setErr("Network hiccup — try again.");
+      return null;
+    } finally { setMailBusy(false); }
+  }
+
+  const openMail = async () => {
+    setMailOpen(true);
+    if (mail) return;
+    try {
+      const res = await fetch(`/api/prototypes/report?key=${encodeURIComponent(prototypeKey)}`);
+      const data = await res.json();
+      if (res.ok) { setMail(data.settings); setMailUnavailable(data.mailUnavailable ?? null); }
+    } catch { /* the panel says so when it opens empty */ }
+  };
+
   const sendComposer = () => {
     const text = composerText.trim();
     if (!text || busy) return;
@@ -1557,6 +1596,108 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   return (
     <div className="space-y-3">
       {toast && <Toast text={toast} onDone={() => setToast(null)} />}
+      {mailOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10vh] print:hidden" onClick={() => setMailOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-xl border border-border bg-surface shadow-2xl p-5 space-y-4">
+            <div className="flex items-baseline gap-3">
+              <h2 className="text-[16px] font-bold">Email this readout</h2>
+              <button onClick={() => setMailOpen(false)} className="ml-auto text-[13px] text-muted-2 hover:text-foreground">Close</button>
+            </div>
+
+            {mailUnavailable && (
+              <p className="text-[13px] text-warn leading-snug">
+                Sending isn&rsquo;t configured on this deployment — {mailUnavailable} Recipients and the schedule can still be saved.
+              </p>
+            )}
+
+            <div className="space-y-2">
+              <div className={ZH}>Recipients</div>
+              {(mail?.recipients ?? []).length === 0 && (
+                <p className="text-[13px] text-muted-2">Nobody yet. The readout goes to everyone on this list.</p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {(mail?.recipients ?? []).map((r) => (
+                  <span key={r} className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[12.5px]">
+                    {r}
+                    <button
+                      onClick={() => void mailPost({ recipients: (mail?.recipients ?? []).filter((x) => x !== r) })}
+                      disabled={mailBusy}
+                      aria-label={`Remove ${r}`}
+                      className="text-muted-2 hover:text-danger">&times;</button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={recipientDraft}
+                  onChange={(e) => setRecipientDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const add = recipientDraft.split(/[,;\s]+/).filter(Boolean);
+                    if (!add.length) return;
+                    setRecipientDraft("");
+                    void mailPost({ recipients: [...(mail?.recipients ?? []), ...add] });
+                  }}
+                  placeholder="name@company.com — Enter to add, commas for several"
+                  className="flex-1 h-8 px-2.5 rounded-md border border-border bg-background text-[13px] focus:outline-none focus:border-accent" />
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              <label className="flex items-center gap-2 text-[13.5px]">
+                <input
+                  type="checkbox"
+                  checked={Boolean(mail?.schedule?.enabled)}
+                  disabled={mailBusy || !(mail?.recipients ?? []).length}
+                  onChange={(e) => void mailPost({ schedule: { enabled: e.target.checked, day: mail?.schedule?.day ?? 1, hour: mail?.schedule?.hour ?? 13 } })} />
+                Send it every week
+              </label>
+              {mail?.schedule?.enabled && (
+                <div className="flex items-center gap-2 text-[13px] text-muted pl-6">
+                  <select
+                    value={mail.schedule.day}
+                    onChange={(e) => void mailPost({ schedule: { ...mail.schedule!, day: Number(e.target.value) } })}
+                    className="h-8 px-2 rounded-md border border-border bg-background text-[13px]">
+                    {DAYNAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                  </select>
+                  <select
+                    value={mail.schedule.hour}
+                    onChange={(e) => void mailPost({ schedule: { ...mail.schedule!, hour: Number(e.target.value) } })}
+                    className="h-8 px-2 rounded-md border border-border bg-background text-[13px]">
+                    {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, "0")}:00 UTC</option>)}
+                  </select>
+                </div>
+              )}
+              <p className="text-[12.5px] text-muted-2 leading-snug">
+                It sends whatever the readout says at that moment — including &ldquo;too early to call&rdquo;. Worth switching on once a run has something to report.
+              </p>
+            </div>
+
+            {(mail?.lastSentAt || mail?.lastError) && (
+              <div className="border-t border-border/60 pt-3 text-[12.5px] leading-snug">
+                {mail.lastError
+                  ? <p className="text-danger">Last attempt failed: {mail.lastError}</p>
+                  : <p className="text-muted-2">Last sent {mail.lastSentAt?.slice(0, 16).replace("T", " ")} to {mail.lastSentTo?.join(", ")}</p>}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={async () => {
+                  const out = await mailPost({ sendNow: true });
+                  if (out?.sent) { setToast(`Sent to ${out.sent} recipient${out.sent === 1 ? "" : "s"}`); setMailOpen(false); }
+                }}
+                disabled={mailBusy || !(mail?.recipients ?? []).length || Boolean(mailUnavailable)}
+                className="h-8 px-3 rounded-md bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40">
+                {mailBusy ? "Sending…" : "Send now"}
+              </button>
+              <span className="text-[12.5px] text-muted-2">Goes out as an email, not an attachment — it opens on a phone.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {err && <div className="text-[14px] text-danger print:hidden">{err}</div>}
 
       {builder && live && (
@@ -1708,6 +1849,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 ))}
                 <button onClick={() => void load()} disabled={loading || busy !== null} className="text-[12.5px] text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
                 <button onClick={printReadout} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Print</button>
+                <button onClick={() => void openMail()} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Email</button>
               </span>
             </div>
           </div>
