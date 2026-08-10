@@ -334,10 +334,17 @@ export function describeComposite(c: CompositeMetric, armName?: (variationId: st
   const per = c.armEvents?.length
     ? c.armEvents.map((a) => `${armName?.(a.variationId) ?? a.variationId}: ${a.events.join(" + ")}`).join("  ·  ")
     : "";
-  const shared = c.events.length ? c.events.join(" + ") : "";
+  // `events` is optional in practice: plans authored before per-arm composites
+  // existed, and any hand-edited map, can omit it. This runs inside the cron
+  // that renders the weekly email — it must degrade to a vaguer sentence, never
+  // throw and cancel the send.
+  const ev = c.events ?? [];
+  const shared = ev.length ? ev.join(" + ") : "";
   const head = per
     ? `Composite metric, defined per version — ${per}${shared ? `  ·  any other version: ${shared}` : ""}`
-    : `Composite metric — sums ${c.events.length} Optimizely event${c.events.length === 1 ? "" : "s"}: ${shared}`;
+    : shared
+      ? `Composite metric — sums ${ev.length} Optimizely event${ev.length === 1 ? "" : "s"}: ${shared}`
+      : "Composite metric";
   return `${head}. Counted as ACTION totals per visitor, so one guest acting on more than one of these counts each time.${c.definition ? ` ${c.definition}` : ""}`;
 }
 
