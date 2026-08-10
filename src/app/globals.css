@@ -93,6 +93,11 @@ body {
   /* Folds are a screen affordance — on paper the report is complete. */
   details > summary { list-style: none; }
   details > *:not(summary) { display: block !important; }
+  /* Chrome hides a closed fold's content with content-visibility, which
+     display:block cannot reach. The Print button also opens every fold before
+     printing; this covers a plain Cmd-P. */
+  details { content-visibility: visible !important; }
+  details::details-content { content-visibility: visible !important; block-size: auto !important; }
   body * { visibility: hidden; }
   .print-report, .print-report * { visibility: visible; }
   .print-report {

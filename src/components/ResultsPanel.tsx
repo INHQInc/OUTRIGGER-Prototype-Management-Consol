@@ -1505,6 +1505,25 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const lastAnswerIdx = entries.map((e) => e.kind).lastIndexOf("analyst-answer");
   const shownEntries = threadOpen ? entries : entries.slice(-6);
 
+  // A COLLAPSED FOLD PRINTS AS AN EMPTY HEADING. Chrome puts closed <details>
+  // behind content-visibility, which no amount of `display: block` in print CSS
+  // can defeat — so the method section printed as a title with nothing under
+  // it. Open every fold for the duration of the print, then put them back
+  // exactly as the reader had them.
+  const printReadout = () => {
+    const folds = Array.from(document.querySelectorAll<HTMLDetailsElement>(".print-report details"));
+    const wasOpen = folds.map((d) => d.open);
+    folds.forEach((d) => { d.open = true; });
+    const restore = () => {
+      folds.forEach((d, i) => { d.open = wasOpen[i]; });
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    window.print();
+    // Safari never fires afterprint in some versions; the timeout is the net.
+    setTimeout(restore, 3000);
+  };
+
   const sendComposer = () => {
     const text = composerText.trim();
     if (!text || busy) return;
@@ -1688,7 +1707,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   </button>
                 ))}
                 <button onClick={() => void load()} disabled={loading || busy !== null} className="text-[12.5px] text-accent hover:text-accent-hover font-medium disabled:opacity-40">{loading ? "Refreshing…" : "Refresh"}</button>
-                <button onClick={() => window.print()} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Print</button>
+                <button onClick={printReadout} className="text-[12.5px] text-accent hover:text-accent-hover font-medium">Print</button>
               </span>
             </div>
           </div>
