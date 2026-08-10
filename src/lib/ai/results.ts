@@ -398,11 +398,12 @@ const STAT_NOTATION = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bF
 
 const readingTool = {
   name: "give_reading",
-  description: "The story a leader reads: one headline, one short paragraph, then the numbers as beats. The words carry no numbers; a beat names the metric it is about.",
+  description: "The story a leader reads: an executive summary, one headline, one short paragraph, then the numbers as beats. The words carry no numbers; a beat names the metric it is about.",
   input_schema: {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
+      executive: { type: "string" as const, description: "<=420 chars, TWO OR THREE SENTENCES, NO DIGITS. THE EXECUTIVE SUMMARY, for a senior leader who will read this and nothing else on the page. Say (1) what the change actually did to guest behaviour in plain business language, (2) whether that reached the outcome the business cares about, and (3) what decision is now in front of them - ship, keep running, stop, or fix something. No statistics vocabulary: never 'significant', 'confidence', 'p-value', 'power', 'underpowered'. Write as if briefing a CEO in a lift: concrete, unhedged about what is known, honest about what is not." },
       effect: { type: "object" as const, properties: {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it." },
         measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
@@ -466,7 +467,7 @@ const readingTool = {
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
       dataWishes: { type: "array" as const, items: { type: "string" as const }, description: "wanted-but-unmeasurable data, recorded honestly" },
     },
-    required: ["headline", "effect", "shift", "cost", "prediction", "beats"],
+    required: ["headline", "executive", "effect", "shift", "cost", "prediction", "beats"],
   },
 };
 
@@ -891,11 +892,12 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   };
 
   let headline = clean(raw.headline, 80);
+  let executive = clean(raw.executive, 420);
   let lede = clean(raw.lede, 900);
   // A digit or an over-long sentence used to swap the analyst's paragraph for
   // a generic template silently. Ask once for a repair, in the same call
   // shape, before settling for the computed story.
-  if (!headline || !lede) {
+  if (!headline || !lede || !executive) {
     try {
       const fix = await client.messages.create({
         model: "claude-opus-4-8",
@@ -903,15 +905,16 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
         system,
         messages: [
           { role: "user", content: res.content.map((c) => (c.type === "text" ? c.text : "")).join("") || "(see below)" },
-          { role: "assistant", content: JSON.stringify({ headline: raw.headline, lede: raw.lede }) },
-          { role: "user", content: `That ${!headline && !lede ? "headline and lede were" : !headline ? "headline was" : "lede was"} rejected${typeof raw.lede === "string" && raw.lede.length > 900 ? ` (the lede ran to ${raw.lede.length} characters — the limit is 900, so cut it down)` : /\d/.test(String(raw.lede ?? "")) ? " (it contained a digit — every number is printed for you)" : ""}. Rules: NO DIGITS anywhere in the words, headline <=80 characters, lede <=900 characters, no statistics vocabulary. Rewrite them about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "lede": "..."}` },
+          { role: "assistant", content: JSON.stringify({ headline: raw.headline, executive: raw.executive, lede: raw.lede }) },
+          { role: "user", content: `${[!headline && "headline", !executive && "executive", !lede && "lede"].filter(Boolean).join(", ")} rejected. Rules: NO DIGITS anywhere in the words, headline <=80 characters, executive <=420 characters and two or three sentences, lede <=900 characters, no statistics vocabulary anywhere (never "significant", "confidence", "power", "underpowered"). The executive summary is for a senior leader who reads nothing else: what the change did in business language, whether it reached the outcome the business cares about, and what decision is now in front of them. Rewrite about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "executive": "...", "lede": "..."}` },
         ],
       });
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
       const m = /\{[\s\S]*\}/.exec(txt);
       if (m) {
-        const parsed = JSON.parse(m[0]) as { headline?: string; lede?: string };
+        const parsed = JSON.parse(m[0]) as { headline?: string; executive?: string; lede?: string };
         headline = headline || clean(parsed.headline, 80);
+        executive = executive || clean(parsed.executive, 420);
         lede = lede || clean(parsed.lede, 900);
       }
     } catch { /* the computed story is the floor */ }
@@ -1071,6 +1074,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   return {
     reading: {
       headline,
+      ...(executive ? { executive } : {}),
       lede,
       ...(read ? { read } : {}),
       ...(ledeComputed ? { ledeComputed: true } : {}),

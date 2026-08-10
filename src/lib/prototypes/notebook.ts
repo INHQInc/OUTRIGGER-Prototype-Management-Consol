@@ -59,6 +59,11 @@ export interface Reading {
    *  beat names a MEASURE, not a number — the page resolves the live value,
    *  so the narrative can never drift from the data beside it. */
   headline?: string;
+  /** THE EXECUTIVE SUMMARY — written for someone who will read this and
+   *  nothing else. Not the headline (a label) and not the lede (the analyst's
+   *  observation): the business consequence and the decision in front of the
+   *  reader. Absent on readings cached before this existed. */
+  executive?: string;
   lede?: string;
   /** The analyst's paragraph was rejected (digits, over-length, statistics
    *  vocabulary) and the COMPUTED floor is what is rendering. Silent fallback
@@ -207,7 +212,7 @@ export function readingBasisKey(parts: {
   // — presentation — cannot retire the reading and buy a fresh Opus call for
   // words that would come out the same.
   const sup = parts.supporting?.length ? [...parts.supporting].sort().join(",") : "";
-  return ["fmt14", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
+  return ["fmt15", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
     sup ? `sup:${sup}` : "-"].join("|");
 }
 

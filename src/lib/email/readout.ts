@@ -63,21 +63,26 @@ const FAINT = "#95A2AE";
 const RULE = "#E1E7EC";
 const TINT = "#F6F8FA";
 
-/** Valence. Solid when settled, pale when it is only a direction. */
-const WIN = "#0B7A4B", WIN_PALE = "#B7E0CB";
-const LOSS = "#B3261E", LOSS_PALE = "#F2C4C0";
+/** VALENCE ALWAYS CARRIES HUE. Direction is a fact whether or not the interval
+ *  has closed, so an unsettled number is a lighter green or red — never grey.
+ *  Grey-for-unsettled was the first attempt and it drained the colour out of
+ *  every readout, because "not settled yet" is the ordinary state of a running
+ *  experiment. Confidence is carried instead by an explicit NOT SETTLED tag and
+ *  by bar saturation, which say so in words rather than by absence. */
+const WIN = "#0B7A4B", WIN_SOFT = "#2E9C6B", WIN_PALE = "#B7E0CB";
+const LOSS = "#B3261E", LOSS_SOFT = "#D1544B", LOSS_PALE = "#F2C4C0";
 const WAIT = "#7A8894", WAIT_PALE = "#D8DEE4";
 const AMBER_INK = "#7A5B00", AMBER_BG = "#FDF3DC", AMBER_RULE = "#E4C86B";
 
 /** The verdict owns the loudest colour in the document, and nothing else uses it. */
-const VERDICT: Record<string, { label: string; bg: string; rule: string; text: string; plain: string }> = {
-  confirmed:        { label: "HYPOTHESIS CONFIRMED", bg: "#E7F4EC", rule: "#0B7A4B", text: "#075437", plain: "The change did what the brief predicted. This one is ready for a ship decision." },
-  refuted:          { label: "HYPOTHESIS REFUTED",   bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "The change did not do what the brief predicted." },
-  guardrail_breach: { label: "GUARDRAIL BREACH",     bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "Something the team promised to protect got worse. This needs a decision now." },
-  keep_running:     { label: "TOO EARLY TO CALL",    bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956", plain: "Not enough evidence yet. Leave it running." },
-  underpowered:     { label: "UNDERPOWERED",         bg: "#FDF3DC", rule: "#C9A227", text: "#7A5B00", plain: "At this traffic the test cannot settle the question. The call is whether it is worth more time." },
-  invalid:          { label: "DATA INVALID",         bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "The data cannot be trusted yet. Fix the setup before reading anything into it." },
-  not_adjudicable:  { label: "NOT READY TO JUDGE",   bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956", plain: "There is no agreed definition of success on file for this run." },
+const VERDICT: Record<string, { label: string; term: string; bg: string; rule: string; text: string; plain: string }> = {
+  confirmed:        { label: "IT WORKED",                 term: "Confirmed",       bg: "#E7F4EC", rule: "#0B7A4B", text: "#075437", plain: "The change did what the hypothesis predicted. This one is ready for a ship decision." },
+  refuted:          { label: "IT DIDN'T WORK",            term: "Refuted",         bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "The change did not do what the hypothesis predicted. A clean negative — the record is the value." },
+  guardrail_breach: { label: "SOMETHING BROKE",           term: "Guardrail breach", bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "Something the team promised to protect got worse. This needs a decision now." },
+  keep_running:     { label: "TOO EARLY TO CALL",         term: "Keep running",    bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956", plain: "Not enough evidence yet. Leave it running." },
+  underpowered:     { label: "CAN'T TELL AT THIS TRAFFIC", term: "Underpowered",   bg: "#FDF3DC", rule: "#C9A227", text: "#7A5B00", plain: "There isn't enough traffic for this test to settle the question. The call is whether it is worth more time." },
+  invalid:          { label: "THE DATA CAN'T BE TRUSTED", term: "Invalid",         bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "Fix the setup before reading anything into these numbers." },
+  not_adjudicable:  { label: "NOTHING TO JUDGE AGAINST",  term: "Not adjudicable", bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956", plain: "There is no agreed definition of success on file for this run." },
 };
 
 const esc = (v: unknown) =>
@@ -87,7 +92,7 @@ const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v
 const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
 const num = (v?: number) => (v === undefined ? "—" : v.toLocaleString());
 
-const caps = (text: string, color = MUTED, pb = 7) =>
+const caps = (text: string, color = "#5A6B7A", pb = 7) =>
   `<div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:${color};padding-bottom:${pb}px;">${esc(text)}</div>`;
 
 export function renderReadoutEmail(opts: {
@@ -120,12 +125,21 @@ export function renderReadoutEmail(opts: {
     if (lift === 0) return false;
     return wantsDown(k) ? lift < 0 : lift > 0;
   };
-  const tone = (k?: string): { solid: string; pale: string } => {
+  const tone = (k?: string): { solid: string; soft: string; pale: string } => {
     const lift = k ? cell(k, focusId)?.lift ?? 0 : 0;
-    if (!k || lift === 0) return { solid: WAIT, pale: WAIT_PALE };
-    return favourable(k) ? { solid: WIN, pale: WIN_PALE } : { solid: LOSS, pale: LOSS_PALE };
+    if (!k || lift === 0) return { solid: WAIT, soft: WAIT, pale: WAIT_PALE };
+    return favourable(k)
+      ? { solid: WIN, soft: WIN_SOFT, pale: WIN_PALE }
+      : { solid: LOSS, soft: LOSS_SOFT, pale: LOSS_PALE };
   };
-  const inkFor = (k?: string) => (isSettled(k) ? tone(k).solid : WAIT);
+  /** The hue either way; full strength only once the interval has closed. */
+  const inkFor = (k?: string) => (isSettled(k) ? tone(k).solid : tone(k).soft);
+
+  /** Says "not settled" in words, so colour never has to say it by absence. */
+  const unsettledTag = (k?: string, ml = 8) =>
+    isSettled(k)
+      ? ""
+      : `<span style="display:inline-block;margin-left:${ml}px;font:700 8.5px/1 ${F};letter-spacing:.08em;text-transform:uppercase;color:${AMBER_INK};background:${AMBER_BG};border:1px solid ${AMBER_RULE};border-radius:3px;padding:3px 5px;vertical-align:middle;">Not settled</span>`;
 
   const shown = opts.supporting.filter((k) => metric(k));
 
@@ -216,7 +230,8 @@ export function renderReadoutEmail(opts: {
   // The inbox preview line. This is the only text most recipients will see
   // before deciding whether to open, so it carries the answer and the action —
   // not the subject repeated back at them.
-  const preheader = [
+  const firstSentence = reading?.executive?.split(/(?<=[.!?])\s+/)[0];
+  const preheader = firstSentence ? firstSentence.slice(0, 160) : [
     answer.word,
     pm ? `decision step ${pct(pf?.lift)}${heroSettled ? "" : " (not settled)"}` : "",
     step.label,
@@ -232,16 +247,22 @@ export function renderReadoutEmail(opts: {
   const movedLine = (k?: string, fallback = "Nothing moved measurably") => {
     if (!k) return `<span style="font:400 14.5px/1.5 ${F};color:${MUTED};">${esc(fallback)}</span>`;
     const m = metric(k)!;
-    return `<span style="font:800 16px/1.4 ${F};color:${inkFor(k)};">${esc(pct(cell(k, focusId)?.lift))}</span>
-      <span style="font:400 14.5px/1.5 ${F};color:${BODY};">&nbsp; ${esc(m.label)}</span>
-      ${isSettled(k) ? "" : `<span style="font:400 12.5px/1.5 ${F};color:${FAINT};">&nbsp; not settled</span>`}`;
+    return `<span style="font:800 17px/1.45 ${F};color:${inkFor(k)};">${esc(pct(cell(k, focusId)?.lift))}</span>
+      <span style="font:500 14.5px/1.5 ${F};color:${BODY};">&nbsp; ${esc(m.label)}</span>${unsettledTag(k)}`;
   };
+
+  // THE ANALYST'S EXECUTIVE SUMMARY. Two or three sentences, digit-free by
+  // schema, aimed at someone who reads this and nothing else. It sits above the
+  // computed rows because prose answers "so what" and a table never will.
+  const execBlock = reading?.executive
+    ? `<div style="font:400 16.5px/1.62 ${F};color:${INK};padding-bottom:20px;">${esc(reading.executive)}</div>`
+    : "";
 
   const summary = `
     <tr><td style="padding:24px 28px 6px 28px;">
+      ${execBlock}
       ${caps("The short version", MUTED, 10)}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        ${answerRow("Did it work?", `<span style="font:800 17px/1.4 ${F};color:${answer.ink};">${esc(answer.word)}</span>`)}
         ${pm ? answerRow("The decision step", movedLine(pk)) : ""}
         ${answerRow("Biggest gain", movedLine(biggest, "Nothing moved in the team's favour"))}
         ${answerRow("What it cost", movedLine(worst, "Nothing moved against the team"))}
@@ -263,7 +284,7 @@ export function renderReadoutEmail(opts: {
     <tr><td style="padding:26px 28px 24px 28px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
         <tr><td style="padding-top:24px;">
-          ${caps("The decision metric — the only one that ships it")}
+          ${caps("The decision metric")}
           <div style="font:600 14.5px/1.35 ${F};color:${BODY};padding-bottom:12px;">${esc(pm.label)}</div>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
             <td style="vertical-align:bottom;padding-right:16px;">
@@ -292,7 +313,7 @@ export function renderReadoutEmail(opts: {
         <tr>
           <td width="4" bgcolor="${frozen ? INK : "#C9A227"}" style="width:4px;background:${frozen ? INK : "#C9A227"};font-size:0;">&nbsp;</td>
           <td style="padding:16px 18px;">
-            ${caps(frozen ? "What we said we believed · frozen before traffic" : "What we said we believed · never frozen", frozen ? MUTED : AMBER_INK)}
+            ${caps(frozen ? "The hypothesis · frozen before traffic" : "The hypothesis · never frozen", frozen ? MUTED : AMBER_INK)}
             <div style="font:400 15px/1.6 ${F};color:${BODY};">${esc(pre.hypothesis)}</div>
             ${!frozen ? `<div style="font:400 12px/1.5 ${F};color:${AMBER_INK};padding-top:9px;">Judged against the brief as it reads today. It was not locked before the traffic arrived, so this is evidence — not a pre-registered result.</div>` : ""}
           </td>
@@ -310,12 +331,15 @@ export function renderReadoutEmail(opts: {
     return `
       <tr><td style="padding:0 0 22px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-          <td width="28" style="width:28px;vertical-align:top;font:700 11px/1.6 ${F};color:#B4BFC9;">${esc(n)}</td>
+          <td width="3" bgcolor="${m ? ink : RULE}" style="width:3px;background:${m ? ink : RULE};font-size:0;border-radius:2px;">&nbsp;</td>
+          <td width="14" style="width:14px;font-size:0;">&nbsp;</td>
           <td style="vertical-align:top;">
-            ${caps(label)}
+            <div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding-bottom:7px;">
+              <span style="color:#AEBAC5;">${esc(n)}</span>&nbsp;&nbsp;${esc(label)}
+            </div>
             ${m ? `<div style="padding-bottom:7px;">
               <span style="font:800 26px/1.05 ${F};color:${ink};letter-spacing:-.015em;">${esc(pct(c?.lift))}</span>
-              <span style="font:400 13px/1.2 ${F};color:${MUTED};">&nbsp;&nbsp;${esc(m.label)}${isSettled(sec.measureKey) ? "" : " &middot; still inside luck"}</span>
+              <span style="font:600 13px/1.2 ${F};color:${BODY};">&nbsp;&nbsp;${esc(m.label)}</span>${unsettledTag(sec.measureKey)}
             </div>` : ""}
             <div style="font:400 14.5px/1.62 ${F};color:${BODY};">${esc(sec.text)}</div>
           </td>
@@ -366,7 +390,7 @@ export function renderReadoutEmail(opts: {
         <td width="${BAR_W + GUT}" style="width:${BAR_W + GUT}px;${pad(`padding-left:${GUT}px;vertical-align:middle;`)}">${bar(k)}</td>
         <td width="66" align="right" style="width:66px;${pad(`padding-left:${GUT}px;padding-right:${isDecision ? "10px" : "0"};vertical-align:middle;`)}">
           <span style="font:800 15px/1.2 ${F};color:${ink};">${esc(pct(f?.lift))}</span>
-          ${isSettled(k) ? "" : `<div style="font:400 9.5px/1.2 ${F};color:${FAINT};padding-top:3px;">not settled</div>`}
+          ${isSettled(k) ? "" : `<div style="font:700 8px/1 ${F};letter-spacing:.07em;text-transform:uppercase;color:${AMBER_INK};padding-top:4px;">Not settled</div>`}
         </td>
       </tr>`;
   }).join("");
@@ -395,7 +419,10 @@ export function renderReadoutEmail(opts: {
   <!-- THE VERDICT BAND: the loudest thing here, and the colour of the email. -->
   ${v ? `<tr><td bgcolor="${v.bg}" style="background:${v.bg};border-left:5px solid ${v.rule};padding:22px 28px 24px 23px;">
     <div style="font:800 26px/1.15 ${F};color:${v.text};letter-spacing:-.015em;">${esc(v.label)}</div>
-    <div style="font:400 13.5px/1.55 ${F};color:${v.text};padding-top:7px;">${esc(v.plain)}</div>
+    <div style="padding-top:9px;">
+      <span style="display:inline-block;font:700 8.5px/1 ${F};letter-spacing:.1em;text-transform:uppercase;color:${v.text};border:1px solid ${v.rule};border-radius:3px;padding:4px 6px;">${esc(v.term)}</span>
+    </div>
+    <div style="font:400 13.5px/1.55 ${F};color:${v.text};padding-top:10px;">${esc(v.plain)}</div>
     <div style="font:600 19px/1.42 ${F};color:${INK};padding-top:16px;">${esc(headline)}</div>
   </td></tr>` : ""}
 
@@ -448,17 +475,17 @@ export function renderReadoutEmail(opts: {
 
   const text = [
     `${opts.prototypeName.toUpperCase()} — EXPERIMENT READOUT`,
-    v ? `\n${v.label}\n${v.plain}` : "",
+    v ? `\n${v.label}  (${v.term})\n${v.plain}` : "",
     `\n${headline}`,
+    reading?.executive ? `\n${reading.executive}` : "",
     `\nTHE SHORT VERSION`,
-    `Did it work?        ${answer.word}`,
     pm ? `The decision step   ${pct(pf?.lift)} ${pm.label}${heroSettled ? "" : " (not settled)"}` : "",
     biggest ? `Biggest gain        ${pct(cell(biggest, focusId)?.lift)} ${metric(biggest)!.label}${isSettled(biggest) ? "" : " (not settled)"}` : "",
     worst ? `What it cost        ${pct(cell(worst, focusId)?.lift)} ${metric(worst)!.label}${isSettled(worst) ? "" : " (not settled)"}` : "",
     `What happens next   ${step.label}`,
     `Visitors ${visitors !== undefined ? num(visitors) : "—"} · ${days !== undefined ? `Day ${days}` : "—"} · Settled ${nSettled} of ${nShown} · Guardrails ${guardWord}`,
     pm ? `\nTHE DECISION METRIC\n${pct(pf?.lift)}  ${pm.label}\n${rate(pf?.rate)} vs ${rate(pbase?.rate)} control · ${num(pf?.count)} vs ${num(pbase?.count)} events\n${heroSettled ? "Settled beyond luck." : "Still inside luck."}` : "",
-    pre?.hypothesis ? `\nWHAT WE SAID WE BELIEVED${frozen ? " (frozen before traffic)" : " (never frozen)"}\n${pre.hypothesis}` : "",
+    pre?.hypothesis ? `\nTHE HYPOTHESIS${frozen ? " (frozen before traffic)" : " (never frozen)"}\n${pre.hypothesis}` : "",
     reading?.read
       ? "\n" + [
           reading.read.effect?.text && `01 WHAT THE CHANGE DID\n${reading.read.effect.text}`,
