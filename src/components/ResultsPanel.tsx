@@ -1477,6 +1477,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       value: m.featureOnly ? rate(focus?.rate) : pctS(focus?.lift),
       tone: m.featureOnly || !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
       focusRate: rate(focus?.rate),
+      // A rate with no count is unfalsifiable at a glance: 5.9% of a hundred
+      // and 5.9% of ten thousand read identically and mean very different
+      // things. The counts are already on the cell; they were just not shown.
+      focusCount: focus?.count, focusN: focus?.n,
+      baseCount: base?.count, baseN: base?.n,
       baseRate: m.featureOnly ? null : rate(base?.rate),
       computedLine: computedLine + oneArmNote,
       // Collapsed, the row says WHAT THIS METRIC CAPTURES — a definition that
@@ -1910,6 +1915,13 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                           {o.baseRate
                             ? <span className="text-muted"> vs <span className="font-semibold text-foreground/70">{o.baseRate}</span> control</span>
                             : <span className="text-muted-2"> &middot; nothing equivalent in the control</span>}
+                          {o.focusCount !== undefined && (
+                            <span className="text-muted-2 font-normal">
+                              {" "}&middot; {o.focusCount.toLocaleString()}
+                              {o.baseCount !== undefined ? ` vs ${o.baseCount.toLocaleString()}` : ""} events
+                              {o.focusN ? ` from ${o.focusN.toLocaleString()} visitors` : ""}
+                            </span>
+                          )}
                         </span>
                         <span className="block text-[14px] text-foreground/85 leading-snug line-clamp-2">{o.gloss ?? o.computedLine}</span>
                         {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
@@ -2210,7 +2222,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   </td>
                   {ordered.map((v) => {
                     const r = rowsC.find((x) => x.variationId === v.variationId);
-                    return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
+                    return (
+                      <td key={v.variationId} className="py-1.5 px-1.5 text-right tabular-nums align-top">
+                        <div>{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</div>
+                        {r?.conversions !== undefined && (
+                          <div className="text-[10.5px] text-muted-2 leading-tight">{r.conversions.toLocaleString()}</div>
+                        )}
+                      </td>
+                    );
                   })}
                   <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</td>
                   <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</td>
@@ -2301,7 +2320,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   </td>
                   {ordered.map((v) => {
                     const r = m.perVariation.find((x) => x.variationId === v.variationId);
-                    return <td key={v.variationId} className="py-1.5 px-1.5 text-right">{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</td>;
+                    return (
+                      <td key={v.variationId} className="py-1.5 px-1.5 text-right tabular-nums align-top">
+                        <div>{r?.rate !== undefined ? `${(r.rate * 100).toFixed(1)}%` : "—"}</div>
+                        {r?.conversions !== undefined && (
+                          <div className="text-[10.5px] text-muted-2 leading-tight">{r.conversions.toLocaleString()}</div>
+                        )}
+                      </td>
+                    );
                   })}
                   <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
                   <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
@@ -2332,7 +2358,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                         {ordered.map((v) => (
                           <th key={v.variationId} className="font-medium py-1 px-1.5 text-right max-w-24">
                             <span className="block truncate" title={v.name}>{v.name}</span>
-                            {isCtl(v.variationId) && <span className="font-normal">(control)</span>}
+                            {isCtl(v.variationId) && <span className="block font-normal">(control)</span>}
+                            <span className="block font-normal text-muted-2/80">rate · events</span>
                           </th>
                         ))}
                         <th className="font-medium py-1 pl-2 text-right">Δ vs control</th>
