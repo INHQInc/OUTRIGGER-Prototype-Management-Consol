@@ -75,14 +75,17 @@ const WAIT = "#7A8894", WAIT_PALE = "#D8DEE4";
 const AMBER_INK = "#7A5B00", AMBER_BG = "#FDF3DC", AMBER_RULE = "#E4C86B";
 
 /** The verdict owns the loudest colour in the document, and nothing else uses it. */
-const VERDICT: Record<string, { label: string; term: string; bg: string; rule: string; text: string; plain: string }> = {
-  confirmed:        { label: "IT WORKED",                 term: "Confirmed",       bg: "#E7F4EC", rule: "#0B7A4B", text: "#075437", plain: "The change did what the hypothesis predicted. This one is ready for a ship decision." },
-  refuted:          { label: "IT DIDN'T WORK",            term: "Refuted",         bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "The change did not do what the hypothesis predicted. A clean negative — the record is the value." },
-  guardrail_breach: { label: "SOMETHING BROKE",           term: "Guardrail breach", bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "Something the team promised to protect got worse. This needs a decision now." },
-  keep_running:     { label: "TOO EARLY TO CALL",         term: "Keep running",    bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956", plain: "Not enough evidence yet. Leave it running." },
-  underpowered:     { label: "CAN'T TELL AT THIS TRAFFIC", term: "Underpowered",   bg: "#FDF3DC", rule: "#C9A227", text: "#7A5B00", plain: "There isn't enough traffic for this test to settle the question. The call is whether it is worth more time." },
-  invalid:          { label: "THE DATA CAN'T BE TRUSTED", term: "Invalid",         bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18", plain: "Fix the setup before reading anything into these numbers." },
-  not_adjudicable:  { label: "NOTHING TO JUDGE AGAINST",  term: "Not adjudicable", bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956", plain: "There is no agreed definition of success on file for this run." },
+/** Reads as the VALUE of "Status:" — a complete answer with a subject, not a
+ *  shouted fragment. "CAN'T TELL AT THIS TRAFFIC" alone left the reader asking
+ *  "can't tell what?"; a label in front of it is what makes it a sentence. */
+const VERDICT: Record<string, { label: string; term: string; bg: string; rule: string; text: string }> = {
+  confirmed:        { label: "It worked",                        term: "Confirmed",        bg: "#E7F4EC", rule: "#0B7A4B", text: "#075437" },
+  refuted:          { label: "It didn't work",                   term: "Refuted",          bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18" },
+  guardrail_breach: { label: "Stop and look — a guardrail broke", term: "Guardrail breach", bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18" },
+  keep_running:     { label: "Too early to call",                term: "Keep running",     bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956" },
+  underpowered:     { label: "Not enough traffic to tell yet",   term: "Underpowered",     bg: "#FDF3DC", rule: "#C9A227", text: "#7A5B00" },
+  invalid:          { label: "The data can't be trusted yet",    term: "Invalid",          bg: "#FDECEA", rule: "#B3261E", text: "#8C1D18" },
+  not_adjudicable:  { label: "No agreed definition of success",  term: "Not adjudicable",  bg: "#EEF2F6", rule: "#6B7A88", text: "#3B4956" },
 };
 
 const esc = (v: unknown) =>
@@ -231,6 +234,14 @@ export function renderReadoutEmail(opts: {
   // before deciding whether to open, so it carries the answer and the action —
   // not the subject repeated back at them.
   const firstSentence = reading?.executive?.split(/(?<=[.!?])\s+/)[0];
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const asOfLabel = (() => {
+    const iso = stats?.computedAt;
+    if (!iso) return "";
+    const d = new Date(iso);
+    return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  })();
+
   const preheader = firstSentence ? firstSentence.slice(0, 160) : [
     answer.word,
     pm ? `decision step ${pct(pf?.lift)}${heroSettled ? "" : " (not settled)"}` : "",
@@ -254,9 +265,9 @@ export function renderReadoutEmail(opts: {
   // THE ANALYST'S EXECUTIVE SUMMARY. Two or three sentences, digit-free by
   // schema, aimed at someone who reads this and nothing else. It sits above the
   // computed rows because prose answers "so what" and a table never will.
-  const execBlock = reading?.executive
-    ? `<div style="font:400 16.5px/1.62 ${F};color:${INK};padding-bottom:20px;">${esc(reading.executive)}</div>`
-    : "";
+  const execBlock = `
+    <div style="font:700 19px/1.4 ${F};color:${INK};padding-bottom:${reading?.executive ? "10" : "18"}px;">${esc(headline)}</div>
+    ${reading?.executive ? `<div style="font:400 16px/1.62 ${F};color:${BODY};padding-bottom:20px;">${esc(reading.executive)}</div>` : ""}`;
 
   const summary = `
     <tr><td style="padding:24px 28px 6px 28px;">
@@ -265,8 +276,7 @@ export function renderReadoutEmail(opts: {
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         ${pm ? answerRow("The decision step", movedLine(pk)) : ""}
         ${answerRow("Biggest gain", movedLine(biggest, "Nothing moved in the team's favour"))}
-        ${answerRow("What it cost", movedLine(worst, "Nothing moved against the team"))}
-        ${answerRow("What happens next", `<span style="font:600 14.5px/1.5 ${F};color:${INK};">${esc(step.label)}</span>`, true)}
+        ${answerRow("What it cost", movedLine(worst, "Nothing moved against the team"), true)}
       </table>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
         <tr>
@@ -301,26 +311,6 @@ export function renderReadoutEmail(opts: {
             ${pf?.count !== undefined ? `&nbsp;&middot;&nbsp; ${esc(num(pf.count))} vs ${esc(num(pbase?.count))} events` : ""}
           </div>
         </td></tr>
-      </table>
-    </td></tr>`
-    : "";
-
-  // ── THE BRIEF: what the team committed to, before any of this ──
-  const brief = pre?.hypothesis
-    ? `
-    <tr><td style="padding:0 28px 26px 28px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${TINT};border-radius:8px;">
-        <tr>
-          <td width="4" bgcolor="${frozen ? INK : "#C9A227"}" style="width:4px;background:${frozen ? INK : "#C9A227"};font-size:0;">&nbsp;</td>
-          <td style="padding:16px 18px;">
-            ${/* Frozen is the expected case and saying so is reassurance clutter.
-                  NOT frozen still gets disclosed — by the amber note below, which
-                  explains the consequence instead of just flagging it. */ ""}
-            ${caps("The hypothesis", frozen ? MUTED : AMBER_INK)}
-            <div style="font:400 15px/1.6 ${F};color:${BODY};">${esc(pre.hypothesis)}</div>
-            ${!frozen ? `<div style="font:400 12px/1.5 ${F};color:${AMBER_INK};padding-top:9px;">Judged against the brief as it reads today. It was not locked before the traffic arrived, so this is evidence — not a pre-registered result.</div>` : ""}
-          </td>
-        </tr>
       </table>
     </td></tr>`
     : "";
@@ -411,27 +401,46 @@ export function renderReadoutEmail(opts: {
 <tr><td align="center">
 <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;width:100%;background:#FFFFFF;border-radius:12px;overflow:hidden;">
 
-  <!-- MASTHEAD: quiet. Says which experiment, not how it went. -->
-  <tr><td bgcolor="${INK}" style="background:${INK};padding:16px 28px;">
+  <!-- 1. WHAT KIND OF DOCUMENT THIS IS, and how far into the run we are. -->
+  <tr><td bgcolor="${INK}" style="background:${INK};padding:15px 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td style="font:700 11px/1.2 ${F};letter-spacing:.14em;text-transform:uppercase;color:#FFFFFF;">${esc(opts.prototypeName)}</td>
-      <td align="right" style="font:600 10.5px/1.2 ${F};letter-spacing:.09em;text-transform:uppercase;color:#7E8FA0;">Experiment readout</td>
+      <td style="font:700 10.5px/1.2 ${F};letter-spacing:.16em;text-transform:uppercase;color:#FFFFFF;">Experiment readout</td>
+      <td align="right" style="font:600 10.5px/1.2 ${F};letter-spacing:.1em;text-transform:uppercase;color:#8DA0B2;">${esc([days !== undefined ? `Day ${days}` : "", asOfLabel].filter(Boolean).join(" · "))}</td>
     </tr></table>
   </td></tr>
 
-  <!-- THE VERDICT BAND: the loudest thing here, and the colour of the email. -->
-  ${v ? `<tr><td bgcolor="${v.bg}" style="background:${v.bg};border-left:5px solid ${v.rule};padding:22px 28px 24px 23px;">
-    <div style="font:800 26px/1.15 ${F};color:${v.text};letter-spacing:-.015em;">${esc(v.label)}</div>
-    <div style="padding-top:9px;">
-      <span style="display:inline-block;font:700 8.5px/1 ${F};letter-spacing:.1em;text-transform:uppercase;color:${v.text};border:1px solid ${v.rule};border-radius:3px;padding:4px 6px;">${esc(v.term)}</span>
-    </div>
-    <div style="font:400 13.5px/1.55 ${F};color:${v.text};padding-top:10px;">${esc(v.plain)}</div>
-    <div style="font:600 19px/1.42 ${F};color:${INK};padding-top:16px;">${esc(headline)}</div>
+  <!-- 2. WHAT IS BEING TESTED — before any result. A reader who does not know
+          what the experiment is cannot use a verdict about it. -->
+  <tr><td style="padding:26px 28px 22px 28px;">
+    <div style="font:800 27px/1.2 ${F};color:${INK};letter-spacing:-.02em;">${esc(opts.prototypeName)}</div>
+    ${pre?.hypothesis ? `
+      <div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding:16px 0 7px 0;">What we're testing</div>
+      <div style="font:400 15.5px/1.6 ${F};color:${BODY};">${esc(pre.hypothesis)}</div>
+      ${!frozen ? `<div style="font:400 12px/1.5 ${F};color:${AMBER_INK};padding-top:8px;">This wasn't locked before the traffic arrived, so it is evidence rather than a pre-registered result.</div>` : ""}
+    ` : ""}
+  </td></tr>
+
+  <!-- 3. HOW IT IS GOING. A labelled row, because the answer needs a subject:
+          "Not enough traffic to tell yet" is a fragment until something in
+          front of it says what it is the status OF. -->
+  ${v ? `<tr><td style="padding:0 28px 4px 28px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${v.bg}" style="background:${v.bg};border-radius:8px;">
+      <tr>
+        <td width="5" bgcolor="${v.rule}" style="width:5px;background:${v.rule};font-size:0;border-radius:8px 0 0 8px;">&nbsp;</td>
+        <td style="padding:18px 20px;">
+          <div style="font:700 10px/1.2 ${F};letter-spacing:.13em;text-transform:uppercase;color:${v.text};opacity:.75;padding-bottom:7px;">Status</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="vertical-align:middle;padding-right:10px;font:800 22px/1.25 ${F};color:${v.text};letter-spacing:-.015em;">${esc(v.label)}</td>
+            <td style="vertical-align:middle;"><span style="display:inline-block;font:700 8.5px/1 ${F};letter-spacing:.1em;text-transform:uppercase;color:${v.text};border:1px solid ${v.rule};border-radius:3px;padding:4px 6px;">${esc(v.term)}</span></td>
+          </tr></table>
+          <div style="font:600 14px/1.5 ${F};color:${v.text};padding-top:9px;">${esc(step.label)}</div>
+        </td>
+      </tr>
+    </table>
   </td></tr>` : ""}
 
   ${summary}
   ${hero}
-  ${brief}
 
   ${movements ? `<tr><td style="padding:0 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
@@ -478,19 +487,16 @@ export function renderReadoutEmail(opts: {
 
   const text = [
     `${opts.prototypeName.toUpperCase()} — EXPERIMENT READOUT`,
-    v ? `\n${v.label}  (${v.term})\n${v.plain}` : "",
+    pre?.hypothesis ? `\nWHAT WE'RE TESTING\n${pre.hypothesis}${frozen ? "" : "\nNot locked before the traffic arrived — evidence, not a pre-registered result."}` : "",
+    v ? `\nSTATUS: ${v.label} (${v.term})\n${step.label}` : "",
     `\n${headline}`,
     reading?.executive ? `\n${reading.executive}` : "",
     `\nTHE SHORT VERSION`,
     pm ? `The decision step   ${pct(pf?.lift)} ${pm.label}${heroSettled ? "" : " (not settled)"}` : "",
     biggest ? `Biggest gain        ${pct(cell(biggest, focusId)?.lift)} ${metric(biggest)!.label}${isSettled(biggest) ? "" : " (not settled)"}` : "",
     worst ? `What it cost        ${pct(cell(worst, focusId)?.lift)} ${metric(worst)!.label}${isSettled(worst) ? "" : " (not settled)"}` : "",
-    `What happens next   ${step.label}`,
     `Visitors ${visitors !== undefined ? num(visitors) : "—"} · ${days !== undefined ? `Day ${days}` : "—"} · Settled ${nSettled} of ${nShown} · Guardrails ${guardWord}`,
     pm ? `\nTHE DECISION METRIC\n${pct(pf?.lift)}  ${pm.label}\n${rate(pf?.rate)} vs ${rate(pbase?.rate)} control · ${num(pf?.count)} vs ${num(pbase?.count)} events\n${heroSettled ? "Settled beyond luck." : "Still inside luck."}` : "",
-    pre?.hypothesis
-      ? `\nTHE HYPOTHESIS\n${pre.hypothesis}${frozen ? "" : "\nNot locked before the traffic arrived — this is evidence, not a pre-registered result."}`
-      : "",
     reading?.read
       ? "\n" + [
           reading.read.effect?.text && `01 WHAT THE CHANGE DID\n${reading.read.effect.text}`,
