@@ -10,6 +10,12 @@
  * names a metric key, the code resolves the live value. A number is never
  * copied out of the model's prose, here or anywhere.
  *
+ * IT USES THE WINDOW. The default email card — 600 to 640px centred on a grey
+ * canvas — wastes most of a desktop reading pane. The shell runs to 1280px with
+ * a thin margin holding the frame, and prose caps at 900px: wide enough that a
+ * paragraph does not read as a ribbon inside a broad card, short of the point
+ * where the eye loses the start of the next line.
+ *
  * ── HOW THIS EARNS AN EXECUTIVE'S SECOND ─────────────────────────────────────
  *
  * FOUR LAYERS, EACH READABLE ON ITS OWN, EACH SHORTER THAN THE LAST ONE DOWN.
@@ -66,7 +72,7 @@ const RULE = "#E1E7EC";
 const TINT = "#F6F8FA";
 /** Tables want the full width; prose does not — a 110-character measure is
  *  harder to read, not easier. Paragraphs keep their own cap inside the wider shell. */
-const PROSE = "max-width:680px;";
+const PROSE = "max-width:900px;";
 
 /** VALENCE ALWAYS CARRIES HUE. Direction is a fact whether or not the interval
  *  has closed, so an unsettled number is a lighter green or red — never grey.
@@ -378,9 +384,9 @@ ${roleFor(k) === "exploratory" ? " " : `
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"></head>
 <body style="margin:0;padding:0;background:#E8ECF0;-webkit-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#E8ECF0;padding:24px 12px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#E8ECF0;padding:14px;">
 <tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:860px;width:100%;background:#FFFFFF;border-radius:12px;overflow:hidden;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:1280px;width:100%;background:#FFFFFF;border-radius:12px;overflow:hidden;">
 
   <!-- 1. WHAT KIND OF DOCUMENT THIS IS, and how far into the run we are. -->
   <tr><td bgcolor="${INK}" style="background:${INK};padding:15px 28px;">
