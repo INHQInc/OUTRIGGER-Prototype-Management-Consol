@@ -42,12 +42,14 @@
  * Slate = not yet beyond luck. Sections are told apart by position and label,
  * so hue stays free to mean exactly one thing.
  *
- * MAGNITUDE IS DRAWN. Every metric carries a bar scaled to the biggest mover,
- * so the shape of a result — huge at the browse step, flat at the booking step
- * — lands before a number is read. Unsettled bars are a pale tint of the same
- * colour: direction visible, confidence not overstated.
+ * ALL METRICS USES THE CONSOLE'S OWN ROW SHAPE: the change first and large,
+ * then the metric with its role, both rates, the event counts and the base, and
+ * underneath it the analyst's observation of that metric. An earlier version
+ * was a spreadsheet with a bar chart; this carries the same numbers and adds
+ * the sentence that says what they mean, which is the part a reader keeps.
  */
-import type { ExperimentResults, MetricMap } from "../prototypes/results";
+import type { ExperimentResults, MetricMap, MetricRole } from "../prototypes/results";
+import { roleOf, optiPrimaryKeyOf } from "../prototypes/results";
 import type { StatsReport } from "../prototypes/stats";
 import type { VerdictRecord } from "../prototypes/verdict";
 import { nextStep } from "../prototypes/verdict";
@@ -62,6 +64,9 @@ const MUTED = "#6B7A88";
 const FAINT = "#95A2AE";
 const RULE = "#E1E7EC";
 const TINT = "#F6F8FA";
+/** Tables want the full width; prose does not — a 110-character measure is
+ *  harder to read, not easier. Paragraphs keep their own cap inside the wider shell. */
+const PROSE = "max-width:680px;";
 
 /** VALENCE ALWAYS CARRIES HUE. Direction is a fact whether or not the interval
  *  has closed, so an unsettled number is a lighter green or red — never grey.
@@ -146,22 +151,20 @@ export function renderReadoutEmail(opts: {
 
   const shown = opts.supporting.filter((k) => metric(k));
 
-  /** Bars are scaled to the biggest mover on show, so the set is comparable
-   *  with itself and one huge metric doesn't flatten the rest. */
-  const maxAbs = Math.max(0.0001, ...shown.map((k) => Math.abs(cell(k, focusId)?.lift ?? 0)));
-  const BAR_W = 104;
-  const bar = (k: string) => {
-    const lift = cell(k, focusId)?.lift ?? 0;
-    const t = tone(k);
-    const fill = isSettled(k) ? t.solid : t.pale;
-    const w = Math.max(3, Math.round((Math.abs(lift) / maxAbs) * BAR_W));
-    const rest = Math.max(0, BAR_W - w);
-    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;width:${BAR_W}px;">
-      <tr>
-        <td width="${w}" bgcolor="${fill}" style="width:${w}px;height:7px;background:${fill};font-size:0;line-height:0;border-radius:3px;">&nbsp;</td>
-        <td width="${rest}" style="width:${rest}px;font-size:0;line-height:0;">&nbsp;</td>
-      </tr></table>`;
+  /** What each metric is FOR. A table of numbers with no roles asks the reader
+   *  to know which one decides the experiment and which are context. */
+  const ROLE_CHIP: Record<MetricRole, { label: string; fg: string; bg: string }> = {
+    decision:    { label: "Decision",    fg: "#FFFFFF", bg: INK },
+    supporting:  { label: "Supporting",  fg: "#185FA5", bg: "#E6F1FB" },
+    guardrail:   { label: "Guardrail",   fg: "#7A5B00", bg: AMBER_BG },
+    exploratory: { label: "Exploratory", fg: "#5F5E5A", bg: "#F1EFE8" },
   };
+  const roleFor = (k: string): MetricRole =>
+    roleOf(k, {
+      map: opts.map,
+      decisionKey: stats?.primaryKey ?? null,
+      optiPrimaryKey: optiPrimaryKeyOf(opts.results),
+    });
 
   const v = verdict ? VERDICT[verdict.verdict] ?? VERDICT.not_adjudicable : null;
   const headline = reading?.headline || verdict?.headline || `${opts.prototypeName} — experiment readout`;
@@ -266,25 +269,16 @@ export function renderReadoutEmail(opts: {
   // schema, aimed at someone who reads this and nothing else. It sits above the
   // computed rows because prose answers "so what" and a table never will.
   const execBlock = `
-    <div style="font:700 19px/1.4 ${F};color:${INK};padding-bottom:${reading?.executive ? "10" : "18"}px;">${esc(headline)}</div>
-    ${reading?.executive ? `<div style="font:400 16px/1.62 ${F};color:${BODY};padding-bottom:20px;">${esc(reading.executive)}</div>` : ""}`;
+    <div style="font:700 21px/1.35 ${F};color:${INK};${PROSE}padding-bottom:${reading?.executive ? "10" : "0"}px;">${esc(headline)}</div>
+    ${reading?.executive ? `<div style="font:400 16px/1.62 ${F};color:${BODY};${PROSE}">${esc(reading.executive)}</div>` : ""}`;
 
   const summary = `
-    <tr><td style="padding:24px 28px 6px 28px;">
-      ${execBlock}
-      ${caps("The short version", MUTED, 10)}
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-        ${pm ? answerRow("The decision step", movedLine(pk)) : ""}
-        ${answerRow("Biggest gain", movedLine(biggest, "Nothing moved in the team's favour"))}
-        ${answerRow("What it cost", movedLine(worst, "Nothing moved against the team"), true)}
-      </table>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:16px;">
-        <tr>
-          ${tile("Visitors", visitors !== undefined ? num(visitors) : "—")}
-          ${tile("Running", days !== undefined ? `Day ${days}` : "—")}
-          ${tile("Settled", `${nSettled} of ${nShown}`)}
-          ${tile("Guardrails", guardWord, guardInk)}
-        </tr>
+    <tr><td style="padding:26px 28px 6px 28px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
+        <tr><td style="padding-top:24px;">
+          ${caps("Observations", MUTED, 10)}
+          ${execBlock}
+        </td></tr>
       </table>
     </td></tr>`;
 
@@ -334,7 +328,7 @@ export function renderReadoutEmail(opts: {
               <span style="font:800 26px/1.05 ${F};color:${ink};letter-spacing:-.015em;">${esc(pct(c?.lift))}</span>
               <span style="font:600 13px/1.2 ${F};color:${BODY};">&nbsp;&nbsp;${esc(m.label)}</span>${unsettledTag(sec.measureKey)}
             </div>` : ""}
-            <div style="font:400 14.5px/1.62 ${F};color:${BODY};">${esc(sec.text)}</div>
+            <div style="font:400 14.5px/1.62 ${F};color:${BODY};${PROSE}">${esc(sec.text)}</div>
           </td>
         </tr></table>
       </td></tr>`;
@@ -352,38 +346,25 @@ export function renderReadoutEmail(opts: {
       : "";
 
   // ── EVERY METRIC: a real table. Columns, headers, one alignment per kind. ──
-  // Numeric columns carry their own left gutter — right-aligned headers in
-  // adjacent cells run into each other without one ("VARIANTCONTROL").
-  const NUMW = 64, GUT = 12;
-  const th = (text: string, align: "left" | "right" = "left", w?: number, gutter = 0) =>
-    `<td ${w ? `width="${w}" ` : ""}align="${align}" style="${w ? `width:${w}px;` : ""}padding:0 0 9px ${gutter}px;font:700 9.5px/1.2 ${F};letter-spacing:.1em;text-transform:uppercase;color:${FAINT};">${esc(text)}</td>`;
-
-  const metricRows = shown.map((k, i) => {
+  const metricRows = shown.map((k) => {
     const m = metric(k)!;
     const f = cell(k, focusId), b = cell(k, baseId);
-    const isDecision = k === stats?.primaryKey;
-    const ink = inkFor(k);
-    const bg = isDecision ? TINT : "#FFFFFF";
-    const pad = (extra = "") => `padding:11px 0;border-top:1px solid ${RULE};background:${bg};${extra}`;
+    const r = ROLE_CHIP[roleFor(k)];
+    const note = reading?.observations?.find((o) => o.measureKey === k)?.note;
     return `
       <tr>
-        <td style="${pad(`padding-left:${isDecision ? "10px" : "0"};vertical-align:middle;`)}">
-          <div style="font:600 13.5px/1.35 ${F};color:${INK};">${esc(m.label)}</div>
-          <div style="padding-top:4px;font:400 11.5px/1.5 ${F};color:${FAINT};">
-            ${isDecision ? `<span style="font:700 8.5px/1 ${F};letter-spacing:.08em;color:#FFFFFF;background:${INK};border-radius:3px;padding:3px 5px;">DECISION</span>&nbsp;&nbsp;` : ""}
-            ${f?.count !== undefined ? `${esc(num(f.count))} vs ${esc(num(b?.count))} events` : ""}
+        <td width="96" align="left" style="width:96px;padding:14px 14px 14px 0;border-top:1px solid ${RULE};vertical-align:top;white-space:nowrap;">
+          <div style="font:800 22px/1.1 ${F};color:${inkFor(k)};letter-spacing:-.015em;">${esc(pct(f?.lift))}</div>
+          ${isSettled(k) ? "" : `<div style="font:700 8px/1.2 ${F};letter-spacing:.07em;text-transform:uppercase;color:${AMBER_INK};padding-top:5px;">Not settled</div>`}
+        </td>
+        <td style="padding:14px 0;border-top:1px solid ${RULE};vertical-align:top;">
+          <div style="font:400 13px/1.6 ${F};color:${MUTED};">
+            <span style="font:600 14.5px/1.5 ${F};color:${INK};">${esc(m.label)}</span>
+${roleFor(k) === "exploratory" ? " " : `
+            <span style="display:inline-block;margin:0 8px;font:700 8.5px/1 ${F};letter-spacing:.08em;text-transform:uppercase;color:${r.fg};background:${r.bg};border-radius:3px;padding:3px 5px;vertical-align:middle;">${esc(r.label)}</span>`}
+            <span style="font:600 13px/1.6 ${F};color:${BODY};">${esc(rate(f?.rate))}</span> vs <span style="font:600 13px/1.6 ${F};color:${BODY};">${esc(rate(b?.rate))}</span> control${f?.count !== undefined ? ` &middot; ${esc(num(f.count))} vs ${esc(num(b?.count))} events` : ""}${f?.n ? ` from ${esc(num(f.n))} visitors` : ""}
           </div>
-        </td>
-        <td width="${NUMW}" align="right" style="width:${NUMW}px;${pad(`padding-left:${GUT}px;vertical-align:middle;`)}">
-          <span style="font:600 13px/1.2 ${F};color:${BODY};">${esc(rate(f?.rate))}</span>
-        </td>
-        <td width="${NUMW}" align="right" style="width:${NUMW}px;${pad(`padding-left:${GUT}px;vertical-align:middle;`)}">
-          <span style="font:400 13px/1.2 ${F};color:${MUTED};">${esc(rate(b?.rate))}</span>
-        </td>
-        <td width="${BAR_W + GUT}" style="width:${BAR_W + GUT}px;${pad(`padding-left:${GUT}px;vertical-align:middle;`)}">${bar(k)}</td>
-        <td width="66" align="right" style="width:66px;${pad(`padding-left:${GUT}px;padding-right:${isDecision ? "10px" : "0"};vertical-align:middle;`)}">
-          <span style="font:800 15px/1.2 ${F};color:${ink};">${esc(pct(f?.lift))}</span>
-          ${isSettled(k) ? "" : `<div style="font:700 8px/1 ${F};letter-spacing:.07em;text-transform:uppercase;color:${AMBER_INK};padding-top:4px;">Not settled</div>`}
+          ${note ? `<div style="font:400 14px/1.6 ${F};color:${BODY};${PROSE}padding-top:6px;">${esc(note)}</div>` : ""}
         </td>
       </tr>`;
   }).join("");
@@ -399,7 +380,7 @@ export function renderReadoutEmail(opts: {
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#E8ECF0;padding:24px 12px;">
 <tr><td align="center">
-<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;width:100%;background:#FFFFFF;border-radius:12px;overflow:hidden;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:860px;width:100%;background:#FFFFFF;border-radius:12px;overflow:hidden;">
 
   <!-- 1. WHAT KIND OF DOCUMENT THIS IS, and how far into the run we are. -->
   <tr><td bgcolor="${INK}" style="background:${INK};padding:15px 28px;">
@@ -414,8 +395,8 @@ export function renderReadoutEmail(opts: {
   <tr><td style="padding:26px 28px 22px 28px;">
     <div style="font:800 27px/1.2 ${F};color:${INK};letter-spacing:-.02em;">${esc(opts.prototypeName)}</div>
     ${pre?.hypothesis ? `
-      <div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding:16px 0 7px 0;">What we're testing</div>
-      <div style="font:400 15.5px/1.6 ${F};color:${BODY};">${esc(pre.hypothesis)}</div>
+      <div style="font:700 10.5px/1.2 ${F};letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding:16px 0 7px 0;">Hypothesis</div>
+      <div style="font:400 15.5px/1.6 ${F};color:${BODY};${PROSE}">${esc(pre.hypothesis)}</div>
       ${!frozen ? `<div style="font:400 12px/1.5 ${F};color:${AMBER_INK};padding-top:8px;">This wasn't locked before the traffic arrived, so it is evidence rather than a pre-registered result.</div>` : ""}
     ` : ""}
   </td></tr>
@@ -437,6 +418,14 @@ export function renderReadoutEmail(opts: {
         </td>
       </tr>
     </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;">
+      <tr>
+        ${tile("Visitors", visitors !== undefined ? num(visitors) : "—")}
+        ${tile("Running", days !== undefined ? `Day ${days}` : "—")}
+        ${tile("Beyond luck", `${nSettled} of ${nShown} metrics`)}
+        ${tile("Guardrails", guardWord, guardInk)}
+      </tr>
+    </table>
   </td></tr>` : ""}
 
   ${summary}
@@ -453,18 +442,8 @@ export function renderReadoutEmail(opts: {
   ${metricRows ? `<tr><td style="padding:2px 28px 0 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
       <tr><td style="padding-top:24px;">
-        ${caps("Every metric", MUTED, 10)}
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          <tr>
-            ${th("Metric")}
-            ${th("Variant", "right", NUMW, GUT)}
-            ${th("Control", "right", NUMW, GUT)}
-            ${th("", "left", BAR_W + GUT)}
-            ${th("Change", "right", 66, GUT)}
-          </tr>
-          ${metricRows}
-        </table>
-        <div style="font:400 11px/1.5 ${F};color:${FAINT};padding-top:10px;">Bars are scaled to the biggest mover. Pale bars have not settled beyond luck.</div>
+        ${caps("All metrics", MUTED, 10)}
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${metricRows}</table>
       </td></tr>
     </table>
   </td></tr>` : ""}

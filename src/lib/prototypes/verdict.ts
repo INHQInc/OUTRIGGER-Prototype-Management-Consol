@@ -59,6 +59,16 @@ export interface Discovery {
   promotedIdeaId?: string;
 }
 
+/** THE WHOLE CLAIM, in one sentence, from the four parts the brief stores.
+ *  The rationale used to be dropped here, so every surface that printed "the
+ *  hypothesis" was printing three quarters of it — and the "because" is the
+ *  part that says what the team actually believed about guests. */
+export function composeHypothesis(h: { change?: string; audience?: string; outcome?: string; rationale?: string }): string {
+  const base = `We believe ${h.change || "…"} for ${h.audience || "…"} will cause ${h.outcome || "…"}`;
+  const why = h.rationale?.trim();
+  return why ? `${base}, because ${why.replace(/^because\s+/i, "").replace(/\.$/, "")}.` : `${base}.`;
+}
+
 export interface PreRegistration {
   /** What froze the contract: a version cut (console-built), the measurement
    *  plan's confirmation (externally-built — no cuts exist), or NOTHING —
@@ -296,7 +306,7 @@ export function deriveVerdict(opts: {
         version: opts.pushedVersion.version,
         cutAt: opts.pushedVersion.createdAt,
         hypothesis: snap
-          ? `We believe ${snap.hypothesis.change || "…"} for ${snap.hypothesis.audience || "…"} will cause ${snap.hypothesis.outcome || "…"}.`
+          ? composeHypothesis(snap.hypothesis)
           : "(no brief snapshot on this cut)",
         primaryMetric: snap?.metrics.primary || "(unset)",
         guardrails: snap?.metrics.guardrails ?? [],
@@ -306,7 +316,7 @@ export function deriveVerdict(opts: {
       ? {
           anchor: "plan",
           cutAt: earliestStamp?.at,
-          hypothesis: `We believe ${planBrief.change || "…"} for ${planBrief.audience || "…"} will cause ${planBrief.outcome || "…"}.`,
+          hypothesis: composeHypothesis(planBrief),
           primaryMetric: planBrief.primary || "(unset)",
           guardrails: planBrief.guardrails ?? [],
           briefRefrozenAfterObservation: briefRefrozen || undefined,
@@ -387,7 +397,7 @@ export function deriveVerdict(opts: {
     preRegistration = {
       anchor: "live",
       hypothesisNotFrozen: true,
-      hypothesis: `We believe ${opts.liveBrief.change || "…"} for ${opts.liveBrief.audience || "…"} will cause ${opts.liveBrief.outcome || "…"}.`,
+      hypothesis: composeHypothesis(opts.liveBrief),
       primaryMetric: opts.liveBrief.primary || primary.label,
       guardrails: opts.liveBrief.guardrails ?? [],
       ...mapDisclosure,
