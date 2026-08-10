@@ -1,7 +1,15 @@
 # The Readout Model — one derivation, two skins
 
-*Started 2026-08-10. Status: **design in progress**. Read this before touching
-`ResultsPanel.tsx` or `lib/email/readout.ts`.*
+*Started 2026-08-10. Status: **module written and smoke-tested; neither surface
+is cut over yet.** Read this before touching `ResultsPanel.tsx` or
+`lib/email/readout.ts`.*
+
+- Design: [`READOUT-MODEL-DESIGN.md`](READOUT-MODEL-DESIGN.md)
+- Module: `src/lib/prototypes/readout-model.ts` — `buildReadoutModel(input)`
+- Smoke test: `docs/dev/model-smoke.mts` (`npx tsx docs/dev/model-smoke.mts`),
+  a fixture built to exercise every resolved defect at once. Run it after any
+  change to the builder; it is faster than a render and it asserts semantics the
+  eye cannot check.
 
 ## Why this exists
 
@@ -160,4 +168,5 @@ replaces on both surfaces.*
 | Settledness comes from the verdict's own test | `p < VERDICT_THRESHOLDS.alpha`, FDR `q` for supporting rows | four textual variants of a CI-excludes-zero test that the verdict never used |
 | Valence is three-state and direction-aware | `favourable / unfavourable / neutral`, guardrails from `GuardrailVerdict.state` | `toneOf`, `liftClass`, `sigClass`, and two more rules that disagreed |
 | The model emits tokens, the skins own the palette | orthogonal `valence` + `confidence` fields | a single tone field would silently settle a live design disagreement |
-| Two map inputs | `plan` (writable) + `interpretation` (read-only) | one `map`, which on the page would persist Optimizely's composite into the plan |
+| Two map inputs | `plan` (writable) + a read-only `DecisionDescriptor` | one `map`, which on the page would persist Optimizely's composite into the plan |
+| Biggest gain/cost exclude the decision metric | it has its own slot on both surfaces | printing the same number twice under two headings |
