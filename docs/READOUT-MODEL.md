@@ -1,7 +1,7 @@
 # The Readout Model — one derivation, two skins
 
-*Started 2026-08-10. Status: **module written and smoke-tested; neither surface
-is cut over yet.** Read this before touching `ResultsPanel.tsx` or
+*Started 2026-08-10. Status: **module written and smoke-tested; the EMAIL is cut
+over, the PAGE is not.** Read this before touching `ResultsPanel.tsx` or
 `lib/email/readout.ts`.*
 
 - Design: [`READOUT-MODEL-DESIGN.md`](READOUT-MODEL-DESIGN.md)
@@ -15,10 +15,10 @@ is cut over yet.** Read this before touching `ResultsPanel.tsx` or
 
 The console renders an experiment readout in two places:
 
-| Surface | File | Technology |
-|---|---|---|
-| The page | `src/components/ResultsPanel.tsx` | React + Tailwind |
-| The email | `src/lib/email/readout.ts` | tables + inline styles, rendered server-side |
+| Surface | File | Technology | Cut over |
+|---|---|---|---|
+| The page | `src/components/ResultsPanel.tsx` | React + Tailwind | not yet |
+| The email | `src/lib/email/readout.ts` | tables + inline styles, rendered server-side | yes — `97f08e8` |
 
 **The maths has one home. The meaning had two.** Every number is already shared —
 `computeStatsReport()`, `getVerdict()`, the metric semantics in `results.ts`, and
@@ -170,3 +170,46 @@ replaces on both surfaces.*
 | The model emits tokens, the skins own the palette | orthogonal `valence` + `confidence` fields | a single tone field would silently settle a live design disagreement |
 | Two map inputs | `plan` (writable) + a read-only `DecisionDescriptor` | one `map`, which on the page would persist Optimizely's composite into the plan |
 | Biggest gain/cost exclude the decision metric | it has its own slot on both surfaces | printing the same number twice under two headings |
+
+## The email cutover, and what the diff proved
+
+`renderReadoutEmail` now takes `ReadoutModel` and derives no meaning. What left
+that file: the settled test, the valence rules, the verdict vocabulary, the
+vitals, the day count, biggest gain/cost, movement resolution, role labels. What
+stayed: the hex palette, tables and inline styles, and the longhand font
+properties Word does not discard.
+
+**The method matters more than the result.** Render the HTML with the old
+renderer and the new one against the same fixture, then diff *the tag stream*,
+not just the visible text. The text diff showed the three intended changes. The
+tag diff also caught two silent losses the text diff could not see: a
+`border-radius` on the status band's rule, and `opacity:.75` on the STATUS
+eyebrow. Both were restored.
+
+| Difference | Verdict |
+|---|---|
+| Day 7 → Day 8 | Intended — defect 11. The page's 1-based convention; the email had been quoting a second clock in the same document. |
+| The direction-assumed caveat now prints | Intended — defect 1. The engine always computed it; the email discarded it and printed a flat "It didn't work" over a run whose prediction may have held. |
+| The guardrail row red → grey | Intended — defect 7. Tone comes from `GuardrailVerdict.state`; this row has no verdict, so the honest answer is "unknown", not "went down". |
+| `<strong>` inside the caveat | Accepted loss. The model emits prose, and string-matching model text to re-bold phrases is exactly the fragility this refactor removes. The amber box carries the emphasis. |
+| Everything else | Byte-identical. |
+
+Two defects the exercise surfaced that were not on the list of eleven:
+
+- **`text/plain` still printed THE SHORT VERSION**, removed from the HTML weeks
+  earlier. A say-it-once violation living in the alternative body nobody reads.
+- **The actions-per-visitor unit travelled in the HTML and not in `text/plain`**,
+  so a composite's 118% read as a conversion rate there — defect 8, hiding in a
+  second body.
+
+And one crash: `describeComposite` dereferenced `c.events` unguarded. It is typed
+as present and is absent in practice (plans authored before per-arm composites;
+any hand-edited map). That call sits inside the weekly cron — one row with a
+missing event list would have cancelled the whole send. Fixed in `9b559d0`.
+
+### For the page cutover
+
+The fixture is the thing to get right first. `docs/dev/preview-email.mts` had no
+p-values, so the model correctly fell back to its degraded path and the diff
+proved nothing — a fixture that under-specifies its input is a strawman. It now
+carries p-values and a Benjamini-Hochberg-corrected exploratory pool.

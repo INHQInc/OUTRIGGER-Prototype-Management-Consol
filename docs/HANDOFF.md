@@ -4,87 +4,80 @@
 
 ---
 
-## ⚠ IN FLIGHT RIGHT NOW — READOUT MODEL EXTRACTION (2026-08-10, mid-task)
+## ⚠ IN FLIGHT — READOUT MODEL EXTRACTION: email done, page not (2026-08-10)
 
-**Read [`docs/READOUT-MODEL.md`](READOUT-MODEL.md) first. It holds the architecture,
-the six commitments, and the decisions log. Do not start editing without it.**
+**Read [`docs/READOUT-MODEL.md`](READOUT-MODEL.md) first.** It holds the
+architecture, the six commitments, the eleven live defects with who-is-right for
+each, and the decisions log. Do not edit `ResultsPanel.tsx` or
+`lib/email/readout.ts` without it.
 
 ### The task
-The page (`ResultsPanel.tsx`) and the email (`lib/email/readout.ts`) share every
-NUMBER but duplicate every INTERPRETATION — settled/not, win direction, tone, how
-each movement resolves its metric, the observation lookup. They drifted, and the
-drift shipped real defects (a correct prediction reported as REFUTED; "Hold the
-call" on an adjudicated run; everything grey; trend sentence and composite flags
-page-only; vitals and plain-words verdict email-only).
+The page (`ResultsPanel.tsx`) and the email (`lib/email/readout.ts`) shared every
+NUMBER but duplicated every INTERPRETATION — settled/not, win direction, tone,
+how each movement resolves its metric. They drifted, and the drift shipped real
+defects. ONE `buildReadoutModel()` produces a colourless, presentation-ready,
+**pure and server-computable** model that both surfaces render. Email renders in
+a cron job — no React, no browser — so nothing may depend on component state.
 
-Bryan approved the extraction and asked for "elite enterprise architecture":
-ONE `buildReadout()` producing a colourless, presentation-ready, **pure and
-server-computable** model that both surfaces render. Email renders in a cron job
-— no React, no browser — so nothing may depend on component state.
+### Done
+- **`src/lib/prototypes/readout-model.ts`** — the model. Pure sync function, no
+  hooks, no hex, no class names. Smoke test: `npx tsx docs/dev/model-smoke.mts`,
+  a fixture built to exercise every resolved defect at once. **Run it after any
+  change to the builder** — it caught `biggestCost` returning the SMALLEST mover,
+  which inspection had missed.
+- **The EMAIL is cut over** (`97f08e8`). `renderReadoutEmail` takes the model and
+  derives no meaning. Verified by diffing rendered HTML before/after: three
+  visible differences, all intended (day count 7→8, the direction caveat now
+  prints, the unadjudicated guardrail goes grey). Everything else identical.
+- Direction resolution (`effectiveDirection` / `directionDeclared` in
+  `results.ts`), `composeHypothesis()`, `nextStep()` with the adjudicated
+  short-circuit, the direction toggle, and `actionChip` — all fixed and shipped.
 
-### Where it got to
-- `docs/READOUT-MODEL.md` — problem, six commitments, the ELEVEN live defects the
-  audit found with who-is-right for each, four structural constraints, decisions log.
-- `docs/READOUT-MODEL-DESIGN.md` — the full model interface, builder signature,
-  field-by-field replacement table and migration order. **Design is final; the
-  module is not yet written.**
-- A 7-agent inventory workflow was running when context ran out:
-  - Run ID `wf_1c751d83-d96`, task `w5xqx62oc`
-  - Transcript: `.claude/projects/…/subagents/workflows/wf_1c751d83-d96/`
-  - Read `journal.jsonl` there for each agent's return value.
-  - Script: `.claude/projects/…/workflows/scripts/readout-model-extraction-wf_1c751d83-d96.js`
-    (re-runnable with `Workflow({scriptPath, resumeFromRunId})` — unchanged agents replay from cache)
-  - It produces: a line-numbered inventory of every derivation in both surfaces,
-    three adversarial risk passes, and a full model interface + migration order.
-  - **If that output is gone, re-run the script rather than designing blind.**
+### Next: cut the PAGE over
+`ResultsPanel.tsx` is in daily use. **Incrementally, never one rewrite.**
 
-### Next steps, in order
-1. Read `READOUT-MODEL-DESIGN.md` (the design is done — do not re-run the audit).
-2. Write `src/lib/prototypes/readout-model.ts` — types + `buildReadoutModel()`.
-   Plain synchronous function, NO hooks: the page's derivations sit between five
-   conditional returns and a useMemo there changes the hook count and throws.
-3. Cut the EMAIL over first (lower risk, no interaction) and diff the rendered
-   HTML against the current preview before/after.
-4. Cut the PAGE over incrementally. It is in daily use; do not do this in one
-   rewrite. Optimistic local state (pins, roles, hidden metrics) becomes an
-   INPUT to the builder, never a fork of it.
-5. Update the decisions log in `READOUT-MODEL.md` as each disagreement is
-   resolved — the point is that the resolution is recorded, not just made.
+1. Call `buildReadoutModel()` where the derivations sit today — a plain call, NOT
+   a `useMemo`. Those derivations sit between five conditional returns; a hook
+   there changes the hook count between renders and throws.
+2. Pass optimistic local state as INPUTS: `observedLocal ?? plan.observed`,
+   `rolesLocal`, `orderLocal`. Never fork the builder for the page.
+3. Replace one derivation at a time, checking the screen after each:
+   `toneOf` → `tone` + `confidence`; `liftClass`/`sigClass` → the same pair;
+   `beatFor`/`observationFor` → `MetricView`; the day count → `runtime.dayLabel`.
+4. The page keeps "chroma is earned" (grey when unsettled); the email keeps hue
+   always. That disagreement is deliberate and the model refuses to settle it —
+   map `confidence` yourself in each skin.
+5. Delete each page-local derivation as it is replaced. Leaving both is how this
+   drifted the first time.
 
 ### Verifying the email without sending
 ```
-npx tsx "<scratchpad>/preview-email.mts" out.html     # renders the real renderer against a fixture
+npx tsx docs/dev/preview-email.mts out.html
 ```
-The harness is checked in at `docs/dev/preview-email.mts`. `tsconfig.json`
+Renders the real renderer against the Room Detail Overlay fixture. `tsconfig.json`
 excludes `docs/dev` — the repo's `include` is `**/*.mts`, so without that exclude
-the fixture's loose types fail `tsc --noEmit`. It imports `readout.ts` by
-absolute path; fix the path for your checkout before running.
+the fixture's loose types fail `tsc --noEmit`. It imports by absolute path; fix
+the path for your checkout. To diff against a previous version, render
+`git show <sha>:src/lib/email/readout.ts` into `src/lib/email/` (so its relative
+imports resolve), point a copy of the harness at it, and diff the tag stream —
+the text diff alone misses lost styles.
 
-### Fix these while extracting — they are live bugs, not drift
-- **The direction toggle is write-once** (`setDirection` writes `map.directions`
-  only; GET returns the stored map; the glyph reads `composites[].direction`).
-  Clicking ↑ records the change and the UI never updates. **This is probably why
-  Hero CTA Click still has no effective direction.**
-- **"Settled" uses a statistic the verdict does not** — a Katz log-ratio CI vs the
-  verdict's pooled z-test on `p`. They disagree around alpha.
-- **`actionChip` contradicts `nextStep()`** — created this session by extracting
-  `nextStep` without rewiring the page. Adopt `nextStep`, keep only the href map.
-- Beyond-luck ignores the engine's Benjamini-Hochberg `q`; guardrail tone ignores
-  `GuardrailVerdict.state`; composite action-totals print as conversion rates
-  above 100%; one-arm metrics render as an em-dash in email; the frozen-snapshot
-  fallback is page-only; the day count differs by one between surfaces.
-
-### Also outstanding from this session
-- **`fmt16` cache basis** — readings regenerate with the new `executive` field on
-  next page load. Until a prototype's reading is regenerated the email falls back
-  to `lede`, then omits.
-- **Hero CTA Click has no declared win direction.** This is a DATA fix, not code:
-  the brief wanted that metric DOWN, nothing declared it, so the engine assumed UP
-  and called a successful prediction REFUTED. Set the direction on the metric (the
-  ↑/↓ control) or set `winning_direction` in Optimizely. The email now discloses
-  the assumption rather than printing a confident wrong answer.
+### Still outstanding
+- **Hero CTA Click has no declared win direction.** A DATA fix, not code: the
+  brief wanted that metric DOWN, nothing declared it, so the engine assumed UP
+  and called a successful prediction REFUTED. The toggle now works — set the
+  direction on the metric, or set `winning_direction` in Optimizely. Until then
+  the email discloses the assumption rather than printing a confident wrong
+  answer.
+- **`fmt16` cache basis** — readings regenerate with the `executive` field on next
+  page load. Until a prototype's reading is regenerated the email falls back to
+  `lede`, then omits.
 - **`SHOW_CALL = false`** hides the verdict card on the page while the email leads
   with the verdict. Bryan has not decided which way that resolves.
+- **The weekly cron has never fired** and recipient lists are empty. Vercel Hobby
+  allows one run per day; a more frequent expression fails the whole deployment
+  at creation and surfaces only as a GitHub commit status, not a listed
+  deployment.
 
 ---
 
