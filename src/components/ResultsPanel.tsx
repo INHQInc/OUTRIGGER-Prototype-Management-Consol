@@ -12,6 +12,7 @@ import { SWEEP_HOUR_UTC } from "@/lib/prototypes/report";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import { nextStep } from "@/lib/prototypes/verdict";
+import { buildReadoutModel, type Tone } from "@/lib/prototypes/readout-model";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
 import type { AnalystAnswer } from "@/lib/ai/results";
 
@@ -826,6 +827,51 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const live = results ?? (verdict?.state === "stamped" ? verdict.frozenResults ?? null : null);
   const statsEff = stats ?? (verdict?.state === "stamped" ? verdict.frozenStats ?? null : null);
 
+  const optiPrimaryKey = optiPrimaryKeyOf(live);
+  // The optimistic list overrides the stored one until the write lands, so the
+  // beats row, the observations and the toggle all move together on click.
+  const observedEff = observedLocal ?? map?.observed ?? [];
+  const rolesEff = rolesLocal ?? map?.roles ?? {};
+  const mapEff = map ? { ...map, observed: observedEff, roles: rolesEff } : null;
+  const inheritedPrimary = decision?.source === "optimizely";
+
+  // ── THE MODEL. The same interpretation the email renders, built here from
+  //    the page's OPTIMISTIC state so a click answers on the same frame. A
+  //    plain call, deliberately NOT a useMemo: this sits below five conditional
+  //    returns, and a hook here changes the hook count between renders and
+  //    throws. See docs/READOUT-MODEL.md.
+  const model = buildReadoutModel({
+    prototypeName: prototypeKey,
+    prototypeKey,
+    results: live, stats: statsEff, verdict, reading,
+    plan: map,
+    decision,
+    observed: observedEff, roles: rolesEff,
+    order: orderLocal ?? map?.measureOrder ?? [],
+    hidden: map?.unfeatured ?? [],
+    experimentStatus: expStatus,
+    now: Date.parse(statsEff?.computedAt ?? live?.fetchedAt ?? "") || 0,
+  });
+  // Chroma is earned HERE — the page's position, and the opposite of the
+  // email's. The model emits `tone` and `confidence` separately precisely so
+  // each surface can hold its own line on this.
+  const TONE_CLASS: Record<Tone, string> = {
+    win: "text-ok", loss: "text-danger", caution: "text-warn", neutral: "text-muted-2",
+  };
+  const inkFor = (key: string) => {
+    const m = model.byKey[key];
+    if (!m || m.confidence !== "settled") return "text-muted-2";
+    return TONE_CLASS[m.tone];
+  };
+  /** The word under the lift. Was `sigOf(cell)` — a CI-excludes-zero test the
+   *  verdict never used, printed in a column headed "beyond luck". */
+  const luckWord = (key: string) => {
+    const m = model.byKey[key];
+    if (!m) return "too early";
+    if (m.confidence === "not-applicable") return "adoption";
+    return m.beyondLuck ? "beyond luck" : "too early";
+  };
+
   const sigClass = (s: number | undefined) => (s === undefined ? "text-muted-2" : s >= 0.9 ? "text-ok font-semibold" : "text-muted-2");
   const liftClass = (l: number | undefined) => (l === undefined ? "text-muted-2" : l > 0 ? "text-ok" : l < 0 ? "text-danger" : "text-muted-2");
   const statsFor = (key: string): CellStats[] | undefined => statsEff?.metrics.find((m) => m.key === key)?.cells;
@@ -858,8 +904,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const primaryBase = primaryStats?.cells.find((c) => c.variationId === statsEff?.baselineVariationId);
   const focusVar = live?.variations.find((v) => v.variationId === statsEff?.focusVariationId);
   const baseVar = live?.variations.find((v) => v.variationId === statsEff?.baselineVariationId);
+  // THE DECISION METRIC'S TONE comes from the model: direction-aware, and
+  // settled on the test the verdict adjudicated on rather than on whether a
+  // Katz interval clears zero. `liftSig` still gates the CI gauge and the
+  // sparkline, which are literally drawings OF that interval.
   const liftSig = sigOf(primaryFocus);
-  const liftTone = toneOf(primaryFocus);
+  const liftTone = headlineKey ? inkFor(headlineKey) : "text-muted-2";
   const ciWide = Boolean(primaryFocus?.liftCi && primaryFocus.liftCi.hi - primaryFocus.liftCi.lo > 0.2);
   const fmtLift = (v: number) => `${v >= 0 ? "▲ +" : "▼ "}${(v * 100).toFixed(ciWide ? 0 : 1)}%`;
 
@@ -1304,13 +1354,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   // observations list: one act, one meaning. ONE DERIVATION — the same
   // function the reading generator and the cache basis use, so what the
   // analyst was asked about and what the page shows can never drift apart.
-  const optiPrimaryKey = optiPrimaryKeyOf(live);
-  // The optimistic list overrides the stored one until the write lands, so the
-  // beats row, the observations and the toggle all move together on click.
-  const observedEff = observedLocal ?? map?.observed ?? [];
-  const rolesEff = rolesLocal ?? map?.roles ?? {};
-  const mapEff = map ? { ...map, observed: observedEff, roles: rolesEff } : null;
-  const inheritedPrimary = decision?.source === "optimizely";
   const supporting = supportingKeys({
     map: mapEff,
     optiPrimaryKey,
@@ -2417,8 +2460,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </td>
                     );
                   })}
-                  <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{pctS(cell?.lift)}</td>
-                  <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{sigOf(cell) ? "beyond luck" : "too early"}</td>
+                  <td className={`py-1.5 pl-2 text-right font-semibold ${inkFor(rowKey)}`}>{pctS(cell?.lift)}</td>
+                  <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{luckWord(rowKey)}</td>
                   <td className="py-1.5 pl-2 print:hidden">
                     {deleteArmId === c.id ? (
                       <span className="flex items-center justify-end gap-1 text-[11px] whitespace-nowrap">
@@ -2525,8 +2568,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       </td>
                     );
                   })}
-                  <td className={`py-1.5 pl-2 text-right font-semibold ${toneOf(cell)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
-                  <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{ms?.featureOnly ? "adoption" : sigOf(cell) ? "beyond luck" : "too early"}</td>
+                  <td className={`py-1.5 pl-2 text-right font-semibold ${inkFor(rowKey)}`}>{ms?.featureOnly ? "—" : pctS(cell?.lift)}</td>
+                  <td className="py-1.5 pl-2 text-right text-[10.5px] text-muted-2">{luckWord(rowKey)}</td>
                   <td className="py-1.5 pl-2 print:hidden">
                     <span className={CLUSTER}>
                       <span />
