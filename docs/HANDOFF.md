@@ -1,6 +1,6 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-08-06. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+*Updated: 2026-08-10. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
 
 ## Where we are (2026-08-03)
 
@@ -87,6 +87,13 @@
   - **Silent fallbacks are now visible**: `ledeComputed` surfaces "computed summary" in the header. A silent substitution turned a validator bug into what looked like a quality problem for most of a session.
   - **Presentation writes never ride the analyst's busy gate** — pin/type/order/hide go on the quiet chain with optimistic state and answer on the same frame. A click dropped by `if (busy) return` read as a ten-second lag.
   - Cache basis `fmt7 → fmt12` across the session; deep observations keep a set-free basis so typing a metric doesn't discard generated reads.
+
+- **EMAILED READOUTS + THE PRINTED RECORD (2026-08-10)**
+  - **Ownership on paper.** Every page of the PDF carries `A product of INHQ Inc. · © · Confidential` plus a provenance line (experiment · ISO timestamp · draft-or-stamped). Wording lives in **`lib/brand.ts` and nowhere else** — counsel's revisions and a future product name (`PRODUCT_NAME`, currently null) are one edit. A STAMPED verdict prints its own stamp time, never the clock: an immutable record must read identically however many times it is printed.
+  - **Print mechanics, three fixes.** `@page { margin: 0 }` removes Chrome's own date/title header (CSS cannot switch it off; leaving no margin to draw it in is what removes it). The notice needs BOTH techniques — a `tfoot` spacer to RESERVE room per sheet and a fixed block to DRAW at the page edge; either alone gives overlap or a footer stranded mid-page. And the Print button now **opens every `<details>`** before printing and restores them after, because Chrome hides a closed fold behind `content-visibility` where print CSS cannot reach — the method section was printing as a heading with nothing under it.
+  - **What prints:** THE READ, METRIC BY METRIC with every cached deep read expanded (the report must not depend on which rows someone left open), and the method fold. ALL METRICS is screen-only — it is the operating table, and it was the fourth page. Per-metric charts stay off paper.
+  - **EMAIL — HTML, not an attachment.** `window.print()` hands its PDF to the browser and the app never sees the file, so emailing "the printed PDF" needs a headless renderer; an HTML body opens on a phone and is what actually gets read. `lib/email/readout.ts` renders from the SAME resolved data the page uses. `lib/email/send.ts` is the Resend seam and **fails loud** when unconfigured. Recipients + an opt-in weekly schedule per prototype (`report:<key>`); `/api/cron/reports` sweeps **hourly** and `scheduleDue()` guarantees one send per day however often it runs. Button and sweep share ONE path. Needs `RESEND_API_KEY` + `REPORT_FROM_EMAIL`.
+  - **Also this pass:** event COUNTS beside every rate (a rate with no count is unfalsifiable at a glance); a Σ COMPOSITE flag with its own hover card wherever a multi-event metric appears, set apart by FORM because the four role chips own the colour vocabulary; the analyst posts your question immediately and shows a typing indicator; expanding a metric draws IMPROVEMENT OVER TIME against a baseline (cumulative by default, day-by-day one click away) with a crosshair readout; and a ↑/↓ control so an experiment can predict a FALL and be judged right — recorded in `directionHistory` and disclosed if set after traffic, because flipping it post-hoc turns a refutation into a confirmation.
 
 ### PINNED — designed with the user 2026-08-06, deliberately NOT built yet
 

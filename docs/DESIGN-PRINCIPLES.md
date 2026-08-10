@@ -243,6 +243,15 @@ version changes on the page" and the tooling disappears from the prose.
 *Origin: "we dont care where the change was made this is about the change and
 the impact thats all."*
 
+## 14e. A document does not depend on the reader's screen state
+
+What prints must not depend on which folds happened to be open or which rows
+someone expanded. Two people printing the same readout must get the same
+document. Open the folds for the duration of the print and restore them after;
+print every cached explanation, not the ones currently on screen.
+
+*Origin: the method section printing as a heading with nothing under it.*
+
 ## 15. Compute the caveat; never ask for it
 
 If the console can derive a warning, it states it. Action-total composites,
