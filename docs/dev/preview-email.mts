@@ -1,12 +1,18 @@
 import { renderReadoutEmail } from "/Users/bryanhopkins/Projects/OUTRIGGER Prototypes/OUTRIGGER Prototype Managment Console/src/lib/email/readout.ts";
+import { buildReadoutModel } from "/Users/bryanhopkins/Projects/OUTRIGGER Prototypes/OUTRIGGER Prototype Managment Console/src/lib/prototypes/readout-model.ts";
 import { writeFileSync } from "node:fs";
 
 const V = "v1", B = "v0";
-const mk = (key, label, fr, br, fc, bc, n, settled) => ({
+// `p` is NOT decoration in this fixture. The model settles a claim on the test
+// the verdict adjudicates on (p < alpha, FDR-corrected q for supporting rows),
+// not on whether the CI excludes zero — so a fixture without p-values silently
+// exercises the degraded path and proves nothing. These are the values the
+// counts below actually produce.
+const mk = (key, label, fr, br, fc, bc, n, p, settled) => ({
   key, label, kind: key.startsWith("composite") ? "composite" : "metric", test: "proportion",
   cells: [
     { variationId: B, name: "Control", isBaseline: true, n, count: bc, rate: br },
-    { variationId: V, name: "Variation #1", n, count: fc, rate: fr,
+    { variationId: V, name: "Variation #1", n, count: fc, rate: fr, p,
       lift: (fr - br) / br,
       liftCi: settled ? { lo: 0.02, hi: 0.09 } : { lo: -0.03, hi: 0.06 } },
   ],
@@ -15,23 +21,34 @@ const N = 14730;
 const stats = {
   computedAt: "2026-08-10T20:45:00Z",
   validity: { status: "ok", detail: "" },
-  exploratory: [], expectedFalsePositives: 0, flags: [],
+  // Benjamini-Hochberg over the five rows above: only the two browse
+  // composites survive the correction.
+  exploratory: [
+    { key: "composite:c2", label: "Total Room Detail Views", variationId: V, variationName: "Variation #1", lift: 0.357, p: 1e-40, q: 5e-40, discovery: true },
+    { key: "composite:c1", label: "Total Room Check Availability CTA Clicks", variationId: V, variationName: "Variation #1", lift: 0.320, p: 1e-30, q: 2.5e-30, discovery: true },
+    { key: "m2", label: "Global: Booking Widget Form Submit", variationId: V, variationName: "Variation #1", lift: -0.020, p: 0.32, q: 0.533, discovery: false },
+    { key: "m3", label: "Booking Complete", variationId: V, variationName: "Variation #1", lift: 0.057, p: 0.66, q: 0.79, discovery: false },
+    { key: "m1", label: "Visit Page: Booking Engine: Rooms & Rates", variationId: V, variationName: "Variation #1", lift: 0.013, p: 0.79, q: 0.79, discovery: false },
+  ],
+  expectedFalsePositives: 0.3, flags: [],
   power: { baselineRate: 0.057, perArmN: N, observationDays: 7, daysToObserved: 18 },
   primaryKey: "m1", focusVariationId: V, baselineVariationId: B,
   metrics: [
-    mk("m1", "Visit Page: Booking Engine: Rooms & Rates", 0.058, 0.057, 860, 849, N, false),
-    mk("composite:c1", "Total Room Check Availability CTA Clicks", 0.227, 0.172, 3339, 2540, N, true),
-    mk("composite:c2", "Total Room Detail Views", 0.350, 0.258, 5155, 3800, N, true),
-    mk("m2", "Global: Booking Widget Form Submit", 0.249, 0.254, 3660, 3735, N, false),
-    mk("m3", "Booking Complete", 0.009, 0.008, 129, 122, N, false),
+    mk("m1", "Visit Page: Booking Engine: Rooms & Rates", 0.058, 0.057, 860, 849, N, 0.79, false),
+    mk("composite:c1", "Total Room Check Availability CTA Clicks", 0.227, 0.172, 3339, 2540, N, 1e-30, true),
+    mk("composite:c2", "Total Room Detail Views", 0.350, 0.258, 5155, 3800, N, 1e-40, true),
+    mk("m2", "Global: Booking Widget Form Submit", 0.249, 0.254, 3660, 3735, N, 0.32, false),
+    mk("m3", "Booking Complete", 0.009, 0.008, 129, 122, N, 0.66, false),
   ],
 };
-const out = renderReadoutEmail({
+const results = { fetchedAt: stats.computedAt, startTime: "2026-08-03T00:00:00Z", totalVisitors: N,
+  variations: [{ variationId: B, name: "Control", visitors: N }, { variationId: V, name: "Variation #1", visitors: N }], metrics: [] };
+
+const args = {
   prototypeName: "Room Detail Overlay",
   prototypeKey: "room-detail-overlay",
   url: "https://outrigger-prototype-management-cons.vercel.app/prototypes/room-detail-overlay?tab=analytics",
-  results: { fetchedAt: stats.computedAt, startTime: "2026-08-03T00:00:00Z", totalVisitors: N,
-    variations: [{ variationId: B, name: "Control", visitors: N }, { variationId: V, name: "Variation #1", visitors: N }], metrics: [] },
+  results,
   stats,
   verdict: {
     state: "draft", verdict: "refuted",
@@ -61,7 +78,21 @@ const out = renderReadoutEmail({
   map: { composites: [{ id: "c1", label: "Total Room Check Availability CTA Clicks", role: "secondary" }, { id: "c2", label: "Total Room Detail Views", role: "secondary" }],
     roles: { "composite:c1": "supporting", "composite:c2": "supporting", m2: "guardrail", m3: "supporting" } },
   supporting: ["m1", "composite:c1", "composite:c2", "m2", "m3"],
+};
+
+// The renderer is now a SKIN: it gets the model, and the model is built from
+// exactly what the server path passes it (docs/READOUT-MODEL.md).
+const model = buildReadoutModel({
+  prototypeName: args.prototypeName,
+  prototypeKey: args.prototypeKey,
+  results, stats, verdict: args.verdict, reading: args.reading,
+  plan: args.map,
+  decision: { key: "m1", label: "Visit Page: Booking Engine: Rooms & Rates", source: "console", directionDeclared: false },
+  observed: [], roles: args.map.roles, order: args.supporting, hidden: [],
+  experimentStatus: null, now: Date.parse(stats.computedAt),
 });
+
+const out = renderReadoutEmail({ ...args, model });
 writeFileSync(process.argv[2], out.html);
 console.log("SUBJECT:", out.subject);
-console.log("---- TEXT ----\n" + out.text.slice(0, 1400));
+console.log("---- TEXT ----\n" + out.text);

@@ -21,6 +21,7 @@ import { getReading } from "../prototypes/notebook";
 import { getReportSettings, mutateReportSettings } from "../prototypes/report";
 import { validRecipients, sendEmail } from "./send";
 import { renderReadoutEmail } from "./readout";
+import { buildReadoutModel } from "../prototypes/readout-model";
 import type { PrototypeRecord } from "../prototypes/types";
 
 export async function sendReadoutEmail(opts: {
@@ -44,9 +45,12 @@ export async function sendReadoutEmail(opts: {
   if (!results) throw new Error("Optimizely returned no readable results, so there is nothing to send.");
 
   const stored = await getMetricMap(opts.proto.key);
-  const { map } = resolveDecisionMap(stored, results);
+  // The RESOLVED map is what the statistics are computed against; the STORED
+  // plan is what the model interprets. Keeping them separate is what stops
+  // Optimizely's synthesized composite ever reaching a write path.
+  const { map: resolved, source: decisionSource } = resolveDecisionMap(stored, results);
   const stats = computeStatsReport({
-    results, map,
+    results, map: resolved,
     focusVariationId: opts.proto.experiment?.variationId,
     experimentStart: results.startTime,
   });
@@ -56,18 +60,47 @@ export async function sendReadoutEmail(opts: {
   ]);
 
   const supporting = supportingKeys({
-    map,
+    map: resolved,
     optiPrimaryKey: optiPrimaryKeyOf(results),
     decisionKey: stats.primaryKey,
     available: stats.metrics.map((m) => m.key),
-    optiRowIsDecision: map?.composites.some((c) => c.role === "primary" && c.source === "optimizely"),
+    order: stored?.measureOrder ?? [],
+    optiRowIsDecision: decisionSource === "optimizely",
+  });
+
+  // ── THE MODEL. Every interpretive question — direction, settled vs
+  //    significant, beyond-luck after FDR, guardrail state, composite units,
+  //    one-arm adoption, valence — is answered here rather than in the
+  //    renderer, and answered identically for the page.
+  const decisionComposite = resolved?.composites.find((c) => c.role === "primary");
+  const model = buildReadoutModel({
+    prototypeName: opts.proto.name,
+    prototypeKey: opts.proto.key,
+    results, stats, verdict, reading,
+    plan: stored,
+    decision: decisionComposite
+      ? {
+          key: stats.primaryKey ?? `composite:${decisionComposite.id}`,
+          label: decisionComposite.label,
+          source: decisionSource === "optimizely" ? "optimizely" : "console",
+          direction: decisionComposite.direction,
+          directionDeclared: Boolean(decisionComposite.direction),
+        }
+      : null,
+    // The server has no optimistic state — it passes what is stored.
+    observed: stored?.observed ?? [],
+    roles: stored?.roles ?? {},
+    order: stored?.measureOrder ?? [],
+    hidden: stored?.unfeatured ?? [],
+    experimentStatus: null,
+    now: Date.parse(stats.computedAt),
   });
 
   const { subject, html, text } = renderReadoutEmail({
     prototypeName: opts.proto.name,
     prototypeKey: opts.proto.key,
     url: opts.baseUrl ? `${opts.baseUrl}/prototypes/${encodeURIComponent(opts.proto.key)}?tab=analytics` : undefined,
-    results, stats, verdict, reading, map, supporting,
+    results, stats, verdict, reading, map: resolved, supporting, model,
   });
 
   let out: Awaited<ReturnType<typeof sendEmail>>;
