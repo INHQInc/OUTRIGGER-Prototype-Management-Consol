@@ -544,3 +544,50 @@ export function deriveVerdict(opts: {
   }
   return finish("underpowered", `The run ended without a significant read on the primary (${pct(cell.lift)}, p=${cell.p.toFixed(3)}) — the pre-registered hypothesis is UNPROVEN, not refuted. ${stats.power?.mdeNow !== undefined ? `This sample could only detect ±${(stats.power.mdeNow * 100).toFixed(1)}% reliably.` : ""}`, guardrails, discoveries);
 }
+
+/**
+ * WHAT HAPPENS NEXT — the single derivation of the action, shared by the
+ * console's decision chip and the emailed readout.
+ *
+ * It lived only inside ResultsPanel, which meant the email had no answer to the
+ * one question a leader actually has. Two copies of this arithmetic would drift,
+ * and the day-count is the part people plan around, so there is one.
+ *
+ * Returns the WORDS plus the gate that produced them; the caller decides
+ * whether that gate deserves a link (the page links, an email cannot).
+ */
+export function nextStep(
+  verdict: VerdictRecord | null,
+  stats: StatsReport | null,
+): { label: string; gateId?: string } {
+  if (!verdict) return { label: "Waiting for data" };
+  if (verdict.state === "stamped") return { label: "Decision recorded" };
+
+  const failing = verdict.gates.find((g) => g.pass === false);
+  if (!failing) return { label: "Ready for a decision" };
+
+  // Two gates emit `validity` and the measurability check emits `significance`,
+  // so key off the title where the id alone would be ambiguous.
+  if (/pre-registration/i.test(failing.title)) return { label: "Re-confirm the measurement plan", gateId: failing.id };
+  if (/measurable/i.test(failing.title)) return { label: "Remap the decision metric", gateId: failing.id };
+
+  const byGate: Record<string, string> = {
+    mapping: "Confirm the measurement plan",
+    focus: "Rebind the experiment",
+    validity: "Fix the traffic split",
+    guardrails: "Review the breached guardrail",
+    prereg: "Freeze the brief before reading this",
+  };
+  if (byGate[failing.id]) return { label: byGate[failing.id], gateId: failing.id };
+
+  if (failing.id === "runtime" || failing.id === "sample") {
+    const dayN = (stats?.power?.observationDays ?? 0) + 1;
+    const eta = stats?.power?.daysToTarget ?? stats?.power?.daysToObserved;
+    const left = Math.max(eta ?? 0, Math.max(0, VERDICT_THRESHOLDS.minRuntimeDays - dayN));
+    return {
+      label: left > 0 ? `Keep running — about ${left} more ${left === 1 ? "day" : "days"} of traffic` : "Keep running",
+      gateId: failing.id,
+    };
+  }
+  return { label: "Hold the call", gateId: failing.id };
+}
