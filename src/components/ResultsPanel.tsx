@@ -71,8 +71,13 @@ function ComparisonBars({ focusName, focusRate, focusCount, focusN, baseName, ba
   );
 }
 
-/** Chroma is earned: color only when the CI excludes zero. */
+/** Chroma is earned: colour only when the CI excludes zero. */
 const sigOf = (c?: CellStats) => Boolean(c?.liftCi && (c.liftCi.lo > 0 || c.liftCi.hi < 0));
+/** DIRECTION-BLIND, and deliberately still here for ONE caller: the windowed
+ *  day-range table, whose cells are recomputed over a slice the readout model
+ *  does not describe. Everywhere else — both metric tables, the beats row, the
+ *  observations, the decision hero — reads `inkFor()` off the model instead.
+ *  Do not reach for this for a whole-run number. */
 const toneOf = (c?: CellStats) => (!sigOf(c) ? "text-muted-2" : (c!.lift ?? 0) >= 0 ? "text-ok" : "text-danger");
 
 const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
@@ -1325,27 +1330,23 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
   type Beat = { key: string; label: string; value: string; qualifier?: string; tone: string };
   const beatFor = (b: { measureKey: string; label: string }): Beat | null => {
-    const m = statsEff?.metrics.find((x) => x.key === b.measureKey);
+    // Direction-of-good used to be read off `map.composites[].direction` here
+    // — the STORED map, which has no `directions` overlay — so every direction
+    // the team declared through the ↕ toggle was invisible to this function and
+    // a falling bounce rate rendered red. The model resolves it once.
+    const m = model.byKey[b.measureKey];
     if (!m) return null;
-    const focus = m.cells.find((c) => c.variationId === statsEff?.focusVariationId);
-    const sig = sigOf(focus);
-    const comp = map?.composites.find((c) => `composite:${c.id}` === b.measureKey);
-    // Direction-of-good comes from the plan, so a rising bounce reads red.
-    const good = comp?.direction === "decrease" ? (focus?.lift ?? 0) < 0 : (focus?.lift ?? 0) > 0;
-    const breach = verdict?.guardrails.find((g) => `composite:${g.compositeId}` === b.measureKey && g.state === "breach");
 
-    if (m.featureOnly) {
-      return { key: b.measureKey, label: b.label, tone: "text-muted",
-        value: focus?.rate !== undefined ? `${(focus.rate * 100).toFixed(1)}%` : "—",
-        qualifier: "new surface" };
+    if (m.confidence === "not-applicable") {
+      return { key: m.key, label: b.label, tone: "text-muted", value: m.focusRate.text, qualifier: "new surface" };
     }
     return {
-      key: b.measureKey, label: b.label,
-      value: pctS(focus?.lift),
+      key: m.key, label: b.label,
+      value: m.lift.text,
       // QUALIFIERS ARE COMPUTED, never written — the analyst cannot drop one
       // to make a story read cleaner.
-      qualifier: breach ? "guardrail" : !sig ? "too early" : undefined,
-      tone: !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
+      qualifier: m.guardrail === "breach" ? "guardrail" : m.confidence !== "settled" ? "too early" : undefined,
+      tone: inkFor(m.key),
     };
   };
 
@@ -1503,14 +1504,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
   const observationFor = (key: string) => {
     const m = statsEff?.metrics.find((x) => x.key === key);
-    if (!m || !live) return null;
+    const mv = model.byKey[key];
+    if (!m || !mv || !live) return null;
     const focus = m.cells.find((c) => c.variationId === statsEff?.focusVariationId);
     const base = m.cells.find((c) => c.variationId === statsEff?.baselineVariationId);
-    const sig = sigOf(focus);
-    const comp = map?.composites.find((c) => `composite:${c.id}` === key);
-    const good = comp?.direction === "decrease" ? (focus?.lift ?? 0) < 0 : (focus?.lift ?? 0) > 0;
-    const breach = verdict?.guardrails.find((g) => `composite:${g.compositeId}` === key && g.state === "breach");
-    const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
+    // `sig` is the CI-excludes-zero test and stays that, because the only
+    // things it gates here are the sparkline's chroma and the trend sentence —
+    // drawings OF that interval. Everything that makes a CLAIM (tone, the
+    // value, the rates) now comes from the model, where direction-of-good is
+    // resolved against the `directions` overlay this function could not see.
+    const sig = mv.settled;
 
     // Fallback only, and it says the same KIND of thing the analyst is asked
     // for: what this metric counts, not how it is doing.
@@ -1534,15 +1537,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       points: pts,
       earned: sig && !m.featureOnly,
       trend: m.featureOnly ? null : trendSentence(pts, sig),
-      value: m.featureOnly ? rate(focus?.rate) : pctS(focus?.lift),
-      tone: m.featureOnly || !sig ? "text-muted" : breach ? "text-danger" : good ? "text-ok" : "text-danger",
-      focusRate: rate(focus?.rate),
+      value: mv.headline.text,
+      tone: mv.confidence === "not-applicable" ? "text-muted" : inkFor(key),
+      focusRate: mv.focusRate.text,
       // A rate with no count is unfalsifiable at a glance: 5.9% of a hundred
       // and 5.9% of ten thousand read identically and mean very different
       // things. The counts are already on the cell; they were just not shown.
       focusCount: focus?.count, focusN: focus?.n,
       baseCount: base?.count, baseN: base?.n,
-      baseRate: m.featureOnly ? null : rate(base?.rate),
+      baseRate: mv.baseRate?.text ?? null,
       computedLine: computedLine + oneArmNote,
       // Collapsed, the row says WHAT THIS METRIC CAPTURES — a definition that
       // reads the same whichever way the number went. What HAPPENED to it is
