@@ -542,6 +542,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [analystOpen, setAnalystOpen] = useState(false);
   const [clearArmed, setClearArmed] = useState(false);
   const [composerText, setComposerText] = useState("");
+  // THE QUESTION APPEARS THE MOMENT IT IS SENT. It used to land in the thread
+  // only once the answer came back, so the drawer sat unchanged for twenty
+  // seconds and looked like the send had failed.
+  const [pendingAsk, setPendingAsk] = useState<string | null>(null);
+  const threadEndRef = useRef<HTMLDivElement | null>(null);
   const [replyDurable, setReplyDurable] = useState(false);
   const dragKeyRef = useRef<string | null>(null);
   const [chartType, setChartType] = useState<"line" | "bar">("line");
@@ -1504,13 +1509,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     const text = composerText.trim();
     if (!text || busy) return;
     setComposerText("");
+    setPendingAsk(text);
 
     if (composerMode === "reply" && reading?.question) {
-      void post(`tune:${reading.question}`, { tune: { question: reading.question, answer: text, durable: replyDurable } });
+      void post(`tune:${reading.question}`, { tune: { question: reading.question, answer: text, durable: replyDurable } })
+        .finally(() => setPendingAsk(null));
       setComposerMode("ask");
       return;
     }
-    void post("ask", { ask: text, stance: composerMode === "challenge" ? "challenge" : "ask" });
+    void post("ask", { ask: text, stance: composerMode === "challenge" ? "challenge" : "ask" })
+      .finally(() => setPendingAsk(null));
   };
 
   const answerBlock = (a: AnalystAnswer) => (
@@ -1545,18 +1553,25 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
       {/* ═══ THE READOUT — decision band · numbers · attention · findings ═══ */}
       <div className="print-report">
-        {/* OWNERSHIP, on paper only. The footer repeats on every sheet; the
-            block below the report is the full assertion. A stamped verdict
-            prints its OWN timestamp, never the clock, so the immutable record
-            reads identically however many times it is printed. */}
-        <div className="print-legal print-legal-footer">
-          <div>{shortNotice()}</div>
-          <div>{provenanceLine({
-            experiment: protoName ?? prototypeKey,
-            recordId: stamped ? `stamped ${verdict?.stampedAt?.slice(0, 19)}` : `draft ${statsEff?.computedAt?.slice(0, 19) ?? ""}`,
-            at: stamped ? verdict?.stampedAt : statsEff?.computedAt,
-          })}</div>
-        </div>
+        {/* OWNERSHIP, on paper only, as a TABLE FOOTER — the one construct a
+            print engine both repeats on every sheet AND reserves space for.
+            As a fixed element it repeated fine and reserved nothing, so the
+            report ran underneath it. On screen the table collapses to blocks
+            and the footer is hidden, so the layout is untouched. */}
+        <table className="print-frame">
+          <tfoot className="print-legal">
+            <tr><td>
+              <div className="print-legal-footer">
+                <div>{shortNotice()}</div>
+                <div>{provenanceLine({
+                  experiment: protoName ?? prototypeKey,
+                  recordId: stamped ? `stamped ${verdict?.stampedAt?.slice(0, 19)}` : `draft ${statsEff?.computedAt?.slice(0, 19) ?? ""}`,
+                  at: stamped ? verdict?.stampedAt : statsEff?.computedAt,
+                })}</div>
+              </div>
+            </td></tr>
+          </tfoot>
+          <tbody><tr><td>
         <div className="min-w-0 space-y-5">
 
           {/* ── the controls the call card used to hold ── */}
@@ -2408,7 +2423,8 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
             </div>
           </details>
         </div>
-
+          </td></tr></tbody>
+        </table>
       </div>
 
       {/* ── THE ANALYST — a drawer, not a column. It slides in when you want
@@ -2494,7 +2510,24 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 return <p key={`${e.at}:${idx}`} className="text-[14px] leading-snug text-ok">{e.text}</p>;
               })}
 
-              {busy === "ask" && <p className="text-[14px] text-muted-2">Reading the numbers…</p>}
+              {pendingAsk && (
+                <div className="flex justify-end">
+                  <p className="max-w-[85%] rounded-lg bg-background px-3 py-1.5 text-[14px] font-medium leading-snug opacity-70">{pendingAsk}</p>
+                </div>
+              )}
+              {busy !== null && (busy === "ask" || busy.startsWith("tune:") || busy === "define") && (
+                <div className="flex items-center gap-2 text-[13px] text-muted-2" role="status" aria-live="polite">
+                  <span className="flex items-end gap-[3px] h-3" aria-hidden>
+                    {[0, 1, 2].map((i) => (
+                      <span key={i}
+                        className="w-[5px] h-[5px] rounded-full bg-muted-2 animate-bounce motion-reduce:animate-none"
+                        style={{ animationDelay: `${i * 140}ms`, animationDuration: "1s" }} />
+                    ))}
+                  </span>
+                  {busy === "define" ? "Building that metric…" : busy.startsWith("tune:") ? "Noting that…" : "Reading the numbers against the brief…"}
+                </div>
+              )}
+              <div ref={threadEndRef} />
 
               {customMsg && <p className="text-[14px] leading-snug text-ok">{customMsg}</p>}
 

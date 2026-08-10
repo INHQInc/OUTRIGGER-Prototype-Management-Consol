@@ -134,10 +134,15 @@ body {
      is what removes them. The report supplies its own padding instead. */
   @page { margin: 0; }
   .print-report { padding: 14mm 12mm 20mm !important; }
-  .print-legal { display: block !important; }
+  /* A repeating TABLE FOOTER is the one construct that both repeats per sheet
+     and RESERVES the space it occupies. Fixed positioning repeated fine and
+     reserved nothing, so the report ran underneath the notice. */
+  .print-frame { display: table !important; width: 100%; }
+  .print-frame > tfoot { display: table-footer-group !important; }
+  .print-frame > tbody, .print-frame > tbody > tr, .print-frame > tbody > tr > td,
+  .print-frame > tfoot > tr, .print-frame > tfoot > tr > td { display: revert !important; }
+  .print-legal { display: table-footer-group !important; }
   .print-legal-footer {
-    position: fixed;
-    bottom: 6mm; left: 12mm; right: 12mm;
     padding-top: 4px;
     border-top: 1px solid #d5dbe2;
     font-size: 7.5pt;
@@ -145,8 +150,15 @@ body {
     color: #5c6771 !important;
     visibility: visible !important;
   }
+  /* the cell holds the report; the frame must not add table chrome */
+  .print-frame, .print-frame td { border: 0 !important; padding-left: 0; padding-right: 0; }
   .print-legal-footer * { visibility: visible !important; color: #5c6771 !important; }
   /* A page break must never split the notice off from the line above it. */
   .print-legal-block { break-inside: avoid; page-break-inside: avoid; }
 }
 .print-legal { display: none; }
+/* SCREEN: the frame is not a table at all — it exists only for paper. */
+.print-frame, .print-frame > tbody, .print-frame > tbody > tr, .print-frame > tbody > tr > td {
+  display: block; width: 100%; border: 0; padding: 0; margin: 0;
+}
+.print-frame > tfoot { display: none; }
