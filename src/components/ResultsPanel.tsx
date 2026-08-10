@@ -565,6 +565,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     lastSentAt?: string; lastSentTo?: string[]; lastError?: string;
   } | null>(null);
   const [mailUnavailable, setMailUnavailable] = useState<string | null>(null);
+  const [mailFrom, setMailFrom] = useState<string | null>(null);
   const [mailBusy, setMailBusy] = useState(false);
   const [recipientDraft, setRecipientDraft] = useState("");
   const [decision, setDecision] = useState<{
@@ -1559,7 +1560,11 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     try {
       const res = await fetch(`/api/prototypes/report?key=${encodeURIComponent(prototypeKey)}`);
       const data = await res.json();
-      if (res.ok) { setMail(data.settings); setMailUnavailable(data.mailUnavailable ?? null); }
+      if (res.ok) {
+        setMail(data.settings);
+        setMailUnavailable(data.mailUnavailable ?? null);
+        setMailFrom(typeof data.mailFrom === "string" ? data.mailFrom : null);
+      }
     } catch { /* the panel says so when it opens empty */ }
   };
 
@@ -1604,11 +1609,15 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               <button onClick={() => setMailOpen(false)} className="ml-auto text-[13px] text-muted-2 hover:text-foreground">Close</button>
             </div>
 
-            {mailUnavailable && (
+            {mailUnavailable ? (
               <p className="text-[13px] text-warn leading-snug">
                 Sending isn&rsquo;t configured on this deployment — {mailUnavailable} Recipients and the schedule can still be saved.
               </p>
-            )}
+            ) : mailFrom ? (
+              <p className="text-[13px] text-muted-2 leading-snug">
+                Arrives from <span className="text-foreground">{mailFrom}</span>. Recipients are blind-copied, so nobody sees the list.
+              </p>
+            ) : null}
 
             <div className="space-y-2">
               <div className={ZH}>Recipients</div>

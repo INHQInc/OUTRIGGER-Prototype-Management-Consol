@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { getReportSettings, mutateReportSettings } from "@/lib/prototypes/report";
-import { validRecipients, mailUnavailableReason } from "@/lib/email/send";
+import { validRecipients, mailUnavailableReason, activeProvider, fromAddress } from "@/lib/email/send";
 import { sendReadoutEmail } from "@/lib/email/report-run";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
@@ -22,9 +22,14 @@ export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
+  // The sending identity is shown, not assumed. Which address a leadership
+  // digest arrives from is a thing people notice, and the operator should be
+  // able to read it off the screen rather than off a Vercel env page.
   return NextResponse.json({
     settings: await getReportSettings(g.proto.key),
     mailUnavailable: mailUnavailableReason(),
+    mailProvider: activeProvider(),
+    mailFrom: fromAddress() || null,
   });
 }
 

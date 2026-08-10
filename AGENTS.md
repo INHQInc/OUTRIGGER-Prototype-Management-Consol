@@ -150,15 +150,29 @@ can exist without a headless renderer. The body is built by
 `lib/email/readout.ts` from the SAME resolved data the page uses — the analyst
 names a metric key, the code resolves the value, here as everywhere.
 
-- `lib/email/send.ts` — the provider seam, TWO implementations. **Gmail over
-  SMTP** (`GMAIL_USER` + `GMAIL_APP_PASSWORD`) is the only honest way to send
-  FROM a @gmail.com address: verifying a sending domain means publishing DNS for
-  it and nobody controls gmail.com's, so no HTTP provider will ever allow it.
-  **Resend** (`RESEND_API_KEY` + `REPORT_FROM_EMAIL`) for a verified domain.
-  Gmail wins when both are set. Recipients go in **BCC** on the Gmail path — a
-  leadership digest must not publish everyone's address to everyone else.
-  FAILS LOUD when neither is configured: a mailer that silently no-ops reports
-  "sent" to a room that received nothing.
+- `lib/email/send.ts` — the provider seam, THREE implementations behind one
+  function. **Mailgun** (`MAILGUN_API_KEY` + `MAILGUN_DOMAIN` +
+  `REPORT_FROM_EMAIL`) and **Resend** (`RESEND_API_KEY` + `REPORT_FROM_EMAIL`)
+  are domain senders. **Gmail over SMTP** (`GMAIL_USER` +
+  `GMAIL_APP_PASSWORD`) is the fallback, and the only honest way to send FROM a
+  @gmail.com address: verifying a sending domain means publishing DNS for it and
+  nobody controls gmail.com's, so no HTTP provider will ever allow it.
+  - **Precedence: mailgun → resend → gmail.** A provider that authenticates the
+    DOMAIN can put the brand in the From line; Gmail can only ever be one
+    person's personal account, because Google rewrites any other address.
+  - `MAIL_PROVIDER` pins one. If the named provider isn't fully configured,
+    sending is UNAVAILABLE and says which vars are missing — it never falls
+    through to a different sender. A readout arriving from an address nobody
+    expected is worse than one that doesn't arrive.
+  - Recipients go in **BCC on every path** — a leadership digest must not
+    publish everyone's address to everyone else. The visible To is the sender.
+  - Mailgun is REGIONAL: a US key against the EU host returns 401 and reads
+    exactly like a bad key. `MAILGUN_REGION=eu` (or `MAILGUN_BASE_URL`) names it,
+    and the 401 message says so rather than leaving you to guess.
+  - `activeProvider()` / `fromAddress()` are surfaced by `/api/prototypes/report`
+    so the dialog shows the real sending identity instead of assuming it.
+  - FAILS LOUD when none is configured: a mailer that silently no-ops reports
+    "sent" to a room that received nothing.
 - `lib/prototypes/report.ts` — recipients + opt-in weekly schedule per prototype
   (`report:<key>`, CAS). `lastSentAt` is the idempotence guard.
 - `lib/email/report-run.ts` — ONE send path for the button and the sweep, so
@@ -213,6 +227,8 @@ names a metric key, the code resolves the value, here as everywhere.
 | `GITHUB_TOKEN` | git deploy / auto-pin / source reads |
 | `OPTIMIZELY_API_TOKEN` / `OPTIMIZELY_PROJECT_ID` | legacy/CLI fallback (brand config preferred) |
 | `ANTHROPIC_API_KEY` | the console's API-side Claude (brief drafting) |
+| `MAIL_PROVIDER` + one provider's vars, `REPORT_FROM_EMAIL` | emailed readouts (see above; absent → sending disabled, and the app says so) |
+| `CRON_SECRET` | guards `/api/cron/reports` |
 
 Claude never enters credentials — the user pastes them into Vercel / the app's Brand settings.
 
