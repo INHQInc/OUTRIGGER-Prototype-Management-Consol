@@ -23,8 +23,11 @@ server-computable** model that both surfaces render. Email renders in a cron job
 — no React, no browser — so nothing may depend on component state.
 
 ### Where it got to
-- `docs/READOUT-MODEL.md` written: problem, shape, six commitments, what stays
-  surface-specific, five open questions, decisions log. **Design not yet final.**
+- `docs/READOUT-MODEL.md` — problem, six commitments, the ELEVEN live defects the
+  audit found with who-is-right for each, four structural constraints, decisions log.
+- `docs/READOUT-MODEL-DESIGN.md` — the full model interface, builder signature,
+  field-by-field replacement table and migration order. **Design is final; the
+  module is not yet written.**
 - A 7-agent inventory workflow was running when context ran out:
   - Run ID `wf_1c751d83-d96`, task `w5xqx62oc`
   - Transcript: `.claude/projects/…/subagents/workflows/wf_1c751d83-d96/`
@@ -36,8 +39,10 @@ server-computable** model that both surfaces render. Email renders in a cron job
   - **If that output is gone, re-run the script rather than designing blind.**
 
 ### Next steps, in order
-1. Recover or re-run the workflow; read the design section.
-2. Write `src/lib/prototypes/readout-model.ts` — types + `buildReadout()`.
+1. Read `READOUT-MODEL-DESIGN.md` (the design is done — do not re-run the audit).
+2. Write `src/lib/prototypes/readout-model.ts` — types + `buildReadoutModel()`.
+   Plain synchronous function, NO hooks: the page's derivations sit between five
+   conditional returns and a useMemo there changes the hook count and throws.
 3. Cut the EMAIL over first (lower risk, no interaction) and diff the rendered
    HTML against the current preview before/after.
 4. Cut the PAGE over incrementally. It is in daily use; do not do this in one
@@ -54,6 +59,20 @@ The harness is checked in at `docs/dev/preview-email.mts`. `tsconfig.json`
 excludes `docs/dev` — the repo's `include` is `**/*.mts`, so without that exclude
 the fixture's loose types fail `tsc --noEmit`. It imports `readout.ts` by
 absolute path; fix the path for your checkout before running.
+
+### Fix these while extracting — they are live bugs, not drift
+- **The direction toggle is write-once** (`setDirection` writes `map.directions`
+  only; GET returns the stored map; the glyph reads `composites[].direction`).
+  Clicking ↑ records the change and the UI never updates. **This is probably why
+  Hero CTA Click still has no effective direction.**
+- **"Settled" uses a statistic the verdict does not** — a Katz log-ratio CI vs the
+  verdict's pooled z-test on `p`. They disagree around alpha.
+- **`actionChip` contradicts `nextStep()`** — created this session by extracting
+  `nextStep` without rewiring the page. Adopt `nextStep`, keep only the href map.
+- Beyond-luck ignores the engine's Benjamini-Hochberg `q`; guardrail tone ignores
+  `GuardrailVerdict.state`; composite action-totals print as conversion rates
+  above 100%; one-arm metrics render as an em-dash in email; the frozen-snapshot
+  fallback is page-only; the day count differs by one between surfaces.
 
 ### Also outstanding from this session
 - **`fmt16` cache basis** — readings regenerate with the new `executive` field on
