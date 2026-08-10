@@ -287,6 +287,42 @@ export function optiPrimaryKeyOf(results: ExperimentResults | null | undefined):
 /** Is this metric a COMPOSITE — built from more than one Optimizely event? A one-event
  *  composite is just the event under another name — flagging it would train
  *  the reader to ignore the flag. */
+/**
+ * WHICH WAY IS A WIN, resolved from the stored plan.
+ *
+ * `setDirection` writes `map.directions[key]` and never touches
+ * `composites[].direction`, and the API deliberately returns the STORED map —
+ * so anything reading `composite.direction` alone sees a value that never
+ * changes. That is a real bug, not a subtlety: clicking the toggle recorded the
+ * change server-side while the glyph, the tooltip and the next click's payload
+ * all kept reading the stale field, so the control was write-once and looked
+ * broken.
+ *
+ * One resolution, called by the toggle, the readout model and the API.
+ */
+export function effectiveDirection(
+  map: MetricMap | null | undefined,
+  rowKey: string,
+): "increase" | "decrease" {
+  const declared =
+    map?.directions?.[rowKey] ??
+    map?.composites.find((c) => `composite:${c.id}` === rowKey)?.direction;
+  return declared === "decrease" ? "decrease" : "increase";
+}
+
+/** True when a direction was actually DECLARED rather than defaulted. An
+ *  assumed "increase" on a metric the brief wanted to fall inverts the verdict,
+ *  so the difference has to be visible. */
+export function directionDeclared(
+  map: MetricMap | null | undefined,
+  rowKey: string,
+): boolean {
+  return Boolean(
+    map?.directions?.[rowKey] ??
+      map?.composites.find((c) => `composite:${c.id}` === rowKey)?.direction,
+  );
+}
+
 export function isCompositeOf(c: CompositeMetric): boolean {
   return Boolean(c.armEvents?.length) || allCompositeEvents(c).length > 1;
 }

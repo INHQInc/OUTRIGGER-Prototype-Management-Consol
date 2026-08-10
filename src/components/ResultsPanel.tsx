@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ExperimentResults, MetricMap, VariationResult, CompositeMetric } from "@/lib/prototypes/results";
-import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, isCompositeOf, describeComposite, resolveMetricRow, type MetricRole } from "@/lib/prototypes/results";
+import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys, roleOf, isCompositeOf, describeComposite, resolveMetricRow, effectiveDirection, type MetricRole } from "@/lib/prototypes/results";
 import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
@@ -11,6 +11,7 @@ import { shortNotice, provenanceLine } from "@/lib/brand";
 import { SWEEP_HOUR_UTC } from "@/lib/prototypes/report";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
+import { nextStep } from "@/lib/prototypes/verdict";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
 import type { AnalystAnswer } from "@/lib/ai/results";
 
@@ -1235,29 +1236,27 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
   // The action is COMPUTED from the first failing gate — never narrated, so a
   // model can't recommend shipping past a gate that hasn't passed.
+  /** THE ACTION. `nextStep()` in verdict.ts is the ONE derivation — shared with
+   *  the emailed readout so the two can never recommend different things. This
+   *  used to re-implement it gate-first, with no short-circuit on an
+   *  adjudicated verdict, no `prereg` entry and a hardcoded 7 where nextStep
+   *  reads VERDICT_THRESHOLDS: a refuted run said "Hold the call" on screen and
+   *  "Stop it, or redesign the change" in the inbox. Only the in-app
+   *  destination is decided here, keyed off the gate nextStep already returns
+   *  for exactly this purpose. */
+  const GATE_HREF: Record<string, string> = {
+    mapping: "?tab=analytics#measurement",
+    prereg: "?tab=analytics#measurement",
+    significance: "?tab=analytics#measurement",
+    focus: "?tab=experiment#ship",
+    validity: "#method",
+    guardrails: "#attention",
+  };
   const actionChip = (): { label: string; href?: string } | null => {
-    const failing = verdict?.gates.find((g) => g.pass === false);
-    if (!failing) return stamped ? null : { label: verdict ? "Keep running" : "Waiting for data" };
-    // The `validity` id is emitted by TWO gates (pre-registration resolved,
-    // traffic split) and `significance` by the measurability check — key off
-    // the title so the one action we offer is never confidently wrong.
-    if (/pre-registration/i.test(failing.title)) return { label: "Re-confirm the plan →", href: "?tab=analytics#measurement" };
-    if (/measurable/i.test(failing.title)) return { label: "Remap the primary →", href: "?tab=analytics#measurement" };
-    const byGate: Record<string, { label: string; href?: string }> = {
-      mapping: { label: "Confirm the measurement plan →", href: "?tab=analytics#measurement" },
-      focus: { label: "Rebind the experiment →", href: "?tab=experiment#ship" },
-      validity: { label: "Fix the traffic split →", href: "#method" },
-      guardrails: { label: "Review the guardrail →", href: "#attention" },
-    };
-    if (byGate[failing.id]) return byGate[failing.id];
-    if (failing.id === "runtime" || failing.id === "sample") {
-      // Mirrors the Timeline tile's arithmetic (VERDICT_THRESHOLDS.minRuntimeDays = 7).
-      const dayN = (statsEff?.power?.observationDays ?? 0) + 1;
-      const eta = statsEff?.power?.daysToTarget ?? statsEff?.power?.daysToObserved;
-      const left = Math.max(eta ?? 0, Math.max(0, 7 - dayN));
-      return { label: left > 0 ? `Keep running · ~${plural(left, "more day")}` : "Keep running" };
-    }
-    return { label: "Hold the call" };
+    if (!verdict) return { label: "Waiting for data" };
+    if (stamped) return null;
+    const step = nextStep(verdict, statsEff ?? null);
+    return { label: step.label, href: step.gateId ? GATE_HREF[step.gateId] : undefined };
   };
 
   // Severity edge on the decision card — the only place verdict colour lives
@@ -2434,18 +2433,28 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                             fewer taps on it. Without this the console judges
                             every decision metric as "up is good" and reads a
                             successful test as refuted. */}
+                        {/* Reads the RESOLVED direction, not c.direction. The
+                            write lands in map.directions and never touches the
+                            composite, so reading the composite made this
+                            control write-once: the arrow never moved and the
+                            second click posted the same value back. */}
+                        {(() => {
+                          const dirNow = effectiveDirection(mapEff, rowKey);
+                          return (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            void post("direction", { setDirection: { key: rowKey, direction: (c.direction ?? "increase") === "increase" ? "decrease" : "increase" } });
+                            void post("direction", { setDirection: { key: rowKey, direction: dirNow === "increase" ? "decrease" : "increase" } });
                           }}
                           disabled={busy !== null}
-                          title={(c.direction ?? "increase") === "increase"
+                          title={dirNow === "increase"
                             ? "A WIN IS UP for this metric. Click if this experiment expects it to FALL — removing a shortcut, cutting a step — so the verdict judges it the right way round."
                             : "A WIN IS DOWN for this metric: the verdict treats a fall as the predicted result. Click to switch back."}
-                          className={`text-[11px] font-bold leading-none ${(c.direction ?? "increase") === "increase" ? "text-muted-2 hover:text-foreground" : "text-warn"}`}>
-                          {(c.direction ?? "increase") === "increase" ? "↑" : "↓"}
+                          className={`text-[11px] font-bold leading-none ${dirNow === "increase" ? "text-muted-2 hover:text-foreground" : "text-warn"}`}>
+                          {dirNow === "increase" ? "↑" : "↓"}
                         </button>
+                          );
+                        })()}
                         {watch(rowKey)}
                         {/* ONE primary — switch semantics: on = the decision metric;
                             flipping another on moves it (the server keeps exactly one) */}

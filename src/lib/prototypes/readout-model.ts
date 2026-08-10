@@ -28,7 +28,7 @@
  * browser path provably identical rather than hopefully similar.
  */
 import type { ExperimentResults, MetricMap, MetricRole } from "./results";
-import { isCompositeOf, describeComposite } from "./results";
+import { isCompositeOf, describeComposite, effectiveDirection, directionDeclared } from "./results";
 import type { StatsReport, MetricStats, CellStats, DailySnapshot } from "./stats";
 import type { VerdictRecord, VerdictState, VerdictGate } from "./verdict";
 import { VERDICT_THRESHOLDS, nextStep } from "./verdict";
@@ -429,12 +429,14 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     // ── DIRECTION, resolved once. plan.directions wins because that is what a
     //    click on the ↑/↓ toggle writes; the composite's own field is the
     //    fallback, and the decision descriptor carries Optimizely's.
-    const planDir = input.plan?.directions?.[m.key];
-    const compDir = input.plan?.composites.find((c) => `composite:${c.id}` === m.key)?.direction;
+    const declaredHere = directionDeclared(input.plan, m.key);
     const decDir = isDecision ? input.decision?.direction : undefined;
-    const resolved = planDir ?? compDir ?? decDir;
-    const direction: "increase" | "decrease" = resolved === "decrease" ? "decrease" : "increase";
-    const directionDeclared = Boolean(resolved) || Boolean(isDecision && input.decision?.directionDeclared);
+    const direction: "increase" | "decrease" = declaredHere
+      ? effectiveDirection(input.plan, m.key)
+      : decDir === "decrease"
+        ? "decrease"
+        : "increase";
+    const dirDeclared = declaredHere || Boolean(isDecision && input.decision?.directionDeclared);
 
     const featureOnly = m.featureOnly ?? null;
     const lift = featureOnly ? undefined : f?.lift;
@@ -526,7 +528,7 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
       testsDisagree: !featureOnly && settled !== significant,
       favourable,
       direction,
-      directionDeclared,
+      directionDeclared: dirDeclared,
       guardrail: guardrailState,
       featureOnly,
       settledWord: featureOnly ? "Adoption" : beyondLuck ? "Settled" : "Not settled",
