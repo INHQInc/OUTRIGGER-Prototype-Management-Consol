@@ -405,19 +405,19 @@ const readingTool = {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
       effect: { type: "object" as const, properties: {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it." },
-        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+        measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
       }, required: ["text", "measure"] },
       shift: { type: "object" as const, properties: {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHERE THE BEHAVIOUR WENT — if that intent moved, name the surfaces it moved TO and how far along the path it got. If it simply didn't move, say that plainly." },
-        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+        measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
       }, required: ["text", "measure"] },
       cost: { type: "object" as const, properties: {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT IT COST — the step that softened, the trade being made, or the leak between intent and outcome. If nothing measurably gave way, say so rather than inventing a cost." },
-        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+        measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
       }, required: ["text", "measure"] },
       prediction: { type: "object" as const, properties: {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. AGAINST THE PREDICTION — what the brief claimed, which half is settled, and which half is not." },
-        measure: { type: "string" as const, description: "the ONE metric that evidences this movement — the page prints its live value beside these words" },
+        measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
       }, required: ["text", "measure"] },
       lede: { type: "string" as const, description: "<=900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what guests are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary." },
       beats: {
@@ -954,7 +954,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
         messages: [
           { role: "user", content: "Rewrite the sections of the reading you just gave." },
           { role: "assistant", content: JSON.stringify({ effect: raw.effect, shift: raw.shift, cost: raw.cost, prediction: raw.prediction }) },
-          { role: "user", content: `These sections were rejected: ${missingSections.join(", ")}. Each must be plain text of AT MOST 420 characters with NO DIGITS AT ALL (every number is printed for you) and no statistics vocabulary (significance, sample size, confidence, p-values, days remaining). Keep the same substance. Return only JSON with a string for each: {${missingSections.map((k) => `"${k}": "..."`).join(", ")}}.` },
+          { role: "user", content: `These sections were rejected: ${missingSections.join(", ")}. Each must be plain text of AT MOST 420 characters with NO DIGITS AT ALL (every number is printed for you) and no statistics vocabulary (significance, sample size, confidence, p-values, days remaining). Keep the same substance. Return only JSON, an OBJECT per section with its text AND the metric key that evidences it: {${missingSections.map((k) => `"${k}": {"text": "...", "measure": "<one of the metric keys you were given>"}`).join(", ")}}.` },
         ],
       });
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
@@ -967,6 +967,31 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       }
     } catch { /* whatever survived is what renders */ }
   }
+  // A SECTION WITHOUT ITS NUMBER IS HALF A SECTION. A section can arrive as a
+  // bare string (no `measure` at all) or name a metric outside the enum, and
+  // either way the movement rendered as prose with nothing above it. Rather
+  // than leave the slot empty, pair it with the metric the movement is BY
+  // DEFINITION about — and where no metric honestly qualifies, leave it empty
+  // rather than attach a number the sentence was not written about.
+  if (read) {
+    const cellOf = (k: string) => opts.stats?.metrics.find((m) => m.key === k)?.cells.find((c) => c.variationId === opts.stats?.focusVariationId);
+    const headKeyForRead = opts.stats?.primaryKey ?? (optiPrimaryKeyOf(opts.results) || undefined);
+    const others = supporting.filter((k) => k !== headKeyForRead && !opts.stats?.metrics.find((m) => m.key === k)?.featureOnly);
+    const byLift = [...others].sort((a, b) => (cellOf(b)?.lift ?? 0) - (cellOf(a)?.lift ?? 0));
+    const biggestRise = byLift.find((k) => (cellOf(k)?.lift ?? 0) > 0);
+    const biggestFall = [...byLift].reverse().find((k) => (cellOf(k)?.lift ?? 0) < 0);
+    const fallback: Record<string, string | undefined> = {
+      effect: headKeyForRead,
+      shift: biggestRise ?? headKeyForRead,
+      cost: biggestFall,
+      prediction: headKeyForRead,
+    };
+    for (const k of ["effect", "shift", "cost", "prediction"] as const) {
+      const sect = read[k];
+      if (sect && !sect.measureKey && fallback[k]) sect.measureKey = fallback[k];
+    }
+  }
+
   // Two different failures, two different admissions: the paragraph fell back
   // to the computed floor, or the four sections could not be recovered and the
   // readout is showing prose where it should show structure.
