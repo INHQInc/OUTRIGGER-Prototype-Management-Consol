@@ -2,6 +2,73 @@
 
 *Updated: 2026-08-10. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
 
+---
+
+## ⚠ IN FLIGHT RIGHT NOW — READOUT MODEL EXTRACTION (2026-08-10, mid-task)
+
+**Read [`docs/READOUT-MODEL.md`](READOUT-MODEL.md) first. It holds the architecture,
+the six commitments, and the decisions log. Do not start editing without it.**
+
+### The task
+The page (`ResultsPanel.tsx`) and the email (`lib/email/readout.ts`) share every
+NUMBER but duplicate every INTERPRETATION — settled/not, win direction, tone, how
+each movement resolves its metric, the observation lookup. They drifted, and the
+drift shipped real defects (a correct prediction reported as REFUTED; "Hold the
+call" on an adjudicated run; everything grey; trend sentence and composite flags
+page-only; vitals and plain-words verdict email-only).
+
+Bryan approved the extraction and asked for "elite enterprise architecture":
+ONE `buildReadout()` producing a colourless, presentation-ready, **pure and
+server-computable** model that both surfaces render. Email renders in a cron job
+— no React, no browser — so nothing may depend on component state.
+
+### Where it got to
+- `docs/READOUT-MODEL.md` written: problem, shape, six commitments, what stays
+  surface-specific, five open questions, decisions log. **Design not yet final.**
+- A 7-agent inventory workflow was running when context ran out:
+  - Run ID `wf_1c751d83-d96`, task `w5xqx62oc`
+  - Transcript: `.claude/projects/…/subagents/workflows/wf_1c751d83-d96/`
+  - Read `journal.jsonl` there for each agent's return value.
+  - Script: `.claude/projects/…/workflows/scripts/readout-model-extraction-wf_1c751d83-d96.js`
+    (re-runnable with `Workflow({scriptPath, resumeFromRunId})` — unchanged agents replay from cache)
+  - It produces: a line-numbered inventory of every derivation in both surfaces,
+    three adversarial risk passes, and a full model interface + migration order.
+  - **If that output is gone, re-run the script rather than designing blind.**
+
+### Next steps, in order
+1. Recover or re-run the workflow; read the design section.
+2. Write `src/lib/prototypes/readout-model.ts` — types + `buildReadout()`.
+3. Cut the EMAIL over first (lower risk, no interaction) and diff the rendered
+   HTML against the current preview before/after.
+4. Cut the PAGE over incrementally. It is in daily use; do not do this in one
+   rewrite. Optimistic local state (pins, roles, hidden metrics) becomes an
+   INPUT to the builder, never a fork of it.
+5. Update the decisions log in `READOUT-MODEL.md` as each disagreement is
+   resolved — the point is that the resolution is recorded, not just made.
+
+### Verifying the email without sending
+```
+npx tsx "<scratchpad>/preview-email.mts" out.html     # renders the real renderer against a fixture
+```
+The harness lives in the session scratchpad (NOT the repo — it breaks `tsc` if
+placed under `src/`). It imports `readout.ts` by absolute path. Recreate it if
+lost: build a StatsReport + VerdictRecord + Reading fixture and call
+`renderReadoutEmail()`.
+
+### Also outstanding from this session
+- **`fmt16` cache basis** — readings regenerate with the new `executive` field on
+  next page load. Until a prototype's reading is regenerated the email falls back
+  to `lede`, then omits.
+- **Hero CTA Click has no declared win direction.** This is a DATA fix, not code:
+  the brief wanted that metric DOWN, nothing declared it, so the engine assumed UP
+  and called a successful prediction REFUTED. Set the direction on the metric (the
+  ↑/↓ control) or set `winning_direction` in Optimizely. The email now discloses
+  the assumption rather than printing a confident wrong answer.
+- **`SHOW_CALL = false`** hides the verdict card on the page while the email leads
+  with the verdict. Bryan has not decided which way that resolves.
+
+---
+
 ## Where we are (2026-08-03)
 
 **The full loop is real and every stage ran live**: AI-drafted brief → gate opens → agent builds in the branch → real-env review → cut + certification → API push (read-back verified) → experiment in Optimizely → running lock. `room-detail-overlay` traversed all of it.
