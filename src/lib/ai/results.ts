@@ -885,15 +885,28 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // a beat may only name a metric that exists. Anything that fails falls
   // back to the computed story rather than being patched into shape.
   const fallback = templateStory({ results: opts.results, stats: opts.stats, verdict: opts.verdict, supporting });
-  const clean = (v: unknown, cap: number) => {
+  // WHY a field was rejected, not just THAT it was. Every rejection used to
+  // collapse to "" and the caller substituted the computed floor, so a rule
+  // the model kept tripping over was indistinguishable from the model simply
+  // writing a poor sentence — and the fix for those two is not the same.
+  const rejectReason = (v: unknown, cap: number): string | null => {
     const t = typeof v === "string" ? stripMd(v).replace(/\s+/g, " ").trim() : "";
-    if (!t || t.length > cap || /\d/.test(t) || STAT_NOTATION.test(t)) return "";
-    return t;
+    if (!t) return "empty";
+    if (t.length > cap) return `over ${cap} chars (${t.length})`;
+    if (/\d/.test(t)) return "contains a digit";
+    if (STAT_NOTATION.test(t)) return "statistics vocabulary";
+    return null;
+  };
+  const rejected: string[] = [];
+  const clean = (v: unknown, cap: number, field?: string) => {
+    const why = rejectReason(v, cap);
+    if (why) { if (field && why !== "empty") rejected.push(`${field}: ${why}`); return ""; }
+    return typeof v === "string" ? stripMd(v).replace(/\s+/g, " ").trim() : "";
   };
 
-  let headline = clean(raw.headline, 80);
-  let executive = clean(raw.executive, 900);
-  let lede = clean(raw.lede, 900);
+  let headline = clean(raw.headline, 80, "headline");
+  let executive = clean(raw.executive, 900, "executive");
+  let lede = clean(raw.lede, 900, "lede");
   // A digit or an over-long sentence used to swap the analyst's paragraph for
   // a generic template silently. Ask once for a repair, in the same call
   // shape, before settling for the computed story.
@@ -913,9 +926,9 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       const m = /\{[\s\S]*\}/.exec(txt);
       if (m) {
         const parsed = JSON.parse(m[0]) as { headline?: string; executive?: string; lede?: string };
-        headline = headline || clean(parsed.headline, 80);
-        executive = executive || clean(parsed.executive, 900);
-        lede = lede || clean(parsed.lede, 900);
+        headline = headline || clean(parsed.headline, 80, "headline(repair)");
+        executive = executive || clean(parsed.executive, 900, "executive(repair)");
+        lede = lede || clean(parsed.lede, 900, "lede(repair)");
       }
     } catch { /* the computed story is the floor */ }
   }
@@ -1000,6 +1013,11 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // readout is showing prose where it should show structure.
   const ledeComputed = !lede && !read;
   const sectionsMissing = (["effect", "shift", "cost", "prediction"] as const).some((k) => !read?.[k]);
+  // The headline had no equivalent of `ledeComputed`, so this substitution was
+  // invisible: the readout reported itself as the analyst's while printing the
+  // template's sentence.
+  const headlineComputed = !headline;
+  if (rejected.length) console.warn("[reading] rejected after repair —", rejected.join("; "));
   headline = headline || fallback.headline;
   lede = lede || fallback.lede;
 
@@ -1078,6 +1096,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       lede,
       ...(read ? { read } : {}),
       ...(ledeComputed ? { ledeComputed: true } : {}),
+      ...(headlineComputed ? { headlineComputed: true } : {}),
       ...(sectionsMissing ? { sectionsMissing: true } : {}),
       beats,
       observations,

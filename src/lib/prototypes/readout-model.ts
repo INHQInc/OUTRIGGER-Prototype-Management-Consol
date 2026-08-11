@@ -269,6 +269,10 @@ export interface StoryView {
   summaryProse: string | null;
   movements: MovementView[];
   source: "analyst" | "computed";
+  /** The HEADLINE specifically fell back to the computed floor — tracked apart
+   *  from `source`, which reports on the paragraph. The two fail independently:
+   *  a reading can carry the analyst's prose above the template's headline. */
+  headlineComputed: boolean;
 }
 
 export type VitalId = "visitors" | "runtime" | "beyond-luck" | "guardrails";
@@ -708,6 +712,7 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     summaryProse: input.reading?.executive ?? input.reading?.lede ?? null,
     movements,
     source: input.reading?.ledeComputed ? "computed" : "analyst",
+    headlineComputed: Boolean(input.reading?.headlineComputed),
   };
 
   // ── HYPOTHESIS

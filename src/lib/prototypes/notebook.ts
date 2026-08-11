@@ -69,6 +69,13 @@ export interface Reading {
    *  vocabulary) and the COMPUTED floor is what is rendering. Silent fallback
    *  made a validator bug look like a quality problem for a whole session. */
   ledeComputed?: boolean;
+  /** THE SAME ADMISSION FOR THE HEADLINE, which did not have one. `ledeComputed`
+   *  is `!lede && !read` and says nothing about the headline, so a rejected
+   *  headline fell back to the computed floor while the readout still reported
+   *  itself as the analyst's work. That is how "Nothing separates the two
+   *  versions yet" reached an inbox above a table showing two metrics moving:
+   *  no one could tell it was the template talking. */
+  headlineComputed?: boolean;
   /** One or more of the four movements could not be recovered, so the readout
    *  is showing prose where it should show structure. Surfaced, because a
    *  section that silently disappears reads as the feature being broken. */
