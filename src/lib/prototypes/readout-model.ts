@@ -726,14 +726,24 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
 
   // ── STORY
   const read = input.reading?.read;
+  // ONE METRIC, ONE NUMBER, ONE PLACE. The analyst nominates a metric per
+  // movement and nothing stopped two movements naming the same one — "what the
+  // change did" and "against the prediction" both gravitate to the decision
+  // metric, so a readout showed the identical figure and label twice in a row
+  // of four. The reader counts it as two findings.
+  //
+  // First claim wins, in reading order: the number appears at the first place
+  // it is relevant, and later movements carry it in prose. Deliberately NOT
+  // "give it to whichever movement needs it most" — that ranking would be an
+  // editorial theory, and the analyst's own ordering is the better evidence.
+  const claimed = new Set<string>();
   const movements: MovementView[] = MOVEMENTS.map((spec) => {
     const sec = read?.[spec.id];
     if (!sec?.text) return null;
-    return {
-      ...spec,
-      text: sec.text,
-      metric: sec.measureKey ? byKey[sec.measureKey] ?? null : null,
-    };
+    const nominated = sec.measureKey ? byKey[sec.measureKey] ?? null : null;
+    const metric = nominated && !claimed.has(nominated.key) ? nominated : null;
+    if (metric) claimed.add(metric.key);
+    return { ...spec, text: sec.text, metric };
   }).filter((m): m is MovementView => m !== null);
 
   const story: StoryView = {

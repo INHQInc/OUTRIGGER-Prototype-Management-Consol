@@ -188,6 +188,12 @@ export function renderReadoutEmail(opts: {
     .map((mv) => {
       const m = mv.metric;
       const ink = m ? inkOf(m) : RULE;
+      // The decision metric is already printed above at fifty-four point. A
+      // movement that names it again puts the same figure on the page twice
+      // and the reader counts two findings. Its prose still carries it; only
+      // the duplicate number goes. (Across the four movements the MODEL has
+      // already deduped — this is the separate collision with the hero.)
+      const showFigure = m && m.key !== decision?.key;
       return `
       <tr><td style="padding:0 0 22px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -197,7 +203,7 @@ export function renderReadoutEmail(opts: {
             <div style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding-bottom:7px;">
               <span style="color:#AEBAC5;">${esc(mv.ordinal)}</span>&nbsp;&nbsp;${esc(mv.label)}
             </div>
-            ${m ? `<div style="padding-bottom:7px;">
+            ${showFigure && m ? `<div style="padding-bottom:7px;">
               <span style="font-family:${F};font-size:26px;line-height:1.05;font-weight:800;color:${ink};letter-spacing:-.015em;">${esc(m.headline.text)}</span>
               <span style="font-family:${F};font-size:13px;line-height:1.2;font-weight:600;color:${BODY};">&nbsp;&nbsp;${esc(m.label)}</span>${settledTag(m)}
             </div>` : ""}
@@ -376,7 +382,10 @@ export function renderReadoutEmail(opts: {
       ? `\nTHE DECISION METRIC\n${decision.headline.text}  ${decision.label}\n${decision.focusRate.text} vs ${decision.baseRate?.text ?? "—"} control · ${decision.focusCount.text} vs ${decision.baseCount.text} events\n${decision.settledWord}.`
       : "",
     model.story.movements.length
-      ? "\n" + model.story.movements.map((mv) => `${mv.ordinal} ${mv.label.toUpperCase()}\n${mv.text}`).join("\n\n")
+      ? "\n" + model.story.movements.map((mv) => {
+          const m = mv.metric && mv.metric.key !== decision?.key ? mv.metric : null;
+          return `${mv.ordinal} ${mv.label.toUpperCase()}${m ? `  ${m.headline.text} ${m.label}` : ""}\n${mv.text}`;
+        }).join("\n\n")
       : "",
     rows.length ? "\nALL METRICS" : "",
     // The unit travels with the value here too. text/plain is exactly the kind

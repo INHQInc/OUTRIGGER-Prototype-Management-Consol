@@ -45,7 +45,18 @@ const model = buildReadoutModel({
     discoveries: [], observedAt: stats.computedAt,
     preRegistration: { anchor: "cut", hypothesis: "We believe replacing the discount-led hero …", primaryMetric: "Hero CTA Click", guardrails: [], directionAssumed: true },
   },
-  reading: { headline: "Swapping the offer for an invitation gutted the hero click it was aimed at", observations: [] },
+  reading: {
+    headline: "Swapping the offer for an invitation gutted the hero click it was aimed at",
+    observations: [],
+    // effect and prediction BOTH name the decision metric — the shape that put
+    // the identical figure in two of four movements.
+    read: {
+      effect: { text: "Swapping the discount hero for a soft explore invitation collapsed clicks on the hero offer button.", measureKey: "m1" },
+      shift: { text: "The freed attention leans toward discovery, not away from it.", measureKey: "composite:c1" },
+      cost: { text: "Slightly fewer guests reached the Rooms & Rates page.", measureKey: "m3" },
+      prediction: { text: "The brief said the soft hero would cut the offer click and lift downstream exploration.", measureKey: "m1" },
+    },
+  },
   plan: { composites: [{ id: "c1", label: "Total explorer actions", role: "secondary", events: ["a", "b"] }], directions: {}, roles: { m2: "guardrail", m3: "supporting", "composite:c1": "supporting" } },
   decision: { key: "m1", label: "Hero CTA Click", source: "optimizely", directionDeclared: false },
   observed: [], roles: { m2: "guardrail", m3: "supporting", "composite:c1": "supporting" }, order: ["m1", "composite:c1", "m3", "m2", "m4"], hidden: [],
@@ -61,3 +72,14 @@ console.log("NOTICES    :", model.notices.map(n => n.id).join(", "));
 console.log("CAVEAT     :", model.verdict.directionCaveat ? "present" : "ABSENT");
 console.log("---- rows ----");
 for (const k of ["m1", "m2", "m3", "composite:c1", "m4"]) console.log(row(k));
+
+console.log("---- movements ----");
+for (const mv of model.story.movements) {
+  console.log(`${mv.ordinal} ${mv.label.padEnd(22)} ${(mv.metric?.label ?? "— no figure —").padEnd(24)}`);
+}
+// NO METRIC TWICE. Two movements naming the same row printed the same figure
+// and label in a row of four, and the reader counts two findings.
+const used = model.story.movements.map((m) => m.metric?.key).filter(Boolean);
+const dupes = used.filter((k, i) => used.indexOf(k) !== i);
+if (dupes.length) { console.log(`\nFAIL: metric repeated across movements — ${dupes.join(", ")}`); process.exit(1); }
+console.log("\nno metric repeats across the four movements");
