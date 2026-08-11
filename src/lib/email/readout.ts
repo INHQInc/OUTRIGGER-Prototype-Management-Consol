@@ -110,7 +110,7 @@ export function renderReadoutEmail(opts: {
     : "";
 
   const tile = (label: string, value: string, tone: Tone) => `
-    <td width="25%" style="width:25%;padding-right:8px;vertical-align:top;">
+    <td class="tile" width="25%" style="width:25%;padding-right:8px;vertical-align:top;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${TINT};border-radius:8px;">
         <tr><td style="padding:13px 12px;">
           <div style="font-family:${F};font-size:9.5px;line-height:1.2;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${FAINT};padding-bottom:6px;">${esc(label)}</div>
@@ -123,7 +123,7 @@ export function renderReadoutEmail(opts: {
   //    traffic to tell yet" is a fragment until something says what it is the
   //    status OF.
   const status = v
-    ? `<tr><td style="padding:0 28px 4px 28px;">
+    ? `<tr><td class="pad" style="padding:0 28px 4px 28px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${band.bg}" style="background:${band.bg};border-radius:8px;">
           <tr>
             <td width="5" bgcolor="${band.rule}" style="width:5px;background:${band.rule};font-size:0;border-radius:8px 0 0 8px;">&nbsp;</td>
@@ -146,7 +146,7 @@ export function renderReadoutEmail(opts: {
 
   const observations =
     model.story.headline || model.story.summaryProse
-      ? `<tr><td style="padding:26px 28px 6px 28px;">
+      ? `<tr><td class="pad" style="padding:26px 28px 6px 28px;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
             <tr><td style="padding-top:24px;">
               ${caps("Observations", MUTED, 10)}
@@ -162,14 +162,14 @@ export function renderReadoutEmail(opts: {
   //    further. Leading with the biggest number would launder a browse-stage
   //    win into a business result.
   const hero = decision
-    ? `<tr><td style="padding:26px 28px 24px 28px;">
+    ? `<tr><td class="pad" style="padding:26px 28px 24px 28px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
           <tr><td style="padding-top:24px;">
             ${caps("The decision metric")}
             <div style="font-family:${F};font-size:14.5px;line-height:1.35;font-weight:600;color:${BODY};padding-bottom:12px;">${esc(decision.label)}</div>
             <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
               <td style="vertical-align:bottom;padding-right:16px;">
-                <div style="font-family:${F};font-size:54px;line-height:.92;font-weight:800;color:${inkOf(decision)};letter-spacing:-.025em;">${esc(decision.headline.text)}</div>
+                <div class="hero-num" style="font-family:${F};font-size:54px;line-height:.92;font-weight:800;color:${inkOf(decision)};letter-spacing:-.025em;">${esc(decision.headline.text)}</div>
               </td>
               <td style="vertical-align:bottom;">
                 <span style="display:inline-block;font-family:${F};font-size:9.5px;line-height:1;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:${decision.confidence === "settled" ? inkOf(decision) : AMBER_INK};background:${decision.confidence === "settled" ? "#FFFFFF" : AMBER_BG};border:1px solid ${decision.confidence === "settled" ? inkOf(decision) : AMBER_RULE};border-radius:3px;padding:6px 8px;">${esc(decision.settledWord)}</span>
@@ -218,28 +218,39 @@ export function renderReadoutEmail(opts: {
     .map((m) => {
       const chip = ROLE_CHIP[m.roleLabel] ?? ROLE_CHIP.Exploratory;
       const top = `padding:13px 0;border-top:1px solid ${RULE};vertical-align:top;`;
+      const unit = m.rateUnit === "actions-per-visitor" ? " per visitor" : "";
+      // The stacked card's one numbers line. It repeats what the three right-
+      // hand columns say, but LABELLED — without the headings above them,
+      // "1.2%  1.0%  111 vs 92" is three unattributed numbers.
+      const mobileNumbers = [
+        `Variant ${m.focusRate.text}${unit}`,
+        m.baseRate ? `control ${m.baseRate.text}` : null,
+        m.focusCount.absent ? null : `${m.focusCount.text} vs ${m.baseCount.text} events`,
+      ].filter(Boolean).join(" &nbsp;·&nbsp; ");
+
       return `
-      <tr>
-        <td width="${COL.chg}" style="width:${COL.chg}px;${top}padding-right:12px;">
-          <div style="font-family:${F};font-size:20px;line-height:1.1;font-weight:800;color:${inkOf(m)};letter-spacing:-.015em;">${esc(m.headline.text)}</div>
-          <div style="font-family:${F};font-size:9px;line-height:1.3;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${m.confidence === "settled" ? HUE.win.solid : FAINT};padding-top:4px;">${esc(m.settledWord)}</div>
+      <tr class="mrow">
+        <td class="mcell m-chg" width="${COL.chg}" style="width:${COL.chg}px;${top}padding-right:12px;">
+          <span style="font-family:${F};font-size:20px;line-height:1.1;font-weight:800;color:${inkOf(m)};letter-spacing:-.015em;">${esc(m.headline.text)}</span>
+          <span style="display:block;font-family:${F};font-size:9px;line-height:1.3;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${m.confidence === "settled" ? HUE.win.solid : FAINT};padding-top:4px;">${esc(m.settledWord)}</span>
         </td>
-        <td width="${COL.role}" style="width:${COL.role}px;${top}padding-right:12px;">
+        <td class="mcell" width="${COL.role}" style="width:${COL.role}px;${top}padding-right:12px;">
           ${m.role === "exploratory" ? "" : `<span style="display:inline-block;font-family:${F};font-size:8.5px;line-height:1;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${chip.fg};background:${chip.bg};border-radius:3px;padding:4px 6px;">${esc(m.roleLabel)}</span>`}
         </td>
-        <td style="${top}padding-right:12px;">
-          <div style="font-family:${F};font-size:14.5px;line-height:1.35;font-weight:600;color:${INK};">${esc(m.label)}</div>
+        <td class="mcell m-name" style="${top}padding-right:12px;">
+          <div style="font-family:${F};font-size:14.5px;line-height:1.35;font-weight:600;color:${INK};padding-top:2px;">${esc(m.label)}</div>
+          <div class="m-mob" style="display:none;font-family:${F};font-size:12.5px;line-height:1.5;font-weight:400;color:${MUTED};padding-top:5px;">${mobileNumbers}</div>
           ${m.note ? `<div style="font-family:${F};font-size:13.5px;line-height:1.6;font-weight:400;color:${BODY};${PROSE}padding-top:5px;">${esc(m.note)}</div>` : ""}
           ${m.misnamed ? `<div style="font-family:${F};font-size:12.5px;line-height:1.5;font-weight:400;color:${AMBER_INK};padding-top:5px;">${esc(m.misnamed.line)}</div>` : ""}
         </td>
-        <td width="${COL.rate}" align="right" style="width:${COL.rate}px;${top}">
+        <td class="mcell m-desk" width="${COL.rate}" align="right" style="width:${COL.rate}px;${top}">
           <span style="font-family:${F};font-size:14px;line-height:1.2;font-weight:700;color:${INK};">${esc(m.focusRate.text)}</span>
           ${m.rateUnit === "actions-per-visitor" ? `<div style="font-family:${F};font-size:9px;line-height:1.3;font-weight:400;color:${FAINT};padding-top:3px;">per visitor</div>` : ""}
         </td>
-        <td width="${COL.rate}" align="right" style="width:${COL.rate}px;${top}">
+        <td class="mcell m-desk" width="${COL.rate}" align="right" style="width:${COL.rate}px;${top}">
           <span style="font-family:${F};font-size:14px;line-height:1.2;font-weight:400;color:${MUTED};">${esc(m.baseRate?.text ?? "—")}</span>
         </td>
-        <td width="${COL.ev}" align="right" style="width:${COL.ev}px;${top}">
+        <td class="mcell m-desk" width="${COL.ev}" align="right" style="width:${COL.ev}px;${top}">
           <span style="font-family:${F};font-size:12.5px;line-height:1.2;font-weight:400;color:${MUTED};">${m.focusCount.absent ? "—" : `${esc(m.focusCount.text)} vs ${esc(m.baseCount.text)}`}</span>
         </td>
       </tr>`;
@@ -252,21 +263,54 @@ export function renderReadoutEmail(opts: {
     at: v?.stamped ? opts.verdict?.stampedAt : model.runtime.computedAt,
   });
 
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"></head>
+  // ── PHONES. The metrics grid is six fixed columns adding up to ~436px of
+  //    numbers before the metric name gets any room at all. On a 375px screen
+  //    that squeezes the name column to about sixty pixels and every sentence
+  //    breaks one word per line — the readout arrives unreadable on the device
+  //    it is most often opened on.
+  //
+  //    So below 640px the row stops being a row: the cells go `display:block`
+  //    and stack into a card. The three number columns are replaced by one
+  //    line that names its own values, because a bare "1.2% 1.0% 111 vs 92"
+  //    means nothing once the column headings are gone.
+  //
+  //    This lives in a <style> block, which Outlook-through-Word discards —
+  //    correct, since Word is desktop and the wide grid is what we want there.
+  //    Every mobile client that matters (iOS Mail, Outlook mobile, the Gmail
+  //    app) honours it.
+  const MOBILE = `
+    @media only screen and (max-width:640px) {
+      .pad { padding-left:16px !important; padding-right:16px !important; }
+      .mtable, .mrow, .mcell { display:block !important; width:100% !important; }
+      .mcell { padding:0 !important; text-align:left !important; border-top:0 !important; }
+      .mrow { border-top:1px solid ${RULE} !important; padding:15px 0 !important; }
+      .m-head { display:none !important; }
+      .m-desk { display:none !important; }
+      .m-mob { display:block !important; }
+      .m-chg { padding-bottom:7px !important; }
+      .m-name { padding-bottom:5px !important; }
+      .hero-num { font-size:44px !important; }
+      /* Two-up, not stacked. Four short facts down the screen is four scrolls
+         for four words; at 50% each still has room for "BEYOND LUCK" over
+         "2 of 5 metrics" without wrapping. */
+      .tile { display:inline-block !important; width:50% !important; box-sizing:border-box !important; vertical-align:top !important; padding:0 4px 8px 0 !important; }
+    }`;
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><style>${MOBILE}</style></head>
 <body style="margin:0;padding:0;background:#E8ECF0;-webkit-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(model.preheader)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#E8ECF0;padding:14px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:1280px;width:100%;background:#FFFFFF;border-radius:12px;overflow:hidden;">
 
-  <tr><td bgcolor="${INK}" style="background:${INK};padding:15px 28px;">
+  <tr><td class="pad" bgcolor="${INK}" style="background:${INK};padding:15px 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
       <td style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#FFFFFF;">Experiment readout</td>
       <td align="right" style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8DA0B2;">${esc([model.runtime.dayLabel, model.runtime.asOfDate].filter((x) => x && x !== "—").join(" · "))}</td>
     </tr></table>
   </td></tr>
 
-  <tr><td style="padding:26px 28px 22px 28px;">
+  <tr><td class="pad" style="padding:26px 28px 22px 28px;">
     <div style="font-family:${F};font-size:27px;line-height:1.2;font-weight:800;color:${INK};letter-spacing:-.02em;">${esc(model.prototypeName)}</div>
     ${model.hypothesis.text ? `
       <div style="font-family:${F};font-size:10.5px;line-height:1.2;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:#5A6B7A;padding:16px 0 7px 0;">Hypothesis</div>
@@ -277,7 +321,7 @@ export function renderReadoutEmail(opts: {
   ${observations}
   ${hero}
 
-  ${movements ? `<tr><td style="padding:0 28px;">
+  ${movements ? `<tr><td class="pad" style="padding:0 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
       <tr><td style="padding-top:24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${movements}</table>
@@ -285,12 +329,12 @@ export function renderReadoutEmail(opts: {
     </table>
   </td></tr>` : ""}
 
-  ${metricRows ? `<tr><td style="padding:2px 28px 0 28px;">
+  ${metricRows ? `<tr><td class="pad" style="padding:2px 28px 0 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
       <tr><td style="padding-top:24px;">
         ${caps("All metrics", MUTED, 10)}
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          <tr>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="mtable">
+          <tr class="m-head">
             ${hcell("Change", COL.chg)}
             ${hcell("Role", COL.role)}
             ${hcell("Metric")}
@@ -304,11 +348,11 @@ export function renderReadoutEmail(opts: {
     </table>
   </td></tr>` : ""}
 
-  ${opts.url ? `<tr><td style="padding:26px 28px 6px 28px;">
+  ${opts.url ? `<tr><td class="pad" style="padding:26px 28px 6px 28px;">
     <a href="${esc(opts.url)}" style="display:inline-block;background:${INK};color:#FFFFFF;text-decoration:none;font-family:${F};font-size:14px;line-height:1;font-weight:600;padding:13px 20px;border-radius:6px;">Open the full readout &rarr;</a>
   </td></tr>` : ""}
 
-  <tr><td style="padding:24px 28px 26px 28px;">
+  <tr><td class="pad" style="padding:24px 28px 26px 28px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${RULE};">
       <tr><td style="padding-top:16px;">
         <div style="font-family:${F};font-size:10.5px;line-height:1.5;font-weight:400;color:${FAINT};">${esc(shortNotice())}</div>

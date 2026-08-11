@@ -756,7 +756,12 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     : null;
 
   const empty = !results || !stats;
-  const subject = `${input.prototypeName} — ${verdictView?.label ?? "readout"}`;
+  // THE NAME, AND NOTHING ELSE. The verdict used to ride along here — but an
+  // inbox truncates the subject well before the end on a phone, so the tail was
+  // spent on a word the reader could not see, and a subject that changes as the
+  // verdict changes stops a weekly series from threading as one conversation.
+  // The verdict leads the body; the subject only has to say which experiment.
+  const subject = `Experiment Status: ${input.prototypeName}`;
   const preheader =
     story.summaryProse?.split(/(?<=[.!?])\s+/)[0]?.slice(0, 160) ??
     [verdictView?.answer, decision ? `decision step ${decision.lift.text}` : "", verdictView?.nextStep.label]
