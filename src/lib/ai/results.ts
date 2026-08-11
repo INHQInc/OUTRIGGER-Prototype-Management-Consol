@@ -489,6 +489,9 @@ export function templateStory(opts: {
   /** The team's supporting set. When present it IS the beats row — the
    *  computed floor obeys the same contract the analyst does. */
   supporting?: string[];
+  /** `ReadoutModel.headlineFloor`. Passed in rather than derived here so the
+   *  headline has ONE home; absent only in callers that predate the model. */
+  headlineFloor?: string;
 }): { headline: string; lede: string; beats: { measureKey: string; label: string }[] } {
   const { stats, verdict } = opts;
   const headlineKey = stats?.primaryKey ?? (optiPrimaryKeyOf(opts.results) || undefined);
@@ -510,12 +513,13 @@ export function templateStory(opts: {
     flat: others2.filter((m) => !m.featureOnly && !sigOf2(m)).map((m) => m.label),
   };
 
-  const headline =
-    verdict?.verdict === "not_adjudicable" ? "The traffic is real; the definition is not settled"
-    : lift === undefined ? "Nothing comparable has come through yet"
-    : !sig ? "Nothing separates the two versions yet"
-    : lift > 0 ? "The variant is ahead on the metric this test was written to prove"
-    : "The variant is behind on the metric this test was written to prove";
+  // THE HEADLINE BRANCH IS GONE. It read one metric's Katz interval and stated
+  // a conclusion about the experiment — "Nothing separates the two versions
+  // yet" shipped above a table showing two settled movers. The derivation now
+  // lives in readout-headline.ts, reads every row, and is gated on the test the
+  // verdict actually used. Callers pass the model's `headlineFloor`; this
+  // parameter exists so the floor has exactly one source.
+  const headline = opts.headlineFloor || "The run is still being read";
 
   const lede =
     verdict?.verdict === "not_adjudicable"
@@ -1018,7 +1022,11 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // template's sentence.
   const headlineComputed = !headline;
   if (rejected.length) console.warn("[reading] rejected after repair —", rejected.join("; "));
-  headline = headline || fallback.headline;
+  // THE FLOOR IS NOT STORED. A computed headline written into the reading
+  // freezes at generation time and then goes stale as the numbers move beneath
+  // it — the run that had nothing to say on Tuesday has plenty by Friday. The
+  // reading now holds only what the analyst actually wrote; when that is
+  // nothing, the model supplies `headlineFloor` fresh on every render.
   lede = lede || fallback.lede;
 
   // THE BEATS ROW IS THE TEAM'S SET, RECONCILED IN CODE — not whatever the

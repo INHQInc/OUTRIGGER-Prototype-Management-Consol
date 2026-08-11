@@ -31,8 +31,9 @@ import type { ExperimentResults, MetricMap, MetricRole } from "./results";
 import { isCompositeOf, describeComposite, effectiveDirection, directionDeclared } from "./results";
 import type { StatsReport, MetricStats, CellStats, DailySnapshot } from "./stats";
 import type { VerdictRecord, VerdictState, VerdictGate } from "./verdict";
-import { VERDICT_THRESHOLDS, nextStep } from "./verdict";
+import { VERDICT_THRESHOLDS, nextStep, guardrailHarmSide } from "./verdict";
 import type { Reading } from "./notebook";
+import { deriveHeadline, headlineContradiction, type HeadlineTrace } from "./readout-headline";
 
 // ────────────────────────────────────────────────────────────────────────────
 // TOKENS — the enums every skin maps to its own palette. No hex here, ever.
@@ -164,6 +165,12 @@ export interface MetricView {
   /** False means "increase" is an ASSUMPTION, not a declaration. */
   directionDeclared: boolean;
   guardrail: "pass" | "at_risk" | "breach" | "unknown" | null;
+  /** WHY an at-risk guardrail is at risk: the point estimate is already past
+   *  tolerance ("harm"), or the interval is merely too wide to clear it
+   *  ("unproven"). Different facts — a headline must not say the second in the
+   *  words of the first. Computed by CALLING `guardrailHarmSide`, never by a
+   *  second copy of the threshold comparison. */
+  guardrailReason: "harm" | "unproven" | null;
   featureOnly: "variation" | "baseline" | null;
 
   /** "Settled" | "Not settled" | "Adoption" */
@@ -273,6 +280,11 @@ export interface StoryView {
    *  from `source`, which reports on the paragraph. The two fail independently:
    *  a reading can carry the analyst's prose above the template's headline. */
   headlineComputed: boolean;
+  /** The analyst DID write a headline and it was refused because it contradicts
+   *  the numbers. Recorded rather than silently swallowed: a model that keeps
+   *  denying movement is a prompt problem, and a model that never trips this is
+   *  evidence the check is dead code. */
+  headlineOverridden?: string;
 }
 
 export type VitalId = "visitors" | "runtime" | "beyond-luck" | "guardrails";
@@ -324,6 +336,16 @@ export interface ReadoutModel {
   vitals: VitalView[];
   notices: Notice[];
   settledTally: { settled: number; total: number; text: string };
+
+  /** A guardrail was DECLARED but never adjudicated — distinct from none being
+   *  declared at all, which the "None mapped" vitals tile conflates with it. */
+  guardrailsUnjudged: boolean;
+
+  /** THE COMPUTED HEADLINE — always present, always true, used when the analyst
+   *  has not written one or when what they wrote contradicts the numbers. See
+   *  readout-headline.ts for why this is not five branches over one metric. */
+  headlineFloor: string;
+  headlineTrace: HeadlineTrace | null;
 
   preheader: string;
   subject: string;
@@ -465,6 +487,14 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
       role === "guardrail"
         ? input.verdict?.guardrails.find((g) => `composite:${g.compositeId}` === m.key || g.compositeId === m.key)?.state ?? "unknown"
         : null;
+    // WHY it is at risk. `at_risk` covers two different situations — already
+    // past tolerance, versus an interval too wide to clear it — and a readout
+    // that says the second in the words of the first is crying wolf. Calls the
+    // engine's own comparison rather than repeating the threshold here.
+    const guardrailReason: "harm" | "unproven" | null =
+      guardrailState === "at_risk"
+        ? guardrailHarmSide(f?.lift, effectiveDirection(input.plan, m.key), VERDICT_THRESHOLDS.guardrailMarginRel)
+        : null;
 
     // ── VALENCE. Three-state and direction-aware. An exactly-zero or absent
     //    lift is NEUTRAL, never green. A guardrail's valence is its adjudicated
@@ -534,6 +564,7 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
       direction,
       directionDeclared: dirDeclared,
       guardrail: guardrailState,
+      guardrailReason,
       featureOnly,
       settledWord: featureOnly ? "Adoption" : beyondLuck ? "Settled" : "Not settled",
       rateUnit: actions ? "actions-per-visitor" : "conversion",
@@ -773,7 +804,12 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
       .filter(Boolean)
       .join(" · ");
 
-  return {
+  // A guardrail DECLARED but never adjudicated is not the same as none being
+  // declared, and the vitals tile's "None mapped" conflates them.
+  const guardrailsUnjudged =
+    (verdictView?.guardrails.total ?? 0) === 0 && all.some((m) => m.role === "guardrail");
+
+  const model: ReadoutModel = {
     empty,
     emptyReason: empty ? "No results yet." : null,
     results,
@@ -799,7 +835,32 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     vitals,
     notices,
     settledTally,
+    guardrailsUnjudged,
+    // Filled below: the derivation needs the assembled model to read.
+    headlineFloor: "",
+    headlineTrace: null,
     preheader,
     subject,
   };
+
+  // ── THE HEADLINE, last, because it reads the finished model.
+  const derived = deriveHeadline(model);
+  model.headlineFloor = derived?.text ?? "";
+  model.headlineTrace = derived?.trace ?? null;
+
+  // THE ANALYST WINS ON WORDS, NEVER ON FACTS. Their headline is printed unless
+  // it denies something the numbers beside it establish — the failure that put
+  // "Nothing separates the two versions yet" above two settled movers. This
+  // tests CONTRADICTION only: never tone, register, or preference.
+  const written = input.reading?.headline?.trim();
+  const contradiction = written ? headlineContradiction(written, model) : null;
+  if (written && !contradiction) {
+    story.headline = written;
+  } else if (model.headlineFloor) {
+    story.headline = model.headlineFloor;
+    story.headlineComputed = true;
+    if (contradiction) story.headlineOverridden = contradiction;
+  }
+
+  return model;
 }

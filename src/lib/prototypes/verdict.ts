@@ -224,6 +224,24 @@ export function adjudicationPending(v: VerdictRecord | null, experimentStatus?: 
 
 const pct = (v: number) => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
 
+/** WHY a guardrail is at risk: because the point estimate is already past the
+ *  tolerance ("harm"), or because the interval is merely too wide to clear it
+ *  ("unproven"). Those are different facts and a readout must not say the
+ *  second one in the words of the first.
+ *
+ *  Exported so the readout model CALLS this instead of re-deriving
+ *  `lift < -marginRel` — a second copy of a threshold comparison is exactly
+ *  the drift the one-derivation rule exists to prevent. */
+export function guardrailHarmSide(
+  lift: number | undefined,
+  direction: "increase" | "decrease" | undefined,
+  marginRel: number,
+): "harm" | "unproven" {
+  if (lift === undefined) return "unproven";
+  const normalised = lift * (direction === "decrease" ? -1 : 1);
+  return normalised < -marginRel ? "harm" : "unproven";
+}
+
 function guardrailVerdict(c: CompositeMetric, cell: CellStats | undefined, marginRel: number): GuardrailVerdict {
   const dir = c.direction === "decrease" ? -1 : 1;
   if (!cell || cell.lift === undefined || !cell.liftCi) {
@@ -239,7 +257,7 @@ function guardrailVerdict(c: CompositeMetric, cell: CellStats | undefined, margi
   if (hi < -marginRel) {
     return { compositeId: c.id, label: c.label, state: "breach", detail: `Confidently worse than the ${(marginRel * 100).toFixed(0)}% tolerance (lift ${pct(cell.lift)}) — this vetoes a confirmed verdict.` };
   }
-  if (lift < -marginRel) {
+  if (guardrailHarmSide(cell.lift, c.direction, marginRel) === "harm") {
     return { compositeId: c.id, label: c.label, state: "at_risk", detail: `Point estimate ${pct(cell.lift)} is past the tolerance but the CI still straddles it — needs more data before it blocks or clears.` };
   }
   return { compositeId: c.id, label: c.label, state: "at_risk", detail: `Not yet proven inside the ${(marginRel * 100).toFixed(0)}% tolerance (lift ${pct(cell.lift)}, CI too wide).` };

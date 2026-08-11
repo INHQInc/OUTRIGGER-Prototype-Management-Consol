@@ -1386,7 +1386,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       if (picked.length) return { headline: reading.headline, lede: reading.lede, read: reading.read, beats: picked };
     }
     // No reading yet (or a cached one in the old shape): the computed story.
-    const t = templateStory({ results: live!, stats: statsEff ?? null, verdict, supporting });
+    const t = templateStory({ results: live!, stats: statsEff ?? null, verdict, supporting, headlineFloor: model.headlineFloor });
     return {
       headline: reading?.headline || t.headline,
       lede: reading?.lede || t.lede,
