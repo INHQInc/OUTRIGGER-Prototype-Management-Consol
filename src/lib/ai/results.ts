@@ -1026,11 +1026,21 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
         messages: [
           { role: "user", content: "Rewrite the sections of the reading you just gave." },
           { role: "assistant", content: JSON.stringify({ effect: raw.effect, shift: raw.shift, cost: raw.cost, prediction: raw.prediction }) },
-          { role: "user", content: `These sections were rejected: ${missingSections.join(", ")}. Each must be plain text of AT MOST 420 characters with NO DIGITS AT ALL (every number is printed for you) and no statistics vocabulary (significance, sample size, confidence, p-values, days remaining). Keep the same substance. Return only JSON, an OBJECT per section with its text AND the metric key that evidences it: {${missingSections.map((k) => `"${k}": {"text": "...", "measure": "<one of the metric keys you were given>"}`).join(", ")}}.` },
+          // NAME THE ACTUAL FAULT. This used to recite the rules and never say
+          // which one was broken, so the second attempt was a re-roll rather
+          // than a correction and the same defect came back. `rejected` has
+          // held the precise reason all along.
+          { role: "user", content: `These sections were rejected: ${missingSections.join(", ")}.${rejected.length ? `\n\nWHY THEY WERE REJECTED — fix exactly this:\n${rejected.map((r) => `  - ${r}`).join("\n")}` : ""}
+
+Each must be PLAIN TEXT: no XML, no tags, no tool-call syntax such as <parameter name="text">, no markdown fences. At most 420 characters, NO DIGITS AT ALL (every number is printed for you), and no statistics vocabulary (significance, sample size, confidence, p-values, days remaining). Keep the same substance.
+
+Return only JSON, an OBJECT per section with its text AND the metric key that evidences it: {${missingSections.map((k) => `"${k}": {"text": "...", "measure": "<one of the metric keys you were given>"}`).join(", ")}}.` },
         ],
       });
+      const beforeRepair = rejected.length;
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
       const m2 = /\{[\s\S]*\}/.exec(txt);
+      void beforeRepair;
       if (m2) {
         const parsed = JSON.parse(m2[0]) as Record<string, unknown>;
         const patched = { ...(read ?? {}) } as Record<string, { text: string; measureKey?: string } | undefined>;
@@ -1164,6 +1174,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       ...(ledeComputed ? { ledeComputed: true } : {}),
       ...(headlineComputed ? { headlineComputed: true } : {}),
       ...(sectionsMissing ? { sectionsMissing: true } : {}),
+      ...(rejected.length ? { rejectedReasons: [...new Set(rejected)].slice(0, 6) } : {}),
       beats,
       observations,
       riskNotes,

@@ -1915,8 +1915,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               {zoneHeader("The read",
                 <span className="ml-auto text-[12.5px] text-muted-2 print:hidden">
                   {reading?.sectionsMissing && !reading?.ledeComputed && (
-                    <span className="text-warn/80 mr-2" title="One or more of the four movements was rejected by the format rules (a digit, over-length, or statistics vocabulary) and could not be recovered, so this is showing as prose. Re-read to try again.">
-                      partial structure
+                    <span
+                      className="text-warn/80 mr-2"
+                      // NAME THE FAULT. This listed every rule because it did
+                      // not know which one fired — so "partial structure" was
+                      // a symptom with no diagnosis, and the same one covered
+                      // a flaky model and a rule nothing can satisfy.
+                      title={`${reading.rejectedReasons?.length
+                        ? `Rejected — ${reading.rejectedReasons.join("; ")}.`
+                        : "One or more of the four movements could not be recovered."} Re-read to try again.`}
+                    >
+                      partial structure{reading.rejectedReasons?.length ? ` · ${reading.rejectedReasons[0]}` : ""}
                     </span>
                   )}
                   {reading?.ledeComputed && (

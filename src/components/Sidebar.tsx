@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { SessionPayload } from "@/lib/auth/types";
+import type { BuildInfo } from "@/lib/build-info";
 import { OrgSwitcher, type OrgOption } from "./OrgSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -22,7 +23,7 @@ const ICON = {
   reports: "M4 4h16v16H4zM8 9h8M8 13h8M8 17h5",
 };
 
-export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionPayload | null; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean }) {
+export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: SessionPayload | null; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean; build: BuildInfo }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -114,6 +115,18 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
           </div>
         </div>
       ) : null}
+
+      {/* WHICH BUILD YOU ARE LOOKING AT. "Is the fix live?" was answered three
+          times this week by inference — a header only middleware sets, a 401
+          that became a 200, a button that did or did not appear — and once it
+          was wrong for an hour because a deploy had not finished. The answer
+          belongs on screen. Preview and development say so; production shows
+          the commit alone, because there the environment is not the news. */}
+      <div className="px-4 pb-3 pt-1 text-[11px] leading-tight text-muted-2 print:hidden" title={build.full ?? "running from source, not a build"}>
+        <span className="font-mono">{build.sha}</span>
+        {build.env !== "production" && <span className="ml-1.5 uppercase tracking-wide">{build.env}</span>}
+        {build.ref && build.ref !== "main" && <span className="ml-1.5">{build.ref}</span>}
+      </div>
     </aside>
   );
 }

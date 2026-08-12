@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppFrame } from "@/components/AppFrame";
+import { buildInfo } from "@/lib/build-info";
 import { currentUser } from "@/lib/auth/current";
 import { listOrgs } from "@/lib/orgs";
 import { accessibleOrgIds, getActiveOrgId } from "@/lib/active-org";
@@ -47,7 +48,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("opmc-theme");if(t==="dark")document.documentElement.dataset.theme="dark"}catch(e){}` }} />
       </head>
       <body className="min-h-full flex">
-        <AppFrame user={user} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
+        <AppFrame build={buildInfo()} user={user} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
       </body>
     </html>
   );

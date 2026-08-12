@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildInfo } from "@/lib/build-info";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +20,9 @@ export const dynamic = "force-dynamic";
  * env, no paths.
  */
 export function GET() {
-  const sha = process.env.VERCEL_GIT_COMMIT_SHA ?? "";
   return NextResponse.json(
     {
-      sha: sha ? sha.slice(0, 7) : "local",
-      full: sha || null,
-      ref: process.env.VERCEL_GIT_COMMIT_REF ?? null,
-      env: process.env.VERCEL_ENV ?? "development",
+      ...buildInfo(),
       // The moment this module was first evaluated on this instance — a rough
       // cold-start stamp, not a build time. Named so nobody reads it as one.
       instanceStartedAt: BOOTED,

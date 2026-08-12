@@ -80,6 +80,13 @@ export interface Reading {
    *  is showing prose where it should show structure. Surfaced, because a
    *  section that silently disappears reads as the feature being broken. */
   sectionsMissing?: boolean;
+  /** WHY they were rejected — "section: contains markup", "lede: contains a
+   *  digit". The badge used to guess in a tooltip ("a digit, over-length, or
+   *  statistics vocabulary"), listing every rule because it did not know which
+   *  one fired. The generator knows exactly; it just never wrote it down, so
+   *  neither the reader nor the next engineer could tell a flaky model from a
+   *  rule nobody can satisfy. */
+  rejectedReasons?: string[];
   /** THE READ, in the SAME four movements for every experiment. One paragraph
    *  of good prose is still a wall — you cannot scan back to the part you
    *  half-remember. Fixed sections mean the shape is learned once and every
