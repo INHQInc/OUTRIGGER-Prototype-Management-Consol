@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
+import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { getReportSettings, scheduleDue, mutateReportSettings } from "@/lib/prototypes/report";
 import { sendReadoutEmail } from "@/lib/email/report-run";
 import { mailConfigured } from "@/lib/email/send";
@@ -53,12 +54,18 @@ export async function GET(req: NextRequest) {
     } catch { due = false; }
     if (!due) continue;
 
-    if (!proto.orgId) {
-      failed[proto.key] = "no organisation on the prototype record";
+    // RESOLVE, don't read the field. A legacy prototype carries no `orgId` and
+    // reaches it through its site link; `resolvePrototypeOrg` returns it and
+    // heals the record in place. Reading `proto.orgId` directly meant the sweep
+    // permanently refused exactly the prototypes every UI path silently fixes —
+    // so a report could be configured, look scheduled, and never once send.
+    const orgId = await resolvePrototypeOrg(proto);
+    if (!orgId) {
+      failed[proto.key] = "no organisation on the prototype record, and none resolvable from its site";
       continue;
     }
     try {
-      const out = await sendReadoutEmail({ orgId: proto.orgId, proto, baseUrl: origin });
+      const out = await sendReadoutEmail({ orgId, proto, baseUrl: origin });
       sent.push(`${proto.key} → ${out.sent}`);
     } catch (e) {
       const msg = (e as Error).message.slice(0, 200);
