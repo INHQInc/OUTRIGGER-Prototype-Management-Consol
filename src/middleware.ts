@@ -20,7 +20,16 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // content hash, skill ids, stage, target URLs), so it leaks nothing the
 // key-gated loader doesn't already expose. Keep it above the /api/prototypes
 // token check below, which would otherwise demand a Bearer.
-const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status"];
+//
+// `/api/cron` is here because a Vercel cron arrives with
+// `Authorization: Bearer $CRON_SECRET` and NO session cookie, so the session
+// gate below 401'd it at the edge before either handler ran — every scheduled
+// readout and every token-health probe, silently, since they were written.
+// Confirmed against production by the `x-robots-tag` header on the 401, which
+// only this file sets. The cron routes are NOT unguarded: each one requires the
+// bearer to equal CRON_SECRET and refuses to run at all when it is unset, so
+// the guard moved from the edge into the route rather than disappearing.
+const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

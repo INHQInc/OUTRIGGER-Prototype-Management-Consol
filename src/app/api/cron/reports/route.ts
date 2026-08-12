@@ -7,11 +7,16 @@ import { mailConfigured } from "@/lib/email/send";
 export const maxDuration = 300;
 
 /**
- * HOURLY SWEEP (vercel.json) for scheduled readouts.
+ * DAILY SWEEP (vercel.json, `0 13 * * *`) for scheduled readouts.
  *
- * Hourly rather than daily so a schedule can name an hour, and `scheduleDue`
- * carries the idempotence: right weekday, at or past the hour, and not already
- * sent today. The job can run sixty times in a day and the report leaves once —
+ * Daily, not hourly: Vercel's Hobby plan permits one cron run per day and
+ * rejects a more frequent expression at deploy time — which fails the whole
+ * deployment and surfaces only as a commit status. So a schedule names a DAY
+ * and never an hour; `SWEEP_HOUR_UTC` in report.ts is the one place that hour
+ * is written down.
+ *
+ * `scheduleDue` carries the idempotence on the date alone: right weekday, not
+ * already sent today. The job can fire repeatedly and the report leaves once —
  * which matters, because the failure everyone remembers is the tool that mailed
  * their leadership the same report twice.
  *
@@ -19,8 +24,15 @@ export const maxDuration = 300;
  * one experiment must not silently cancel everyone else's Monday report.
  */
 export async function GET(req: NextRequest) {
+  // FAIL CLOSED. This was `if (secret && …)`, which meant an unset CRON_SECRET
+  // skipped the check entirely — and now that middleware lets this path through,
+  // that would be a public GET that mails real people. Missing configuration is
+  // a 503, never an open door.
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!secret) {
+    return NextResponse.json({ error: "CRON_SECRET is not configured on this deployment." }, { status: 503 });
+  }
+  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!mailConfigured()) {

@@ -7,12 +7,18 @@ export const maxDuration = 120;
 /**
  * Daily cron (vercel.json): refresh every customer's GitHub token health so
  * expiry/write problems surface as banners days before they break a build.
- * Vercel invokes with `Authorization: Bearer ${CRON_SECRET}` when the env var
- * is set. Fail-closed when the secret exists; open only if it's unset (dev).
+ * Vercel attaches `Authorization: Bearer ${CRON_SECRET}` automatically to cron
+ * invocations when an env var of exactly that name exists — there is no sending
+ * side to configure. Fail closed: no secret, no run.
  */
 export async function GET(req: NextRequest) {
+  // FAIL CLOSED — see the note in cron/reports. Middleware now lets this path
+  // through, so an unset secret would leave the probe world-runnable.
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!secret) {
+    return NextResponse.json({ error: "CRON_SECRET is not configured on this deployment." }, { status: 503 });
+  }
+  if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const orgs = await listOrgs();
