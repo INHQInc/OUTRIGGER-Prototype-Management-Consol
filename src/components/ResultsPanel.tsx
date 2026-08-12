@@ -1832,7 +1832,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     before the browser snapshots the page, or the method section
                     prints as a heading with nothing under it. */}
                 <button onClick={printReadout} className="text-accent hover:text-accent-hover font-medium">Print</button>
-                <button onClick={() => void openMail()} className="text-accent hover:text-accent-hover font-medium">Email</button>
+                {/* "Email" sat between Refresh and Print — two one-shot
+                    actions — so it read as "send this now" and nobody looking
+                    for the recipient list ever clicked it. This panel is where
+                    recipients and the weekly schedule are set; the label has to
+                    say the destination, not the verb. */}
+                <button onClick={() => void openMail()} className="text-accent hover:text-accent-hover font-medium">Email &amp; recipients</button>
               </span>
             </div>
           )}
