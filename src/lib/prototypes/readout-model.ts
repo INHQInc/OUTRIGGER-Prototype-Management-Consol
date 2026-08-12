@@ -746,11 +746,22 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     return { ...spec, text: sec.text, metric };
   }).filter((m): m is MovementView => m !== null);
 
+  // A COMPUTED LEDE IS NOT PROSE ANYONE WROTE, and it must not be printed as
+  // though it were. `ledeComputed` has always been on the record; nothing read
+  // it. So the template's paragraph — "…is behind by more than luck explains.
+  // The idea as built is costing something rather than adding it." — went out
+  // in the OBSERVATIONS slot, direction-blind, over a metric the brief wanted
+  // to fall. Readings already stored carry that text, so the refusal has to be
+  // here, at render, not only at generation.
+  const writtenLede = input.reading?.ledeComputed ? null : input.reading?.lede ?? null;
   const story: StoryView = {
     headline: input.reading?.headline ?? null,
     executive: input.reading?.executive ?? null,
-    lede: input.reading?.lede ?? null,
-    summaryProse: input.reading?.executive ?? input.reading?.lede ?? null,
+    lede: writtenLede,
+    // No generic paragraph. Where the analyst wrote nothing, the headline
+    // carries the finding and the four movements carry the detail — an absent
+    // paragraph beats a meaningless one in the largest prose slot on the page.
+    summaryProse: input.reading?.executive ?? writtenLede,
     movements,
     source: input.reading?.ledeComputed ? "computed" : "analyst",
     headlineComputed: Boolean(input.reading?.headlineComputed),

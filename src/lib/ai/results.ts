@@ -893,19 +893,42 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // collapse to "" and the caller substituted the computed floor, so a rule
   // the model kept tripping over was indistinguishable from the model simply
   // writing a poor sentence — and the fix for those two is not the same.
+  //
+  // TOOL SCAFFOLDING LEAKS INTO THE ARGUMENT. A reading went out reading
+  // `<parameter name="text">Swapping the on-sale hero…` — the model emitted its
+  // own call syntax inside the value, and every check here passed it, because
+  // markup is not a digit, not too long and not statistics vocabulary.
+  //
+  // STRIP, THEN REJECT. The prose after the wrapper was perfectly good, so
+  // discarding the whole paragraph would throw away the analyst's work over a
+  // formatting slip. Peel known scaffolding first; only reject if a tag
+  // survives, which means the value is genuinely not prose.
+  const unwrap = (t: string) =>
+    t
+      .replace(/^\s*<\s*parameter\b[^>]*>/i, "")
+      .replace(/<\s*\/\s*parameter\s*>\s*$/i, "")
+      .replace(/^\s*<\s*(?:text|value|string|content)\s*>/i, "")
+      .replace(/<\s*\/\s*(?:text|value|string|content)\s*>\s*$/i, "")
+      .replace(/^\s*```[a-z]*\s*/i, "")
+      .replace(/\s*```\s*$/, "")
+      .trim();
+  const normalise = (v: unknown) =>
+    typeof v === "string" ? unwrap(stripMd(v).replace(/\s+/g, " ").trim()) : "";
   const rejectReason = (v: unknown, cap: number): string | null => {
-    const t = typeof v === "string" ? stripMd(v).replace(/\s+/g, " ").trim() : "";
+    const t = normalise(v);
     if (!t) return "empty";
     if (t.length > cap) return `over ${cap} chars (${t.length})`;
     if (/\d/.test(t)) return "contains a digit";
     if (STAT_NOTATION.test(t)) return "statistics vocabulary";
+    // Anything still carrying a tag is not a sentence a person wrote.
+    if (/<\s*\/?\s*[a-z][^>]*>/i.test(t)) return "contains markup";
     return null;
   };
   const rejected: string[] = [];
   const clean = (v: unknown, cap: number, field?: string) => {
     const why = rejectReason(v, cap);
     if (why) { if (field && why !== "empty") rejected.push(`${field}: ${why}`); return ""; }
-    return typeof v === "string" ? stripMd(v).replace(/\s+/g, " ").trim() : "";
+    return normalise(v);
   };
 
   let headline = clean(raw.headline, 80, "headline");
@@ -949,7 +972,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // the four sections appeared on one refresh and vanished on the next.
   const sec = (v: unknown) => {
     const o = typeof v === "string" ? { text: v } : ((v ?? {}) as Record<string, unknown>);
-    const text = clean(o.text, 420);
+    const text = clean(o.text, 420, "section");
     if (!text) return undefined;
     const mk = typeof o.measure === "string" ? o.measure.trim() : "";
     return { text, ...(allowedMeasures.has(mk) ? { measureKey: mk } : {}) };
@@ -1022,12 +1045,18 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // template's sentence.
   const headlineComputed = !headline;
   if (rejected.length) console.warn("[reading] rejected after repair —", rejected.join("; "));
-  // THE FLOOR IS NOT STORED. A computed headline written into the reading
-  // freezes at generation time and then goes stale as the numbers move beneath
-  // it — the run that had nothing to say on Tuesday has plenty by Friday. The
-  // reading now holds only what the analyst actually wrote; when that is
-  // nothing, the model supplies `headlineFloor` fresh on every render.
-  lede = lede || fallback.lede;
+  // THE FLOOR IS NOT STORED — for the lede either, now. A computed paragraph
+  // written into the reading freezes at generation time and goes stale as the
+  // numbers move beneath it, and worse, it is indistinguishable from the
+  // analyst's own words once saved. `templateStory`'s lede is also still the
+  // old direction-blind prose: it called a metric that fell BY DESIGN "behind
+  // by more than luck explains… costing something rather than adding it", and
+  // that sentence went out as the observations paragraph.
+  //
+  // The reading now holds only what the analyst actually wrote. Where they
+  // wrote nothing, the readout prints no paragraph — the headline carries the
+  // finding and the four movements carry the detail. A generic paragraph in
+  // the largest prose slot is worse than an absent one.
 
   // THE BEATS ROW IS THE TEAM'S SET, RECONCILED IN CODE — not whatever the
   // model returned. The analyst contributes WORDING; the membership and the
