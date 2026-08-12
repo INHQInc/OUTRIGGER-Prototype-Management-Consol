@@ -1661,7 +1661,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </p>
             ) : mailFrom ? (
               <p className="text-[13px] text-muted-2 leading-snug">
-                Arrives from <span className="text-foreground">{mailFrom}</span>. Recipients are blind-copied, so nobody sees the list.
+                {/* NOT BCC. `send.ts` sends ONE MESSAGE PER RECIPIENT, on
+                    purpose — a BCC puts the undeliverable sender address in the
+                    visible To: line, which is how the first readout bounced.
+                    The privacy claim happens to be true either way, but it was
+                    describing a design that was removed. */}
+                Arrives from <span className="text-foreground">{mailFrom}</span>. Each person gets their own copy, so nobody sees the list.
               </p>
             ) : null}
 

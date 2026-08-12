@@ -164,8 +164,12 @@ names a metric key, the code resolves the value, here as everywhere.
     sending is UNAVAILABLE and says which vars are missing — it never falls
     through to a different sender. A readout arriving from an address nobody
     expected is worse than one that doesn't arrive.
-  - Recipients go in **BCC on every path** — a leadership digest must not
-    publish everyone's address to everyone else. The visible To is the sender.
+  - **ONE MESSAGE PER RECIPIENT on every path** — not BCC. A leadership digest
+    must not publish everyone's address to everyone else, and BCC needs an
+    address in the visible To: the only one available is the sender, which is
+    frequently undeliverable. That is how the first readout bounced. Per-
+    recipient sending keeps the list private more thoroughly than BCC and makes
+    partial failure attributable to a person.
   - Mailgun is REGIONAL: a US key against the EU host returns 401 and reads
     exactly like a bad key. `MAILGUN_REGION=eu` (or `MAILGUN_BASE_URL`) names it,
     and the 401 message says so rather than leaving you to guess.
