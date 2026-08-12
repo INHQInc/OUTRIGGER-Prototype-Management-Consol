@@ -12,101 +12,12 @@
  * UI refuses to save a multi-prototype scope for the same reason, so this is a
  * belt-and-braces floor rather than a path anyone reaches.
  */
-import { getOptimizelyClientForOrg } from "../experimentation";
-import {
-  normalizeResults, getMetricMap, resolveDecisionMap, supportingKeys, optiPrimaryKeyOf,
-  type ExperimentResults,
-} from "../prototypes/results";
-import { computeStatsReport } from "../prototypes/stats";
-import { getVerdict } from "../prototypes/verdict";
-import { getReading } from "../prototypes/notebook";
-import { buildReadoutModel } from "../prototypes/readout-model";
 import { renderReadoutEmail } from "../email/readout";
 import { validRecipients, sendEmail } from "../email/send";
-import { getContentStore } from "../content/store";
-import { resolvePrototypeOrg } from "../prototypes/org";
+import { buildFor, resolveScope } from "./build";
 import { audienceOf, receiving } from "./store";
+import { readoutLinkUrl } from "./link";
 import type { Report, ReportRun } from "./types";
-import type { PrototypeRecord } from "../prototypes/types";
-
-/** The experiments a report covers, right now. `all-live` is resolved at send
- *  time on purpose — a report that keeps up with the programme is the point. */
-export async function resolveScope(r: Report): Promise<PrototypeRecord[]> {
-  const all = await (await getContentStore()).listPrototypes();
-  const mine: PrototypeRecord[] = [];
-  for (const p of all) {
-    if ((await resolvePrototypeOrg(p)) !== r.orgId) continue;
-    if (r.scope.mode === "selected") { if (r.scope.keys.includes(p.key)) mine.push(p); }
-    else if (p.experiment?.experimentId) mine.push(p);
-  }
-  return mine;
-}
-
-/**
- * Build one experiment's readout. NEVER THROWS — an unreadable Optimizely
- * response must cost that entry, not the whole report. The frozen-snapshot
- * fallback inside `buildReadoutModel` covers a stamped run whose fetch failed.
- */
-async function buildFor(orgId: string, proto: PrototypeRecord) {
-  try {
-    const experimentId = proto.experiment?.experimentId;
-    if (!experimentId) return { unavailable: "no experiment is bound" as const };
-
-    const client = await getOptimizelyClientForOrg(orgId);
-    if (!client) return { unavailable: "Optimizely isn't connected" as const };
-
-    let results: ExperimentResults | null = null;
-    try {
-      results = normalizeResults(await client.getExperimentResults(experimentId));
-    } catch {
-      results = null; // buildReadoutModel falls back to the frozen snapshot
-    }
-
-    const stored = await getMetricMap(proto.key);
-    const { map: resolved, source: decisionSource } = resolveDecisionMap(stored, results);
-    const stats = results
-      ? computeStatsReport({ results, map: resolved, focusVariationId: proto.experiment?.variationId, experimentStart: results.startTime })
-      : null;
-    const [verdict, reading] = await Promise.all([getVerdict(proto.key), getReading(proto.key)]);
-
-    const supporting = supportingKeys({
-      map: resolved,
-      optiPrimaryKey: optiPrimaryKeyOf(results),
-      decisionKey: stats?.primaryKey,
-      available: (stats?.metrics ?? []).map((m) => m.key),
-      order: stored?.measureOrder ?? [],
-      optiRowIsDecision: decisionSource === "optimizely",
-    });
-
-    const decisionComposite = resolved?.composites.find((c) => c.role === "primary");
-    const model = buildReadoutModel({
-      prototypeName: proto.name,
-      prototypeKey: proto.key,
-      results, stats, verdict, reading,
-      plan: stored,
-      decision: decisionComposite
-        ? {
-            key: stats?.primaryKey ?? `composite:${decisionComposite.id}`,
-            label: decisionComposite.label,
-            source: decisionSource === "optimizely" ? "optimizely" : "console",
-            direction: decisionComposite.direction,
-            directionDeclared: Boolean(decisionComposite.direction),
-          }
-        : null,
-      observed: stored?.observed ?? [],
-      roles: stored?.roles ?? {},
-      order: stored?.measureOrder ?? [],
-      hidden: stored?.unfeatured ?? [],
-      experimentStatus: null,
-      now: Date.parse(stats?.computedAt ?? results?.fetchedAt ?? "") || 0,
-    });
-
-    if (model.empty) return { unavailable: "no readable results yet" as const };
-    return { model, results, stats, verdict, reading, resolved, supporting, frozen: model.fromFrozenSnapshot };
-  } catch (e) {
-    return { unavailable: (e as Error).message.slice(0, 120) };
-  }
-}
 
 export interface SendOutcome {
   accepted: string[];
@@ -147,7 +58,12 @@ export async function runReport(opts: {
     const rendered = renderReadoutEmail({
       prototypeName: proto.name,
       prototypeKey: proto.key,
-      url: opts.baseUrl ? `${opts.baseUrl}/prototypes/${encodeURIComponent(proto.key)}?tab=analytics` : undefined,
+      // A SIGNED PUBLIC LINK, not the console. `/prototypes/...` is behind the
+      // session gate, so the button was a redirect to a login screen for every
+      // recipient who is not a console user — which is all of them. When no
+      // link secret is configured this is `undefined` and the renderer omits
+      // the button entirely: no affordance beats a broken one.
+      url: await readoutLinkUrl(opts.baseUrl, { orgId: r.orgId, prototypeKey: proto.key }),
       results: built.results!, stats: built.stats, verdict: built.verdict, reading: built.reading,
       map: built.resolved, supporting: built.supporting, model: built.model,
     });

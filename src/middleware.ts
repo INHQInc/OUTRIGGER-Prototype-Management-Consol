@@ -21,6 +21,11 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // key-gated loader doesn't already expose. Keep it above the /api/prototypes
 // token check below, which would otherwise demand a Bearer.
 //
+// `/r` is the public readout a recipient opens from the email. It carries its
+// own authority — a signed token naming exactly one prototype — because the
+// old CTA pointed into the session-gated console and sent every executive to a
+// login screen for an account they do not have.
+//
 // `/api/cron` is here because a Vercel cron arrives with
 // `Authorization: Bearer $CRON_SECRET` and NO session cookie, so the session
 // gate below 401'd it at the edge before either handler ran — every scheduled
@@ -29,13 +34,20 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // only this file sets. The cron routes are NOT unguarded: each one requires the
 // bearer to equal CRON_SECRET and refuses to run at all when it is unset, so
 // the guard moved from the edge into the route rather than disappearing.
-const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron"];
+const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron", "/r"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
-  if (isPublic) return NextResponse.next();
+  if (isPublic) {
+    const res = NextResponse.next();
+    // A readout carries a customer's experiment results. The page sets a robots
+    // meta too, but a header is what a crawler fetching the URL directly — from
+    // a forwarded link in a mail archive, say — actually honours.
+    if (pathname === "/r" || pathname.startsWith("/r/")) res.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
+    return res;
+  }
 
   // CLI tooling (the prototype skill) authenticates with a per-customer API
   // token instead of a session cookie. Only /api/prototypes* may pass; the
