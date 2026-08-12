@@ -21,6 +21,10 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // key-gated loader doesn't already expose. Keep it above the /api/prototypes
 // token check below, which would otherwise demand a Bearer.
 //
+// `/api/version` reports the commit this build was made from. Public because
+// a version endpoint behind the session gate cannot tell you whether the
+// session code deployed — which is exactly the question it exists to answer.
+//
 // `/r` is the public readout a recipient opens from the email. It carries its
 // own authority — a signed token naming exactly one prototype — because the
 // old CTA pointed into the session-gated console and sent every executive to a
@@ -34,7 +38,7 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // only this file sets. The cron routes are NOT unguarded: each one requires the
 // bearer to equal CRON_SECRET and refuses to run at all when it is unset, so
 // the guard moved from the edge into the route rather than disappearing.
-const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron", "/r"];
+const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron", "/r", "/api/version"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
