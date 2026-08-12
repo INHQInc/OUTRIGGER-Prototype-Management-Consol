@@ -15,11 +15,16 @@
  * ONE SENDER, TWO ENTRY POINTS. The alternative — keeping both paths live —
  * is two schedulers over one audience, which is the double-send.
  */
-import { getReport, putReport, mutateReport } from "./store";
+import { getReport, putReport, mutateReport, listReports } from "./store";
 import type { Report } from "./types";
 
-/** The stable id linking a prototype to its report. */
-export const reportIdForPrototype = (prototypeKey: string) => `r-${prototypeKey}`.slice(0, 60);
+/** The stable id linking a prototype to its report.
+ *
+ *  NOT TRUNCATED. It used to `.slice(0, 60)`, which keeps only the first 58
+ *  characters of the key — and prototype slugs are capped at 60 with a
+ *  uniqueness suffix on the END, so two experiments whose names agree for long
+ *  enough collapsed onto one report id and silently shared an audience. */
+export const reportIdForPrototype = (prototypeKey: string) => `r-${prototypeKey}`;
 
 /** The shape the existing panel already renders. Kept identical so the UI does
  *  not have to change in the same step as the storage underneath it. */
@@ -47,8 +52,20 @@ export function toLegacyShape(r: Report | null): LegacyShape {
   };
 }
 
+/**
+ * The report this prototype's panel edits.
+ *
+ * BY SCOPE FIRST, id second. Resolving by id alone meant a report created from
+ * the /reports screen — which mints a random id — was invisible here, so the
+ * panel would create a SECOND report covering the same experiment and the same
+ * audience would receive two copies of it. The id is only the convention the
+ * migration and this file use when creating one.
+ */
 export async function getPrototypeReport(orgId: string, prototypeKey: string): Promise<Report | null> {
-  return getReport(orgId, reportIdForPrototype(prototypeKey));
+  const byId = await getReport(orgId, reportIdForPrototype(prototypeKey));
+  if (byId) return byId;
+  const all = await listReports(orgId);
+  return all.find((r) => r.scope.mode === "selected" && r.scope.keys.length === 1 && r.scope.keys[0] === prototypeKey) ?? null;
 }
 
 /**
@@ -62,8 +79,8 @@ export async function updatePrototypeReport(
   actor: string,
   patch: (cur: Report) => Report,
 ): Promise<Report> {
-  const id = reportIdForPrototype(prototypeKey);
-  const existing = await getReport(orgId, id);
+  const existing = await getPrototypeReport(orgId, prototypeKey);
+  const id = existing?.id ?? reportIdForPrototype(prototypeKey);
   if (!existing) {
     const now = new Date().toISOString();
     const fresh: Report = {

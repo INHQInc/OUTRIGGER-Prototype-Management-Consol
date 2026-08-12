@@ -24,7 +24,8 @@ import { getContentStore } from "../content/store";
 import { getReportSettings } from "../prototypes/report";
 import { resolvePrototypeOrg } from "../prototypes/org";
 import { isoWeek } from "./cadence";
-import { putReport } from "./store";
+import { putReport, getReport } from "./store";
+import { reportIdForPrototype } from "./bridge";
 import type { Person, Report } from "./types";
 
 const DONE = "reports:migrated:v2";
@@ -102,7 +103,7 @@ export async function migrateReportsOnce(): Promise<MigrationResult> {
       const { error, failures } = splitLegacyError(legacy.lastError);
 
       const report: Report = {
-        id: `r-${proto.key}`.slice(0, 60),
+        id: reportIdForPrototype(proto.key),
         orgId,
         name: proto.name,
         enabled: legacy.schedule?.enabled ?? false,
@@ -144,14 +145,28 @@ export async function migrateReportsOnce(): Promise<MigrationResult> {
       }
     }
 
-    for (const r of created) await putReport(r);
+    // NEVER CLOBBER AN EXISTING RECORD. `putReport` is a bare setFlag, and this
+    // function is re-entrant by design (the lock releases in `finally`, and
+    // DONE is only written at the end). Two ways that bites without this check:
+    // the owner edits recipients in a prototype's panel during the window
+    // before the first migration runs — the panel creates `r-<key>` — and then
+    // the sweep's migration rebuilds that id from the untouched legacy flag,
+    // reverting their edit AND resetting `run`, which re-opens a week that has
+    // already sent. The second is any thrown error between the first write and
+    // DONE, which leaves a partial migration that re-runs and does the same.
+    let written = 0;
+    for (const r of created) {
+      if (await getReport(r.orgId, r.id)) { skipped.push(`${r.id}: a report already exists for it`); continue; }
+      await putReport(r);
+      written++;
+    }
     await store.setFlag(DONE, new Date().toISOString());
     return {
       ran: true,
-      created: created.length,
+      created: written,
       skipped,
       reconciled: true,
-      detail: `${created.length} report(s) created from per-prototype settings`,
+      detail: `${written} report(s) created from per-prototype settings${skipped.length ? `; ${skipped.length} left alone` : ""}`,
     };
   } finally {
     // Release the lock either way: a crash must not wedge the migration.

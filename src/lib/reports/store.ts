@@ -49,7 +49,14 @@ async function mutateIndex(orgId: string, fn: (cur: Index) => Index): Promise<vo
 export async function getReport(orgId: string, id: string): Promise<Report | null> {
   const raw = await (await getContentStore()).getFlag(recordKey(orgId, id));
   if (!raw) return null;
-  try { return JSON.parse(raw) as Report; } catch { return null; }
+  try {
+    const r = JSON.parse(raw) as Report;
+    // A TOMBSTONE IS NOT A RECORD. There is no deleteFlag, so delete unlinks
+    // from the index — and the index is not what `getReport` reads. Without
+    // this check a deleted report still resolved by URL, so its detail page
+    // still loaded and its Send now button still mailed people.
+    return r.deleted ? null : r;
+  } catch { return null; }
 }
 
 export async function listReports(orgId: string): Promise<Report[]> {
@@ -89,18 +96,43 @@ export async function mutateReport(
   return null;
 }
 
-/** Claim this week BEFORE sending. Returns the claimed record, or null if
- *  another invocation got there first — in which case do nothing at all. */
+/**
+ * Claim this week BEFORE sending. Returns the claimed record, or null if
+ * anyone else already has it — in which case do nothing at all.
+ *
+ * THIS CANNOT GO THROUGH `mutateReport`. That helper re-reads the record and
+ * compares against its OWN fresh read, which makes it a lost-update guard and
+ * nothing more: a second invocation that reads an already-claimed blob would
+ * CAS against exactly those bytes and succeed. Two overlapping sweeps would
+ * both claim and both send, and the second settle would overwrite the first so
+ * the record showed a single send while two landed in the inbox.
+ *
+ * So the precondition lives INSIDE the compare: the periodKey check rejects a
+ * claim that already happened, and the CAS against the bytes we read rejects
+ * one that lands between our read and our write. One attempt on purpose — a
+ * lost race is a decision, not a transient failure.
+ */
 export async function claimRun(orgId: string, id: string, periodKey: string, late: boolean): Promise<Report | null> {
-  return mutateReport(orgId, id, (cur) => ({
+  const store = await getContentStore();
+  const raw = await store.getFlag(recordKey(orgId, id));
+  if (!raw) return null;
+  let cur: Report;
+  try { cur = JSON.parse(raw) as Report; } catch { return null; }
+  // Someone already holds this week — claimed, sent or failed alike.
+  if (cur.run?.periodKey === periodKey) return null;
+  const next: Report = {
     ...cur,
     run: { periodKey, state: "claimed", at: new Date().toISOString(), ...(late ? { late: true } : {}) },
-  }), 1); // ONE attempt: a lost race is a decision, not a transient failure.
+  };
+  return (await store.compareAndSetFlag(recordKey(orgId, id), raw, JSON.stringify(next))) ? next : null;
 }
 
 export async function deleteReport(orgId: string, id: string): Promise<void> {
-  // The store has no deleteFlag, so the record is tombstoned by removing it
-  // from the index. Named debt: the blob stays until a real delete exists.
+  // The store has no deleteFlag, so deletion is a TOMBSTONE ON THE RECORD plus
+  // an index unlink. The tombstone is the load-bearing half: `getReport` reads
+  // the record key directly and never consults the index, so unlinking alone
+  // left the report fully alive to anyone holding its URL.
+  await mutateReport(orgId, id, (cur) => ({ ...cur, deleted: true, updatedAt: new Date().toISOString() }));
   await mutateIndex(orgId, (cur) => ({ ...cur, reports: cur.reports.filter((x) => x !== id) }));
 }
 

@@ -54,6 +54,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   };
   const user = await currentUser();
   const actor = user?.name ?? user?.sub ?? "user";
+  let dropped = 0;
 
   try {
     if (body.remove) {
@@ -100,6 +101,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     if (body.people !== undefined) {
       const emails = validRecipients(body.people);
+      // A SILENTLY DISCARDED ADDRESS is a person who never receives the report
+      // and nobody notices for months. The prototype panel already says so;
+      // this one did not.
+      const offered = Array.isArray(body.people) ? body.people.length : 0;
+      dropped = Math.max(0, offered - emails.length);
       const existing = await audienceOf(g.report);
       // KEEP STATE ACROSS AN EDIT. Re-typing an unsubscribed address must not
       // quietly resubscribe someone who asked to stop.
@@ -130,7 +136,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     });
     if (!next) throw new Error("That didn't save — reload and try again.");
     await audit(g.orgId, actor, "report.updated", next.name, Object.keys(patch).join(", "));
-    return NextResponse.json({ report: next, nextSendAt: nextSend(next, new Date())?.toISOString() ?? null });
+    return NextResponse.json({
+      report: next,
+      nextSendAt: nextSend(next, new Date())?.toISOString() ?? null,
+      ...(dropped > 0 ? { warning: `${dropped} address${dropped === 1 ? "" : "es"} didn't look like an email and ${dropped === 1 ? "was" : "were"} left out.` } : {}),
+    });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

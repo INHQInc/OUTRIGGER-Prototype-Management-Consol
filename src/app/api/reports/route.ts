@@ -57,8 +57,14 @@ export async function POST(req: NextRequest) {
   const name = String(body.name ?? "").trim();
   if (!name) return NextResponse.json({ error: "Give the report a name — it becomes the subject line." }, { status: 400 });
 
-  const scope: Report["scope"] = body.scope?.mode === "all-live" ? { mode: "all-live" } : { mode: "selected", keys: [] };
-  if (scope.mode === "selected") {
+  // Symmetric with the edit route. Accepting `all-live` here while POST
+  // /api/reports/[id] refuses it would mint a record the editor cannot
+  // represent and the sender would silently truncate to one experiment.
+  if (body.scope?.mode === "all-live") {
+    return NextResponse.json({ error: "Covering every live experiment needs the digest email, which is coming next." }, { status: 400 });
+  }
+  const scope: Report["scope"] = { mode: "selected", keys: [] };
+  {
     const keys = Array.isArray((body.scope as { keys?: unknown })?.keys) ? ((body.scope as { keys: string[] }).keys) : [];
     const foreign = await foreignScopeKeys(orgId, keys);
     if (foreign.length) return NextResponse.json({ error: `Not this customer's experiments: ${foreign.join(", ")}` }, { status: 400 });

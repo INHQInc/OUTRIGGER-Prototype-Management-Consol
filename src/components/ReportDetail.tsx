@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge } from "./ui";
 import { DAY_NAMES } from "@/lib/reports/types";
+import { isoWeek } from "@/lib/reports/cadence";
 import type { Person, Report } from "@/lib/reports/types";
 
 interface Covered { key: string; name: string; bound: boolean }
@@ -24,20 +25,34 @@ export function ReportDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [draftPeople, setDraftPeople] = useState("");
 
-  const load = async () => {
-    const res = await fetch(`/api/reports/${id}`);
-    const data = await res.json();
-    if (!res.ok) { setErr(data.error ?? "Couldn't load it."); return; }
-    setReport(data.report);
-    setPeople(data.people ?? []);
-    setCovered(data.covered ?? []);
-    setNextSendAt(data.nextSendAt ?? null);
-    setMailUnavailable(data.mailUnavailable ?? null);
-    setMailFrom(data.mailFrom ?? null);
-    setSweepHour(data.sweepHourUtc ?? 13);
-    setDraftPeople((data.people ?? []).map((p: Person) => p.email).join(", "));
+  const fetchReport = async (rid: string) => {
+    try {
+      const res = await fetch(`/api/reports/${rid}`);
+      const data = await res.json();
+      if (!res.ok) return { error: (data.error as string) ?? "Couldn't load it." };
+      return data as Record<string, unknown>;
+    } catch { return { error: "Network hiccup — try again." }; }
   };
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+  const apply = (data: Record<string, unknown>) => {
+    if (typeof data.error === "string") { setErr(data.error); return; }
+    setReport(data.report as Report);
+    const ppl = (data.people ?? []) as Person[];
+    setPeople(ppl);
+    setCovered((data.covered ?? []) as Covered[]);
+    setNextSendAt((data.nextSendAt as string) ?? null);
+    setMailUnavailable((data.mailUnavailable as string) ?? null);
+    setMailFrom((data.mailFrom as string) ?? null);
+    setSweepHour((data.sweepHourUtc as number) ?? 13);
+    setDraftPeople(ppl.map((p) => p.email).join(", "));
+  };
+  const load = async () => { const r = await fetchReport(id); if (r) apply(r); };
+  // Guarded the same way as the list: switching reports quickly must not let a
+  // slow response from the previous one paint over the new one.
+  useEffect(() => {
+    let live = true;
+    void (async () => { const r = await fetchReport(id); if (live && r) apply(r); })();
+    return () => { live = false; };
+  }, [id]);
 
   const post = async (body: unknown, label: string) => {
     setBusy(label); setErr(null); setNote(null);
@@ -56,7 +71,10 @@ export function ReportDetail({ id }: { id: string }) {
 
   const scopeKeys = report.scope.mode === "selected" ? report.scope.keys : [];
   const receivingCount = people.filter((p) => p.state === "receiving").length;
-  const canSchedule = receivingCount > 0 && scopeKeys.length > 0;
+  // A day is part of being schedulable. Without it the button was live on a
+  // manual-cadence report and the only feedback was a server error telling you
+  // to do the thing the form should not have let you skip.
+  const canSchedule = receivingCount > 0 && scopeKeys.length > 0 && report.cadence.kind === "weekly";
   const run = report.run;
 
   return (
@@ -134,7 +152,10 @@ export function ReportDetail({ id }: { id: string }) {
               <input type="radio" name="scope" checked={scopeKeys.includes(c.key)}
                 onChange={() => void post({ scope: { mode: "selected", keys: [c.key] } }, "scope")} />
               <span>{c.name}</span>
-              {!c.bound && <span className="text-[11px] text-warn">no experiment bound</span>}
+              {/* COMPUTE THE CAVEAT. Without a bound experiment there is
+                  nothing to read, so this report would save, schedule, and
+                  fail on the morning it mattered. */}
+              {!c.bound && <span className="text-[11px] text-warn">no experiment bound — nothing to report yet</span>}
             </label>
           ))}
         </div>
@@ -208,7 +229,12 @@ export function ReportDetail({ id }: { id: string }) {
           className="h-8 px-3 rounded-md bg-accent text-accent-fg text-[13px] font-semibold hover:bg-accent-hover disabled:opacity-40">
           {busy === "send" ? "Sending…" : "Send now"}
         </button>
-        {report.enabled && report.cadence.kind === "weekly" && new Date().getUTCDay() === report.cadence.day && (
+        {/* Only warn if the scheduled send has NOT already happened. Reading
+            just the cadence told you it was "also going out today" hours after
+            it had gone out, which teaches people to ignore the warning. */}
+        {report.enabled && report.cadence.kind === "weekly"
+          && new Date().getUTCDay() === report.cadence.day
+          && !(run && run.periodKey === isoWeek(new Date())) && (
           <span className="text-[12.5px] text-warn">This report is also scheduled to go out today.</span>
         )}
       </div>

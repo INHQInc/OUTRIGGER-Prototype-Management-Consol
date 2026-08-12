@@ -69,5 +69,36 @@ check("today, when this week has not sent", nextSend(base, D("2026-08-17"))?.toI
 check("next week, when this week already sent", nextSend(sentMon, D("2026-08-17"))?.toISOString().slice(0, 10), "2026-08-24");
 check("paused has no next send", nextSend({ ...base, enabled: false }, D("2026-08-17")), null);
 
+// ── THE CLAIM, against a fake store ───────────────────────────────────────
+// claimRun used to route through mutateReport, which re-reads and compares
+// against its OWN read — a lost-update guard, not mutual exclusion. Two
+// overlapping sweeps both claimed and both sent. This asserts the precondition
+// now lives inside the compare.
+console.log("\nClaim (mutual exclusion, not lost-update)");
+{
+  const store = new Map<string, string>();
+  const rec = "report:v2:outrigger:r1";
+  store.set(rec, JSON.stringify(base));
+  // The same shape claimRun uses, inlined so this test needs no content store.
+  const claim = (raw: string | undefined, periodKey: string) => {
+    if (!raw) return null;
+    const cur = JSON.parse(raw) as Report;
+    if (cur.run?.periodKey === periodKey) return null;          // already held
+    const next = { ...cur, run: { periodKey, state: "claimed", at: "now" } };
+    if (store.get(rec) !== raw) return null;                     // CAS
+    store.set(rec, JSON.stringify(next));
+    return next;
+  };
+  // A and B both read BEFORE either writes — the overlapping-sweep case.
+  const rawA = store.get(rec), rawB = store.get(rec);
+  const a = claim(rawA, "2026-W34");
+  const b = claim(rawB, "2026-W34");
+  check("first claimant wins", a !== null, true);
+  check("the overlapping one is refused", b, null);
+  // And a later, non-overlapping reader is refused by the periodKey check.
+  check("a later reader is refused too", claim(store.get(rec), "2026-W34"), null);
+  check("but next week is claimable", claim(store.get(rec), "2026-W35") !== null, true);
+}
+
 console.log(fails ? `\n${fails} FAILURE(S)` : "\nall cadence assertions passed");
 process.exit(fails ? 1 : 0);

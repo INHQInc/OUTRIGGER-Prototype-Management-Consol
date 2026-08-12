@@ -26,19 +26,27 @@ export function ReportsList() {
   const [busy, setBusy] = useState(false);
   const [migration, setMigration] = useState<string | null>(null);
 
-  const load = async () => {
-    try {
-      const res = await fetch("/api/reports");
-      const data = await res.json();
-      if (!res.ok) { setErr(data.error ?? "Couldn't load reports."); setRows([]); return; }
-      setRows(data.reports ?? []);
-      setMailUnavailable(data.mailUnavailable ?? null);
-      setMailFrom(data.mailFrom ?? null);
-      setSweepHour(data.sweepHourUtc ?? 13);
-      if (data.migration) setMigration(data.migration.reconciled ? data.migration.detail : `Migration held back — ${data.migration.detail}`);
-    } catch { setErr("Network hiccup — try again."); setRows([]); }
-  };
-  useEffect(() => { void load(); }, []);
+  // The fetch is started INSIDE the effect and every setState is guarded by a
+  // liveness flag: this mount can be torn down before the request lands (the
+  // migration runs on this endpoint, so the first call is the slow one), and
+  // writing state into a dead component is a warning nobody acts on.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/reports");
+        const data = await res.json();
+        if (!live) return;
+        if (!res.ok) { setErr(data.error ?? "Couldn't load reports."); setRows([]); return; }
+        setRows(data.reports ?? []);
+        setMailUnavailable(data.mailUnavailable ?? null);
+        setMailFrom(data.mailFrom ?? null);
+        setSweepHour(data.sweepHourUtc ?? 13);
+        if (data.migration) setMigration(data.migration.reconciled ? data.migration.detail : `Migration held back — ${data.migration.detail}`);
+      } catch { if (live) { setErr("Network hiccup — try again."); setRows([]); } }
+    })();
+    return () => { live = false; };
+  }, []);
 
   const create = async () => {
     const name = prompt("Name this report. It becomes the subject line, so write it the way you want it to read in an inbox.");
@@ -116,7 +124,11 @@ export function ReportsList() {
                       : <span className="text-muted-2">never</span>}
                   </td>
                   <td className="py-2.5">
-                    {r.enabled && r.nextSendAt ? <span className="text-muted">{fmtDate(r.nextSendAt)}</span> : <Badge tone="neutral">paused</Badge>}
+                    {/* Manual is not paused. A report with no schedule was
+                        never turned off — it was never given a day. */}
+                    {r.enabled && r.nextSendAt
+                      ? <span className="text-muted">{fmtDate(r.nextSendAt)}</span>
+                      : <Badge tone="neutral">{r.cadence.kind === "manual" ? "on request" : "paused"}</Badge>}
                   </td>
                 </tr>
               );

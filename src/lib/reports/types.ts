@@ -85,6 +85,11 @@ export interface Report {
   createdAt: string;
   createdBy: string;
   updatedAt: string;
+  /** Tombstone. The content store has no delete, and `getReport` reads the
+   *  record key directly rather than the index — so without a flag ON THE
+   *  RECORD a "deleted" report still loaded, still edited and still sent to
+   *  anyone who kept the URL. */
+  deleted?: boolean;
 }
 
 export interface RecipientGroup {
