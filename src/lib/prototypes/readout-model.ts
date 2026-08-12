@@ -726,22 +726,55 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
 
   // ── STORY
   const read = input.reading?.read;
-  // ONE METRIC, ONE NUMBER, ONE PLACE. The analyst nominates a metric per
-  // movement and nothing stopped two movements naming the same one — "what the
-  // change did" and "against the prediction" both gravitate to the decision
-  // metric, so a readout showed the identical figure and label twice in a row
-  // of four. The reader counts it as two findings.
+  // FOUR MOVEMENTS, FOUR DISTINCT METRICS. Both halves are requirements and
+  // solving one alone produces the other's bug.
   //
-  // First claim wins, in reading order: the number appears at the first place
-  // it is relevant, and later movements carry it in prose. Deliberately NOT
-  // "give it to whichever movement needs it most" — that ranking would be an
-  // editorial theory, and the analyst's own ordering is the better evidence.
+  //   · The analyst nominates a metric per movement and nothing stopped two
+  //     naming the same one — "what the change did" and "against the
+  //     prediction" both gravitate to the decision metric — so the identical
+  //     figure and label printed twice in a row of four and the reader counted
+  //     two findings.
+  //   · Dropping the clash then left that movement with NO number, and with
+  //     the hero suppression on top, the two movements that carry the decision
+  //     arrived as prose with no figure at all. Half the story, silently.
+  //
+  // So a clash SUBSTITUTES rather than blanks: each movement falls back down a
+  // list appropriate to what it is for, skipping anything already taken. Only
+  // when the run genuinely has no unclaimed metric left does a movement go
+  // without — degrade, never invent.
   const claimed = new Set<string>();
+  const unclaimed = (m: MetricView | null | undefined): m is MetricView =>
+    Boolean(m) && !claimed.has(m!.key);
+
+  /** Candidates in preference order for each movement, best first. Every entry
+   *  is a real row from this run; nothing is fabricated to fill a slot. */
+  const candidatesFor = (id: MovementView["id"], nominated: MetricView | null): (MetricView | null)[] => {
+    const movers = [...supporting, ...all]
+      .filter((m) => !m.hidden && m.lift.raw !== undefined && m.lift.raw !== 0)
+      .sort((a, z) => Math.abs(z.lift.raw!) - Math.abs(a.lift.raw!));
+    const favourable = movers.filter((m) => m.favourable === true && !m.isDecision);
+    const against = movers.filter((m) => m.favourable === false && !m.isDecision);
+    const guard = all.find((m) => m.guardrail === "breach") ?? all.find((m) => m.guardrail === "at_risk");
+    // SUBSTITUTION IS ONLY HONEST WHERE THE SLOT IS ABOUT "SOME OTHER METRIC".
+    // `shift` and `cost` are: any row that moved the right or wrong way answers
+    // them. `effect` and `prediction` are about the metric the change TOUCHED
+    // and the metric the brief NAMED — usually the same one — so an unrelated
+    // row under either is a figure that argues something nobody claimed. Those
+    // two get the decision metric or nothing at all, and the prose stands on
+    // its own. A misleading number is worse than an absent one.
+    switch (id) {
+      case "effect": return [nominated, decision];
+      case "shift": return [nominated, ...favourable, ...movers.filter((m) => !m.isDecision)];
+      case "cost": return [nominated, ...against, guard ?? null, ...movers.filter((m) => !m.isDecision)];
+      case "prediction": return [nominated, decision];
+    }
+  };
+
   const movements: MovementView[] = MOVEMENTS.map((spec) => {
     const sec = read?.[spec.id];
     if (!sec?.text) return null;
     const nominated = sec.measureKey ? byKey[sec.measureKey] ?? null : null;
-    const metric = nominated && !claimed.has(nominated.key) ? nominated : null;
+    const metric = candidatesFor(spec.id, nominated).find(unclaimed) ?? null;
     if (metric) claimed.add(metric.key);
     return { ...spec, text: sec.text, metric };
   }).filter((m): m is MovementView => m !== null);

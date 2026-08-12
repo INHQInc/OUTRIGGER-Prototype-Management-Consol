@@ -188,12 +188,20 @@ export function renderReadoutEmail(opts: {
     .map((mv) => {
       const m = mv.metric;
       const ink = m ? inkOf(m) : RULE;
-      // The decision metric is already printed above at fifty-four point. A
-      // movement that names it again puts the same figure on the page twice
-      // and the reader counts two findings. Its prose still carries it; only
-      // the duplicate number goes. (Across the four movements the MODEL has
-      // already deduped — this is the separate collision with the hero.)
-      const showFigure = m && m.key !== decision?.key;
+      // THE FIGURE STAYS, even when the hero above shows the same metric.
+      //
+      // Suppressing it here looked right in isolation — the same number twice
+      // on one screen — but it stacked with the model's dedupe across the four
+      // movements, and between them they stripped the number from BOTH
+      // movements that concern the decision metric: "what the change did" and
+      // "against the prediction" arrived as prose with no figure at all, which
+      // is the half of the story that matters most.
+      //
+      // The hero and the movement are different registers. The hero is a
+      // headline at fifty-four point; the movement's number sits with the
+      // sentence that explains it, which is the whole reason it is there.
+      // The model still guarantees no metric appears twice ACROSS the four.
+      const showFigure = Boolean(m);
       return `
       <tr><td style="padding:0 0 22px 0;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -383,7 +391,7 @@ export function renderReadoutEmail(opts: {
       : "",
     model.story.movements.length
       ? "\n" + model.story.movements.map((mv) => {
-          const m = mv.metric && mv.metric.key !== decision?.key ? mv.metric : null;
+          const m = mv.metric;
           return `${mv.ordinal} ${mv.label.toUpperCase()}${m ? `  ${m.headline.text} ${m.label}` : ""}\n${mv.text}`;
         }).join("\n\n")
       : "",

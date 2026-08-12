@@ -1931,22 +1931,29 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 </span>, undefined, busy === "reading" ? "rewriting" : undefined)}
               <div className="space-y-2">
                 {story.headline && <p className="text-[22px] font-bold leading-[1.2] tracking-[-0.015em] text-balance max-w-[64ch]">{story.headline}</p>}
-                {story.read && Object.values(story.read).some(Boolean) ? (
+                {model.story.movements.length ? (
                   // FIXED SECTIONS, same four every time. The prose was good and
                   // still unscannable: one block you cannot re-enter at the part
                   // you half-remember.
+                  //
+                  // FROM THE MODEL, not from `story.read`. The page used to walk
+                  // the analyst's four sections itself and resolve each one's
+                  // metric independently — so "what the change did" and "against
+                  // the prediction", which both gravitate to the decision metric,
+                  // printed the identical figure and label side by side and the
+                  // reader counted two findings. The model deduplicates across
+                  // the four (first claim wins, in reading order); the email has
+                  // been reading that since d5978cf and the page had not.
                   <div className="grid gap-x-10 gap-y-5 md:grid-cols-2 xl:grid-cols-4 pt-1.5">
-                    {([
-                      ["What the change did", story.read.effect],
-                      ["Where the behaviour went", story.read.shift],
-                      ["What it cost", story.read.cost],
-                      ["Against the prediction", story.read.prediction],
-                    ] as const).filter(([, sec]) => Boolean(sec?.text)).map(([label, sec]) => {
+                    {model.story.movements.map((mv) => {
+                      const label = mv.label;
+                      const sec = { text: mv.text };
                       // THE NUMBER LIVES WITH THE SENTENCE THAT EXPLAINS IT.
                       // A row of lifts underneath was a magnitude with no
                       // meaning, sitting between the prose that gave it meaning
-                      // and the table that gave it context.
-                      const b = sec!.measureKey ? beatFor({ measureKey: sec!.measureKey, label: "" }) : null;
+                      // and the table that gave it context. `mv.metric` is null
+                      // on a movement whose metric an earlier one already used.
+                      const b = mv.metric ? beatFor({ measureKey: mv.metric.key, label: "" }) : null;
                       return (
                         <div key={label} className="min-w-0">
                           <div className={`${ZH} mb-1.5 text-muted-2`}>{label}</div>
@@ -1963,13 +1970,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                               </span>
                             </div>
                           )}
-                          <p className="text-[14px] leading-[1.55] text-foreground/90">{sec!.text}</p>
+                          <p className="text-[14px] leading-[1.55] text-foreground/90">{sec.text}</p>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  story.lede && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{story.lede}</p>
+                  // `summaryProse` refuses a lede the generator flagged as
+                  // computed, so the page cannot print the template's paragraph
+                  // as though the analyst wrote it — the same refusal the email
+                  // got in 0f9dbd8.
+                  model.story.summaryProse && <p className="text-[15px] leading-relaxed max-w-[92ch] text-foreground/90">{model.story.summaryProse}</p>
                 )}
                 {supporting.length <= 1 && (
                   <p className="text-[12.5px] text-muted-2 pt-1 print:hidden">
