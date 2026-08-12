@@ -853,7 +853,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
     decision,
     observed: observedEff, roles: rolesEff,
     order: orderLocal ?? map?.measureOrder ?? [],
-    hidden: map?.unfeatured ?? [],
+    // BOTH HIDE LISTS. `hiddenMeasures` is what the eye toggle writes; `unfeatured`
+      // is the older "keep it out of the top line" mark. `supportingKeys` reads the
+      // first and the model was fed only the second, so a metric you had visibly
+      // hidden stayed eligible to lead a movement or the headline — hidden from the
+      // index and still speaking for the experiment.
+    hidden: [...new Set([...(map?.unfeatured ?? []), ...(map?.hiddenMeasures ?? [])])],
     experimentStatus: expStatus,
     now: Date.parse(statsEff?.computedAt ?? live?.fetchedAt ?? "") || 0,
   });

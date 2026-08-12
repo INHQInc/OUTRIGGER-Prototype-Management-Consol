@@ -1194,6 +1194,10 @@ export interface AnalystAnswer {
   bullets: string[];
   caveat?: string;
   nextStep?: string;
+  /** Set when the answer claimed to have CHANGED something. The analyst is
+   *  read-only; an answer in the past tense means the reader now believes the
+   *  readout moved when it did not. */
+  readOnlyNotice?: string;
 }
 
 const answerTool = {
@@ -1270,10 +1274,33 @@ ANSWER IT THROUGH THE TEAM'S OWN METRICS. The decision metric is ${decisionLabel
   const bullets = (Array.isArray(raw.bullets) ? raw.bullets : []).filter((b): b is string => typeof b === "string" && b.trim().length > 0).map((b) => stripMd(b).slice(0, 400)).filter(Boolean).slice(0, 6);
   const headline = typeof raw.headline === "string" ? stripMd(raw.headline).slice(0, 300) : "";
   if (!headline && !bullets.length) throw new Error("The analyst returned nothing — try again.");
+  const caveat = typeof raw.caveat === "string" && raw.caveat.trim() ? stripMd(raw.caveat).slice(0, 300) : undefined;
+  const nextStep = typeof raw.nextStep === "string" && raw.nextStep.trim() ? stripMd(raw.nextStep).slice(0, 300) : undefined;
+
+  // THE ANALYST CANNOT CHANGE ANYTHING, and must never sound like it did.
+  //
+  // Its tool returns four strings. It cannot hide a metric, exclude one from
+  // the summary, change a role or a direction, or edit the plan. Asked to do
+  // any of those it answers anyway — fluently, in the past tense — and the
+  // reader believes the readout changed. Nothing did.
+  //
+  // Enforced here rather than asked for in the prompt: the prompt already says
+  // it is read-only, and a model that ignores that instruction ignores it
+  // exactly when a user phrases the request as a command.
+  const claimsAction = ACTION_CLAIM.test([headline, ...bullets, caveat ?? "", nextStep ?? ""].join(" "));
   return {
     headline,
     bullets,
-    caveat: typeof raw.caveat === "string" && raw.caveat.trim() ? stripMd(raw.caveat).slice(0, 300) : undefined,
-    nextStep: typeof raw.nextStep === "string" && raw.nextStep.trim() ? stripMd(raw.nextStep).slice(0, 300) : undefined,
+    caveat,
+    nextStep: claimsAction ? READ_ONLY_NOTE : nextStep,
+    ...(claimsAction ? { readOnlyNotice: READ_ONLY_NOTE } : {}),
   };
 }
+
+/** Past-tense claims of a change this surface cannot make. Deliberately narrow:
+ *  it must catch "I've hidden that metric", never "hero clicks fell". */
+const ACTION_CLAIM =
+  /\b(?:i(?:'ve| have)?|we(?:'ve| have)?)\s+(?:now\s+)?(?:hidden|removed|excluded|dropped|unhidden|added|renamed|reordered|changed|updated|set|marked|adjusted)\b|\b(?:has|have) been (?:hidden|removed|excluded|dropped|updated|changed)\b/i;
+
+const READ_ONLY_NOTE =
+  "I can read the results but I can't change the readout. To leave a metric out, use the eye icon on its row in the metric index — that hides it and stops it feeding the summary.";

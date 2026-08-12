@@ -87,7 +87,12 @@ export async function buildFor(orgId: string, proto: PrototypeRecord) {
       observed: stored?.observed ?? [],
       roles: stored?.roles ?? {},
       order: stored?.measureOrder ?? [],
-      hidden: stored?.unfeatured ?? [],
+      // BOTH HIDE LISTS. `hiddenMeasures` is what the eye toggle writes; `unfeatured`
+      // is the older "keep it out of the top line" mark. `supportingKeys` reads the
+      // first and the model was fed only the second, so a metric you had visibly
+      // hidden stayed eligible to lead a movement or the headline — hidden from the
+      // index and still speaking for the experiment.
+      hidden: [...new Set([...(stored?.unfeatured ?? []), ...(stored?.hiddenMeasures ?? [])])],
       experimentStatus: null,
       now: Date.parse(stats?.computedAt ?? results?.fetchedAt ?? "") || 0,
     });
