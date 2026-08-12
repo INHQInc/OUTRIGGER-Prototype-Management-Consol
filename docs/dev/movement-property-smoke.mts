@@ -143,6 +143,21 @@ for (let n = 0; n < RUNS; n++) {
     if (usable.length) report(n, before, `"${mv.id}" blank with ${usable.length} usable row(s) unclaimed`);
   }
 
+  // 3b. THE TEAM'S SET FIRST. A movement must not reach past an unclaimed
+  //     top-line metric to show an exploratory one nobody nominated.
+  const topLine = new Set(model.supporting.map((m) => m.key));
+  // The analyst's OWN nomination is exempt: if they wrote the sentence about an
+  // exploratory row, overriding it would attach a number to prose about
+  // something else. The rule constrains what the code SUBSTITUTES.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const readIn = (input as any).reading?.read ?? {};
+  for (const mv of mvs) {
+    if (!mv.metric || mv.metric.role !== "exploratory") continue;
+    if (readIn[mv.id]?.measureKey === mv.metric.key) continue;
+    const spareTop = rowsWithFigure.filter((m) => topLine.has(m.key) && !used.includes(m.key) && (mv.id === "cost" || !m.guardrail));
+    if (spareTop.length) report(n, before, `"${mv.id}" substituted exploratory "${mv.metric.key}" while ${spareTop.length} top-line row(s) were free`);
+  }
+
   // 3. a guardrail only under "what it cost"
   for (const mv of mvs) {
     if (mv.metric?.guardrail && mv.id !== "cost") report(n, before, `guardrail under "${mv.id}"`);

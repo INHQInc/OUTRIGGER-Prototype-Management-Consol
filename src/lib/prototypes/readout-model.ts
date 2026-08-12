@@ -751,7 +751,20 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
    *  an em dash, which is a blank with extra steps. */
   const candidatesFor = (id: MovementView["id"], nominated: MetricView | null): (MetricView | null)[] => {
     const printable = all.filter((m) => !m.hidden && !m.headline.absent);
-    const ordered = [...printable].sort((a, z) => Math.abs(z.lift.raw ?? 0) - Math.abs(a.lift.raw ?? 0));
+    // THE TEAM'S SET COMES FIRST. `roles` is what the team says each metric is
+    // FOR, and it decides what the summary is written about — so a movement
+    // reaches for a row they marked as part of the story before it reaches for
+    // one they never nominated. Exploratory rows are last: they are in the
+    // index to be watched, not to speak for the experiment.
+    //
+    // The rest of `all` still follows, because a run that collapses the
+    // supporting set — an unadjudicable one keeps only the decision row —
+    // would otherwise go blank, and a blank slot reads as missing data.
+    const inTopLine = new Set(supporting.map((m) => m.key));
+    const tier = (m: MetricView) => (inTopLine.has(m.key) ? 0 : m.role === "exploratory" ? 2 : 1);
+    const ordered = [...printable].sort(
+      (a, z) => tier(a) - tier(z) || Math.abs(z.lift.raw ?? 0) - Math.abs(a.lift.raw ?? 0),
+    );
     // A GUARDRAIL ANSWERS ONE QUESTION: what it cost. Under any other heading
     // it states a fact nobody claimed. This holds for the ANALYST'S OWN
     // NOMINATION too — an earlier version excluded guardrails from the
@@ -764,23 +777,35 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     const lead = decision && !decision.headline.absent ? decision : null;
     const asked = nominated && !nominated.headline.absent && (id === "cost" || !nominated.guardrail) ? nominated : null;
 
+    // THE TIER OUTRANKS THE SEMANTICS. A favourable EXPLORATORY row used to
+    // beat a top-line one for "where the behaviour went", because favourability
+    // was ordered first — so a metric nobody nominated spoke for the experiment
+    // while one the team marked as part of the story sat unclaimed. Stable
+    // sort, so each list keeps its meaning inside its tier.
+    const byTier = (xs: (MetricView | null)[]) =>
+      xs.filter((m): m is MetricView => Boolean(m)).sort((a, z) => tier(a) - tier(z));
+
     switch (id) {
       // What the change TOUCHED: the decision metric, else the biggest move.
-      case "effect": return [asked, lead, ...story, ...open];
+      case "effect": return [asked, lead, ...byTier([...story, ...open])];
       // Where it WENT: something that moved the right way.
-      case "shift": return [asked, ...favourable, ...story, ...open];
+      case "shift": return [asked, ...byTier([...favourable, ...story, ...open])];
       // What it COST: the wrong way, or a live guardrail — its one home.
       // `ordered` last, and only here: it is the one list that still contains
       // guardrails, and "what it cost" is the one slot they belong under. A
       // PASSING guardrail is not in `guard` and is excluded from `open`, so
       // without this the slot went blank while that row sat unclaimed.
-      case "cost": return [asked, ...against, guard, ...story, ...open, ...ordered];
+      // `ordered` goes INSIDE the tier sort, not after it. It is the one list
+      // still carrying guardrails, and a PASSING guardrail the team marked as
+      // top-line is reachable nowhere else — appended raw it lost to an
+      // exploratory row nobody nominated.
+      case "cost": return [asked, ...byTier([...against, guard, ...story, ...open, ...ordered])];
       // Against the PREDICTION: the metric the brief named, else the biggest
       // thing nothing else has spoken for. This took the list in REVERSE on
       // the theory that the last row is furthest down the funnel — an
       // inference `order` cannot support, and it handed the slot the smallest
       // mover while the outcome the brief predicted sat unclaimed beside it.
-      case "prediction": return [asked, lead, ...story, ...open];
+      case "prediction": return [asked, lead, ...byTier([...story, ...open])];
     }
   };
 
