@@ -1,15 +1,20 @@
 /**
- * WHO GETS THE READOUT, AND WHEN.
+ * THE LEGACY PER-PROTOTYPE EMAIL SETTINGS — READ-ONLY, FOR MIGRATION.
  *
- * Per prototype: a recipient list and an opt-in weekly schedule. Off by
- * default and deliberately so — a digest that mails itself the moment an
- * experiment is bound would send "too early to call" every week until someone
- * found the switch, and the fastest way to make a report ignored is to send it
- * before it says anything.
+ * Superseded by Reports (src/lib/reports/, docs/REPORTS-DESIGN.md). Email is an
+ * object you own now, not a setting on an experiment, and nothing schedules
+ * these flags any more: `migrateReportsOnce()` reads them once into Report
+ * records and the prototype's own panel edits the Report through
+ * `reports/bridge.ts`.
  *
- * `lastSentAt` is the idempotence guard: cron granularity and retries both
- * mean a scheduled job can fire more than once in its window, and nobody
- * forgives a tool that mails the same report to their leadership twice.
+ * NOTHING MAY WRITE HERE AGAIN. Two stores over one audience is two schedulers
+ * over one audience, which is the double-send. `scheduleDue()` was deleted with
+ * the old sweep for the same reason — it also compared against today's DATE, so
+ * moving a report's day mid-week sent it twice; the replacement keys on the ISO
+ * week (src/lib/reports/cadence.ts).
+ *
+ * `SWEEP_HOUR_UTC` stays here because it is still the one place the send window
+ * is written down.
  */
 import { getContentStore } from "../content/store";
 
@@ -83,21 +88,3 @@ export async function mutateReportSettings(
   return getReportSettings(prototypeKey);
 }
 
-/**
- * Is this schedule due right now?
- *
- * The right weekday, and not already sent today. There is deliberately NO hour
- * test: the sweep runs once a day, so gating on an hour could only ever make a
- * report late or — for any hour after the sweep — permanently unsent.
- *
- * "Already sent today" survives regardless: retries and a manual send both mean
- * the job can reach this twice, and nobody forgives a tool that mails the same
- * report to their leadership twice.
- */
-export function scheduleDue(s: ReportSettings, now: Date): boolean {
-  if (!s.schedule?.enabled) return false;
-  if (!s.recipients.length) return false;
-  if (now.getUTCDay() !== s.schedule.day) return false;
-  const today = now.toISOString().slice(0, 10);
-  return (s.lastSentAt ?? "").slice(0, 10) !== today;
-}
