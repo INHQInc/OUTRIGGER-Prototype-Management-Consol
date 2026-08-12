@@ -396,6 +396,54 @@ function normFigure(s: string): string {
  *  "beyond what luck explains"; q-values live in The numbers. */
 const STAT_NOTATION = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bFDR\b|\bconfidence interval\b|\bstatistically significant\b/i;
 
+//
+// RECOVER, DON'T DISCARD. The first version of this stripped a LEADING
+// wrapper and then rejected anything still carrying a tag — which turned
+// yesterday's visible `<parameter name="text">…` into today's MISSING
+// sections, three of four gone with a "partial structure" badge. Both are
+// failures; the second is quieter and therefore worse.
+//
+// When the model emits its own call syntax it emits the WHOLE shape, e.g.
+//   <parameter name="text">Prose…</parameter><parameter name="measure">m1</parameter>
+// so the prose and the metric key are both in there and both recoverable.
+// Pull them out; only refuse when nothing survives.
+export const unwrapScaffolding = (t: string) => {
+  let out = t;
+  const named = /<\s*parameter\b[^>]*\bname\s*=\s*["']?(?:text|value|content)["']?[^>]*>([\s\S]*?)(?:<\s*\/\s*parameter\s*>|<\s*parameter\b|$)/i.exec(out);
+  if (named) out = named[1];
+  out = out
+    .replace(/^\s*<\s*(?:text|value|string|content)\s*>/i, "")
+    .replace(/<\s*\/\s*(?:text|value|string|content)\s*>\s*$/i, "")
+    .replace(/^\s*```[a-z]*\s*/i, "")
+    .replace(/\s*```\s*$/, "");
+  // Any tag left is scaffolding, not prose — drop the tags, keep the words.
+  // Rejection still happens downstream if what remains is not a sentence.
+  if (/<\s*\/?\s*[a-z][^>]*>/i.test(out)) out = out.replace(/<[^>]*>/g, " ");
+  return out.replace(/\s+/g, " ").trim();
+};
+/** A `measure` key smuggled into the text as scaffolding, so a recovered
+ *  section keeps its figure instead of rendering as prose alone. */
+export const scaffoldedMeasure = (v: unknown): string => {
+  if (typeof v !== "string") return "";
+  const m = /<\s*parameter\b[^>]*\bname\s*=\s*["']?measure["']?[^>]*>([\s\S]*?)(?:<\s*\/\s*parameter\s*>|$)/i.exec(v);
+  return m ? m[1].replace(/<[^>]*>/g, " ").trim() : "";
+};
+export const normaliseProse = (v: unknown) =>
+  typeof v === "string" ? unwrapScaffolding(stripMd(v).replace(/\s+/g, " ").trim()) : "";
+export const rejectReason = (v: unknown, cap: number): string | null => {
+  const t = normaliseProse(v);
+  if (!t) return "empty";
+  if (t.length > cap) return `over ${cap} chars (${t.length})`;
+  if (/\d/.test(t)) return "contains a digit";
+  if (STAT_NOTATION.test(t)) return "statistics vocabulary";
+  // `unwrap` has already pulled the prose out of any scaffolding and dropped
+  // stray tags, so a tag surviving here means the value was never prose.
+  if (/<\s*\/?\s*[a-z][^>]*>/i.test(t)) return "contains markup";
+  // Tags removed can leave a fragment. A section is a sentence, not a word.
+  if (t.length < 15) return "too short to be a sentence";
+  return null;
+};
+
 const readingTool = {
   name: "give_reading",
   description: "The story a leader reads: an executive summary, one headline, one short paragraph, then the numbers as beats. The words carry no numbers; a beat names the metric it is about.",
@@ -903,32 +951,11 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // discarding the whole paragraph would throw away the analyst's work over a
   // formatting slip. Peel known scaffolding first; only reject if a tag
   // survives, which means the value is genuinely not prose.
-  const unwrap = (t: string) =>
-    t
-      .replace(/^\s*<\s*parameter\b[^>]*>/i, "")
-      .replace(/<\s*\/\s*parameter\s*>\s*$/i, "")
-      .replace(/^\s*<\s*(?:text|value|string|content)\s*>/i, "")
-      .replace(/<\s*\/\s*(?:text|value|string|content)\s*>\s*$/i, "")
-      .replace(/^\s*```[a-z]*\s*/i, "")
-      .replace(/\s*```\s*$/, "")
-      .trim();
-  const normalise = (v: unknown) =>
-    typeof v === "string" ? unwrap(stripMd(v).replace(/\s+/g, " ").trim()) : "";
-  const rejectReason = (v: unknown, cap: number): string | null => {
-    const t = normalise(v);
-    if (!t) return "empty";
-    if (t.length > cap) return `over ${cap} chars (${t.length})`;
-    if (/\d/.test(t)) return "contains a digit";
-    if (STAT_NOTATION.test(t)) return "statistics vocabulary";
-    // Anything still carrying a tag is not a sentence a person wrote.
-    if (/<\s*\/?\s*[a-z][^>]*>/i.test(t)) return "contains markup";
-    return null;
-  };
-  const rejected: string[] = [];
+    const rejected: string[] = [];
   const clean = (v: unknown, cap: number, field?: string) => {
     const why = rejectReason(v, cap);
     if (why) { if (field && why !== "empty") rejected.push(`${field}: ${why}`); return ""; }
-    return normalise(v);
+    return normaliseProse(v);
   };
 
   let headline = clean(raw.headline, 80, "headline");
@@ -974,7 +1001,9 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     const o = typeof v === "string" ? { text: v } : ((v ?? {}) as Record<string, unknown>);
     const text = clean(o.text, 420, "section");
     if (!text) return undefined;
-    const mk = typeof o.measure === "string" ? o.measure.trim() : "";
+    // The measure may arrive properly, or smuggled inside the text as part of
+    // the same scaffolding the prose was wrapped in. Either beats no figure.
+    const mk = (typeof o.measure === "string" ? o.measure.trim() : "") || scaffoldedMeasure(o.text);
     return { text, ...(allowedMeasures.has(mk) ? { measureKey: mk } : {}) };
   };
   let read = (() => {

@@ -755,18 +755,30 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     const favourable = movers.filter((m) => m.favourable === true && !m.isDecision);
     const against = movers.filter((m) => m.favourable === false && !m.isDecision);
     const guard = all.find((m) => m.guardrail === "breach") ?? all.find((m) => m.guardrail === "at_risk");
-    // SUBSTITUTION IS ONLY HONEST WHERE THE SLOT IS ABOUT "SOME OTHER METRIC".
-    // `shift` and `cost` are: any row that moved the right or wrong way answers
-    // them. `effect` and `prediction` are about the metric the change TOUCHED
-    // and the metric the brief NAMED — usually the same one — so an unrelated
-    // row under either is a figure that argues something nobody claimed. Those
-    // two get the decision metric or nothing at all, and the prose stands on
-    // its own. A misleading number is worse than an absent one.
+    // EVERY MOVEMENT CARRIES A FIGURE while the run has an unclaimed one to
+    // give. A blank slot reads as missing data, and it was: two of four
+    // arrived as prose alone.
+    //
+    // The thing to protect against is not substitution, it is substituting
+    // NONSENSE. Putting the bounce-rate guardrail under "against the
+    // prediction" states a fact nobody claimed, so guardrails are excluded
+    // everywhere except `cost`, which is the one slot they answer.
+    const story = movers.filter((m) => !m.isDecision && !m.guardrail);
+    // LAST RESORT: an adoption row. It has no lift — a one-arm surface has
+    // nothing to compare against — but it does have a real figure, its rate,
+    // and a take-up number is a safer thing to show under any heading than a
+    // guardrail's safety claim. Only reached when every mover is spoken for.
+    const adoption = all.filter((m) => !m.hidden && m.featureOnly && !m.headline.absent);
     switch (id) {
-      case "effect": return [nominated, decision];
-      case "shift": return [nominated, ...favourable, ...movers.filter((m) => !m.isDecision)];
-      case "cost": return [nominated, ...against, guard ?? null, ...movers.filter((m) => !m.isDecision)];
-      case "prediction": return [nominated, decision];
+      // What the change TOUCHED: the decision metric, else the biggest move.
+      case "effect": return [nominated, decision, ...story, ...adoption];
+      // Where it WENT: something that moved the right way.
+      case "shift": return [nominated, ...favourable.filter((m) => !m.guardrail), ...story, ...adoption];
+      // What it COST: the wrong way, or a live guardrail — its one home.
+      case "cost": return [nominated, ...against, guard ?? null, ...story, ...adoption];
+      // Against the PREDICTION: the metric the brief named, else the outcome
+      // furthest down the story that nothing else has spoken for.
+      case "prediction": return [nominated, decision, ...[...story].reverse(), ...adoption];
     }
   };
 

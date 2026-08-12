@@ -91,21 +91,24 @@ else console.log("no metric repeats across the four movements");
 //    the two movements about the decision metric with no figure at all — half
 //    the story, silently. A clash must SUBSTITUTE, not blank, while the run
 //    still has an unclaimed metric to give.
-//    `shift` and `cost` may substitute freely and so must never be blank while
-//    an unclaimed mover exists. `effect` and `prediction` are about the metric
-//    the change touched and the one the brief named, so they take the decision
-//    metric or nothing — an unrelated row there argues something nobody
-//    claimed. Only ONE of those two can hold it, by rule (1).
-const movers = model.all.filter((m) => !m.hidden && m.lift.raw !== undefined && m.lift.raw !== 0).length;
+//    EVERY movement carries one while the run has an unclaimed metric to give.
+//    A blank slot reads as missing data — and it was: dedupe-by-blanking left
+//    two of four as prose alone.
+// Rows that can supply a figure at all — a mover, or an adoption rate.
+const movers = model.all.filter((m) => !m.hidden && !m.headline.absent).length;
+const blanks = model.story.movements.filter((m) => !m.metric);
+if (blanks.length && movers >= model.story.movements.length) {
+  mvFail++;
+  console.log(`FAIL: ${blanks.length} movement(s) blank with ${movers} movers available — ${blanks.map((b) => b.label).join(", ")}`);
+} else {
+  console.log(`${model.story.movements.filter((m) => m.metric).length} of ${model.story.movements.length} movements carry a distinct metric`);
+}
+// A guardrail answers "what it cost" and nothing else — under any other
+// heading it states a fact nobody claimed.
 for (const mv of model.story.movements) {
-  const substitutable = mv.id === "shift" || mv.id === "cost";
-  if (!mv.metric && substitutable && movers >= model.story.movements.length) {
+  if (mv.metric?.guardrail && mv.id !== "cost") {
     mvFail++;
-    console.log(`FAIL: "${mv.label}" can substitute but is blank, with ${movers} movers available`);
+    console.log(`FAIL: guardrail "${mv.metric.label}" placed under "${mv.label}"`);
   }
 }
-const carried = model.story.movements.filter((m) => m.metric).length;
-console.log(`${carried} of ${model.story.movements.length} movements carry a distinct metric`);
-const decisionSlots = model.story.movements.filter((m) => (m.id === "effect" || m.id === "prediction") && m.metric);
-if (decisionSlots.length > 1) { mvFail++; console.log("FAIL: effect and prediction both hold a metric — one of them is a repeat"); }
 if (mvFail) process.exit(1);
