@@ -19,6 +19,7 @@ const ICON = {
   activity: "M22 12h-4l-3 9L9 3l-3 9H2",
   users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
   brand: "M3 21h18M5 21V7l8-4v18M19 21V11l-6-3M9 9v.01M9 12v.01M9 15v.01M9 18v.01",
+  reports: "M4 4h16v16H4zM8 9h8M8 13h8M8 17h5",
 };
 
 export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionPayload | null; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean }) {
@@ -74,6 +75,10 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate }: { user: SessionP
         {renderLink({ href: "/prototypes", label: "Prototypes", icon: ICON.prototypes })}
         {renderLink({ href: "/handoff", label: "Handoff", icon: ICON.handoff })}
         {renderLink({ href: "/backlog", label: "Backlog", icon: ICON.activity })}
+        {/* A Report is a first-class object a human creates and names — the same
+            class as a Prototype — and it spans prototypes, so it cannot live
+            inside one. */}
+        {renderLink({ href: "/reports", label: "Reports", icon: ICON.reports })}
 
         {sectionHeader("Configuration")}
         {renderLink({ href: "/environments", label: "Environments", icon: ICON.pages })}
