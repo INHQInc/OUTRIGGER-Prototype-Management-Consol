@@ -746,39 +746,41 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
   const unclaimed = (m: MetricView | null | undefined): m is MetricView =>
     Boolean(m) && !claimed.has(m!.key);
 
-  /** Candidates in preference order for each movement, best first. Every entry
-   *  is a real row from this run; nothing is fabricated to fill a slot. */
+  /** Candidates in preference order, best first. Every entry is a real row of
+   *  this run with a PRINTABLE figure — a row whose lift is absent renders as
+   *  an em dash, which is a blank with extra steps. */
   const candidatesFor = (id: MovementView["id"], nominated: MetricView | null): (MetricView | null)[] => {
-    const movers = [...supporting, ...all]
-      .filter((m) => !m.hidden && m.lift.raw !== undefined && m.lift.raw !== 0)
-      .sort((a, z) => Math.abs(z.lift.raw!) - Math.abs(a.lift.raw!));
-    const favourable = movers.filter((m) => m.favourable === true && !m.isDecision);
-    const against = movers.filter((m) => m.favourable === false && !m.isDecision);
-    const guard = all.find((m) => m.guardrail === "breach") ?? all.find((m) => m.guardrail === "at_risk");
-    // EVERY MOVEMENT CARRIES A FIGURE while the run has an unclaimed one to
-    // give. A blank slot reads as missing data, and it was: two of four
-    // arrived as prose alone.
-    //
-    // The thing to protect against is not substitution, it is substituting
-    // NONSENSE. Putting the bounce-rate guardrail under "against the
-    // prediction" states a fact nobody claimed, so guardrails are excluded
-    // everywhere except `cost`, which is the one slot they answer.
-    const story = movers.filter((m) => !m.isDecision && !m.guardrail);
-    // LAST RESORT: an adoption row. It has no lift — a one-arm surface has
-    // nothing to compare against — but it does have a real figure, its rate,
-    // and a take-up number is a safer thing to show under any heading than a
-    // guardrail's safety claim. Only reached when every mover is spoken for.
-    const adoption = all.filter((m) => !m.hidden && m.featureOnly && !m.headline.absent);
+    const printable = all.filter((m) => !m.hidden && !m.headline.absent);
+    const ordered = [...printable].sort((a, z) => Math.abs(z.lift.raw ?? 0) - Math.abs(a.lift.raw ?? 0));
+    // A GUARDRAIL ANSWERS ONE QUESTION: what it cost. Under any other heading
+    // it states a fact nobody claimed. This holds for the ANALYST'S OWN
+    // NOMINATION too — an earlier version excluded guardrails from the
+    // fallbacks only, and a nominated one walked straight past the guard.
+    const open = ordered.filter((m) => !m.guardrail);
+    const story = open.filter((m) => !m.isDecision);
+    const favourable = story.filter((m) => m.favourable === true);
+    const against = story.filter((m) => m.favourable === false);
+    const guard = ordered.find((m) => m.guardrail === "breach") ?? ordered.find((m) => m.guardrail === "at_risk") ?? null;
+    const lead = decision && !decision.headline.absent ? decision : null;
+    const asked = nominated && !nominated.headline.absent && (id === "cost" || !nominated.guardrail) ? nominated : null;
+
     switch (id) {
       // What the change TOUCHED: the decision metric, else the biggest move.
-      case "effect": return [nominated, decision, ...story, ...adoption];
+      case "effect": return [asked, lead, ...story, ...open];
       // Where it WENT: something that moved the right way.
-      case "shift": return [nominated, ...favourable.filter((m) => !m.guardrail), ...story, ...adoption];
+      case "shift": return [asked, ...favourable, ...story, ...open];
       // What it COST: the wrong way, or a live guardrail — its one home.
-      case "cost": return [nominated, ...against, guard ?? null, ...story, ...adoption];
-      // Against the PREDICTION: the metric the brief named, else the outcome
-      // furthest down the story that nothing else has spoken for.
-      case "prediction": return [nominated, decision, ...[...story].reverse(), ...adoption];
+      // `ordered` last, and only here: it is the one list that still contains
+      // guardrails, and "what it cost" is the one slot they belong under. A
+      // PASSING guardrail is not in `guard` and is excluded from `open`, so
+      // without this the slot went blank while that row sat unclaimed.
+      case "cost": return [asked, ...against, guard, ...story, ...open, ...ordered];
+      // Against the PREDICTION: the metric the brief named, else the biggest
+      // thing nothing else has spoken for. This took the list in REVERSE on
+      // the theory that the last row is furthest down the funnel — an
+      // inference `order` cannot support, and it handed the slot the smallest
+      // mover while the outcome the brief predicted sat unclaimed beside it.
+      case "prediction": return [asked, lead, ...story, ...open];
     }
   };
 
