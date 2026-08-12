@@ -109,7 +109,10 @@ export async function sendReadoutEmail(opts: {
   } catch (e) {
     // The failure is RECORDED, so a schedule that has been failing for a month
     // is visible in the app rather than only in a log nobody reads.
-    await mutateReportSettings(opts.proto.key, (cur) => ({ ...cur, lastError: (e as Error).message.slice(0, 300) }));
+    // Clear the partial too: the two describe the SAME run, so leaving last
+    // week's "1 of 5 didn't go out" beside this week's hard failure reports two
+    // outcomes for one attempt.
+    await mutateReportSettings(opts.proto.key, (cur) => ({ ...cur, lastError: (e as Error).message.slice(0, 300), lastPartial: undefined }));
     throw e;
   }
 
@@ -123,7 +126,12 @@ export async function sendReadoutEmail(opts: {
     ...cur,
     lastSentAt: new Date().toISOString(),
     lastSentTo: out.accepted,
-    lastError: partial,
+    // A partial is NOT the run failing. Writing it to `lastError` made a
+    // four-of-five delivery render as "Last attempt failed", which reads as
+    // "nobody got it" — and clearing the previous run's real error is the
+    // point of setting it to undefined here.
+    lastError: undefined,
+    lastPartial: partial,
   }));
   return { sent: out.accepted.length, to: out.accepted, subject, ...(partial ? { warning: partial } : {}) };
 }

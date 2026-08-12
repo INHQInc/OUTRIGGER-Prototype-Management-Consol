@@ -570,7 +570,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [mail, setMail] = useState<{
     recipients: string[];
     schedule?: { enabled: boolean; day: number };
-    lastSentAt?: string; lastSentTo?: string[]; lastError?: string;
+    lastSentAt?: string; lastSentTo?: string[]; lastError?: string; lastPartial?: string;
   } | null>(null);
   const [mailUnavailable, setMailUnavailable] = useState<string | null>(null);
   const [mailFrom, setMailFrom] = useState<string | null>(null);
@@ -1732,11 +1732,20 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               </p>
             </div>
 
-            {(mail?.lastSentAt || mail?.lastError) && (
-              <div className="border-t border-border/60 pt-3 text-[12.5px] leading-snug">
-                {mail.lastError
-                  ? <p className="text-danger">Last attempt failed: {mail.lastError}</p>
-                  : <p className="text-muted-2">Last sent {mail.lastSentAt?.slice(0, 16).replace("T", " ")} to {mail.lastSentTo?.join(", ")}</p>}
+            {(mail?.lastSentAt || mail?.lastError || mail?.lastPartial) && (
+              <div className="border-t border-border/60 pt-3 text-[12.5px] leading-snug space-y-1">
+                {/* THREE OUTCOMES, not two. A partial send is a delivery that
+                    happened AND a person who is missing; collapsing it into
+                    "failed" hid the delivery, and collapsing it into "sent"
+                    would hide the person. */}
+                {mail.lastError ? (
+                  <p className="text-danger">Last attempt failed: {mail.lastError}</p>
+                ) : (
+                  <>
+                    <p className="text-muted-2">Last sent {mail.lastSentAt?.slice(0, 16).replace("T", " ")} to {mail.lastSentTo?.join(", ")}</p>
+                    {mail.lastPartial && <p className="text-warn">{mail.lastPartial}</p>}
+                  </>
+                )}
               </div>
             )}
 

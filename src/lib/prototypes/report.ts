@@ -37,7 +37,14 @@ export interface ReportSettings {
   };
   lastSentAt?: string;
   lastSentTo?: string[];
+  /** THE WHOLE SEND FAILED — nothing left. */
   lastError?: string;
+  /** SOME of them didn't go out. Kept apart from `lastError` because they are
+   *  different facts with different responses: a whole-run failure means the
+   *  report did not happen, a partial means it did and one person is missing.
+   *  Both used to be written to `lastError`, so four of five delivered read as
+   *  an outright failure and the report looked broken when it had worked. */
+  lastPartial?: string;
 }
 
 const key = (k: string) => `report:${k}`;

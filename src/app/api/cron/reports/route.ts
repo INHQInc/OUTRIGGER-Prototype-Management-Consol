@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
       failed[proto.key] = msg;
       // Recorded on the prototype as well, so the person who owns the report
       // sees it in the app rather than in a log they will never open.
-      await mutateReportSettings(proto.key, (cur) => ({ ...cur, lastError: msg })).catch(() => {});
+      await mutateReportSettings(proto.key, (cur) => ({ ...cur, lastError: msg, lastPartial: undefined })).catch(() => {});
     }
   }
 
