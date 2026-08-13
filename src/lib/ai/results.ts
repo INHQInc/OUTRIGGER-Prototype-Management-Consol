@@ -441,6 +441,13 @@ export const rejectReason = (v: unknown, cap: number): string | null => {
   if (/<\s*\/?\s*[a-z][^>]*>/i.test(t)) return "contains markup";
   // Tags removed can leave a fragment. A section is a sentence, not a word.
   if (t.length < 15) return "too short to be a sentence";
+  // A METRIC KEY IS NOT PROSE. The model sometimes fills `text` with the key it
+  // was asked to put in `measure`, and a key is long enough and digit-free
+  // enough to clear every other rule — so "composite:opti-primary" rendered as
+  // the analyst's sentence under "what the change did". The key is salvaged as
+  // the measure in `sec()`; the sentence still has to be written, so this
+  // triggers the repair with a reason that names the fault.
+  if (/^(?:metric|composite):/i.test(t)) return "the text is a metric key, not a sentence";
   return null;
 };
 
@@ -1001,9 +1008,14 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     const o = typeof v === "string" ? { text: v } : ((v ?? {}) as Record<string, unknown>);
     const text = clean(o.text, 420, "section");
     if (!text) return undefined;
-    // The measure may arrive properly, or smuggled inside the text as part of
-    // the same scaffolding the prose was wrapped in. Either beats no figure.
-    const mk = (typeof o.measure === "string" ? o.measure.trim() : "") || scaffoldedMeasure(o.text);
+    // The measure may arrive properly, smuggled inside the text as part of the
+    // same scaffolding the prose was wrapped in, or BE the text — the model
+    // sometimes puts the key where the sentence goes. Any of the three beats
+    // losing the figure.
+    const asKey = normaliseProse(o.text);
+    const mk = (typeof o.measure === "string" ? o.measure.trim() : "")
+      || scaffoldedMeasure(o.text)
+      || (/^(?:metric|composite):/i.test(asKey) ? asKey : "");
     return { text, ...(allowedMeasures.has(mk) ? { measureKey: mk } : {}) };
   };
   let read = (() => {

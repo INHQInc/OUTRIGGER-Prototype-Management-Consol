@@ -43,6 +43,12 @@ check("markup soup strips to nothing", rejectReason("<div><span></span></div>", 
 check("a tag around a fragment", rejectReason("<b>Rooms</b>", 420), "too short to be a sentence");
 check("empty", rejectReason("", 420), "empty");
 check("a bare fragment", rejectReason("Rooms", 420), "too short to be a sentence");
+// The model sometimes fills `text` with the key meant for `measure`. A key is
+// long enough and digit-free enough to pass every other rule, so
+// "composite:opti-primary" rendered as the analyst's sentence.
+check("a composite key as the text", rejectReason("composite:opti-primary", 420), "the text is a metric key, not a sentence");
+check("a metric key as the text", rejectReason("metric:Booking Complete", 420), "the text is a metric key, not a sentence");
+check("prose merely NAMING a key is fine", rejectReason("The composite: booking completions rose across the week.", 420), null);
 check("over the cap", rejectReason("x".repeat(500), 420), "over 420 chars (500)");
 check("a digit", rejectReason("The click fell 56% below control.", 420), "contains a digit");
 check("statistics vocabulary", rejectReason("The result is statistically significant.", 420), "statistics vocabulary");
