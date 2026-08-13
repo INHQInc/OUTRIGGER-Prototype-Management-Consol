@@ -456,13 +456,24 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     //    click on the ↑/↓ toggle writes; the composite's own field is the
     //    fallback, and the decision descriptor carries Optimizely's.
     const declaredHere = directionDeclared(input.plan, m.key);
-    const decDir = isDecision ? input.decision?.direction : undefined;
+    // THE SAME METRIC UNDER TWO NAMES SHARES ITS DIRECTION. One event can exist
+    // as the console's decision composite AND as Optimizely's own row, with the
+    // winning direction declared on one key only — so the identical fall
+    // rendered GREEN as the decision metric and RED as the raw row, in the same
+    // document. A reader cannot be told a number is both the win and the cost.
+    // Matched on the label, because that is the only thing the two rows share
+    // and it is what the reader sees.
+    const twinsDecision =
+      !isDecision &&
+      Boolean(input.decision?.label) &&
+      m.label.trim().toLowerCase() === input.decision!.label.trim().toLowerCase();
+    const decDir = isDecision || twinsDecision ? input.decision?.direction : undefined;
     const direction: "increase" | "decrease" = declaredHere
       ? effectiveDirection(input.plan, m.key)
       : decDir === "decrease"
         ? "decrease"
         : "increase";
-    const dirDeclared = declaredHere || Boolean(isDecision && input.decision?.directionDeclared);
+    const dirDeclared = declaredHere || Boolean((isDecision || twinsDecision) && input.decision?.directionDeclared);
 
     const featureOnly = m.featureOnly ?? null;
     const lift = featureOnly ? undefined : f?.lift;
@@ -742,9 +753,18 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
   // list appropriate to what it is for, skipping anything already taken. Only
   // when the run genuinely has no unclaimed metric left does a movement go
   // without — degrade, never invent.
+  // CLAIMED BY KEY *AND* BY LABEL. One metric can exist as two rows — the
+  // console's decision composite and Optimizely's own row for the same event —
+  // and `resolveDecisionMap` names that hazard exactly: "the readout must not
+  // print the same number twice under two names". Keys differ, so a key-only
+  // check waved both through: "Hero CTA Click −56.0%" appeared under "what the
+  // change did" AND "against the prediction", in OPPOSITE COLOURS, because the
+  // winning direction was declared on one row and not the other. To the reader
+  // they are one metric, so identity here is what the reader sees.
   const claimed = new Set<string>();
+  const identity = (m: MetricView) => m.label.trim().toLowerCase();
   const unclaimed = (m: MetricView | null | undefined): m is MetricView =>
-    Boolean(m) && !claimed.has(m!.key);
+    Boolean(m) && !claimed.has(m!.key) && !claimed.has(identity(m!));
 
   /** Candidates in preference order, best first. Every entry is a real row of
    *  this run with a PRINTABLE figure — a row whose lift is absent renders as
@@ -814,7 +834,7 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
     if (!sec?.text) return null;
     const nominated = sec.measureKey ? byKey[sec.measureKey] ?? null : null;
     const metric = candidatesFor(spec.id, nominated).find(unclaimed) ?? null;
-    if (metric) claimed.add(metric.key);
+    if (metric) { claimed.add(metric.key); claimed.add(identity(metric)); }
     return { ...spec, text: sec.text, metric };
   }).filter((m): m is MovementView => m !== null);
 

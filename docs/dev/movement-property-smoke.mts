@@ -43,6 +43,14 @@ function generate(): { input: Parameters<typeof buildReadoutModel>[0]; shape: Sh
   const adoption = keys.filter((k) => !guardrails.includes(k) && rnd() < 0.15);
   const decisionKey = rnd() < 0.85 ? keys[0] : null;
 
+  // ONE METRIC, TWO ROWS. The console's decision composite and Optimizely's own
+  // row for the same event carry different keys and the SAME label — and the
+  // winning direction is often declared on only one, so they render in opposite
+  // colours. This produced "Hero CTA Click −56.0%" under two movements at once,
+  // green in one and red in the other. Generated here so it cannot return.
+  const twinOf = rnd() < 0.35 && keys.length > 1 ? keys[1] : null;
+  const labelFor = (k: string) => (k === twinOf ? `Metric ${keys[0]}` : `Metric ${k}`);
+
   const metrics = keys.map((key) => {
     const isAdoption = adoption.includes(key);
     // Every awkward case a real run produces: an absent lift, an exact zero,
@@ -50,7 +58,7 @@ function generate(): { input: Parameters<typeof buildReadoutModel>[0]; shape: Sh
     const lift = isAdoption ? undefined : pick([undefined, 0, 0.0001, -0.02, 0.35, -0.56, 2.4]);
     const rate = 0.01 + rnd() * 0.4;
     return {
-      key, label: `Metric ${key}`, kind: "metric", test: "proportion",
+      key, label: labelFor(key), kind: "metric", test: "proportion",
       ...(isAdoption ? { featureOnly: "variation" } : {}),
       cells: [
         { variationId: B, name: "Control", n: N, count: 100, rate: isAdoption ? 0 : rate, isBaseline: true },
@@ -129,15 +137,26 @@ for (let n = 0; n < RUNS; n++) {
   const rowsWithFigure = model.all.filter((m) => !m.hidden && !m.headline.absent);
   const known = new Set(model.all.map((m) => m.key));
 
-  // 1. distinct
+  // 1. distinct BY KEY and BY LABEL. Two rows for one metric are one metric to
+  //    the reader, and showing both twice states the same fact under two names
+  //    — in opposite colours, when direction is declared on only one of them.
   const used = mvs.map((m) => m.metric?.key).filter(Boolean) as string[];
-  if (new Set(used).size !== used.length) report(n, before, `a metric appears twice — ${used.join(", ")}`);
+  if (new Set(used).size !== used.length) report(n, before, `a key appears twice — ${used.join(", ")}`);
+  const usedLabels = mvs.map((m) => m.metric?.label.trim().toLowerCase()).filter(Boolean) as string[];
+  if (new Set(usedLabels).size !== usedLabels.length) {
+    report(n, before, `a LABEL appears twice — ${usedLabels.join(" | ")}`);
+  }
 
   // 2. never blank while a figure is available and unclaimed — except the one
   //    legitimate case: everything left is a guardrail, and only "what it
   //    cost" may show one. A blank then is the honest answer.
   const claimedKeys = new Set(used);
-  const spare = rowsWithFigure.filter((m) => !claimedKeys.has(m.key));
+  const claimedLabels = new Set(usedLabels);
+  // A twin row — same label, different key — is NOT spare: showing it would
+  // state the same fact under a second name.
+  const spare = rowsWithFigure.filter(
+    (m) => !claimedKeys.has(m.key) && !claimedLabels.has(m.label.trim().toLowerCase()),
+  );
   for (const mv of mvs.filter((m) => !m.metric)) {
     const usable = mv.id === "cost" ? spare : spare.filter((m) => !m.guardrail);
     if (usable.length) report(n, before, `"${mv.id}" blank with ${usable.length} usable row(s) unclaimed`);
@@ -154,7 +173,8 @@ for (let n = 0; n < RUNS; n++) {
   for (const mv of mvs) {
     if (!mv.metric || mv.metric.role !== "exploratory") continue;
     if (readIn[mv.id]?.measureKey === mv.metric.key) continue;
-    const spareTop = rowsWithFigure.filter((m) => topLine.has(m.key) && !used.includes(m.key) && (mv.id === "cost" || !m.guardrail));
+    const spareTop = rowsWithFigure.filter((m) => topLine.has(m.key) && !claimedKeys.has(m.key)
+      && !claimedLabels.has(m.label.trim().toLowerCase()) && (mv.id === "cost" || !m.guardrail));
     if (spareTop.length) report(n, before, `"${mv.id}" substituted exploratory "${mv.metric.key}" while ${spareTop.length} top-line row(s) were free`);
   }
 
