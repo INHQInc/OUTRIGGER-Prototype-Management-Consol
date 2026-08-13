@@ -281,6 +281,15 @@ export function deriveHeadline(model: ReadoutModel): { text: string; trace: Head
     if (suspects[0]) ladder.push(C(`${N(suspects[0], 34)} may be slipping, and nothing has answered`, "SUSPECT", ["HARM"], [suspects[0].key]));
     if (movements[0]) ladder.push(C(`${N(movements[0], 34)} ${moveWord(movements[0])}, and the outcome has not followed`, "MOVED_NO_VERDICT", ["MOVEMENT", "DECISION_QUIET"], [movements[0].key]));
     if (unproven[0]) ladder.push(C(`${N(unproven[0], 30)} is not yet proven safe, and nothing has answered`, "UNPROVEN", [], [unproven[0].key]));
+    // THE DECISION METRIC ITSELF. Every rung above looks at supporting rows,
+    // so a run whose DECISION metric had settled — the single most important
+    // fact available — still fell through to "nothing has answered yet". Stated
+    // as a movement, not a win: `keep_running` forbids claiming the decision,
+    // and it is the verb's job to report and the verdict's job to judge.
+    if (decision?.beyondLuck) {
+      ladder.push(C(`${N(decision, 34)} ${moveWord(decision)}, and nothing else has followed`, "DECISION_MOVED", ["MOVEMENT"], [decision.key]));
+      ladder.push(C(`${N(decision, 44)} ${moveWord(decision)}`, "DECISION_MOVED_BARE", ["MOVEMENT"], [decision.key]));
+    }
 
     // Nothing is established. Say WHICH kind of nothing — the old code had one
     // sentence for all of these and it was the least informative of the three.

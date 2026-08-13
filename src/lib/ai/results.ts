@@ -394,6 +394,20 @@ function normFigure(s: string): string {
 
 /** Statistician notation an executive doesn't read. The console says
  *  "beyond what luck explains"; q-values live in The numbers. */
+/**
+ * THE HEADLINE CAP.
+ *
+ * It was 80, which was an assumption about one line of email at 21px and not a
+ * constraint anything actually has: the page wraps at 64ch and the email column
+ * is 900px wide. An analyst sentence was refused at EIGHTY-FIVE characters and
+ * the readout then showed no headline at all — five characters over a number
+ * nobody chose deliberately, and the reader lost the sentence entirely.
+ *
+ * Generous enough that a real sentence fits, tight enough that a paragraph
+ * cannot masquerade as a headline.
+ */
+export const HEADLINE_MAX = 140;
+
 const STAT_NOTATION = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bFDR\b|\bconfidence interval\b|\bstatistically significant\b/i;
 
 //
@@ -965,7 +979,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
     return normaliseProse(v);
   };
 
-  let headline = clean(raw.headline, 80, "headline");
+  let headline = clean(raw.headline, HEADLINE_MAX, "headline");
   let executive = clean(raw.executive, 900, "executive");
   let lede = clean(raw.lede, 900, "lede");
   // A digit or an over-long sentence used to swap the analyst's paragraph for
@@ -987,7 +1001,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       const m = /\{[\s\S]*\}/.exec(txt);
       if (m) {
         const parsed = JSON.parse(m[0]) as { headline?: string; executive?: string; lede?: string };
-        headline = headline || clean(parsed.headline, 80, "headline(repair)");
+        headline = headline || clean(parsed.headline, HEADLINE_MAX, "headline(repair)");
         executive = executive || clean(parsed.executive, 900, "executive(repair)");
         lede = lede || clean(parsed.lede, 900, "lede(repair)");
       }

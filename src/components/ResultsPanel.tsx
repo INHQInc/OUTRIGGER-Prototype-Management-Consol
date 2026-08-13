@@ -1388,12 +1388,17 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       // The decision metric always reads first — it is the one the verdict
       // adjudicates, so it cannot appear third behind a supporting metric.
       picked.sort((a, b) => Number(b.key === headlineKey) - Number(a.key === headlineKey));
-      if (picked.length) return { headline: reading.headline, lede: reading.lede, read: reading.read, beats: picked };
+      // `model.story.headline` — NEVER `reading.headline`. This branch returned
+      // the analyst's headline raw, so a rejected one (over the cap, a digit)
+      // left the readout with NO headline at all, while the model was holding
+      // a true computed one the whole time. Validation must never subtract
+      // content without a guaranteed replacement.
+      if (picked.length) return { headline: model.story.headline, lede: reading.lede, read: reading.read, beats: picked };
     }
     // No reading yet (or a cached one in the old shape): the computed story.
     const t = templateStory({ results: live!, stats: statsEff ?? null, verdict, supporting, headlineFloor: model.headlineFloor });
     return {
-      headline: reading?.headline || t.headline,
+      headline: model.story.headline || t.headline,
       lede: reading?.lede || t.lede,
       read: reading?.read,
       beats: t.beats.map(beatFor).filter(Boolean) as Beat[],
