@@ -239,14 +239,22 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
             // The indicator is placed by slot number, counted over this column
             // WITHOUT the dragged card — the same count `targetAt` produces.
             let slot = 0;
-            // ZERO LAYOUT IMPACT, DELIBERATELY. As a normal flex child this
-            // would cost its own height plus a `gap-1.5` on each side — 12px of
-            // shift, applied to the very card midpoints `targetAt` measures, so
-            // the indicator would move the target it is pointing at and
-            // oscillate. `h-0` with `-my-[6px]` cancels both gaps exactly; the
-            // bar is drawn out of flow, centred on the seam.
+            // ZERO LAYOUT IMPACT, DELIBERATELY — and the arithmetic matters,
+            // because any shift here moves the very card midpoints `targetAt`
+            // measures, so the indicator would displace the slot it is pointing
+            // at and a pointer parked on a boundary would oscillate.
+            //
+            // Inserting an item between two cards costs gap + itsMarginBox +
+            // gap where the two cards previously cost one gap. With gap-1.5 =
+            // 6px, the margin box has to come to −6px for the total to stay at
+            // 6 — so −3px top and bottom, NOT −6px each. (−6 each nets −12 and
+            // collapses the two cards flush together.) Flexbox does not fold
+            // margins into `gap`; they add, and negative ones subtract.
+            //
+            // The item's border box then lands exactly mid-gap, and the bar
+            // draws out of flow, centred on it.
             const line = (
-              <div className="relative h-0 -my-[6px] pointer-events-none" aria-hidden>
+              <div className="relative h-0 -my-[3px] pointer-events-none" aria-hidden>
                 <span className="absolute -top-[1.5px] left-0 right-0 h-[3px] rounded-full bg-accent" />
               </div>
             );
