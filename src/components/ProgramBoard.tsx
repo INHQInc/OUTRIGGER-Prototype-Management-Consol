@@ -179,8 +179,12 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
 
   // ── the press → drag → release sequence ────────────────────────────────────
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>, card: BoardCard) {
-    if (card.locked || e.button !== 0) return;
+    // BEFORE the guard, not after. This flag is what suppresses the click that
+    // follows a drag, and it stays set until the next press clears it — so if
+    // clearing sat behind the locked/right-button early return, the first
+    // ordinary click on a LOCKED card after any drag would be swallowed.
     draggedRef.current = false;
+    if (card.locked || e.button !== 0) return;
     const el = e.currentTarget;
     const start = { key: card.key, x: e.clientX, y: e.clientY, hold: null as ReturnType<typeof setTimeout> | null };
     pressRef.current = start;
@@ -199,6 +203,12 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     const press = pressRef.current;
     if (!press || press.key !== card.key) return;
     if (!draggedRef.current) {
+      // A PRESS IS ONLY LIVE WHILE A BUTTON IS DOWN. Without capture (which we
+      // don't take until the drag starts) a release outside this card never
+      // fires our pointerup, leaving the press recorded — and then merely
+      // moving the mouse back over the card later would clear the 5px
+      // threshold and begin a drag with nothing held down.
+      if (e.buttons === 0) { if (press.hold) clearTimeout(press.hold); pressRef.current = null; return; }
       const far = Math.hypot(e.clientX - press.x, e.clientY - press.y) > DRAG_THRESHOLD;
       if (!far) return;
       if (e.pointerType === "touch") { // moved before the hold — that's a scroll
