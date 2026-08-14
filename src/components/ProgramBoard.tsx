@@ -57,9 +57,12 @@ function MiniPipeline({ pipeline }: { pipeline: Pipeline }) {
  * and `draggable={false}` on it left the drag source ambiguous), it can't be
  * driven on touch at all, and mutating the source node in `dragstart` — which
  * the fade did — aborts the drag outright in Firefox. Pointer events have none
- * of that: capture makes the sequence ours from press to release, the same code
- * serves mouse, pen and touch, and the commit reads a ref rather than state, so
- * it can't depend on a React flush landing before the release.
+ * of that: the same code serves mouse, pen and touch, and the commit reads a
+ * ref rather than state, so it can't depend on a React flush landing before the
+ * release.
+ *
+ * The gesture itself is owned by the WINDOW once a card is pressed, not by the
+ * card — see `onPointerDown` for why that distinction was the whole bug.
  */
 export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCard[]; archivedCount: number }) {
   const router = useRouter();
@@ -68,6 +71,8 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   /** Where the card would land right now — the column under the pointer and the
    *  slot within it, counted over that column WITHOUT the card being dragged. */
   const [drag, setDrag] = useState<{ key: string; col: BoardColumn; idx: number } | null>(null);
+  /** A card is held. Drives the window-level listeners that own the gesture. */
+  const [pressing, setPressing] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // The commit path reads refs, never state: a pointerup can arrive in the same
@@ -123,18 +128,11 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
 
   function endDrag() {
     dragRef.current = null;
+    if (pressRef.current?.hold) clearTimeout(pressRef.current.hold);
     pressRef.current = null;
     setDrag(null);
+    setPressing(false);
   }
-
-  // Escape abandons the drag — a board you can't back out of is a board you
-  // hesitate to touch.
-  useEffect(() => {
-    if (!drag) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") endDrag(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [drag]);
 
   async function persistPriorities(colCards: BoardCard[]) {
     const results = await Promise.all(colCards.map((c, i) =>
@@ -178,6 +176,23 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   }
 
   // ── the press → drag → release sequence ────────────────────────────────────
+  //
+  // ONCE A CARD IS PRESSED, THE GESTURE BELONGS TO THE WINDOW — not to the card,
+  // and not to whatever the cursor happens to be over. An earlier version put
+  // pointermove/pointerup on the card and only took pointer capture once the
+  // 5px threshold was cleared, which is a chicken-and-egg: the threshold could
+  // only be cleared by a move event that still landed ON the pressed card, and
+  // a real drag leaves the card on its very first move. The event log said it
+  // outright — pointerdown on the card, then every move retargeting to a
+  // neighbouring card, the grid, the next column — so a drag out of a column,
+  // the whole point of the gesture, could never start. Only a short slow wiggle
+  // inside the card worked, which is why it looked like "drag does nothing".
+  //
+  // Window listeners see every move regardless of what is underneath, so target
+  // identity stops mattering. Pointer capture would also fix the retargeting,
+  // but it retargets the compatibility mouse events too, so the click would
+  // land on the wrapper instead of the card's <a> and the card would stop
+  // navigating. Listening on the window costs nothing and keeps the link.
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>, card: BoardCard) {
     // BEFORE the guard, not after. This flag is what suppresses the click that
     // follows a drag, and it stays set until the next press clears it — so if
@@ -185,7 +200,6 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     // ordinary click on a LOCKED card after any drag would be swallowed.
     draggedRef.current = false;
     if (card.locked || e.button !== 0) return;
-    const el = e.currentTarget;
     const start = { key: card.key, x: e.clientX, y: e.clientY, hold: null as ReturnType<typeof setTimeout> | null };
     pressRef.current = start;
     if (e.pointerType === "touch") {
@@ -193,44 +207,62 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       start.hold = setTimeout(() => {
         if (pressRef.current !== start) return;
         draggedRef.current = true;
-        el.setPointerCapture(e.pointerId);
         setTarget(targetAt(start.x, start.y, card.key), card.key);
       }, TOUCH_HOLD_MS);
     }
+    setPressing(true);
   }
 
-  function onPointerMove(e: React.PointerEvent<HTMLDivElement>, card: BoardCard) {
-    const press = pressRef.current;
-    if (!press || press.key !== card.key) return;
-    if (!draggedRef.current) {
-      // A PRESS IS ONLY LIVE WHILE A BUTTON IS DOWN. Without capture (which we
-      // don't take until the drag starts) a release outside this card never
-      // fires our pointerup, leaving the press recorded — and then merely
-      // moving the mouse back over the card later would clear the 5px
-      // threshold and begin a drag with nothing held down.
-      if (e.buttons === 0) { if (press.hold) clearTimeout(press.hold); pressRef.current = null; return; }
-      const far = Math.hypot(e.clientX - press.x, e.clientY - press.y) > DRAG_THRESHOLD;
-      if (!far) return;
-      if (e.pointerType === "touch") { // moved before the hold — that's a scroll
-        if (press.hold) clearTimeout(press.hold);
-        pressRef.current = null;
-        return;
+  // Re-attached whenever `cards` changes so the closure below always measures
+  // and commits against the list currently on screen.
+  useEffect(() => {
+    if (!pressing) return;
+
+    const move = (e: PointerEvent) => {
+      const press = pressRef.current;
+      if (!press) return;
+      const card = cards.find((c) => c.key === press.key);
+      if (!card) return;
+      if (!draggedRef.current) {
+        // A PRESS IS ONLY LIVE WHILE A BUTTON IS DOWN. A release we never saw
+        // (over an iframe, outside the window) would otherwise leave the press
+        // recorded, and the next stray move would start a drag with nothing
+        // held down.
+        if (e.buttons === 0) { endDrag(); return; }
+        if (Math.hypot(e.clientX - press.x, e.clientY - press.y) <= DRAG_THRESHOLD) return;
+        if (e.pointerType === "touch") { endDrag(); return; } // moved before the hold — a scroll
+        draggedRef.current = true;
       }
-      draggedRef.current = true;
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
-    setTarget(targetAt(e.clientX, e.clientY, card.key), card.key);
-  }
+      // Once dragging, the page must not select text or scroll under us.
+      e.preventDefault();
+      setTarget(targetAt(e.clientX, e.clientY, press.key), press.key);
+    };
 
-  function onPointerUp(e: React.PointerEvent<HTMLDivElement>, card: BoardCard) {
-    const press = pressRef.current;
-    if (press?.hold) clearTimeout(press.hold);
-    if (!draggedRef.current) { pressRef.current = null; return; } // a click; the link handles it
-    // Re-read the position at the moment of release rather than trusting the
-    // last move — the two can differ by a frame, and the frame is the drop.
-    commit(targetAt(e.clientX, e.clientY, card.key), card);
-    endDrag();
-  }
+    const up = (e: PointerEvent) => {
+      const press = pressRef.current;
+      const card = press ? cards.find((c) => c.key === press.key) : null;
+      // Re-read the position at the moment of release rather than trusting the
+      // last move — the two can differ by a frame, and the frame is the drop.
+      if (draggedRef.current && card) commit(targetAt(e.clientX, e.clientY, card.key), card);
+      endDrag();
+    };
+
+    const cancel = () => endDrag();
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") endDrag(); };
+
+    // Non-passive: `move` calls preventDefault once the drag is live.
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", key);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pressing, cards]);
 
   const dragging = cardOf(drag?.key ?? null);
 
@@ -296,9 +328,6 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                         <div
                           ref={(el) => { if (el) cardRefs.current.set(c.key, el); else cardRefs.current.delete(c.key); }}
                           onPointerDown={(e) => onPointerDown(e, c)}
-                          onPointerMove={(e) => onPointerMove(e, c)}
-                          onPointerUp={(e) => onPointerUp(e, c)}
-                          onPointerCancel={endDrag}
                           // Native DnD would race our own sequence; the card's
                           // anchor is draggable by default, so refuse it here.
                           onDragStart={(e) => e.preventDefault()}
