@@ -57,9 +57,22 @@ conductors to be bolted on top just to navigate it. **New capability = a
 SECTION inside its stage** (anchor id, one card grammar) — never a new room
 or group. Status escalates INSIDE derivePipeline (anchored alerts: drift,
 cert, QA failing/stale) so every surface — rail dots, table strip, board —
-shares one derivation and can never disagree. **The global sidebar
-disappears inside a prototype** ("← Prototypes" is the exit): one nav
-column, total.
+shares one derivation and can never disagree. **ONE VERTICAL NAV, TOTAL** — and since 08-14 that one is the global
+sidebar, which is now ALWAYS present. The rooms became a horizontal TAB ROW
+inside the workspace, so the sidebar no longer has to vanish to keep the
+count at one, and you can move between prototypes without leaving the one
+you are in. Inside a prototype the sidebar defaults to a 56px ICON RAIL
+(label on hover); elsewhere it is labelled; an explicit toggle beats both
+and is remembered. The tabs keep the rooms' status dots — same
+`derivePipeline` derivation, so tabs, table strip and board cannot
+disagree. "← Prototypes" is gone: the sidebar is the exit, and a link back
+to a place already on screen is dead weight (§1).
+
+*Origin (08-14): "i want the left nav panel to always be present, no more
+navigating away… once you are in an experiment these vertical items on the
+left go away and we use a tab system."* The earlier rule — sidebar hidden
+inside a prototype — solved the same problem (two nav columns) by removing
+the wrong one.
 
 *Origin: "think about our product from a first principles perspective, not
 patching."*

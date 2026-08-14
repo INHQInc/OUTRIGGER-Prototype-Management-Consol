@@ -2,12 +2,47 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useSyncExternalStore } from "react";
 import type { SessionPayload } from "@/lib/auth/types";
 import type { BuildInfo } from "@/lib/build-info";
 import { OrgSwitcher, type OrgOption } from "./OrgSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface NavItem { href: string; label: string; icon: string; exact?: boolean }
+
+const RAIL_KEY = "opmc.rail.collapsed";
+const RAIL_EVENT = "opmc:rail";
+
+/**
+ * THE RAIL PREFERENCE, as an external store.
+ *
+ * `localStorage` is exactly that — state React does not own — and reading it
+ * into `useState` from an effect is both a lint error and a real hydration
+ * hazard: the server renders the default, the client swaps it a frame later,
+ * and the rail visibly jumps. `useSyncExternalStore` exists for this, with a
+ * distinct server snapshot so the two renders agree by construction.
+ */
+const railStore = {
+  subscribe(cb: () => void) {
+    window.addEventListener("storage", cb);
+    window.addEventListener(RAIL_EVENT, cb);
+    return () => {
+      window.removeEventListener("storage", cb);
+      window.removeEventListener(RAIL_EVENT, cb);
+    };
+  },
+  // A string, so React's Object.is check is stable across reads.
+  get(): string | null {
+    try { return window.localStorage.getItem(RAIL_KEY); } catch { return null; }
+  },
+  // No preference on the server — the caller falls back to the route default.
+  server(): string | null { return null; },
+  set(v: boolean) {
+    try { window.localStorage.setItem(RAIL_KEY, v ? "1" : "0"); } catch { /* private mode: this session only */ }
+    // Same-tab writes do not fire `storage`; this is what re-renders us.
+    window.dispatchEvent(new Event(RAIL_EVENT));
+  },
+};
 
 const ICON = {
   overview: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
@@ -27,12 +62,20 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
   const pathname = usePathname();
   const router = useRouter();
 
-  // Inside a prototype the global nav DISAPPEARS — you're in a context, and
-  // "← Prototypes" is the exit. A second nav column next to the workspace
-  // rail said nothing (user: "look how many navigation management areas we
-  // have now"). Everywhere else: the full labeled nav.
+  // THE NAV NEVER LEAVES. It used to vanish inside a prototype, because a
+  // second LABELLED column beside the workspace rail said nothing twice
+  // (user: "look how many navigation management areas we have now"). The
+  // rooms are a horizontal tab row now, so this is the only vertical nav in
+  // the app and there is nothing left for it to compete with — and you can
+  // move between prototypes without going back out first.
+  //
+  // Inside a prototype it defaults to the ICON RAIL: present, oriented, out
+  // of the way. Anywhere else it starts labelled. An explicit choice beats
+  // both and is remembered.
   const inPrototype = /^\/prototypes\/(?!new(?:\/|$))[^/]+/.test(pathname);
-  if (inPrototype) return null;
+  const saved = useSyncExternalStore(railStore.subscribe, railStore.get, railStore.server);
+  const collapsed = saved === "1" ? true : saved === "0" ? false : inPrototype;
+  const setCollapsed = (v: boolean) => railStore.set(v);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -40,9 +83,12 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
     router.refresh();
   }
 
-  const sectionHeader = (label: string) => (
-    <div className="px-3 pt-3 pb-1 text-[12.5px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>
-  );
+  // A group header cannot be a word at 56px. Collapsed, the groups are said
+  // with a rule instead — the grouping survives, the label does not pretend to.
+  const sectionHeader = (label: string) =>
+    collapsed
+      ? <div className="mx-3 my-2 border-t border-border/60" aria-hidden />
+      : <div className="px-3 pt-3 pb-1 text-[12.5px] font-semibold uppercase tracking-wider text-muted-2">{label}</div>;
 
   const renderLink = (item: NavItem) => {
     const active = item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -51,26 +97,67 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
         key={item.href}
         href={item.href}
         aria-label={item.label}
-        className={`flex items-center gap-3 px-3 py-2 text-[15px] rounded-lg font-medium transition-colors ${active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/50"}`}
+        // `title` gives the hover label for free, and unlike a rendered
+        // tooltip it cannot be clipped by the rail's own overflow — which is
+        // the failure mode of every hand-built tooltip inside a narrow column.
+        title={collapsed ? item.label : undefined}
+        className={`group relative flex items-center rounded-lg font-medium transition-colors ${
+          collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2"
+        } text-[15px] ${active ? "bg-surface-2 text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/50"}`}
       >
-        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={active ? "text-accent" : ""}>
+        <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${active ? "text-accent" : ""}`}>
           <path d={item.icon} />
         </svg>
-        {item.label}
+        {!collapsed && item.label}
+        {collapsed && (
+          // The visible label. Rendered beside the rail rather than inside it,
+          // so it is readable at 56px and never truncated.
+          <span className="pointer-events-none absolute left-full ml-2 z-50 hidden group-hover:block whitespace-nowrap rounded-md border border-border bg-surface px-2 py-1 text-[12.5px] font-medium text-foreground shadow-lg">
+            {item.label}
+          </span>
+        )}
       </Link>
     );
   };
 
   return (
-    <aside className="shrink-0 border-r border-border bg-surface flex flex-col w-60">
-      <div className="h-14 flex items-center border-b border-border px-5 gap-2.5">
+    <aside className={`shrink-0 border-r border-border bg-surface flex flex-col transition-[width] duration-150 ${collapsed ? "w-14" : "w-60"}`}>
+      <div className={`h-14 flex items-center border-b border-border gap-2.5 ${collapsed ? "justify-center px-0" : "px-5"}`}>
         <Link href="/" aria-label="Dashboard" className="w-7 h-7 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold text-[15px] shrink-0">O</Link>
-        <div className="text-[15px] font-semibold tracking-tight">Prototype Console</div>
+        {!collapsed && <div className="text-[15px] font-semibold tracking-tight">Prototype Console</div>}
+        {!collapsed && (
+          <button onClick={() => setCollapsed(true)} title="Collapse the sidebar" aria-label="Collapse the sidebar"
+            className="ml-auto text-muted-2 hover:text-foreground p-1 rounded">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        )}
       </div>
+      {collapsed && (
+        <button onClick={() => setCollapsed(false)} title="Expand the sidebar" aria-label="Expand the sidebar"
+          className="mx-auto mt-2 text-muted-2 hover:text-foreground p-1 rounded">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      )}
 
-      <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
+      {/* THE CUSTOMER IS NEVER HIDDEN, only abbreviated. Which tenant you are
+          acting on is the one thing that must not become ambiguous, so the
+          collapsed rail keeps its initial with the full name on hover rather
+          than dropping the control. */}
+      {collapsed ? (
+        <div className="flex justify-center py-2 border-b border-border" title={orgs.find((o) => o.id === activeOrgId)?.name ?? "Customer"}>
+          <div className="w-7 h-7 rounded-md border border-border bg-surface-2 flex items-center justify-center text-[12.5px] font-bold uppercase">
+            {(orgs.find((o) => o.id === activeOrgId)?.name ?? "?").slice(0, 1)}
+          </div>
+        </div>
+      ) : (
+        <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
+      )}
 
-      <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
+      <nav className={`flex-1 space-y-0.5 overflow-y-auto overflow-x-visible ${collapsed ? "px-2 py-3" : "p-3"}`}>
         {sectionHeader("Work")}
         {renderLink({ href: "/", label: "Dashboard", icon: ICON.overview, exact: true })}
         {renderLink({ href: "/prototypes", label: "Prototypes", icon: ICON.prototypes })}
@@ -97,15 +184,18 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
       </nav>
 
       {user ? (
-        <div className="border-t border-border p-3">
-          <div className="flex items-center gap-2.5 px-2 py-1.5">
-              <div className="w-7 h-7 rounded-full bg-surface-2 border border-border flex items-center justify-center text-[13px] font-semibold uppercase">
+        <div className={`border-t border-border ${collapsed ? "p-2" : "p-3"}`}>
+          <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "gap-2.5 px-2 py-1.5"}`}>
+              <div title={collapsed ? `${user.name ?? user.sub} · ${user.role}` : undefined}
+                className="w-7 h-7 rounded-full bg-surface-2 border border-border flex items-center justify-center text-[13px] font-semibold uppercase shrink-0">
                 {(user.name ?? user.sub).slice(0, 1)}
               </div>
-              <div className="min-w-0 flex-1 leading-tight">
-                <div className="text-[14px] font-medium truncate">{user.name ?? user.sub}</div>
-                <div className="text-[12.5px] text-muted-2 capitalize">{user.role}</div>
-              </div>
+              {!collapsed && (
+                <div className="min-w-0 flex-1 leading-tight">
+                  <div className="text-[14px] font-medium truncate">{user.name ?? user.sub}</div>
+                  <div className="text-[12.5px] text-muted-2 capitalize">{user.role}</div>
+                </div>
+              )}
               <ThemeToggle />
               <button onClick={logout} title="Sign out" className="text-muted-2 hover:text-foreground p-1">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -122,10 +212,11 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
           was wrong for an hour because a deploy had not finished. The answer
           belongs on screen. Preview and development say so; production shows
           the commit alone, because there the environment is not the news. */}
-      <div className="px-4 pb-3 pt-1 text-[11px] leading-tight text-muted-2 print:hidden" title={build.full ?? "running from source, not a build"}>
+      <div className={`pb-3 pt-1 text-[11px] leading-tight text-muted-2 print:hidden ${collapsed ? "px-1 text-center" : "px-4"}`}
+        title={build.full ?? "running from source, not a build"}>
         <span className="font-mono">{build.sha}</span>
-        {build.env !== "production" && <span className="ml-1.5 uppercase tracking-wide">{build.env}</span>}
-        {build.ref && build.ref !== "main" && <span className="ml-1.5">{build.ref}</span>}
+        {!collapsed && build.env !== "production" && <span className="ml-1.5 uppercase tracking-wide">{build.env}</span>}
+        {!collapsed && build.ref && build.ref !== "main" && <span className="ml-1.5">{build.ref}</span>}
       </div>
     </aside>
   );

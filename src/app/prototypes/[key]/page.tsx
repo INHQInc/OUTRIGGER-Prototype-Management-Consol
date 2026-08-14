@@ -393,57 +393,70 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   }
 
   return (
-    <div className="flex-1 min-h-0 grid grid-cols-[16.5rem_minmax(0,1fr)]">
+    <div className="flex-1 min-h-0 flex flex-col">
 
-      {/* ── THE COMMAND RAIL ── */}
-      <aside className="overflow-y-auto border-r border-border bg-surface px-3.5 py-4">
-        {/* Identity is THREE elements: exit, name+chip, the NEXT card. No
-            eyebrow (every prototype is a "web experiment prototype"), no
-            description (it lives in the Brief and on the table), no
-            wrapper box, no stage strip (the room dots carry per-stage
-            state). Boilerplate is clutter at rail widths. */}
-        <Link href="/prototypes" className="text-[12.5px] text-muted-2 hover:text-foreground">← Prototypes</Link>
-        <div className="mt-2 flex items-center gap-2">
-          <h1 className="text-[16px] font-bold tracking-tight min-w-0 truncate" title={p.name}>{p.name}</h1>
-          <span className={`ml-auto shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${chip.cls}`}>
+      {/* ── THE WORKSPACE HEADER ──
+          The rooms were a VERTICAL rail here. They are a tab row now, so the
+          app has exactly one vertical nav — the global sidebar, which no longer
+          has to disappear to keep that count at one. You can move between
+          prototypes without leaving the one you are in.
+
+          "← Prototypes" is gone with it: the sidebar is the exit, and a link
+          back to a place already in view is dead weight (principles §1). */}
+      <header className="shrink-0 border-b border-border bg-surface px-6 pt-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h1 className="text-[18px] font-bold tracking-tight min-w-0 truncate" title={p.name}>{p.name}</h1>
+          <span className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${chip.cls}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${chip.dot} ${pipeline.stage.live ? "animate-pulse" : ""}`} />
             {pipeline.stage.blocked ? `Blocked · ${pipeline.stage.label}` : pipeline.stage.live ? `${pipeline.stage.label} · LIVE` : pipeline.stage.label}
           </span>
         </div>
-        <FlowQueue prototypeKey={key} actions={flow} />
 
-        {/* FIVE places — the lifecycle IS the nav. Each row's dot aggregates
-            everything its stage contains; no group headers, nothing to
-            decode. Settings sits apart: configuration, not workflow. */}
-        <nav className="mt-4 space-y-0.5">
+        {/* THE ROOMS. Heavier than the Table/Board pair on the index — this is
+            the primary nav of the workspace, not a view switch. Each tab keeps
+            the dot it had in the rail: one `derivePipeline` derivation, so the
+            tabs, the table strip and the board can never disagree.
+
+            Horizontally scrollable rather than wrapping: a tab row that breaks
+            onto a second line is the clutter this restructure removes. */}
+        <nav className="mt-3 flex items-end gap-1 overflow-x-auto -mb-px">
           {STAGES.map((stage) => {
             const sev = dotFor(stage);
             const active = tab === stage.id;
             return (
               <Link key={stage.id} href={`?tab=${stage.id}`}
-                className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[13.5px] transition-colors ${
-                  active ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-foreground font-semibold" : "text-muted hover:text-foreground hover:bg-surface-2/60 font-medium"}`}>
+                className={`group shrink-0 flex items-center gap-2 px-3.5 py-2.5 text-[14px] border-b-2 transition-colors ${
+                  active
+                    ? "border-accent text-foreground font-semibold"
+                    : "border-transparent text-muted hover:text-foreground font-medium"}`}>
                 <span className={`w-2 h-2 rounded-full shrink-0 ${sev ? SEVERITY_DOT[sev] : "bg-transparent"}`} />
-                <span className="truncate">{stage.label}</span>
+                <span className="whitespace-nowrap">{stage.label}</span>
                 {stage.id === "build" && openRecs > 0 && (
-                  <span className="ml-auto text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-warn bg-[color-mix(in_srgb,var(--warn)_12%,transparent)]">{openRecs}</span>
+                  <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-warn bg-[color-mix(in_srgb,var(--warn)_12%,transparent)]">{openRecs}</span>
                 )}
               </Link>
             );
           })}
-          <div className="pt-2 mt-2 border-t border-border/60">
-            <Link href="?tab=settings"
-              className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[13px] transition-colors ${
-                tab === "settings" ? "bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-foreground font-semibold" : "text-muted-2 hover:text-foreground hover:bg-surface-2/60"}`}>
-              <span className="w-2 h-2 shrink-0" aria-hidden />
-              <span>Settings</span>
-            </Link>
-          </div>
+          {/* Configuration, not workflow — pushed away from the sequence so it
+              never reads as a sixth stage. */}
+          <Link href="?tab=settings"
+            className={`shrink-0 ml-auto flex items-center gap-2 px-3.5 py-2.5 text-[13.5px] border-b-2 transition-colors ${
+              tab === "settings"
+                ? "border-accent text-foreground font-semibold"
+                : "border-transparent text-muted-2 hover:text-foreground"}`}>
+            Settings
+          </Link>
         </nav>
-      </aside>
+      </header>
+
+      {/* The conductor sat in the rail; it belongs under the header now, where
+          it has the width to say what it was cramped into abbreviating. */}
+      <div className="shrink-0 px-6 pt-4">
+        <FlowQueue prototypeKey={key} actions={flow} />
+      </div>
 
       {/* ── CONTENT ── */}
-      <main className="overflow-y-auto px-6 py-5">
+      <main className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
         {tab === "brief" && (
           <Room title="Brief" sub="What are we building, and how do we know it worked? The brief is the gate — it becomes the agent's instructions and the experiment's description.">
             <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} initialAudit={briefAudit ? { inSync: briefAudit.inSync, builtSha: briefAudit.builtSha, checkedAt: briefAudit.checkedAt, checkedBy: briefAudit.checkedBy, current: !briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p)) } : null} />
