@@ -239,7 +239,17 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
             // The indicator is placed by slot number, counted over this column
             // WITHOUT the dragged card — the same count `targetAt` produces.
             let slot = 0;
-            const line = <div className="relative h-0" aria-hidden><span className="absolute -top-[3px] left-0 right-0 h-[3px] rounded-full bg-accent" /></div>;
+            // ZERO LAYOUT IMPACT, DELIBERATELY. As a normal flex child this
+            // would cost its own height plus a `gap-1.5` on each side — 12px of
+            // shift, applied to the very card midpoints `targetAt` measures, so
+            // the indicator would move the target it is pointing at and
+            // oscillate. `h-0` with `-my-[6px]` cancels both gaps exactly; the
+            // bar is drawn out of flow, centred on the seam.
+            const line = (
+              <div className="relative h-0 -my-[6px] pointer-events-none" aria-hidden>
+                <span className="absolute -top-[1.5px] left-0 right-0 h-[3px] rounded-full bg-accent" />
+              </div>
+            );
             return (
               <div
                 key={col.id}
