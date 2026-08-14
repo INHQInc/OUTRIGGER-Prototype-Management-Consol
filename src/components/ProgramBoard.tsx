@@ -85,6 +85,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   const colRefs = useRef(new Map<BoardColumn, HTMLDivElement>());
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
 
+
   const say = useCallback((text: string) => {
     setToast(text);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -101,6 +102,21 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     for (const [id, el] of colRefs.current) {
       const r = el.getBoundingClientRect();
       if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { col = id; break; }
+    }
+    // THE COLUMN IS ITS X BAND, NOT ITS BOX. Columns shrink-wrap their cards, so
+    // a busy column can be 750px tall next to an empty one 144px tall — measured
+    // on the real board, Experimentation 149→901 against Handoff 149→293. Drag
+    // the bottom Experimentation card straight across and you release 500px
+    // BELOW Handoff's box, inside no column at all, and the gesture evaporated
+    // without a word. Since the columns tile the row horizontally, the band
+    // under the pointer is unambiguous, so a release beside a column counts as a
+    // release in it. (The row also stretches now — see the grid — but a pointer
+    // dragged past the bottom of the page still has to land somewhere.)
+    if (!col) {
+      for (const [id, el] of colRefs.current) {
+        const r = el.getBoundingClientRect();
+        if (x >= r.left && x <= r.right) { col = id; y = Math.min(Math.max(y, r.top + 1), r.bottom - 1); break; }
+      }
     }
     if (!col) return null;
     // Counted over the column minus the dragged card — it keeps its slot in the
@@ -134,23 +150,40 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     setPressing(false);
   }
 
-  async function persistPriorities(colCards: BoardCard[]) {
-    const results = await Promise.all(colCards.map((c, i) =>
-      fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: c.key, priority: (i + 1) * 10 }) })
-        .then((r) => r.ok).catch(() => false)
-    ));
-    // Degrade, never invent: if the order didn't save, the board must not go on
-    // showing an order the server doesn't have.
-    if (results.some((ok) => !ok)) {
-      say("Couldn't save the new order — reloading the real one.");
-      router.refresh();
+  async function persistPriorities(colCards: BoardCard[], rollback: BoardCard[]) {
+    // SEQUENTIAL, not Promise.all. A whole-column reorder is N writes to the
+    // same logical thing, and the local FS store round-trips the entire
+    // prototype map per write — fired concurrently, all but the last read a
+    // pre-reorder snapshot and the surviving file holds an order nobody chose.
+    // Postgres upserts by key and would survive it; the board should not depend
+    // on which store it happens to be talking to.
+    let ok = true;
+    for (let i = 0; i < colCards.length; i++) {
+      const saved = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: colCards[i].key, priority: (i + 1) * 10 }) })
+        .then((r) => r.ok).catch(() => false);
+      if (!saved) { ok = false; break; } // stop: further writes only deepen a half-applied order
+    }
+    // DEGRADE, NEVER INVENT — and the recovery has to actually recover. This
+    // used to promise "reloading the real one" and call router.refresh(), which
+    // could not repaint anything: `cards` seeds from the server prop once and
+    // never reads it again, so the failed order stayed on screen under a message
+    // saying it had been corrected. A false reassurance is worse than the
+    // failure it reports. We already hold the order from before the drag, so put
+    // that back — no round trip, and it is the truth by construction.
+    if (!ok) {
+      setCards((cs) => [...cs.filter((c) => c.column !== rollback[0]?.column), ...rollback]);
+      say("Couldn't save the new order — put it back.");
     }
   }
 
   async function markShipped(card: BoardCard) {
     setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: "handoff" as BoardColumn } : c)));
-    const res = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, status: "shipped" }) });
-    if (!res.ok) {
+    // The optimistic move must be undone on a THROWN failure too, not just a
+    // non-ok response — an offline fetch rejects, and without this the card sits
+    // in Handoff claiming a handoff that never happened.
+    const res = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, status: "shipped" }) })
+      .catch(() => null);
+    if (!res?.ok) {
       setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: card.column } : c)));
       say("Couldn't hand it off — try again.");
       return;
@@ -159,8 +192,22 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     router.refresh();
   }
 
+  /** Did this gesture ever propose a different home than the card already had? */
+  function moved(target: { col: BoardColumn; idx: number } | null, card: BoardCard) {
+    if (!target) return true; // off the board — say so rather than navigate
+    if (target.col !== card.column) return true;
+    const rest = cards.filter((c) => c.column === card.column && c.key !== card.key);
+    const at = Math.max(0, Math.min(target.idx, rest.length));
+    const before = cards.filter((c) => c.column === card.column);
+    const next = [...rest.slice(0, at), card, ...rest.slice(at)];
+    return !before.every((c, i) => c.key === next[i]?.key);
+  }
+
   function commit(target: { col: BoardColumn; idx: number } | null, card: BoardCard) {
-    if (!target) return;
+    // The one path that used to end in silence. A drop the board can't place is
+    // still an answer, and "nothing happened" is the one thing it must never
+    // look like.
+    if (!target) { say("Dropped off the board — nothing moved."); return; }
     if (card.locked) { say("The experiment is running — this card is locked until it isn't."); return; }
     if (!canLand(card, target.col)) { say(BOUNCE[target.col]); return; }
 
@@ -172,7 +219,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     const next = [...rest.slice(0, at), card, ...rest.slice(at)];
     if (before.every((c, i) => c.key === next[i]?.key)) return; // already there
     setCards((cs) => [...cs.filter((c) => c.column !== card.column), ...next]);
-    void persistPriorities(next);
+    void persistPriorities(next, before);
   }
 
   // ── the press → drag → release sequence ────────────────────────────────────
@@ -243,7 +290,21 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       const card = press ? cards.find((c) => c.key === press.key) : null;
       // Re-read the position at the moment of release rather than trusting the
       // last move — the two can differ by a frame, and the frame is the drop.
-      if (draggedRef.current && card) commit(targetAt(e.clientX, e.clientY, card.key), card);
+      if (draggedRef.current && card) {
+        const target = targetAt(e.clientX, e.clientY, card.key);
+        // A CLICK WITH A TREMOR IS STILL A CLICK. 6px of drift promoted the
+        // gesture to a drag, the drag resolved to the slot the card was already
+        // in, and the click was then suppressed — so a slightly unsteady click
+        // on a card did nothing at all. If the gesture never proposed a new
+        // home, hand it back to the link.
+        if (!moved(target, card)) draggedRef.current = false;
+        else commit(target, card);
+      }
+      // Cleared on a macrotask, AFTER the click this release generates. It used
+      // to persist until the next pointerdown, which meant a card focused by
+      // keyboard could not be opened with Enter until you had pressed some card
+      // with the mouse first.
+      setTimeout(() => { draggedRef.current = false; }, 0);
       endDrag();
     };
 
@@ -271,12 +332,18 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       {cards.length === 0 ? (
         <EmptyState title="No prototypes yet." hint="Create one — then build it with the agent and review it on the real site." />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 items-start">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
           {BOARD_COLUMNS.map((col) => {
             const items = cards.filter((c) => c.column === col.id);
             const anyLocked = col.id === "experiment" && items.some((c) => c.locked);
             const over = drag?.col === col.id && dragging !== null;
             const welcome = over && canLand(dragging!, col.id);
+            // A CROSS-COLUMN LAND HAS NO SLOT. Experimentation → Handoff sets a
+            // status; where the card sits afterwards is the server's ordering,
+            // not the pointer's. Drawing an insertion line there would promise a
+            // position nothing honours, so the column highlight is the whole
+            // answer for that move.
+            const showSlot = welcome && dragging!.column === col.id;
             const rejecting = over && !canLand(dragging!, col.id);
             // The indicator is placed by slot number, counted over this column
             // WITHOUT the dragged card — the same count `targetAt` produces.
@@ -320,7 +387,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                 <div className="flex flex-col gap-1.5">
                   {items.map((c) => {
                     const isDragged = drag?.key === c.key;
-                    const mark = welcome && !isDragged && slot === drag!.idx;
+                    const mark = showSlot && !isDragged && slot === drag!.idx;
                     if (!isDragged) slot++;
                     return (
                       <Fragment key={c.key}>
@@ -331,6 +398,15 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                           // Native DnD would race our own sequence; the card's
                           // anchor is draggable by default, so refuse it here.
                           onDragStart={(e) => e.preventDefault()}
+                          // touch-action:none is what makes the long-press drag
+                          // possible at all: the browser decides pan-vs-gesture
+                          // at touchstart, and once it has chosen to pan it
+                          // fires pointercancel and no amount of
+                          // preventDefault on pointermove takes it back. The
+                          // cost is that a finger landing ON a card can't
+                          // scroll the page — the gaps and column background
+                          // still can.
+                          style={{ touchAction: "none" }}
                           className={`select-none ${isDragged ? "opacity-40" : ""}`}
                         >
                           <Link
@@ -375,7 +451,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                   })}
                   {/* Below every card — the slot a plain "move it to the bottom"
                       needs, which insert-before could never express. */}
-                  {welcome && slot === drag!.idx && line}
+                  {showSlot && slot === drag!.idx && line}
                   {items.length === 0 && !welcome && <div className="px-1.5 py-3 text-[12.5px] text-muted-2/60">—</div>}
                 </div>
               </div>
