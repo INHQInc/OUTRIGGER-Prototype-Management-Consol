@@ -18,8 +18,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Outrigger Prototype Management Console",
-  description: "Clone, prototype, and hand off Outrigger site features.",
+  // The app answers to ONE name now, everywhere it says one: Prism.
+  title: "Prism",
+  description: "Prototype it, run it as an experiment, and read what actually happened.",
   robots: { index: false, follow: false },
 };
 

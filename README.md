@@ -1,4 +1,9 @@
-# OUTRIGGER Prototype Management Console
+# Prism
+
+*The OUTRIGGER prototype management console. The repo directory keeps its
+original name — renaming it would break every absolute path in `docs/dev/` and
+every provisioned prototype repo — but the product answers to Prism, and so
+does prism.brandgraphai.com.*
 
 Local-first Next.js console for cloning, prototyping, experimenting on, and handing off features for **outrigger.com** and **hawaiivacationcondos.outrigger.com**.
 

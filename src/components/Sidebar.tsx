@@ -7,6 +7,7 @@ import type { SessionPayload } from "@/lib/auth/types";
 import type { BuildInfo } from "@/lib/build-info";
 import { OrgSwitcher, type OrgOption } from "./OrgSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
+import { PrismLogo } from "@/components/PrismMark";
 
 interface NavItem { href: string; label: string; icon: string; exact?: boolean }
 
@@ -123,8 +124,8 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
   return (
     <aside className={`shrink-0 border-r border-border bg-surface flex flex-col transition-[width] duration-150 ${collapsed ? "w-14" : "w-60"}`}>
       <div className={`h-14 flex items-center border-b border-border gap-2.5 ${collapsed ? "justify-center px-0" : "px-5"}`}>
-        <Link href="/" aria-label="Dashboard" className="w-7 h-7 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold text-[15px] shrink-0">O</Link>
-        {!collapsed && <div className="text-[15px] font-semibold tracking-tight">Prototype Console</div>}
+        <Link href="/" aria-label="Prism — dashboard" className="shrink-0"><PrismLogo /></Link>
+        {!collapsed && <div className="text-[15px] font-semibold tracking-tight">Prism</div>}
         {!collapsed && (
           <button onClick={() => setCollapsed(true)} title="Collapse the sidebar" aria-label="Collapse the sidebar"
             className="ml-auto text-muted-2 hover:text-foreground p-1 rounded">

@@ -24,7 +24,7 @@ export function integrateHtml(
   }
   const indent = anchorLine != null ? (lines[anchorLine].match(/^\s*/)?.[0] ?? "") : "";
   const block = [
-    `${indent}@* ── BEGIN prototype: ${featureKey} (from OUTRIGGER Prototype Console — confirm placement) ──`,
+    `${indent}@* ── BEGIN prototype: ${featureKey} (from Prism — confirm placement) ──`,
     ...fragment.trimEnd().split("\n").map((l) => `${indent}${l}`),
     `${indent}@* ── END prototype: ${featureKey} ── *@`,
   ];

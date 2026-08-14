@@ -39,7 +39,7 @@ export async function promoteFeature(feature: FeatureManifest): Promise<PromoteR
 
   const experiment = await createDraftExperiment({
     name: `OPMC — ${feature.name}`,
-    description: `Prototype "${feature.key}" from the Outrigger Prototype Console. Paused draft — review and start in Optimizely.`,
+    description: `Prototype "${feature.key}" from Prism. Paused draft — review and start in Optimizely.`,
     pageId: page.id,
     variantName: feature.name,
     variationJs: exp.variationJs,

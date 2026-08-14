@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PrismLogo } from "@/components/PrismMark";
 
 function LoginForm() {
   const router = useRouter();
@@ -37,8 +38,8 @@ function LoginForm() {
     <div className="min-h-screen w-full flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="flex items-center gap-2.5 mb-8 justify-center">
-          <div className="w-8 h-8 rounded-md bg-accent flex items-center justify-center text-accent-fg font-bold">O</div>
-          <div className="text-[15px] font-semibold">Prototype Console</div>
+          <PrismLogo size="w-8 h-8" />
+          <div className="text-[15px] font-semibold tracking-tight">Prism</div>
         </div>
 
         <div className="rounded-2xl border border-border bg-surface p-6">

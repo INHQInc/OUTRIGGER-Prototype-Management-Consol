@@ -1,4 +1,4 @@
-# Claude Context Guide — OUTRIGGER Prototype Management Console
+# Claude Context Guide — Prism (OUTRIGGER prototype management console)
 
 *Last updated: 2026-08-06 (analytics second pass: per-version composites, the metric builder, observations + deep reads, the analyst drawer, scoped reset, Evidence; 08-04: board-page readout, verdict engine, measurement plan)*
 

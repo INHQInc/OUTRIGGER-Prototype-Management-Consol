@@ -57,7 +57,7 @@ export interface VariationBlock { selector: string; mode: string; html: string }
  * injection code.
  */
 export function renderVariationJs(key: string, css: string, blocks: VariationBlock[], js: string): string {
-  return `/* Optimizely Web variation — generated from "${key}" by Outrigger Prototype Console.
+  return `/* Optimizely Web variation — generated from "${key}" by Prism.
    Idempotent + dynamic-DOM safe (waits for anchors, re-applies via observer). */
 (function () {
   var NS = ${embed(`opmc-${key}`)};
