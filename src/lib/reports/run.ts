@@ -26,6 +26,23 @@ export interface SendOutcome {
   subject: string;
 }
 
+/**
+ * THE HOST AN EMAILED LINK POINTS AT.
+ *
+ * Callers pass `req.nextUrl.origin`, which is right for a human pressing Send
+ * now and WRONG for the cron: that request does not come from anyone's browser,
+ * so a scheduled readout would carry whatever internal host Vercel invoked —
+ * and a link on a *.vercel.app domain, in mail sent from brandgraphai.com, is
+ * both jarring to the reader and worse for the spam filters.
+ *
+ * `PUBLIC_BASE_URL` is the answer when it is set. The request origin remains
+ * the fallback so nothing breaks before the domain exists.
+ */
+function publicBase(requestOrigin?: string): string | undefined {
+  const configured = process.env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, "");
+  return configured || requestOrigin;
+}
+
 export async function runReport(opts: {
   report: Report;
   baseUrl?: string;
@@ -63,7 +80,7 @@ export async function runReport(opts: {
       // recipient who is not a console user — which is all of them. When no
       // link secret is configured this is `undefined` and the renderer omits
       // the button entirely: no affordance beats a broken one.
-      url: await readoutLinkUrl(opts.baseUrl, { orgId: r.orgId, prototypeKey: proto.key }),
+      url: await readoutLinkUrl(publicBase(opts.baseUrl), { orgId: r.orgId, prototypeKey: proto.key }),
       results: built.results!, stats: built.stats, verdict: built.verdict, reading: built.reading,
       map: built.resolved, supporting: built.supporting, model: built.model,
     });
