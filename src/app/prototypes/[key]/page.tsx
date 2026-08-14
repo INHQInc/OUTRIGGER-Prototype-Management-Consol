@@ -32,7 +32,8 @@ import { FlowQueue } from "@/components/FlowQueue";
 import { CoveragePanel } from "@/components/CoveragePanel";
 import { TestCasesPanel } from "@/components/TestCasesPanel";
 import { currentUser } from "@/lib/auth/current";
-import { SEVERITY_DOT, TimeAgo } from "@/components/ui";
+import { TimeAgo } from "@/components/ui";
+import { TabRow } from "@/components/TabRow";
 import { StageSelect } from "@/components/StageSelect";
 import { BriefComposer } from "@/components/BriefComposer";
 import { TargetPages } from "@/components/TargetPages";
@@ -412,41 +413,24 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
           </span>
         </div>
 
-        {/* THE ROOMS. Heavier than the Table/Board pair on the index — this is
-            the primary nav of the workspace, not a view switch. Each tab keeps
-            the dot it had in the rail: one `derivePipeline` derivation, so the
-            tabs, the table strip and the board can never disagree.
-
-            Horizontally scrollable rather than wrapping: a tab row that breaks
-            onto a second line is the clutter this restructure removes. */}
-        <nav className="mt-3 flex items-end gap-1 overflow-x-auto -mb-px">
-          {STAGES.map((stage) => {
-            const sev = dotFor(stage);
-            const active = tab === stage.id;
-            return (
-              <Link key={stage.id} href={`?tab=${stage.id}`}
-                className={`group shrink-0 flex items-center gap-2 px-3.5 py-2.5 text-[14px] border-b-2 transition-colors ${
-                  active
-                    ? "border-accent text-foreground font-semibold"
-                    : "border-transparent text-muted hover:text-foreground font-medium"}`}>
-                <span className={`w-2 h-2 rounded-full shrink-0 ${sev ? SEVERITY_DOT[sev] : "bg-transparent"}`} />
-                <span className="whitespace-nowrap">{stage.label}</span>
-                {stage.id === "build" && openRecs > 0 && (
-                  <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-warn bg-[color-mix(in_srgb,var(--warn)_12%,transparent)]">{openRecs}</span>
-                )}
-              </Link>
-            );
-          })}
-          {/* Configuration, not workflow — pushed away from the sequence so it
-              never reads as a sixth stage. */}
-          <Link href="?tab=settings"
-            className={`shrink-0 ml-auto flex items-center gap-2 px-3.5 py-2.5 text-[13.5px] border-b-2 transition-colors ${
-              tab === "settings"
-                ? "border-accent text-foreground font-semibold"
-                : "border-transparent text-muted-2 hover:text-foreground"}`}>
-            Settings
-          </Link>
-        </nav>
+        {/* THE ROOMS — the same `TabRow` the index uses for Table/Board. Each
+            tab keeps the dot it had in the rail: one `derivePipeline`
+            derivation, so the tabs, the table strip and the board can never
+            disagree. Settings trails, so it never reads as a sixth stage. */}
+        <TabRow
+          className="mt-3"
+          active={tab}
+          items={[
+            ...STAGES.map((stage) => ({
+              id: stage.id,
+              label: stage.label,
+              href: `?tab=${stage.id}`,
+              severity: dotFor(stage),
+              badge: stage.id === "build" ? openRecs : undefined,
+            })),
+            { id: "settings", label: "Settings", href: "?tab=settings", trailing: true },
+          ]}
+        />
       </header>
 
       {/* The conductor sat in the rail; it belongs under the header now, where

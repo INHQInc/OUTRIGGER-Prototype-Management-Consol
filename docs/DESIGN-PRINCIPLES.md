@@ -139,6 +139,38 @@ At most ONE accent-tinted card per room — the room's primary action.
 *Origin: "why is repo and branch collapsible but local folder is not… it's kind
 of a hierarchical mess."*
 
+## 4b. One tab grammar, app-wide — `TabRow`
+
+Every horizontal switch in the console is `src/components/TabRow.tsx`:
+underlined, `border-b-2 border-accent` when active, an optional status dot on
+the left, an optional count on the right, and at most one `trailing` item
+pushed away from the sequence. There is no second tab style — no segmented
+pills, no boxed toggles — because the same gesture rendered two ways is a thing
+to learn before you can use it.
+
+The underline won on capability, not taste. A pill pair works at two items and
+nothing else: it needs a box, it can't carry a status dot without the dot
+reading as a badge, and at seven items the box becomes a wall. The underline
+reads at any count and leaves room for the `derivePipeline` dot.
+
+**The rule under the tabs belongs to the surface, not the row.** `TabRow` is
+inset by its container's padding, so a rule drawn inside it would stop short of
+both edges. The caller puts `border-b` on the full-width element; `TabRow`'s
+`-mb-px` drops onto it so the active accent covers the grey.
+
+*Origin: "now you're using different tab styles on this page vs the experiment —
+we need them all to be the same" (08-14).*
+
+## 4c. The default view is the question you arrive with
+
+When a room has more than one lens, the default is the one that answers why
+someone opened it — not the one that lists what exists. `/prototypes` opens on
+the **Board** (what is moving, what is stuck, what is waiting on me); the
+**Table** is the lookup you reach for once you already know what you came for.
+An index is a destination you choose, never the one you land on.
+
+*Origin: "i want the board to be default here" (08-14).*
+
 ## 5. Gates block, they never teleport
 
 Position holds at the first blocked gate (the first-gate rule). Requirements
