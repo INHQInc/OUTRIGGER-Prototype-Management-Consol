@@ -13,6 +13,8 @@ import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/pr
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";
 import { nextStep } from "@/lib/prototypes/verdict";
 import { buildReadoutModel, type Tone } from "@/lib/prototypes/readout-model";
+import { deriveNextTest } from "@/lib/prototypes/next-test";
+import { NextTestPanel } from "@/components/NextTestPanel";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
 import type { AnalystAnswer } from "@/lib/ai/results";
 
@@ -2086,6 +2088,16 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                 </div>
               </div>
             );
+          })()}
+
+          {/* ── WHAT TO TEST NEXT — only once the verdict is stamped ───────
+              Recommending a follow-up off an unadjudicated run means building
+              on a result nobody has agreed to, which is the sloppiness the
+              verdict engine exists to stop. Pure arithmetic over the model
+              already on screen — no second source of numbers. */}
+          {verdict?.state === "stamped" && (() => {
+            const next = deriveNextTest(model.all, statsEff?.power);
+            return <NextTestPanel next={next} />;
           })()}
 
           {/* ── Z(E) · PROOF — see it, don't read it ──────────────────────── */}
