@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { NextTest } from "@/lib/prototypes/next-test";
 import { TARGET_REL } from "@/lib/prototypes/next-test";
+import type { NextTestDraft } from "@/lib/ai/next-test";
 
 /**
  * WHAT TO TEST NEXT — the computed half, rendered.
@@ -21,8 +24,63 @@ const abs = (x?: number, dp = 1) => (x === undefined ? "—" : `${(x * 100).toFi
 const K = "text-[11px] font-semibold tracking-[.08em] uppercase text-muted-2";
 const CARD = "rounded-xl border border-border bg-surface p-4";
 
-export function NextTestPanel({ next }: { next: NextTest }) {
+export function NextTestPanel({ next, prototypeKey }: { next: NextTest; prototypeKey: string }) {
+  const router = useRouter();
   const { primary, traffic } = next;
+
+  const [draft, setDraft] = useState<NextTestDraft | null>(null);
+  const [busy, setBusy] = useState<"draft" | "promote" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [correction, setCorrection] = useState("");
+  const [refineOpen, setRefineOpen] = useState(false);
+
+  // A draft already made for this run survives a reload — it costs a model
+  // call, and re-billing one because someone refreshed is not a feature.
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/prototypes/next-test?key=${encodeURIComponent(prototypeKey)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (live && j?.draft) setDraft(j.draft as NextTestDraft); })
+      .catch(() => null);
+    return () => { live = false; };
+  }, [prototypeKey]);
+
+  async function makeDraft(withCorrection?: string) {
+    setBusy("draft"); setErr(null);
+    try {
+      const res = await fetch("/api/prototypes/next-test", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, correction: withCorrection, current: withCorrection ? draft : undefined }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(j.error ?? "Couldn't draft the follow-up."); return; }
+      setDraft(j.draft as NextTestDraft);
+      setCorrection(""); setRefineOpen(false);
+    } catch { setErr("Couldn't reach the console."); }
+    finally { setBusy(null); }
+  }
+
+  async function promote() {
+    setBusy("promote"); setErr(null);
+    try {
+      const res = await fetch("/api/prototypes/promote", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parentKey: prototypeKey,
+          name: draft?.name,
+          change: draft?.candidates[0]?.title,
+          hypothesis: draft?.hypothesis,
+          primaryMetric: primary?.label,
+          guardrails: next.guardrails.map((g) => g.label),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(j.error ?? "Couldn't start the next test."); return; }
+      router.push(`/prototypes/${j.key}?tab=brief`);
+    } catch { setErr("Couldn't reach the console."); }
+    finally { setBusy(null); }
+  }
+
   if (!primary && !next.ruleOuts.length && !next.transfer) return null;
 
   return (
@@ -66,6 +124,84 @@ export function NextTestPanel({ next }: { next: NextTest }) {
           )}
         </div>
       )}
+
+      {/* ── THE PROSE, and the way out of this room ────────────────────────
+          The figures above stand on their own; this is the sentence a person
+          would say about them. It is generated with the numbers in hand and is
+          forbidden from containing any — two sources for one fact is how a
+          readout starts contradicting itself. */}
+      <div className={CARD}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className={K}>The follow-up</div>
+          {draft && (
+            <button onClick={() => setRefineOpen((o) => !o)} disabled={busy !== null}
+              className="text-[12.5px] text-muted-2 hover:text-foreground disabled:opacity-50">
+              {refineOpen ? "Cancel" : "Not quite — tell it what to change"}
+            </button>
+          )}
+        </div>
+
+        {!draft && (
+          <div className="mt-2">
+            <p className="text-[13px] text-muted-2 mb-2.5">
+              The metric, the guardrails and the duration are decided above. This writes the claim and
+              what to build.
+            </p>
+            <button onClick={() => makeDraft()} disabled={busy !== null}
+              className="text-[13px] font-semibold px-3 py-1.5 rounded-lg border border-accent text-accent hover:bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] disabled:opacity-50">
+              {busy === "draft" ? "Drafting…" : "Draft the follow-up"}
+            </button>
+          </div>
+        )}
+
+        {draft && (
+          <div className="mt-2 space-y-3">
+            <div>
+              <div className="text-[15px] font-semibold">{draft.name}</div>
+              <p className="text-[13.5px] mt-1 leading-relaxed">{draft.hypothesis}</p>
+            </div>
+
+            {draft.candidates.length > 0 && (
+              <div>
+                <div className={K}>What to build</div>
+                <ol className="mt-1.5 space-y-2">
+                  {draft.candidates.map((c, i) => (
+                    <li key={i} className="text-[13px]">
+                      <span className="font-semibold">{i + 1}. {c.title}</span>
+                      <span className="text-muted-2"> — {c.rationale}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {refineOpen && (
+              <div className="rounded-lg border border-border bg-surface-2 p-3">
+                <textarea value={correction} onChange={(e) => setCorrection(e.target.value)} rows={3}
+                  placeholder="e.g. we can't touch the destination explorer this quarter — propose something on the property tile instead"
+                  className="w-full text-[13px] bg-transparent outline-none resize-y" />
+                <button onClick={() => makeDraft(correction)} disabled={busy !== null || !correction.trim()}
+                  className="mt-2 text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-accent text-accent disabled:opacity-40">
+                  {busy === "draft" ? "Redrafting…" : "Redraft with this"}
+                </button>
+              </div>
+            )}
+
+            <div className="pt-1 border-t border-border/60 flex items-center gap-3 flex-wrap">
+              <button onClick={promote} disabled={busy !== null}
+                className="text-[13px] font-semibold px-3.5 py-2 rounded-lg bg-accent text-accent-fg hover:bg-accent-hover disabled:opacity-50">
+                {busy === "promote" ? "Starting…" : "Start the next test"}
+              </button>
+              <span className="text-[12px] text-muted-2">
+                Creates a new prototype at Brief, carrying this metric and {next.guardrails.length} guardrail(s).
+                Every gate still applies.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {err && <p className="text-[12.5px] text-danger mt-2">{err}</p>}
+      </div>
 
       {next.excluded.length > 0 && (
         <div className={CARD}>

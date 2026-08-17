@@ -225,6 +225,11 @@ export interface PrototypeRecord {
   brief: PrototypeBrief;
   hypothesis: PrototypeHypothesis;
   metrics: PrototypeMetrics;
+  /** LINEAGE. The prototype whose concluded run this one was promoted from.
+   *  A test is rarely a one-off — it is a round in a line of enquiry, and
+   *  without this the console holds a pile of results instead of a thread.
+   *  Set once, at promote; never edited. */
+  parentKey?: string;
   owner?: string;
   ticketUrl?: string;
   priority?: number;     // ICE/PIE-style 1–100

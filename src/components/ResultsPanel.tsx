@@ -2097,7 +2097,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               already on screen — no second source of numbers. */}
           {verdict?.state === "stamped" && (() => {
             const next = deriveNextTest(model.all, statsEff?.power);
-            return <NextTestPanel next={next} />;
+            return <NextTestPanel next={next} prototypeKey={prototypeKey} />;
           })()}
 
           {/* ── Z(E) · PROOF — see it, don't read it ──────────────────────── */}

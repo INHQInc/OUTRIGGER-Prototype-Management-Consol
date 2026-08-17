@@ -407,6 +407,16 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
       <header className="shrink-0 border-b border-border bg-surface px-6 pt-4">
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-[18px] font-bold tracking-tight min-w-0 truncate" title={p.name}>{p.name}</h1>
+          {/* LINEAGE. A test is a round in a line of enquiry, not a one-off —
+              without this the console holds a pile of results instead of a
+              thread. Shown beside the name because "what came before this"
+              changes how you read everything below it. */}
+          {p.parentKey && (
+            <Link href={`/prototypes/${p.parentKey}?tab=analytics`}
+              className="shrink-0 text-[12px] text-muted-2 hover:text-accent">
+              ↳ follows on from a concluded test
+            </Link>
+          )}
           <span className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${chip.cls}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${chip.dot} ${pipeline.stage.live ? "animate-pulse" : ""}`} />
             {pipeline.stage.blocked ? `Blocked · ${pipeline.stage.label}` : pipeline.stage.live ? `${pipeline.stage.label} · LIVE` : pipeline.stage.label}
