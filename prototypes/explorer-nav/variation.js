@@ -1,55 +1,41 @@
 /**
  * Outrigger home page — explorer navigation (step one of the Grid/Map explorer)
  *
- * This is the NAV LAYER ONLY. The map and grid views come later and plug into
- * this same hierarchy — on the map, zooming IS navigating, so the levels here
- * are the levels there.
+ * No back arrow, no levels, no hidden state. Both tiers are on screen at once
+ * and one thing in each is always selected:
  *
- *   Level 0  "Where to?"     → the five destinations; the live one stays selected
- *   Level 1  "Hawaii"        → its four islands; one always selected, defaulting
- *                              to whatever the site is already showing
- *   Level 1  "Thailand"      → no sub-regions; the bar says so rather than sitting empty
+ *   Hawaii  Thailand  Fiji  Mauritius  Maldives     ← destination; selected one is the headline
+ *   [Oahu 4] [Maui 2] [Hawaii Island 1] [Kauai 1]   ← regions of it; one always selected
  *
- * There is no level 2. Drilling into a region hid its siblings and left the bar
- * with a lone back arrow — selecting a region now marks it and filters the cards
- * while the other islands stay one click away. Something is ALWAYS selected.
+ * WHY NO BACK ARROW. A drill-down was tried and abandoned. On first load nobody
+ * has navigated anywhere, so "←" answers a question the visitor never asked —
+ * back to what? It also buried destination switching one click deeper, and that
+ * is the fastest-growing action on the page (dropdown +12.7% vs tabs +8.3%).
  *
- * The rule: THE ROW SHOWS THE CHILDREN OF WHEREVER YOU ARE. One rule, every
- * depth, never an empty row — which matters because the estate is lopsided:
- * Hawaii has regions beneath it and the other four destinations do not. A fixed
- * two-row strip would show an empty second row four times out of five.
+ * WHY NOTHING IS BEHIND A DISCLOSURE. Verndale's reviewer reported missing the
+ * dropdown entirely — "I also missed the drop down at first" — while it was the
+ * single biggest gainer in the experiment. Whatever replaces it has to be MORE
+ * discoverable, not more elegant, so the whole set stays visible at rest.
  *
- * The large destination name is the "you are here". Navigation lives in a navy
- * bar directly beneath it: a back arrow and the child chips. Counts are dropped
- * from the name row — "Hawaii 8 resorts ← All destinations" put four competing
- * text elements on one line and read as clutter.
+ * Type is the site's own: 60px/66px DuplicateSans-Regular for the selected
+ * destination, 18px DuplicateSans-Medium for the others, 16px for the chips.
+ * Navy (rgb(0,69,97)) is reserved for the selected state — a solid navy bar
+ * fought the sand section, and a white bar read as a stray card inside it.
  *
- * NOTE: render() owns every mutation inside the bar. Do NOT add a MutationObserver
- * that edits the bar — an earlier version did and looped the renderer to a hang. Counts do real work — "Mauritius 1" tells you not to bother
- * drilling, "Hawaii 8" tells you there is something to explore.
+ * Switching delegates to the site's own controls (the dropdown's .dropdown-item
+ * and the region tab buttons), so this changes the affordance, not the behaviour.
  *
- * Switching is delegated to the site's own controls (the destination dropdown's
- * .dropdown-item, and the region tab buttons), so this changes the affordance
- * and not the behaviour.
+ * NOTE: render() owns every mutation inside the nav. Do NOT add a MutationObserver
+ * that edits it — an earlier version did and hung the renderer.
  *
- * KNOWN GAP: at level 0 the property cards below still show the last-selected
- * destination — the site has no "all destinations" card state. That is exactly
- * the slot the world-scale map fills in step two. Do not ship level 0 without
- * it, or run the test with level 0 disabled.
- *
- * Runs ALONE: it alters the best-performing surface on the page (dropdown
- * +12.7%, tabs +8.3%). Guardrail: explorer engagement must not fall.
+ * Runs ALONE: it alters the best-performing surface on the page.
+ * Guardrail: explorer engagement (tabs + destination selection) must not fall.
  */
 (function () {
   'use strict';
 
-  var COUNTS = {
-    dest:   { 'Hawaii': 8, 'Thailand': 4, 'Fiji': 2, 'Mauritius': 1, 'Maldives': 1 },
-    region: { 'Oahu': 4, 'Maui': 2, 'Hawaii Island (Big Island)': 1, 'Kauai': 1 }
-  };
-  var STYLE_ID = 'opmc-nav-style', NAV_ID = 'opmc-nav', NAVY = 'rgb(0,69,97)';
-
-  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
+  var REGION_COUNTS = { 'Oahu': 4, 'Maui': 2, 'Hawaii Island (Big Island)': 1, 'Kauai': 1 };
+  var STYLE_ID = 'opmc-nav-style', NAV_ID = 'opmc-nav', NAVY = 'rgb(0,69,97)', INK = 'rgb(51,41,38)';
 
   function styles() {
     if (document.getElementById(STYLE_ID)) return;
@@ -59,139 +45,112 @@
       '.destination-selection-dropdown{display:none !important}',
       '#destination-selection .col-md-4{display:none !important}',
       '#destination-selection .col-md-8{flex:0 0 100%;max-width:100%}',
-      '.destination-selection-tabs-list{display:none !important}',  // site's own tabs — we drive them
-      // the wrapper is flex; without this the bar sits BESIDE the name and overlaps it
-      '.destination-selection-tabs{display:block !important}',
+      '.destination-selection-tabs-list{display:none !important}',   // site's own tabs — we drive them
+      '.destination-selection-tabs{display:block !important}',        // wrapper is flex; without this the tiers sit side by side
 
-      // the destination name keeps its own line; the bar carries the navigation
-      '#opmc-title{display:flex;align-items:baseline;margin:0 0 16px}',
-      'h2.destination-selection-selected{margin:0 !important}',
-      '#opmc-count{display:none}',
+      // tier 1 — destinations. Selected one keeps the site's 60px headline;
+      // the rest sit on its baseline at the site's tab size.
+      '#opmc-dests{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 20px;padding:0;margin:0 0 18px;list-style:none}',
+      '#opmc-dests h2.destination-selection-selected{margin:0 !important;position:relative;padding-bottom:6px}',
+      '#opmc-dests h2.destination-selection-selected::after{content:"";position:absolute;left:0;right:0;bottom:0;' +
+        'height:3px;background:' + NAVY + '}',
+      '#opmc-dests button{font:500 18px/18px DuplicateSans-Medium,sans-serif;color:rgba(51,41,38,.5);' +
+        'background:none;border:0;padding:6px 0;cursor:pointer;transition:color .15s;white-space:nowrap}',
+      '#opmc-dests button:hover{color:' + NAVY + '}',
+      '#opmc-dests button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:3px}',
 
+      // tier 2 — regions of the selected destination
       '#' + NAV_ID + '{display:block;width:100%;margin:0 0 6px}',
-      // No container. Navy fought the sand section and white read as a stray
-      // card inside it — the section already has a ground, so the chips sit
-      // straight on it and navy is kept for the selected chip alone.
-      '#opmc-bar{background:transparent;border:0;padding:0;display:flex;align-items:center;gap:9px;flex-wrap:wrap}',
-      '#opmc-bar .barnote{font:500 13.5px/1 Montserrat-Light,sans-serif;color:rgba(51,41,38,.6);padding:0 2px}',
+      '#opmc-regions{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none;align-items:center}',
+      '#opmc-regions button{font:500 16px/16px DuplicateSans-Medium,sans-serif;color:' + INK + ';' +
+        'background:transparent;border:1px solid rgba(51,41,38,.28);border-radius:7px;padding:11px 16px;' +
+        'cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:7px}',
+      '#opmc-regions button:hover{border-color:' + NAVY + ';color:' + NAVY + '}',
+      '#opmc-regions button.on{background:' + NAVY + ';color:#fff;border-color:' + NAVY + '}',
+      '#opmc-regions button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:2px}',
+      '#opmc-regions button i{font-style:normal;font-size:14px;opacity:.5;font-weight:500}',
+      '#opmc-regions button:hover i,#opmc-regions button.on i{opacity:.75}',
+      '#opmc-note{font:16px/25px Montserrat-Light,sans-serif;color:rgba(51,41,38,.6)}',
 
-      '#opmc-crumb{display:flex;align-items:center;gap:9px;margin:0}',
-      '#opmc-crumb button{width:30px;height:30px;border-radius:6px;border:1px solid rgba(51,41,38,.28);' +
-        'background:transparent;color:rgba(51,41,38,.75);cursor:pointer;font-size:15px;line-height:1;' +
-        'display:inline-flex;align-items:center;justify-content:center;padding:0;transition:.15s}',
-      '#opmc-crumb button:hover{background:' + NAVY + ';color:#fff;border-color:' + NAVY + '}',
-      '#opmc-crumb button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:2px}',
-
-      '#opmc-children{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none;align-items:center}',
-      '#opmc-children button{font:500 13.5px/1 DuplicateSans-Medium,sans-serif;color:rgb(51,41,38);' +
-        'background:transparent;border:1px solid rgba(51,41,38,.28);border-radius:7px;padding:8px 13px;' +
-        'cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}',
-      '#opmc-children button:hover{border-color:' + NAVY + ';color:' + NAVY + '}',
-      '#opmc-children button.on{background:' + NAVY + ';color:#fff;border-color:' + NAVY + ';font-weight:650}',
-      '#opmc-children button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:2px}',
-      '#opmc-children button i{font-style:normal;opacity:.5;font-weight:500;font-size:12px}',
-      '#opmc-children button:hover i{opacity:.75}',
-      '#opmc-children button.on i{opacity:.75}',
-      '@media(max-width:767px){#opmc-bar{padding:11px 12px;gap:8px}' +
-        '#opmc-children button{font-size:12.5px;padding:7px 11px}}'
+      '@media(max-width:767px){#opmc-dests{gap:4px 16px;margin-bottom:14px}' +
+        '#opmc-dests button{font-size:16px}' +
+        '#opmc-regions button{font-size:15px;padding:10px 14px}}'
     ].join('');
     document.head.appendChild(st);
   }
 
   function destItems()  { return [].slice.call(document.querySelectorAll('.destination-selection-dropdown .dropdown-item')); }
   function regionBtns() { return [].slice.call(document.querySelectorAll('.destination-selection-tabs-lists button')); }
+  function label(el)    { return (el.innerText || '').replace(/\s+/g, ' ').trim(); }
 
   function build() {
     var h2 = document.querySelector('h2.destination-selection-selected');
-    if (!h2) return null;
+    if (!h2 || !destItems().length) return null;
     if (document.getElementById(NAV_ID)) return document.getElementById(NAV_ID).__ctl;
-    if (!destItems().length) return null;   // dropdown not rendered yet
 
     styles();
 
-    var nav    = document.createElement('div'); nav.id = NAV_ID;
-    var crumb  = document.createElement('div'); crumb.id = 'opmc-crumb';
-    var title  = document.createElement('div'); title.id = 'opmc-title';
-    var count  = document.createElement('span'); count.id = 'opmc-count';
-    var kids   = document.createElement('ul');  kids.id = 'opmc-children';
-    kids.setAttribute('aria-label', 'Choose a destination');
+    var dests = document.createElement('ul'); dests.id = 'opmc-dests';
+    dests.setAttribute('aria-label', 'Destination');
+    var nav   = document.createElement('div'); nav.id = NAV_ID;
+    var regs  = document.createElement('ul'); regs.id = 'opmc-regions';
+    regs.setAttribute('aria-label', 'Region');
+    var note  = document.createElement('span'); note.id = 'opmc-note';
 
-    var bar = document.createElement('div'); bar.id = 'opmc-bar';
+    h2.parentNode.insertBefore(dests, h2);
+    dests.parentNode.insertBefore(nav, dests.nextSibling);
+    nav.appendChild(regs); nav.appendChild(note);
 
-    h2.parentNode.insertBefore(nav, h2);
-    nav.parentNode.insertBefore(title, nav);
-    title.appendChild(h2); title.appendChild(count);
-    bar.appendChild(crumb); bar.appendChild(kids);
-    nav.appendChild(bar);
-
-    var state = { level: 1, dest: (h2.textContent || '').trim(), region: null };  // region filled in on first render
-
-    function pill(label, n, onClick, selected) {
-      var li = document.createElement('li'), b = document.createElement('button');
-      b.type = 'button'; b.textContent = label;
-      if (selected) { b.className = 'on'; b.setAttribute('aria-current', 'true'); }
-      if (n) { var i = document.createElement('i'); i.textContent = n; b.appendChild(i); }
-      // the parenthetical is dead weight in a chip
-      b.firstChild.nodeValue = b.firstChild.nodeValue.replace(' (Big Island)', '');
-      b.setAttribute('data-tag-item', 'home_destination_nav_pill');
-      b.addEventListener('click', onClick);
-      li.appendChild(b); kids.appendChild(li);
-    }
-    function crumbBtn(label, onClick) {
-      var b = document.createElement('button'); b.type = 'button';
-      b.textContent = '\u2190';
-      b.setAttribute('aria-label', 'Back to ' + label);
-      b.title = 'Back to ' + label;
-      b.setAttribute('data-tag-item', 'home_destination_nav_back');
-      b.addEventListener('click', onClick);
-      crumb.appendChild(b);
-    }
-
-    function note(text) {
-      var n = document.createElement('span'); n.className = 'barnote'; n.textContent = text;
-      bar.appendChild(n);
-    }
+    var state = { dest: label(h2), region: null };
 
     function render() {
-      crumb.innerHTML = ''; kids.innerHTML = ''; count.textContent = '';
-      var stale = bar.querySelector('.barnote'); if (stale) stale.remove();
+      dests.innerHTML = ''; regs.innerHTML = ''; note.textContent = '';
 
-      if (state.level === 0) {
-        h2.textContent = 'Where to?';
-        destItems().forEach(function (item) {
-          var name = (item.innerText || '').replace(/\s+/g, ' ').trim();
-          if (!name) return;
-          pill(name, COUNTS.dest[name] || '', function () {
+      // tier 1 — the selected destination IS the headline; the rest sit beside it
+      destItems().forEach(function (item) {
+        var name = label(item);
+        if (!name) return;
+        var li = document.createElement('li');
+        if (name === state.dest) {
+          h2.textContent = name;
+          li.appendChild(h2);
+        } else {
+          var b = document.createElement('button');
+          b.type = 'button'; b.textContent = name;
+          b.setAttribute('data-tag-item', 'home_destination_select');
+          b.addEventListener('click', function () {
             item.click();
-            state.level = 1; state.dest = name; state.region = null;
+            state.dest = name; state.region = null;
             setTimeout(render, 900);
-          }, name === state.dest);              // the live destination stays selected
-        });
-        return;
-      }
+          });
+          li.appendChild(b);
+        }
+        dests.appendChild(li);
+      });
 
-      // level 1 — the destination, with its regions as siblings. Selecting a
-      // region marks it and filters; it does NOT drill away from the others,
-      // so there is always exactly one chip selected and nothing to get lost in.
-      crumbBtn('All destinations', function () { state.level = 0; render(); });
-      h2.textContent = state.dest;
-
+      // tier 2 — regions of it, one always selected
       var rb = regionBtns();
       if (!rb.length) {
-        note('No sub-regions \u2014 all ' + plural(COUNTS.dest[state.dest] || 0, 'resort') + ' shown');
+        note.textContent = 'All resorts in ' + state.dest + ' shown';
         return;
       }
+      if (!state.region) state.region = label(rb[0]);   // match what the site is already showing
 
-      // default to whatever the site is actually showing — the first region
-      if (!state.region) state.region = (rb[0].innerText || '').replace(/\s+/g, ' ').trim();
-
-      rb.forEach(function (b) {
-        var name = (b.innerText || '').replace(/\s+/g, ' ').trim();
-        pill(name, COUNTS.region[name] || '', function () {
-          b.click();
+      rb.forEach(function (src) {
+        var name = label(src);
+        var li = document.createElement('li'), b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = name.replace(' (Big Island)', '');
+        if (name === state.region) { b.className = 'on'; b.setAttribute('aria-current', 'true'); }
+        var n = REGION_COUNTS[name];
+        if (n) { var i = document.createElement('i'); i.textContent = n; b.appendChild(i); }
+        b.setAttribute('data-tag-item', 'home_region_select');
+        b.addEventListener('click', function () {
+          src.click();
           state.region = name;
           setTimeout(render, 700);
-        }, name === state.region);
+        });
+        li.appendChild(b); regs.appendChild(li);
       });
     }
 
