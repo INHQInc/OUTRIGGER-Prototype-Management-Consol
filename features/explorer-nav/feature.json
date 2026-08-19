@@ -1,0 +1,11 @@
+{
+  "key": "explorer-nav",
+  "name": "Explorer navigation — drill-down with back (step one of Grid/Map)",
+  "description": "Three-level destination navigation: large name as 'you are here', back chips as the way out, and a pill row that always shows the children of the current node with counts. Handles the lopsided estate (only Hawaii has a region tier) without ever showing an empty row. This is the nav layer the Grid and Map views plug into later.",
+  "status": "draft",
+  "targets": [ { "siteKey": "prep-outrigger", "slug": "home", "version": "latest" } ],
+  "injections": [ { "type": "js", "file": "overlay.js" } ],
+  "liveUrls": [ "https://prep.outrigger.com/", "https://www.outrigger.com/" ],
+  "createdAt": "2026-08-19T00:00:00.000Z",
+  "updatedAt": "2026-08-19T00:00:00.000Z"
+}
