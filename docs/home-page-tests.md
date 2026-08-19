@@ -509,3 +509,30 @@ grid. Same capture, less commitment.
 Same card, same guests: ungated **Property Title +11.3%**, gated **Book Now +1 click**. They
 take the ungated path by an order of magnitude. An ungated primary action on the tile
 ("View Property") is the cheapest way to act on that.
+
+### 12c · Proposal (Bryan): make the offer button open the widget too
+
+**Position: agreed**, and the reason is stronger than consistency.
+
+The offer route's current destination is the worst on the page — `promo` + `nights` + a `dest`
+that SynXis discards (`level=chain`), producing a **worldwide list with no dates and no
+property**. Routing it through the widget keeps the guest on-site with context intact.
+
+**Risk to name in the brief:** this adds a date gate to the only ungated route, and the
+strongest signal in the experiment is that gates lose (ungated Title +11.3% vs gated Book Now
++1 click). **Counter, and it holds:** "Check availability" *promises* dates — a guest pressing
+it has already accepted they will supply them. That is different intent from a browser on a
+property tile, which is why this change is defensible while the equivalent on the tile is not.
+
+**Two conditions before it ships:**
+1. **Verify the widget can carry the promo code.** Offer links carry `promo` and `nights`; the
+   widget exposes `data-bw-chain` / `data-bw-hotel` and no promo attribute has been observed.
+   If promo cannot pass through, this silently breaks offer attribution and rate accuracy — a
+   regression hidden inside a tidy-up. **BLOCKING.**
+2. **Do not run it standalone.** Offer CTA baseline 1.55% (198 clicks). A 20% move needs
+   ~27,000/arm ≈ **38 days**. Bundle with the tile work and measure both on Rooms & Rates
+   arrivals.
+
+**Net effect on the programme:** this replaces P1 entirely. P1 was "give the offer route dates";
+this is "give the offer route the same handler as everything else", which is simpler, keeps the
+guest on-site, and needs no new capture UI.
