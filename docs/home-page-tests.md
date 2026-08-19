@@ -893,3 +893,29 @@ changes) rather than reducing taps. `data-bw-length-of-stay` rides on the CTA an
 is accepted by the widget, but produces **no visible LOS control** in the calendar,
 so it cannot be assumed to do the work on its own — verify what it actually changes
 before building on it.
+
+---
+
+## 15. Test 04 — destination name as the selector  ·  source: **Verndale reshaped**
+
+**Verndale's origin** (annotation, destination selector): *"Would love ability to view all your
+locations for a birds-eye-view of where your properties [are] **(I also missed the drop down at
+first)**."*
+
+**The reshape.** Their conclusion was a birds-eye map. The parenthetical is the more useful half:
+their reviewer could not find the dropdown. Pair that with the measurement — dropdown **+12.7%**
+(375→427), the single biggest gainer on the page, ahead of tabs at **+8.3%** — and the finding is
+that *our best-performing control is also our least discoverable one*.
+
+So: don't remove it, and don't replace it with a map. Merge it into the word people already look at.
+"Hawaii" at full size becomes the control, with the next destinations visibly stacked behind it.
+
+**Why the stack rather than a chevron.** Three treatments were considered — word + chevron menu; all
+destinations laid out on one line; and the stack. The first is the obvious one and the worst: a 12px
+chevron against 56px type reads as decoration, so it is strictly *less* discoverable than the form
+control it replaces, which is the exact failure Verndale reported. The stack is the only option that
+makes the existence of other destinations visible **at rest**, with no icon to interpret.
+
+**Runs alone.** It changes the best-performing surface on the page; a regression there must not be
+maskable by another test's win. **Guardrail:** explorer engagement (tabs + destination selection)
+must not fall — that is the whole success condition, not a side-check.
