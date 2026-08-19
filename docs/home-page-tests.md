@@ -416,3 +416,59 @@ change, and survives P1 being off the table.
 
 **Caveat to state in the brief:** without dates, "Explore Dates" still lands on a search form.
 Expect a smaller effect than the same change would produce with P1. Pre-register that.
+
+---
+
+# 12 · CORRECTION — "Book Now" is not a link
+
+**Earlier claim (WRONG):** every route into the booking engine arrives without dates and lands
+the guest on an empty search form.
+
+**What it actually is.** The property tile's Book Now is not a link to SynXis. It is:
+
+```html
+<button data-bs-toggle="offcanvas" data-bs-target="#bookingWidget"
+        class="button bw-magic-link"
+        data-bw-chain="18497" data-bw-hotel="66403"
+        data-bw-label="OUTRIGGER Reef Waikiki Beach Resort"
+        data-bw-currency="USD" data-average-nightly-rate="0"
+        data-average-nightly-rate-fallback="true">Book Now</button>
+```
+
+It opens the **on-site booking widget drawer**, pre-loaded with the property, collects dates,
+and hands off via the magic link. **The date capture already exists.** P1 as originally framed
+was solving a problem that isn't there.
+
+### The finding survives — the mechanism changes, and improves
+Not an empty form at the *destination*. A **date demand at the *start***. A guest comparing four
+Waikīkī properties presses Book Now and is asked to commit to dates before deciding *where*.
+That is a wall at the beginning of the journey, and it is exactly what Verndale meant by
+*"Book Now may feel too aggressive on the home page"* — their instinct was right and the cause
+was mis-attributed.
+
+### The cleanest evidence on the page, now readable
+Same card, same guests, two paths:
+
+| Path | Gate? | Result |
+|---|---|---|
+| Property **Title** | none — plain link | **+11.3%** |
+| Property **Book Now** | opens a date drawer | **+1 click / 18 days** |
+
+They take the ungated path and refuse the gated one. This is the strongest single piece of
+evidence in the experiment and it was only half-read until now.
+
+### Consequences for N1 (rebuild the property tile)
+- **"Explore Dates" is the wrong verb** — it promises the very thing causing the friction.
+  Prefer Verndale's other suggestion: **"View Property"** / "See this resort" — ungated,
+  matching the behaviour that is already winning.
+- **Strong variant worth testing: a soft-date drawer.** Same widget, month-level or "flexible"
+  default instead of an exact-date grid. Keeps the capture, removes the commitment. The SynXis
+  calendar widget is already instantiated on the page.
+- **`data-average-nightly-rate="0"` with `fallback="true"`** appears on the button itself —
+  further confirmation the price pipeline is wired and switched off. If it were on, the tile
+  could show a rate with no new integration.
+
+### Revised N1 hypothesis
+Replacing the tile's two competing CTAs with **one ungated action** — and the marketing sentence
+with the distinctive detail — will increase progression from the tile, because the data shows
+guests already prefer the ungated path by an order of magnitude.
