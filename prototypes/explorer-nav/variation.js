@@ -69,12 +69,11 @@
       '#opmc-count{display:none}',
 
       '#' + NAV_ID + '{display:block;width:100%;margin:0 0 6px}',
-      // The bar sits inside the explorer's sand section. A solid navy band fought
-      // it, so navy is reserved for the SELECTED chip — which also makes "one
-      // thing is always selected" unmissable.
-      '#opmc-bar{background:#fff;border:1px solid rgba(51,41,38,.13);border-radius:8px;padding:10px 12px;' +
-        'display:flex;align-items:center;gap:9px;flex-wrap:wrap}',
-      '#opmc-bar .barnote{font:500 13px/1 Montserrat-Light,sans-serif;color:rgba(51,41,38,.6);padding:0 4px}',
+      // No container. Navy fought the sand section and white read as a stray
+      // card inside it — the section already has a ground, so the chips sit
+      // straight on it and navy is kept for the selected chip alone.
+      '#opmc-bar{background:transparent;border:0;padding:0;display:flex;align-items:center;gap:9px;flex-wrap:wrap}',
+      '#opmc-bar .barnote{font:500 13.5px/1 Montserrat-Light,sans-serif;color:rgba(51,41,38,.6);padding:0 2px}',
 
       '#opmc-crumb{display:flex;align-items:center;gap:9px;margin:0}',
       '#opmc-crumb button{width:30px;height:30px;border-radius:6px;border:1px solid rgba(51,41,38,.28);' +
