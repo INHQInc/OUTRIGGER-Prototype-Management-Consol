@@ -64,6 +64,12 @@
       // own theme (it flips the type to dark); the explorer's exact warm tone is not any
       // theme class, so it is set explicitly so the two sections read as one surface.
       '.offers-slider.is-sand{background-color:rgb(241,239,237) !important}',
+      // Property tile CTAs: View Availability stays left, View Rooms goes to the
+      // right edge. Scoped by the marker this variation sets, so the booking
+      // widget's own .card-cta-info cards are untouched.
+      '.card-cta-info[data-mock-done="1"]{justify-content:space-between;width:100%}',
+      '.card-cta-info[data-mock-done="1"] .card-view-property{margin-left:auto}',
+
       '@media(max-width:767px){#opmc-tq-banner .tq-inner{padding:56px 20px;min-height:340px}' +
         '#opmc-tq-banner .tq-scrim{background:linear-gradient(180deg,rgba(8,26,40,.55) 0%,rgba(8,26,40,.9) 100%)}}'
     ].join('');
