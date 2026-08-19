@@ -1,0 +1,18 @@
+{
+  "key": "explorer-pills",
+  "name": "Destination name as the selector (pills)",
+  "description": "Removes the destination dropdown; the active region stays as the editorial headline and the remaining regions sit beside it as pills, so the full set is visible at rest. Pills proxy to the site's own dropdown items, so switching behaviour is unchanged. Runs alone — it alters the best-performing surface on the page.",
+  "status": "draft",
+  "targets": [
+    { "siteKey": "prep-outrigger", "slug": "home", "version": "latest" }
+  ],
+  "injections": [
+    { "type": "js", "file": "overlay.js" }
+  ],
+  "liveUrls": [
+    "https://prep.outrigger.com/",
+    "https://www.outrigger.com/"
+  ],
+  "createdAt": "2026-08-19T00:00:00.000Z",
+  "updatedAt": "2026-08-19T00:00:00.000Z"
+}
