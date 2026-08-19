@@ -567,3 +567,33 @@ current setup cannot produce, and it is what makes any of these tests separable 
 | 2 | **N1 — rebuild the property tile** | 3 converging signals; keep the title ungated |
 | 3 | Route offers through the widget | Fixes the worst destination on the page (see 12c) |
 | 4 | Trip Planner / vacation-type banner | Metric question in §10 still unanswered |
+
+### 12e · The widget cannot carry a promo code — but it is meant to
+
+Confirmed (Bryan): the booking widget **does not currently pass a promo code**, and **it is
+intended to**. A defect, not a design limit.
+
+**Consequence: 12c is blocked, not cancelled.** Routing the offer buttons through the widget
+today would drop `promo`, breaking offer attribution and showing rack rates against
+offer-branded cards. That is a worse regression than the problem it fixes.
+
+**Dependency to raise:** widget owner adds promo pass-through (`data-bw-promo` → magic link).
+Until then the offer tiles keep their direct SynXis links.
+
+**Interim win available with no widget dependency.** The offer links are broken independently
+of all this: they carry `dest=ORH`, which SynXis discards — normalising to `level=chain` and
+returning a **worldwide** list. Fixing the destination is a pure URL change:
+
+```
+now   ?level=hotel&chain=18497&promo=OCEANVIEW&nights=5&dest=ORH   → worldwide list
+fix   ?level=hotel&chain=18497&promo=OCEANVIEW&nights=5&hotel=<PropertySabreID>
+```
+
+Every property already carries `PropertySabreID` on the page. This lands an offer click on a
+relevant property instead of the global inventory, needs no widget work, and is independent of
+whether 12c ever ships.
+
+**Revised order for the offer route:**
+1. Fix the destination params now (URL only, no dependency)
+2. Widget gains promo support (external dependency, raise it)
+3. Then route offers through the widget per 12c
