@@ -536,3 +536,34 @@ property tile, which is why this change is defensible while the equivalent on th
 **Net effect on the programme:** this replaces P1 entirely. P1 was "give the offer route dates";
 this is "give the offer route the same handler as everything else", which is simpler, keeps the
 guest on-site, and needs no new capture UI.
+
+### 12d · STANDING PRINCIPLE — every home page CTA uses the widget
+
+Decision (Bryan): **all CTAs on the home page leverage the on-site booking widget.** One
+handler, one behaviour, one thing to instrument. Supersedes P1 completely.
+
+**Three consequences.**
+
+**1 · The date gate becomes the single biggest lever on the page.** If every route is gated,
+then softening the gate affects **100% of booking intent**, not the 75% it would have before.
+Relaxing the widget's default from an exact-date grid to **month-level / flexible** is now
+worth more than any individual CTA wording change on the list. It is one change to one
+component, and it sits in front of everything.
+
+**2 · The page still needs one ungated path, and it already has the winner.** Property
+**Title +11.3%** is a plain link with no gate; Book Now is gated and flat. Do **not** route the
+title through the widget. The tile wants **one ungated look action (the name) and one gated
+commit action** — which is exactly N1. Gating everything, including the title, would remove
+the only path guests are actually taking.
+
+**3 · Instrumentation gets easier and better.** One handler means one event with a `source`
+attribute (tile / header / sticky / offer / banner). That gives per-surface attribution the
+current setup cannot produce, and it is what makes any of these tests separable afterwards.
+
+**Revised biggest-opportunity list, post-decision:**
+| Rank | Change | Why |
+|---|---|---|
+| 1 | **Soften the widget's date default** (flexible / month) | Sits in front of 100% of booking intent |
+| 2 | **N1 — rebuild the property tile** | 3 converging signals; keep the title ungated |
+| 3 | Route offers through the widget | Fixes the worst destination on the page (see 12c) |
+| 4 | Trip Planner / vacation-type banner | Metric question in §10 still unanswered |
