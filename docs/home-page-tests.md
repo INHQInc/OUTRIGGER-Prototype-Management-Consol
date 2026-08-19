@@ -334,3 +334,85 @@ Local files: `docs/outrigger-properties.js` · `docs/verndale-priorities.html` �
 
 **Next step when resuming:** ideate remaining hybrid ideas, then generate the PPTX of
 recommended next tests from section 5.
+
+---
+
+# 10 · DECISIONS — 2026-08-19
+
+| Was | Decision |
+|---|---|
+| **P1** Carry dates into the booking engine | **NOT HAPPENING.** Removed from the programme. |
+| **P2** Birds-eye view / the explorer | **DEFERRED** — too complicated for now. Later test. |
+| **P4** Search by vacation type | **Reshaped** → a wide home page banner using the existing **Trip Planner** feature. |
+
+### What killing P1 costs — state it plainly
+P1 was P3's partner. The original argument was: *softening the CTA verb alone won't fix it,
+because the destination is still an empty search form.* Without P1, **P3 becomes a
+lower-confidence test** — we're changing the label on a door but not what's behind it.
+
+It also removes the cheapest bridge between the two economies. The remaining bridges are the
+explorer (deferred) and the trip planner banner (new). **Nothing currently in the near-term
+programme carries a guest's dates.** Worth revisiting P1 if the reason it's blocked is
+effort rather than policy — it was the highest evidence-to-cost item on the list.
+
+### Trip Planner — what it actually is
+Home page markup: `"favorites": { "label": "Trip Planner", "showFavourites": "true", … }`.
+It is a **favourites / save-for-later** feature, not a vacation-type chooser. Repos also carry
+`prototype/favorites` and `prototype/trip-planner` branches (the latter is a site snapshot).
+
+**Measurement consequence — important.** Saving is not booking. A banner that successfully
+drives Trip Planner starts could *depress* Rooms & Rates arrivals while being good for
+long-term conversion. If we test it against the standing primary metric it may look like a
+loss when it isn't — or worse, look like a win on engagement while costing bookings.
+
+**Three ways to handle it, in order of preference:**
+1. **Vacation type routes to properties, saving is secondary.** Pick "romantic" → matching
+   properties → See rates. The Trip Planner is the optional save, not the destination. Keeps
+   the standing primary metric honest.
+2. **Test it on its own metric** (Trip Planner starts / saves per visitor) as an engagement
+   test, with Rooms & Rates arrivals as a **guardrail that must not fall**.
+3. Run it as a pure awareness play and accept it isn't a booking test. Least useful.
+
+**Open question:** is the intent (a) promote the existing favourites feature, or (b) build a
+vacation-type chooser that happens to live near it? These are different tests with different
+metrics. → **needs answering before the brief.**
+
+---
+
+## 11 · Revised near-term ranking
+
+| # | Test | Evidence | Build | Note |
+|---|---|---|---|---|
+| **N1** | **Rebuild the property tile** | **Strong ×3** | Low | New lead — see below |
+| **N2** | Trip Planner / vacation-type banner | Indirect | Med | Metric question above must be settled first |
+| **N3** | Book-direct microcopy under the CTA | Mixed | Low | Unaffected by P1's removal |
+| **N4** | Brand pillars / value prop | None yet | Med | Guardrail: Hero CTA must stay down |
+| later | The explorer (old P2) | Strong | Med-Hi | Deferred by decision, not by evidence |
+| later | Carry dates (old P1) | Strong | Low | Removed by decision, not by evidence |
+
+### N1 — Rebuild the property tile · **the new lead test**
+With the explorer deferred, the signature-experiences idea (old P6) has no vehicle — so give
+it the same one as the CTA change. **One component, one test, three independent data points
+all pointing at it:**
+
+| Signal | Reading |
+|---|---|
+| Property Title **+11.3%** | They want the place |
+| Property "Learn More" **−5.9%** | They don't want the brochure |
+| Property "Book Now" **+1 click / 18 days** | They won't commit from here |
+
+**The change:** one action per tile instead of two competing ones — *"Explore Dates"* per
+Verndale's annotation 4 — and replace the marketing sentence with the **distinctive detail**
+computed from the amenity diff: Monkeypod Kitchen (Reef) · Duke's + Blue Note (Waikiki Beach)
+· 'Auana by Cirque du Soleil (Beachcomber) · Appetito (Paradise) · Holokai Catamaran.
+
+That delivers Verndale's annotation 6 ("showcase other examples since 'Auana is only at
+Waikiki") at **zero page length** — which respects their own "do not add content" principle
+and our flat scroll finding.
+
+**Why this is now the strongest near-term test:** cheapest build, three converging signals,
+fully powered by data already in `docs/outrigger-properties.js`, needs no booking-engine
+change, and survives P1 being off the table.
+
+**Caveat to state in the brief:** without dates, "Explore Dates" still lands on a search form.
+Expect a smaller effect than the same change would produce with P1. Pre-register that.
