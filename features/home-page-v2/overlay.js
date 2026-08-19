@@ -181,8 +181,11 @@
  * No back arrow, no levels, no hidden state. Both tiers are on screen at once
  * and one thing in each is always selected:
  *
- *   Hawaii  Thailand  Fiji  Mauritius  Maldives     ← destination; selected one is the headline
- *   [Oahu 4] [Maui 2] [Hawaii Island 1] [Kauai 1]   ← regions of it; one always selected
+ *   Hawaii  Thailand  Fiji  Mauritius  Maldives   ← destination; selected one is the headline
+ *   [Oahu] [Maui] [Hawaii Island] [Kauai]         ← regions of it; one always selected
+ *
+ * No property counts: the destination tier has none, so counts on the island
+ * tier alone singled Hawaii out for no reason a guest would understand.
  *
  * WHY NO BACK ARROW. A drill-down was tried and abandoned. On first load nobody
  * has navigated anywhere, so "←" answers a question the visitor never asked —
@@ -210,8 +213,6 @@
  */
 (function () {
   'use strict';
-
-  var REGION_COUNTS = { 'Oahu': 4, 'Maui': 2, 'Hawaii Island (Big Island)': 1, 'Kauai': 1 };
   var STYLE_ID = 'opmc-nav-style', NAV_ID = 'opmc-nav', NAVY = 'rgb(0,69,97)', INK = 'rgb(51,41,38)';
 
   function styles() {
@@ -229,13 +230,15 @@
       // the rest sit on its baseline at the site's tab size.
       '#opmc-dests{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 20px;padding:0;margin:0 0 18px;list-style:none}',
       'h2.destination-selection-selected{display:none !important}',   // we render the name ourselves
+      // margin:0 is load-bearing — a site button rule adds margin-left:15px,
+      // which pushed both rows 15px right of the "Explore" heading above them.
       '#opmc-dests button{font:500 18px/18px DuplicateSans-Medium,sans-serif;color:rgba(51,41,38,.5);' +
-        'background:none;border:0;padding:6px 0;cursor:pointer;white-space:nowrap;position:relative;' +
+        'background:none;border:0;padding:6px 0;margin:0;cursor:pointer;white-space:nowrap;position:relative;' +
         'transition:color .15s}',
       '#opmc-dests button:hover{color:' + NAVY + '}',
       // the selected destination IS the headline — a class change, never a DOM move
       '#opmc-dests button.on{font:60px/66px DuplicateSans-Regular,sans-serif;color:rgb(33,37,41);' +
-        'padding:0 0 6px;cursor:default}',
+        'padding:0 0 6px;margin:0;cursor:default}',
       '#opmc-dests button.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;' +
         'background:' + NAVY + '}',
       '@media(max-width:767px){#opmc-dests button.on{font-size:38px;line-height:44px}}',
@@ -246,12 +249,10 @@
       '#opmc-regions{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none;align-items:center}',
       '#opmc-regions button{font:500 16px/16px DuplicateSans-Medium,sans-serif;color:' + INK + ';' +
         'background:transparent;border:1px solid rgba(51,41,38,.28);border-radius:7px;padding:11px 16px;' +
-        'cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:7px}',
+        'margin:0;cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center}',
       '#opmc-regions button:hover{border-color:' + NAVY + ';color:' + NAVY + '}',
       '#opmc-regions button.on{background:' + NAVY + ';color:#fff;border-color:' + NAVY + '}',
       '#opmc-regions button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:2px}',
-      '#opmc-regions button i{font-style:normal;font-size:14px;opacity:.5;font-weight:500}',
-      '#opmc-regions button:hover i,#opmc-regions button.on i{opacity:.75}',
       '#opmc-note{font:16px/25px Montserrat-Light,sans-serif;color:rgba(51,41,38,.6)}',
 
       '@media(max-width:767px){#opmc-dests{gap:4px 16px;margin-bottom:14px}' +
@@ -341,8 +342,6 @@
         b.type = 'button';
         b.textContent = name.replace(' (Big Island)', '');
         if (name === state.region) { b.className = 'on'; b.setAttribute('aria-current', 'true'); }
-        var n = REGION_COUNTS[name];
-        if (n) { var i = document.createElement('i'); i.textContent = n; b.appendChild(i); }
         b.setAttribute('data-tag-item', 'home_region_select');
         b.addEventListener('click', function () {
           if (state.region === name) return;
