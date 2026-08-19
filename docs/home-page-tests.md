@@ -760,3 +760,38 @@ everyone an easier exit, and it removes the cannibalisation risk instead of meas
 
 **Still unresolved (blocking the brief):** is this promoting the existing **favourites** feature,
 or building a **vacation-type chooser**? Different builds, different primary metrics.
+
+---
+
+### ★ addendum · Bundling and attribution
+
+**Question (Bryan):** can we run all of these as one test, or does the outcome stop tying back
+to the change?
+
+**Correct instinct — but "one change per test" is the wrong correction.** At 711/arm/day each
+test needs ~14 days for a 20% move. Seven sequential tests ≈ five months, over which the page,
+the season and the traffic mix all drift. Serialising everything is not rigour, it is slowness
+with its own error term.
+
+**The rule is one HYPOTHESIS per test, not one change.**
+Bundle when every change serves the same mechanism *and* you would take the same action on the
+result. Never bundle changes that test different mechanisms — a win in one masks a loss in the
+other.
+
+**Applied to the live shortlist:**
+
+| Test | Contents | Why grouped |
+|---|---|---|
+| **A** | Rebuild the property tile **+** offer click → pick a property | Same hypothesis: *let guests choose a place before demanding a date.* Same predicted direction, same action either way. Roughly halves the calendar. |
+| **B** | Soften the widget's date default | Different lever — reduces the cost of the expensive commitment rather than reordering the two. Also **global**, so it contaminates anything bundled with it. |
+| **C** | Trip Planner banner | Different mechanism, and it carries genuine risk of moving the primary **down**. Bundled with A, a win in A would mask exactly the cannibalisation we are worried about. |
+
+**Attribution inside a bundle is recoverable — with instrumentation.**
+Events at `offer → property picked → widget opened → engine reached` turn a bundle into a
+**funnel rather than a single number**, so you can see which stage moved. This is already listed
+as required instrumentation (§6); it is what makes bundling safe rather than sloppy.
+
+**And guardrails catch what attribution misses.** If a bundle moves the primary but breaks a
+guardrail, you know something inside it did harm even before you know which part.
+
+**Order:** A first (no dependencies, biggest combined evidence), then B, then C.
