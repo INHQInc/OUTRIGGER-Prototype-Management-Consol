@@ -1,8 +1,8 @@
 /**
  * Outrigger home page — test 01 + 03 variation
  *
- *  1. Trip Planner banner, dark blue, full bleed, directly under the destination explorer.
- *     Styling matched to the site's own .promotion-banner (rgb(0,69,97) / DuplicateSans / Montserrat).
+ *  1. The Travel Quiz promo card from /test/tqpromos, run full-bleed, directly under the
+ *     destination explorer. Same artwork, eyebrow, headline and CTA as the component there.
  *  2. Property tiles: "Book Now" -> "View Availability" (keeps the widget and every data-bw-* attr);
  *     "Learn More" -> "View Rooms", pointing at that property's /rooms-suites page.
  *  3. Offer tiles: the CTA stops linking out to reservation.outrigger.com and instead opens the
@@ -21,65 +21,72 @@
       '<path d="m4.5,3.49174l4,4l-4,4" stroke="' + stroke + '" stroke-width="2"></path></svg></span>';
   };
 
-  /* ---------------------------------------------------------------- 1. banner */
+  /* ---------------------------------------------------------------- 1. banner
+   * The Travel Quiz promo card from /test/tqpromos, run full-bleed under the
+   * destination explorer. Type tokens (DuplicateIonic-Black eyebrow at 4px
+   * tracking, DuplicateSans-Regular headline, Montserrat-Light body, outlined
+   * white CTA) are lifted from that component's computed styles.
+   *
+   * The artwork only exists at 517x643 — the AdaptiveImages `stamp` signs the
+   * width/height, so a larger render cannot be requested. It is therefore run
+   * at native scale as a right-hand accent over a gradient drawn from its own
+   * palette, rather than stretched across 1440px and turned to mush.
+   */
+  var PROMO_IMG = 'https://www.outrigger.com/AdaptiveImages/optimizely/' +
+    '5771c854-7b02-49d2-8ab8-1ca80ec981a6/promo2.png' +
+    '?quality=100&width=1400&height=1741&stamp=9b0851ecb0a4dc9b51c8688da56e73c05f2829ab&format=webp';
+
   function styles() {
-    if (document.getElementById('mock-tp-style')) return;
+    if (document.getElementById('opmc-tq-style')) return;
     var st = document.createElement('style');
-    st.id = 'mock-tp-style';
+    st.id = 'opmc-tq-style';
     st.textContent = [
-      '#mock-tp-banner{background:rgb(0,69,97);display:block;width:100%}',
-      '#mock-tp-banner .mtp-c{max-width:1280px;margin:0 auto;padding:56px 12px;display:flex;flex-wrap:wrap;gap:28px 8.33%}',
-      '#mock-tp-banner .mtp-l{flex:1 1 380px;min-width:280px}',
-      '#mock-tp-banner .mtp-r{flex:1 1 380px;min-width:280px}',
-      '#mock-tp-banner h2{font:40px/52px DuplicateSans-Regular,sans-serif;color:#fff;margin:0 0 12px}',
-      '#mock-tp-banner p{font:16px/25px Montserrat-Light,sans-serif;color:#fff;margin:0 0 28px}',
-      '#mock-tp-banner .mtp-types{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 32px;padding:0;list-style:none}',
-      '#mock-tp-banner .mtp-types button{font:14px/20px Montserrat-Medium,sans-serif;color:#fff;background:transparent;' +
-        'border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:10px 20px;cursor:pointer;transition:.15s}',
-      '#mock-tp-banner .mtp-types button:hover,#mock-tp-banner .mtp-types button[aria-pressed="true"]' +
-        '{background:#fff;color:rgb(0,69,97);border-color:#fff}',
-      '#mock-tp-banner .mtp-cta{font:500 16px/16px DuplicateSans-Medium,sans-serif;color:#fff;background:transparent;' +
-        'border:1px solid #fff;padding:16px;display:inline-flex;align-items:center;cursor:pointer;text-decoration:none}',
-      '#mock-tp-banner .mtp-cta:hover{background:#fff;color:rgb(0,69,97)}',
-      '#mock-tp-banner .mtp-cta:hover path{stroke:rgb(0,69,97)}',
-      '@media(max-width:767px){#mock-tp-banner .mtp-c{padding:36px 12px;gap:20px}' +
-        '#mock-tp-banner h2{font-size:30px;line-height:38px}}'
+      '#opmc-tq-banner{position:relative;width:100%;display:block;overflow:hidden;' +
+        'background:linear-gradient(180deg,#12354C 0%,#0A1F2E 55%,#050F18 100%)}',
+      '#opmc-tq-banner .tq-bg{position:absolute;inset:0;background-image:url("' + PROMO_IMG + '");' +
+        'background-size:auto 118%;background-position:right -40px center;background-repeat:no-repeat;opacity:.9}',
+      // second, mirrored and faint, so the field reads as artwork rather than one lone motif
+      '#opmc-tq-banner .tq-bg2{position:absolute;inset:0;background-image:url("' + PROMO_IMG + '");' +
+        'background-size:auto 150%;background-position:left 46% top -90px;background-repeat:no-repeat;' +
+        'opacity:.16;transform:scaleX(-1)}',
+      '#opmc-tq-banner .tq-scrim{position:absolute;inset:0;background:linear-gradient(90deg,' +
+        'rgba(8,26,40,.94) 0%,rgba(8,26,40,.7) 38%,rgba(8,26,40,.1) 72%,rgba(8,26,40,0) 100%)}',
+      '#opmc-tq-banner .tq-inner{position:relative;max-width:1280px;margin:0 auto;padding:88px 36px;' +
+        'display:flex;flex-direction:column;align-items:flex-start;min-height:440px;justify-content:center}',
+      '#opmc-tq-banner .tq-eyebrow{font:900 14px/18px DuplicateIonic-Black,sans-serif;color:#fff;' +
+        'letter-spacing:4px;text-transform:uppercase;margin:0 0 28px}',
+      '#opmc-tq-banner .tq-title{font:clamp(34px,4.4vw,56px)/1.1 DuplicateSans-Regular,sans-serif;' +
+        'color:#fff;margin:0 0 18px;max-width:16ch}',
+      '#opmc-tq-banner .tq-text{font:325 16px/25px Montserrat-Light,sans-serif;color:#fff;margin:0 0 34px;max-width:52ch}',
+      '#opmc-tq-banner .tq-cta{font:500 16px/16px DuplicateSans-Medium,sans-serif;color:#fff;background:transparent;' +
+        'border:1px solid #fff;padding:16px;display:inline-flex;align-items:center;text-decoration:none;transition:.15s}',
+      '#opmc-tq-banner .tq-cta:hover{background:#fff;color:#0B2233}',
+      '#opmc-tq-banner .tq-cta:hover path{stroke:#0B2233}',
+      '@media(max-width:767px){#opmc-tq-banner .tq-inner{padding:56px 20px;min-height:340px}' +
+        '#opmc-tq-banner .tq-bg{background-size:auto 70%;background-position:right -60px bottom}' +
+        '#opmc-tq-banner .tq-scrim{background:linear-gradient(180deg,rgba(8,26,40,.5) 0%,rgba(8,26,40,.92) 100%)}}'
     ].join('');
     document.head.appendChild(st);
   }
 
   function banner() {
-    if (document.getElementById('mock-tp-banner')) return true;
+    if (document.getElementById('opmc-tq-banner')) return true;
     var ds = document.querySelector('.destination-selection');
     if (!ds) return false;
 
     var el = document.createElement('div');
-    el.id = 'mock-tp-banner';
-    el.setAttribute('data-tag-item', 'trip_planner_banner');
+    el.id = 'opmc-tq-banner';
+    el.setAttribute('data-tag-item', 'travel_quiz_banner');
     el.innerHTML =
-      '<div class="mtp-c">' +
-        '<div class="mtp-l"><h2>Not sure where to start?</h2></div>' +
-        '<div class="mtp-r">' +
-          '<p>Tell us the kind of trip you have in mind and we&rsquo;ll build it with you &mdash; ' +
-          'save the places you love and come back to them any time.</p>' +
-          '<ul class="mtp-types">' +
-            '<li><button type="button" aria-pressed="false" data-type="adventure">Adventure</button></li>' +
-            '<li><button type="button" aria-pressed="false" data-type="wellness">Wellness &amp; spa</button></li>' +
-            '<li><button type="button" aria-pressed="false" data-type="romance">Romantic getaway</button></li>' +
-            '<li><button type="button" aria-pressed="false" data-type="family">Family-friendly</button></li>' +
-          '</ul>' +
-          '<button type="button" class="mtp-cta" data-bs-toggle="offcanvas" data-bs-target="#favoritesOffcanvas" ' +
-            'aria-controls="favoritesOffcanvas" data-tag-item="trip_planner_banner_cta">Start your trip' + ARROW('white') + '</button>' +
-        '</div>' +
+      '<div class="tq-bg" aria-hidden="true"></div>' +
+      '<div class="tq-bg2" aria-hidden="true"></div>' +
+      '<div class="tq-scrim" aria-hidden="true"></div>' +
+      '<div class="tq-inner">' +
+        '<div class="tq-eyebrow">Outrigger Travel Quiz</div>' +
+        '<div class="tq-title">Let’s discover your perfect getaway</div>' +
+        '<div class="tq-text">Take our quick, five-question quiz to see which tropical destination fits your travel dreams.</div>' +
+        '<a href="/travel-quiz" class="tq-cta" data-tag-item="travel_quiz_banner_cta">Take the quiz' + ARROW('white') + '</a>' +
       '</div>';
-
-    el.addEventListener('click', function (e) {
-      var b = e.target.closest('.mtp-types button');
-      if (!b) return;
-      el.querySelectorAll('.mtp-types button').forEach(function (o) {
-        o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
-      });
-    });
 
     ds.insertAdjacentElement('afterend', el);
     return true;
