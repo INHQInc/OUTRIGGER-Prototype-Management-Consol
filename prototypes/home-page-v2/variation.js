@@ -84,7 +84,7 @@
       '<div class="tq-inner">' +
         '<div class="tq-eyebrow">Outrigger Travel Quiz</div>' +
         '<div class="tq-title">Let’s discover your perfect getaway</div>' +
-        '<div class="tq-text">Take our quick, five-question quiz to see which tropical destination fits your travel dreams.</div>' +
+        '<div class="tq-text">What’s your vibe when you’re seeking an escape to paradise? Answer these quick questions and we’ll suggest a destination to fit your travel dreams.</div>' +
         '<a href="/travel-quiz" class="tq-cta" data-tag-item="travel_quiz_banner_cta">Take the quiz' + ARROW('white') + '</a>' +
       '</div>';
 
