@@ -137,70 +137,38 @@
 <h2>The priority table</h2>
 <p class="kicker">Ranked by evidence strength × effect potential ÷ build cost</p>
 
-<p class="measure" style="font-size:14px;color:var(--muted);margin:-4px 0 6px">
+<p class="measure" style="font-size:14px;color:var(--muted);margin:-4px 0 14px">
 <b>Source</b> is one of three. <b>Verndale</b> — proposed as written.
 <b>Verndale reshaped</b> — their idea, changed by what the experiment measured.
 <b>Outrigger</b> — net new, ours.</p>
-<p class="measure" style="font-size:14px;color:var(--muted);margin:0 0 16px">
-<b>Weighting.</b> <span class="m">Score = (Evidence × Effect) ÷ Build</span>.
-Evidence <b>3</b> = a direct measured signal · <b>2</b> = indirect or aligned · <b>1</b> = none ·
-<b>0</b> = the data argues against. Effect <b>3/2/1</b> = expected size of move on Rooms &amp; Rates
-arrivals. Build <b>1/2/3</b> = low/medium/high, as a divisor. Sorted by score.</p>
-
 <div class="tbl">
 <table>
-  <thead><tr><th style="width:27%">Proposal</th><th>Source</th><th class="n">Evid</th><th class="n">Effect</th><th class="n">Build</th><th class="n">Score</th><th>Note</th></tr></thead>
+  <thead><tr><th>Priority</th><th style="width:30%">Proposal</th><th>Source</th><th class="n">Evidence</th><th class="n">Effect</th><th class="n">Build</th><th>Verdict</th></tr></thead>
   <tbody>
-    <tr><td><b>Rebuild the property tile</b></td><td>Verndale reshaped</td>
-        <td class="n hi">3</td><td class="n">2.5</td><td class="n hi">1</td><td class="n hi"><b>7.5</b></td>
-        <td>Three converging signals, cheapest build</td></tr>
-    <tr><td><b>Offer click → pick a property, then dates</b></td><td><b>Outrigger</b></td>
-        <td class="n hi">3</td><td class="n hi">3</td><td class="n">2</td><td class="n hi"><b>4.5</b></td>
-        <td>No dependency. Also pilots the explorer.</td></tr>
-    <tr><td><b>Soften the widget's date default</b></td><td><b>Outrigger</b></td>
-        <td class="n hi">3</td><td class="n hi">3</td><td class="n">2</td><td class="n hi"><b>4.5</b></td>
-        <td>Sits in front of 100% of booking intent</td></tr>
-    <tr><td><b>Book-direct microcopy under the CTA</b></td><td>Verndale reshaped</td>
-        <td class="n">1.5</td><td class="n">2</td><td class="n hi">1</td><td class="n"><b>3.0</b></td>
-        <td>Cheap version of their block</td></tr>
-    <tr style="opacity:.65"><td><b>Birds-eye view / the explorer</b></td><td>Verndale</td>
-        <td class="n hi">3</td><td class="n hi">3</td><td class="n lo">3</td><td class="n"><b>3.0</b></td>
-        <td><b>Deferred</b> by decision, not by score</td></tr>
-    <tr><td><b>Trip Planner banner</b></td><td>Verndale reshaped</td>
-        <td class="n">2</td><td class="n">2</td><td class="n">2</td><td class="n"><b>2.0</b></td>
-        <td>Metric question unresolved; may move primary down</td></tr>
-    <tr><td><b>Value prop / five brand pillars</b></td><td>Verndale</td>
-        <td class="n">1</td><td class="n">2</td><td class="n">2</td><td class="n"><b>1.0</b></td>
-        <td>Only after the hero result is banked</td></tr>
-    <tr><td><b>Gift cards &amp; email copy</b></td><td>Verndale</td>
-        <td class="n">1</td><td class="n lo">1</td><td class="n hi">1</td><td class="n"><b>1.0</b></td>
-        <td>Content fix, not a test</td></tr>
-    <tr style="opacity:.55"><td>“Signature Experiences” section</td><td>Verndale reshaped</td>
-        <td class="n lo">0</td><td class="n">2</td><td class="n">2</td><td class="n lo"><b>0</b></td>
-        <td>Data argues against a new section — absorbed into the tile</td></tr>
-    <tr style="opacity:.55"><td>Rename “Discover paradise”</td><td>Verndale reshaped</td>
-        <td class="n lo">0.5</td><td class="n lo">1</td><td class="n hi">1</td><td class="n lo"><b>0.5</b></td>
-        <td>0.46% ceiling — slot repurposed instead</td></tr>
-    <tr style="opacity:.45"><td>Carry dates into the engine</td><td><b>Outrigger</b></td>
-        <td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td>
-        <td><b>Dropped</b> — the widget already captures dates</td></tr>
+    <tr><td><span class="P">1</span></td><td><b>Offer click → pick a property, then dates</b></td><td><b>Outrigger</b></td>
+        <td class="n hi">Strong</td><td class="n hi">High</td><td class="n">Med</td><td>Lead. No dependency. Pilots the explorer.</td></tr>
+    <tr><td><span class="P p2">2</span></td><td><b>Soften the widget's date default</b></td><td><b>Outrigger</b></td>
+        <td class="n hi">Strong</td><td class="n hi">High</td><td class="n">Med</td><td>Sits in front of 100% of booking intent</td></tr>
+    <tr><td><span class="P p3">3</span></td><td><b>Rebuild the property tile</b></td><td>Verndale reshaped</td>
+        <td class="n hi">Strong ×3</td><td class="n">Med-Hi</td><td class="n hi">Low</td><td>Ungated “View Property”, distinctive detail</td></tr>
+    <tr><td><span class="P p4">4</span></td><td><b>Trip Planner banner under the explorer</b></td><td>Verndale reshaped</td>
+        <td class="n">Indirect</td><td class="n">Med</td><td class="n">Med</td><td>Metric question unresolved — see below</td></tr>
+    <tr><td><span class="P p5">5</span></td><td><b>Book-direct microcopy under the CTA</b></td><td>Verndale reshaped</td>
+        <td class="n warn">Mixed</td><td class="n">Med</td><td class="n hi">Low</td><td>Cheap version of their block</td></tr>
+    <tr><td><span class="P p8">6</span></td><td><b>Value prop / five brand pillars</b></td><td>Verndale</td>
+        <td class="n">None yet</td><td class="n">Med</td><td class="n">Med</td><td>Only after the hero result is banked</td></tr>
+    <tr><td><span class="P p9">7</span></td><td><b>Gift cards &amp; email copy</b></td><td>Verndale</td>
+        <td class="n lo">Tiny</td><td class="n lo">Low</td><td class="n hi">Low</td><td>Content fix, not a test</td></tr>
+    <tr style="opacity:.62"><td>—</td><td><b>Birds-eye view / the explorer</b></td><td>Verndale</td>
+        <td class="n hi">Strong</td><td class="n hi">High</td><td class="n lo">High</td><td><b>Deferred</b> by decision, not evidence</td></tr>
+    <tr style="opacity:.62"><td>—</td><td><b>“Signature Experiences” section</b></td><td>Verndale reshaped</td>
+        <td class="n lo">Against</td><td class="n">Med</td><td class="n">Med</td><td>Absorbed into #3 as card content</td></tr>
+    <tr style="opacity:.62"><td>—</td><td><b>Rename “Discover paradise”</b></td><td>Verndale reshaped</td>
+        <td class="n lo">0.46% ceiling</td><td class="n lo">Low</td><td class="n hi">Low</td><td>Slot repurposed for #4</td></tr>
+    <tr style="opacity:.5"><td>—</td><td>Carry dates into the engine</td><td><b>Outrigger</b></td>
+        <td class="n">—</td><td class="n">—</td><td class="n">—</td><td><b>Dropped</b> — the widget already captures dates</td></tr>
   </tbody>
 </table>
-</div>
-
-<div class="measure">
-<div class="thesis warn">
-  <p class="lede">Where the score disagrees with judgement — and what to do about it.</p>
-  <p>The formula puts <b>rebuild the property tile</b> first, ahead of the offer picker, purely
-  because its build cost is lowest. My earlier ordering led with the offer picker. <b>The
-  disagreement mostly dissolves</b>, because those two share a hypothesis and should run as one
-  bundle (see the sequence below) — so the tile's cheapness pulls the whole bundle forward
-  rather than displacing anything.</p>
-  <p>The score is also deliberately blind to two things: <b>dependencies</b> (the offer reroute
-  needs widget promo support; the picker doesn't) and <b>risk of moving the primary the wrong
-  way</b> (only the Trip Planner banner carries that). Read the score as a starting order, then
-  apply those two filters.</p>
-</div>
 </div>
 
 <div class="measure">
