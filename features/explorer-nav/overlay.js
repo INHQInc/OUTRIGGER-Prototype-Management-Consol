@@ -128,7 +128,8 @@
           // resolve live, for the same detached-node reason as the regions
           var live = destItems().filter(function (x) { return label(x) === name; })[0] || item;
           live.click();
-          setTimeout(renderRegions, 700);
+          lastSig = null;            // force a re-read once the site has switched
+          setTimeout(syncRegions, 400);
         });
         destBtns[name] = b;
         li.appendChild(b);
@@ -184,15 +185,34 @@
       });
     }
 
-    function render() { buildDests(); paintDests(); renderRegions(); }
+    // The site renders its region tabs AFTER this builds on a cold load, and
+    // build() early-returns once the nav exists — so a one-shot render left the
+    // island chips empty until some unrelated re-render happened to rebuild us.
+    // Track the site's tab set and re-render only when it actually changes
+    // (a signature check, so observing the document can't loop us).
+    var lastSig = null;
+    function regionSig() {
+      return regionBtns().map(label).join('|') + '@' + state.dest + '#' + (state.region || '');
+    }
+    function syncRegions() {
+      var sig = regionSig();
+      if (sig === lastSig) return;
+      lastSig = sig;
+      renderRegions();
+    }
+
+    function render() { buildDests(); paintDests(); syncRegions(); }
 
     render();
-    var ctl = { render: render, state: state };
+    var ctl = { render: render, sync: syncRegions, state: state };
     nav.__ctl = ctl;
     return ctl;
   }
 
-  function apply() { build(); }
+  function apply() {
+    var ctl = build();
+    if (ctl && ctl.sync) ctl.sync();   // cheap: no-ops unless the site's tabs changed
+  }
 
   apply();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
