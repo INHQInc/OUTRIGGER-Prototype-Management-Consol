@@ -1,0 +1,718 @@
+<title>Prism Prototype Flow</title>
+<style>
+  :root {
+    --paper:#F5F7FA; --surface:#FFFFFF; --ink:#111823; --muted:#5A6675; --faint:#8A94A3;
+    --line:#DDE3EA; --line-strong:#B9C3D0;
+    --accent:#1D4ED8; --ok:#0E7C4A; --warn:#B45309; --danger:#B42318;
+    --ui: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0D1117; --surface:#161B22; --ink:#E7EDF5; --muted:#9AA7B8; --faint:#6E7B8C;
+      --line:#242C38; --line-strong:#3D4757;
+      --accent:#6C9BFF; --ok:#3FBF84; --warn:#E0A140; --danger:#F27063;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0D1117; --surface:#161B22; --ink:#E7EDF5; --muted:#9AA7B8; --faint:#6E7B8C;
+    --line:#242C38; --line-strong:#3D4757;
+    --accent:#6C9BFF; --ok:#3FBF84; --warn:#E0A140; --danger:#F27063;
+  }
+  :root[data-theme="light"] {
+    --paper:#F5F7FA; --surface:#FFFFFF; --ink:#111823; --muted:#5A6675; --faint:#8A94A3;
+    --line:#DDE3EA; --line-strong:#B9C3D0;
+    --accent:#1D4ED8; --ok:#0E7C4A; --warn:#B45309; --danger:#B42318;
+  }
+
+  body { background:var(--paper); color:var(--ink); font-family:var(--ui);
+         font-size:16px; line-height:1.6; margin:0; padding:0 20px 90px; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1060px; margin:0 auto; }
+  .measure { max-width:68ch; }
+
+  header.top { padding:48px 0 24px; border-bottom:1px solid var(--line); margin-bottom:34px; }
+  .eyebrow { font:600 11.5px/1 var(--mono); letter-spacing:.13em; text-transform:uppercase;
+             color:var(--accent); margin:0 0 12px; }
+  h1 { font-size:clamp(28px,4.6vw,40px); line-height:1.07; letter-spacing:-.025em; font-weight:700; margin:0 0 12px; }
+  .standfirst { font-size:17.5px; color:var(--muted); margin:0; max-width:60ch; }
+
+  h2 { font-size:clamp(20px,2.8vw,25px); line-height:1.2; letter-spacing:-.018em; font-weight:700; margin:56px 0 3px; }
+  h2 + .kicker { color:var(--faint); font:500 13px/1.5 var(--ui); margin:0 0 18px; }
+  p { margin:0 0 14px; }
+  code, .m { font-family:var(--mono); font-size:.875em;
+             background:color-mix(in srgb, var(--ink) 6%, transparent); padding:.12em .38em; border-radius:4px; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:22px; align-items:center; background:var(--surface);
+            border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin:24px 0 8px; }
+  .legend div { display:flex; align-items:center; gap:9px; font-size:13px; color:var(--muted); }
+  .sw { width:34px; height:22px; flex:none; }
+
+  figure { margin:26px 0 10px; }
+  .scroll { overflow-x:auto; background:var(--surface); border:1px solid var(--line);
+            border-radius:14px; padding:22px 18px; }
+  svg.fig { display:block; width:100%; height:auto; color:var(--ink); }
+  figcaption { color:var(--muted); font-size:13.5px; line-height:1.55; margin-top:11px; max-width:74ch; }
+
+  /* ── flowchart vocabulary ───────────────────────────────── */
+  .proc  { fill:var(--surface); stroke:var(--line-strong); stroke-width:1.6; }
+  .dec   { fill:color-mix(in srgb, var(--accent) 7%, var(--surface)); stroke:var(--accent); stroke-width:1.6; }
+  .term  { fill:color-mix(in srgb, var(--ink) 7%, var(--surface)); stroke:var(--line-strong); stroke-width:1.6; }
+  .human { stroke:var(--accent); stroke-width:2.6; }
+  .bad   { stroke:var(--danger); stroke-width:2.2; }
+  .conn  { fill:var(--surface); stroke:var(--muted); stroke-width:1.4; stroke-dasharray:3 3; }
+  .tn    { fill:var(--ink); font:650 13.5px var(--ui); }
+  .tn.sm { font-size:12.5px; }
+  .ts    { fill:var(--muted); font:400 10.5px var(--mono); }
+  .tc    { fill:var(--muted); font:650 12px var(--mono); }
+  .tc.d  { fill:var(--danger); }
+  .yn    { fill:var(--accent); font:700 11px var(--mono); }
+  .yn.n  { fill:var(--muted); }
+  .fl    { stroke:var(--line-strong); stroke-width:1.7; fill:none; }
+  .lp    { stroke:var(--muted); stroke-width:1.4; fill:none; stroke-dasharray:5 4; }
+  .lbl   { fill:var(--muted); font:400 11.5px var(--ui); }
+  .lbl.d { fill:var(--danger); font-weight:600; }
+  .phase { fill:var(--faint); font:700 10.5px var(--mono); letter-spacing:.12em; }
+
+  table { border-collapse:collapse; width:100%; font-size:14.5px; margin:18px 0; }
+  th,td { text-align:left; padding:11px 14px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-weight:650; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  td.m { font-family:var(--mono); font-size:12px; background:none; padding:11px 14px; }
+  .tbl { overflow-x:auto; }
+  .bad-t { color:var(--danger); font-weight:650; }
+
+  .rule { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:22px 0; }
+  .rule.bug { border-color:color-mix(in srgb, var(--danger) 45%, var(--line)); }
+  .rule.flag { border-color:color-mix(in srgb, var(--warn) 45%, var(--line)); }
+  .rule p:last-child { margin-bottom:0; }
+  .rule .lede { font-weight:650; margin:0 0 7px; }
+  .tag { display:inline-block; font:600 10.5px/1 var(--mono); letter-spacing:.09em; text-transform:uppercase;
+         padding:5px 8px; border-radius:5px; margin:0 0 11px; }
+  .tag.bug { color:var(--danger); background:color-mix(in srgb, var(--danger) 13%, transparent); }
+  .tag.open{ color:var(--accent); background:color-mix(in srgb, var(--accent) 13%, transparent); }
+
+  ol.q { counter-reset:q; list-style:none; padding:0; margin:18px 0 0; }
+  ol.q > li { counter-increment:q; position:relative; padding:0 0 0 42px; margin:0 0 22px; }
+  ol.q > li::before { content:counter(q); position:absolute; left:0; top:1px; font:650 12px/26px var(--mono);
+      width:26px; height:26px; text-align:center; border-radius:50%; color:var(--accent);
+      background:color-mix(in srgb, var(--accent) 13%, transparent); }
+  ol.q b { display:block; margin-bottom:2px; }
+  ol.q p { margin:0; color:var(--muted); font-size:14.5px; }
+
+  footer { margin-top:64px; padding-top:20px; border-top:1px solid var(--line); color:var(--faint); font-size:13px; }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Prism · flow map</p>
+  <h1>Three prototype types, end to end</h1>
+  <p class="standfirst">Every decision point, every loop back, traced from <code>derivePipeline</code>
+  and <code>deriveFlow</code>. Diamonds carry the actual predicate the code tests.</p>
+</header>
+
+<div class="legend" aria-hidden="true">
+  <div><svg class="sw" viewBox="0 0 34 22"><rect x="1" y="3" width="32" height="16" rx="8" class="term"/></svg> start / end</div>
+  <div><svg class="sw" viewBox="0 0 34 22"><rect x="1" y="3" width="32" height="16" rx="3" class="proc"/></svg> action</div>
+  <div><svg class="sw" viewBox="0 0 34 22"><polygon points="17,2 33,11 17,20 1,11" class="dec"/></svg> decision</div>
+  <div><svg class="sw" viewBox="0 0 34 22"><rect x="1" y="3" width="32" height="16" rx="3" class="proc human"/></svg> a person must do it</div>
+  <div><svg class="sw" viewBox="0 0 34 22"><line x1="1" y1="11" x2="33" y2="11" class="lp"/></svg> loop back</div>
+  <div><svg class="sw" viewBox="0 0 34 22"><circle cx="17" cy="11" r="9" class="conn"/></svg> jump to marker</div>
+</div>
+
+<h2>The gates, at a glance</h2>
+<p class="kicker">Which of the five each type has to pass, and what opens it</p>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Gate</th><th>Opens when</th><th>Type 1<br>injectable</th><th>Type 2<br>console + exp</th><th>Type 3<br>Opti-built</th></tr></thead>
+  <tbody>
+    <tr><td><b>Brief</b></td><td class="m">brief.change &amp;&amp; metrics.primary</td>
+        <td><span class="bad-t">never opens</span></td><td>✓</td><td>✓</td></tr>
+    <tr><td><b>Build</b></td><td class="m">provisioned &amp;&amp; built &amp;&amp; !artifactProblem</td>
+        <td>✓</td><td>✓</td><td>n/a</td></tr>
+    <tr><td><b>Review</b></td><td class="m">pages &gt; 0 &amp;&amp; passing === pages</td>
+        <td>✓</td><td>✓</td><td>n/a</td></tr>
+    <tr><td><b>Experimentation</b></td><td class="m">running || shipped</td>
+        <td>n/a</td><td>✓</td><td>✓</td></tr>
+    <tr><td><b>Handoff</b></td><td class="m">status === "shipped"</td>
+        <td>open Q1</td><td>✓</td><td><span class="bad-t">accepts, then reverts</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="measure">Two rules govern all three. <b>First-gate hold:</b> a <span class="m">blocked</span> step
+stops everything after it — the card waits there no matter what else is already green.
+<b>Handoff is terminal:</b> never auto-promoted, entered only by an explicit ship.</p>
+
+<h2>Type 2 · Built here, run as an experiment</h2>
+<p class="kicker">The fully modelled path — the other two are cuts of this one</p>
+
+<figure>
+  <div class="scroll">
+    <svg class="fig" viewBox="0 0 940 2380" style="min-width:820px" role="img"
+      aria-label="Flowchart for a console-built experiment: write the brief, check it is complete, provision and sync the branch, the agent builds and pushes, a self-audit checks brief against code, add and verify target pages, run QA, cut and certify a version, bind and push to Optimizely, a person starts it, it runs locked, the verdict is stamped, and a person ships the winner. Failures loop back to the brief or to the agent.">
+      <defs>
+        <marker id="f1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--line-strong)"/></marker>
+        <marker id="f1l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker>
+      </defs>
+
+      <text x="14" y="40" class="phase">BRIEF</text>
+      <text x="14" y="430" class="phase">BUILD</text>
+      <text x="14" y="1100" class="phase">REVIEW</text>
+      <text x="14" y="1550" class="phase">EXPERIMENT</text>
+      <text x="14" y="2260" class="phase">HANDOFF</text>
+
+      <!-- 1 start -->
+      <rect x="390" y="36" width="260" height="48" rx="24" class="term"/>
+      <text x="520" y="66" class="tn" text-anchor="middle">New prototype</text>
+      <line x1="520" y1="84" x2="520" y2="127" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 2 write brief -->
+      <rect x="370" y="129" width="300" height="62" rx="8" class="proc human"/>
+      <text x="520" y="155" class="tn" text-anchor="middle">Write the brief</text>
+      <text x="520" y="175" class="ts" text-anchor="middle">the change + how we'll judge it</text>
+      <circle cx="720" cy="160" r="13" class="conn"/><text x="720" y="164" class="tc" text-anchor="middle">B</text>
+      <line x1="520" y1="191" x2="520" y2="228" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 3 brief complete? -->
+      <polygon points="520,230 675,272 520,314 365,272" class="dec"/>
+      <text x="520" y="269" class="tn sm" text-anchor="middle">Brief complete?</text>
+      <text x="520" y="286" class="ts" text-anchor="middle">change &amp;&amp; metrics.primary</text>
+      <text x="534" y="332" class="yn">YES</text>
+      <line x1="520" y1="314" x2="520" y2="351" class="fl" marker-end="url(#f1)"/>
+      <path d="M365 272 L250 272 L250 160 L366 160" class="lp" marker-end="url(#f1l)"/>
+      <text x="256" y="222" class="yn n">NO</text>
+
+      <!-- 4 provision -->
+      <rect x="370" y="353" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="379" class="tn" text-anchor="middle">Prepare the branch</text>
+      <text x="520" y="399" class="ts" text-anchor="middle">.opmc/brief.md · context.json · skills</text>
+      <line x1="520" y1="415" x2="520" y2="452" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 5 in sync? -->
+      <polygon points="520,454 675,496 520,538 365,496" class="dec"/>
+      <text x="520" y="493" class="tn sm" text-anchor="middle">Branch in sync?</text>
+      <text x="520" y="510" class="ts" text-anchor="middle">hash === contentHashOf(proto)</text>
+      <text x="534" y="556" class="yn">YES</text>
+      <line x1="520" y1="538" x2="520" y2="575" class="fl" marker-end="url(#f1)"/>
+      <path d="M365 496 L250 496 L250 384 L366 384" class="lp" marker-end="url(#f1l)"/>
+      <text x="256" y="446" class="yn n">NO</text>
+      <text x="150" y="446" class="lbl">re-sync</text>
+
+      <!-- 6 agent builds -->
+      <rect x="370" y="577" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="603" class="tn" text-anchor="middle">The agent builds</text>
+      <text x="520" y="623" class="ts" text-anchor="middle">edits src/ → pushes dist/variation.js</text>
+      <circle cx="720" cy="608" r="13" class="conn"/><text x="720" y="612" class="tc" text-anchor="middle">A</text>
+      <line x1="520" y1="639" x2="520" y2="676" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 7 build found? -->
+      <polygon points="520,678 675,720 520,762 365,720" class="dec"/>
+      <text x="520" y="717" class="tn sm" text-anchor="middle">Build on the branch?</text>
+      <text x="520" y="734" class="ts" text-anchor="middle">source.variationJs</text>
+      <text x="534" y="780" class="yn">YES</text>
+      <line x1="520" y1="762" x2="520" y2="799" class="fl" marker-end="url(#f1)"/>
+      <path d="M365 720 L250 720 L250 608 L366 608" class="lp" marker-end="url(#f1l)"/>
+      <text x="256" y="670" class="yn n">NO</text>
+      <text x="140" y="670" class="lbl">keep waiting</text>
+
+      <!-- 8 self audit -->
+      <rect x="370" y="801" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="827" class="tn" text-anchor="middle">Self-audit runs</text>
+      <text x="520" y="847" class="ts" text-anchor="middle">hash(code) + fingerprint(brief)</text>
+      <line x1="520" y1="863" x2="520" y2="900" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 9 drift? -->
+      <polygon points="520,902 675,944 520,986 365,944" class="dec"/>
+      <text x="520" y="941" class="tn sm" text-anchor="middle">Brief ↔ build drift?</text>
+      <text x="520" y="958" class="ts" text-anchor="middle">either hash moved</text>
+      <text x="440" y="1004" class="yn n">NO</text>
+      <line x1="520" y1="986" x2="520" y2="1023" class="fl" marker-end="url(#f1)"/>
+      <line x1="675" y1="944" x2="705" y2="944" class="lp" marker-end="url(#f1l)"/>
+      <circle cx="720" cy="944" r="13" class="conn"/><text x="720" y="948" class="tc" text-anchor="middle">B</text>
+      <text x="745" y="940" class="yn">YES</text>
+      <text x="745" y="956" class="lbl">update the brief</text>
+      <text x="745" y="971" class="lbl">or dismiss the audit</text>
+
+      <!-- 10 pages -->
+      <rect x="370" y="1025" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="1051" class="tn" text-anchor="middle">Add the target page(s)</text>
+      <text x="520" y="1071" class="ts" text-anchor="middle">where it actually runs</text>
+      <line x1="520" y1="1087" x2="520" y2="1124" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 11 inject? -->
+      <polygon points="520,1126 675,1168 520,1210 365,1168" class="dec"/>
+      <text x="520" y="1165" class="tn sm" text-anchor="middle">All pages inject?</text>
+      <text x="520" y="1182" class="ts" text-anchor="middle">passing === pages</text>
+      <text x="534" y="1228" class="yn">YES</text>
+      <line x1="520" y1="1210" x2="520" y2="1247" class="fl" marker-end="url(#f1)"/>
+      <path d="M365 1168 L250 1168 L250 1056 L366 1056" class="lp" marker-end="url(#f1l)"/>
+      <text x="256" y="1118" class="yn n">NO</text>
+      <text x="106" y="1118" class="lbl">verify on the real site</text>
+
+      <!-- 12 QA -->
+      <rect x="370" y="1249" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="1275" class="tn" text-anchor="middle">QA</text>
+      <text x="520" y="1295" class="ts" text-anchor="middle">scenarios → test cases → agent runs them</text>
+      <line x1="520" y1="1311" x2="520" y2="1348" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 13 QA failing? -->
+      <polygon points="520,1350 675,1392 520,1434 365,1392" class="dec"/>
+      <text x="520" y="1389" class="tn sm" text-anchor="middle">QA failing?</text>
+      <text x="520" y="1406" class="ts" text-anchor="middle">failures file recommendations</text>
+      <text x="440" y="1452" class="yn n">NO</text>
+      <line x1="520" y1="1434" x2="520" y2="1471" class="fl" marker-end="url(#f1)"/>
+      <line x1="675" y1="1392" x2="705" y2="1392" class="lp" marker-end="url(#f1l)"/>
+      <circle cx="720" cy="1392" r="13" class="conn"/><text x="720" y="1396" class="tc" text-anchor="middle">A</text>
+      <text x="745" y="1389" class="yn">YES</text>
+      <text x="745" y="1405" class="lbl">send the agent to fix it</text>
+
+      <!-- 14 cut -->
+      <rect x="370" y="1473" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="1499" class="tn" text-anchor="middle">Cut v<tspan font-style="italic">N</tspan></text>
+      <text x="520" y="1519" class="ts" text-anchor="middle">immutable · pinned to the git SHA</text>
+      <line x1="520" y1="1535" x2="520" y2="1572" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 15 certified? -->
+      <polygon points="520,1574 675,1616 520,1658 365,1616" class="dec"/>
+      <text x="520" y="1613" class="tn sm" text-anchor="middle">Certification passed?</text>
+      <text x="520" y="1630" class="ts" text-anchor="middle">static QA gate on the cut</text>
+      <text x="534" y="1676" class="yn">YES</text>
+      <line x1="520" y1="1658" x2="520" y2="1695" class="fl" marker-end="url(#f1)"/>
+      <line x1="675" y1="1616" x2="705" y2="1616" class="lp" marker-end="url(#f1l)"/>
+      <circle cx="720" cy="1616" r="13" class="conn"/><text x="720" y="1620" class="tc" text-anchor="middle">A</text>
+      <text x="745" y="1613" class="yn n">NO</text>
+      <text x="745" y="1629" class="lbl">fix, then re-cut</text>
+
+      <!-- 16 bind + push -->
+      <rect x="370" y="1697" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="1723" class="tn" text-anchor="middle">Bind + push to Optimizely</text>
+      <text x="520" y="1743" class="ts" text-anchor="middle">by API · read-back verified</text>
+      <line x1="520" y1="1759" x2="520" y2="1796" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 17 start (human) -->
+      <rect x="370" y="1798" width="300" height="62" rx="8" class="proc human"/>
+      <text x="520" y="1824" class="tn" text-anchor="middle">Start it in Optimizely</text>
+      <text x="520" y="1844" class="ts" text-anchor="middle">the console never starts traffic</text>
+      <line x1="520" y1="1860" x2="520" y2="1897" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 18 running -->
+      <rect x="370" y="1899" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="1925" class="tn" text-anchor="middle">Running — card LOCKED</text>
+      <text x="520" y="1945" class="ts" text-anchor="middle">push refused while live</text>
+      <line x1="520" y1="1961" x2="520" y2="1998" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 19 verdict -->
+      <rect x="370" y="2000" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="2026" class="tn" text-anchor="middle">Stamp the verdict</text>
+      <text x="520" y="2046" class="ts" text-anchor="middle">against the pre-registration</text>
+      <line x1="520" y1="2062" x2="520" y2="2099" class="fl" marker-end="url(#f1)"/>
+
+      <!-- 20 won? -->
+      <polygon points="520,2101 675,2143 520,2185 365,2143" class="dec"/>
+      <text x="520" y="2140" class="tn sm" text-anchor="middle">Did it win?</text>
+      <text x="520" y="2157" class="ts" text-anchor="middle">verdict vs prediction</text>
+      <text x="534" y="2203" class="yn">YES</text>
+      <line x1="520" y1="2185" x2="520" y2="2222" class="fl" marker-end="url(#f1)"/>
+      <line x1="675" y1="2143" x2="705" y2="2143" class="lp" marker-end="url(#f1l)"/>
+      <circle cx="720" cy="2143" r="13" class="conn"/><text x="720" y="2147" class="tc" text-anchor="middle">B</text>
+      <text x="745" y="2140" class="yn n">NO</text>
+      <text x="745" y="2156" class="lbl">iterate — new hypothesis</text>
+
+      <!-- 21 ship -->
+      <rect x="370" y="2224" width="300" height="52" rx="26" class="term human"/>
+      <text x="520" y="2248" class="tn" text-anchor="middle">Ship the winner</text>
+      <text x="520" y="2266" class="ts" text-anchor="middle">status: "shipped" → Handoff</text>
+
+      <!-- marker key -->
+      <text x="745" y="112" class="lbl">Ⓐ = back to “The agent builds”</text>
+      <text x="745" y="130" class="lbl">Ⓑ = back to “Write the brief”</text>
+    </svg>
+  </div>
+  <figcaption><b>Type 2.</b> Note where the loops land: a failed audit and a lost experiment both go back
+  to the <em>brief</em>, while failed QA and failed certification go back to the <em>agent</em>. That's the
+  distinction between "we described the wrong thing" and "we built it wrong".</figcaption>
+</figure>
+
+<h2>Type 1 · Injectable, no experiment</h2>
+<p class="kicker">The type the model can't currently express</p>
+
+<figure>
+  <div class="scroll">
+    <svg class="fig" viewBox="0 0 940 1180" style="min-width:760px" role="img"
+      aria-label="Flowchart for an injectable prototype with no experiment. It follows the same brief, build and review path, but the Brief completeness check demands a success metric it will never have, so it stalls there. After review it goes live as an injection, and what happens next is an open question.">
+      <defs>
+        <marker id="f2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--line-strong)"/></marker>
+        <marker id="f2l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker>
+        <marker id="f2d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--danger)"/></marker>
+      </defs>
+
+      <rect x="390" y="36" width="260" height="48" rx="24" class="term"/>
+      <text x="520" y="66" class="tn" text-anchor="middle">New injectable prototype</text>
+      <line x1="520" y1="84" x2="520" y2="127" class="fl" marker-end="url(#f2)"/>
+
+      <rect x="370" y="129" width="300" height="62" rx="8" class="proc human"/>
+      <text x="520" y="155" class="tn" text-anchor="middle">Write the brief</text>
+      <text x="520" y="175" class="ts" text-anchor="middle">the change — there is nothing to measure</text>
+      <line x1="520" y1="191" x2="520" y2="228" class="fl" marker-end="url(#f2)"/>
+
+      <polygon points="520,230 675,272 520,314 365,272" class="dec bad"/>
+      <text x="520" y="269" class="tn sm" text-anchor="middle">Brief complete?</text>
+      <text x="520" y="286" class="ts" text-anchor="middle">change &amp;&amp; metrics.primary</text>
+      <line x1="675" y1="272" x2="712" y2="272" class="fl" stroke="var(--danger)" marker-end="url(#f2d)"/>
+      <text x="722" y="262" class="lbl d">ALWAYS NO — there is no</text>
+      <text x="722" y="278" class="lbl d">primary metric, so the card</text>
+      <text x="722" y="294" class="lbl d">never leaves this gate</text>
+      <path d="M365 272 L250 272 L250 160 L366 160" class="lp" stroke="var(--danger)" marker-end="url(#f2d)"/>
+      <text x="256" y="222" class="yn n">NO</text>
+
+      <text x="534" y="332" class="yn">YES — once the rule is per-type</text>
+      <line x1="520" y1="314" x2="520" y2="351" class="fl" stroke-dasharray="6 5" marker-end="url(#f2)"/>
+
+      <rect x="370" y="353" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="379" class="tn" text-anchor="middle">Branch → agent builds → pushes</text>
+      <text x="520" y="399" class="ts" text-anchor="middle">identical to type 2</text>
+      <line x1="520" y1="415" x2="520" y2="452" class="fl" marker-end="url(#f2)"/>
+
+      <polygon points="520,454 675,496 520,538 365,496" class="dec"/>
+      <text x="520" y="493" class="tn sm" text-anchor="middle">Build on the branch?</text>
+      <text x="520" y="510" class="ts" text-anchor="middle">+ self-audit for drift</text>
+      <text x="534" y="556" class="yn">YES</text>
+      <line x1="520" y1="538" x2="520" y2="575" class="fl" marker-end="url(#f2)"/>
+      <path d="M365 496 L250 496 L250 384 L366 384" class="lp" marker-end="url(#f2l)"/>
+      <text x="256" y="446" class="yn n">NO</text>
+
+      <rect x="370" y="577" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="603" class="tn" text-anchor="middle">Add the target page(s)</text>
+      <text x="520" y="623" class="ts" text-anchor="middle">where the injection runs</text>
+      <line x1="520" y1="639" x2="520" y2="676" class="fl" marker-end="url(#f2)"/>
+
+      <polygon points="520,678 675,720 520,762 365,720" class="dec"/>
+      <text x="520" y="717" class="tn sm" text-anchor="middle">All pages inject?</text>
+      <text x="520" y="734" class="ts" text-anchor="middle">passing === pages</text>
+      <text x="534" y="780" class="yn">YES</text>
+      <line x1="520" y1="762" x2="520" y2="799" class="fl" marker-end="url(#f2)"/>
+      <path d="M365 720 L250 720 L250 608 L366 608" class="lp" marker-end="url(#f2l)"/>
+      <text x="256" y="670" class="yn n">NO</text>
+
+      <rect x="390" y="801" width="260" height="52" rx="26" class="term"/>
+      <text x="520" y="825" class="tn" text-anchor="middle">Live on the site</text>
+      <text x="520" y="843" class="ts" text-anchor="middle">as an injection</text>
+      <line x1="520" y1="853" x2="520" y2="896" class="fl" stroke-dasharray="6 5" marker-end="url(#f2)"/>
+
+      <polygon points="520,898 675,940 520,982 365,940" class="dec" stroke-dasharray="6 5"/>
+      <text x="520" y="937" class="tn sm" text-anchor="middle">…then what?</text>
+      <text x="520" y="954" class="ts" text-anchor="middle">OPEN QUESTION 1</text>
+
+      <path d="M365 940 L230 940 L230 1050" class="lp" marker-end="url(#f2l)"/>
+      <rect x="90" y="1052" width="280" height="52" rx="26" class="term" stroke-dasharray="6 5"/>
+      <text x="230" y="1084" class="tn sm" text-anchor="middle">Done — this IS the finish</text>
+
+      <path d="M675 940 L810 940 L810 1050" class="lp" marker-end="url(#f2l)"/>
+      <rect x="670" y="1052" width="280" height="52" rx="26" class="term" stroke-dasharray="6 5"/>
+      <text x="810" y="1084" class="tn sm" text-anchor="middle">Handoff → production code</text>
+
+      <text x="14" y="1150" class="lbl">Dashed = not built. Everything below the first gate is what the flow
+        WOULD be; today the card never gets there.</text>
+    </svg>
+  </div>
+  <figcaption><b>Type 1.</b> Structurally it is type 2 with the whole experiment phase removed — but the
+  very first gate rejects it, because <code>isBriefComplete</code> is global rather than per-type. That
+  single line is why the card sat in Brief and refused to be dragged out.</figcaption>
+</figure>
+
+<h2>Type 3 · Built in Optimizely, measured here</h2>
+<p class="kicker">Brief and experiment only — and a broken ending</p>
+
+<figure>
+  <div class="scroll">
+    <svg class="fig" viewBox="0 0 940 1300" style="min-width:760px" role="img"
+      aria-label="Flowchart for a prototype built in Optimizely. Write the brief, bind the existing Optimizely experiment, a person starts it, it runs, the verdict is stamped, and shipping writes status shipped — but the stage resolver derives an external build back to Experimentation, so the card snaps back.">
+      <defs>
+        <marker id="f3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--line-strong)"/></marker>
+        <marker id="f3l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/></marker>
+        <marker id="f3d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--danger)"/></marker>
+      </defs>
+
+      <rect x="370" y="36" width="300" height="48" rx="24" class="term"/>
+      <text x="520" y="66" class="tn" text-anchor="middle">Experiment already built in Opti</text>
+      <line x1="520" y1="84" x2="520" y2="127" class="fl" marker-end="url(#f3)"/>
+
+      <rect x="370" y="129" width="300" height="62" rx="8" class="proc human"/>
+      <text x="520" y="155" class="tn" text-anchor="middle">Write the brief</text>
+      <text x="520" y="175" class="ts" text-anchor="middle">hypothesis + decision metric</text>
+      <circle cx="720" cy="160" r="13" class="conn"/><text x="720" y="164" class="tc" text-anchor="middle">B</text>
+      <line x1="520" y1="191" x2="520" y2="228" class="fl" marker-end="url(#f3)"/>
+
+      <polygon points="520,230 675,272 520,314 365,272" class="dec"/>
+      <text x="520" y="269" class="tn sm" text-anchor="middle">Brief complete?</text>
+      <text x="520" y="286" class="ts" text-anchor="middle">change &amp;&amp; metrics.primary</text>
+      <text x="534" y="332" class="yn">YES</text>
+      <line x1="520" y1="314" x2="520" y2="351" class="fl" marker-end="url(#f3)"/>
+      <path d="M365 272 L250 272 L250 160 L366 160" class="lp" marker-end="url(#f3l)"/>
+      <text x="256" y="222" class="yn n">NO</text>
+
+      <text x="700" y="360" class="lbl">Build and Review are</text>
+      <text x="700" y="376" class="lbl">n/a for this type — there</text>
+      <text x="700" y="392" class="lbl">is no branch and no</text>
+      <text x="700" y="408" class="lbl">injection to verify</text>
+
+      <polygon points="520,354 675,396 520,438 365,396" class="dec"/>
+      <text x="520" y="393" class="tn sm" text-anchor="middle">Experiment bound?</text>
+      <text x="520" y="410" class="ts" text-anchor="middle">experimentId + variationId</text>
+      <text x="440" y="456" class="yn">YES</text>
+      <line x1="520" y1="438" x2="520" y2="575" class="fl" marker-end="url(#f3)"/>
+      <path d="M365 396 L230 396 L230 508 L366 508" class="lp" marker-end="url(#f3l)"/>
+      <text x="236" y="470" class="yn n">NO</text>
+      <rect x="80" y="477" width="286" height="62" rx="8" class="proc"/>
+      <text x="223" y="503" class="tn sm" text-anchor="middle">Bind the Opti experiment</text>
+      <text x="223" y="523" class="ts" text-anchor="middle">everything downstream reads it</text>
+
+      <rect x="370" y="577" width="300" height="62" rx="8" class="proc human"/>
+      <text x="520" y="603" class="tn" text-anchor="middle">Start it in Optimizely</text>
+      <text x="520" y="623" class="ts" text-anchor="middle">starting traffic is a human act</text>
+      <line x1="520" y1="639" x2="520" y2="676" class="fl" marker-end="url(#f3)"/>
+
+      <rect x="370" y="678" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="704" class="tn" text-anchor="middle">Running</text>
+      <text x="520" y="724" class="ts" text-anchor="middle">their UX · our measurement plan</text>
+      <line x1="520" y1="740" x2="520" y2="777" class="fl" marker-end="url(#f3)"/>
+
+      <rect x="370" y="779" width="300" height="62" rx="8" class="proc"/>
+      <text x="520" y="805" class="tn" text-anchor="middle">Stamp the verdict</text>
+      <text x="520" y="825" class="ts" text-anchor="middle">against the pre-registration</text>
+      <line x1="520" y1="841" x2="520" y2="878" class="fl" marker-end="url(#f3)"/>
+
+      <polygon points="520,880 675,922 520,964 365,922" class="dec"/>
+      <text x="520" y="919" class="tn sm" text-anchor="middle">Did it win?</text>
+      <text x="534" y="982" class="yn">YES</text>
+      <line x1="520" y1="964" x2="520" y2="1001" class="fl" marker-end="url(#f3)"/>
+      <line x1="675" y1="922" x2="705" y2="922" class="lp" marker-end="url(#f3l)"/>
+      <circle cx="720" cy="922" r="13" class="conn"/><text x="720" y="926" class="tc" text-anchor="middle">B</text>
+      <text x="745" y="919" class="yn n">NO</text>
+      <text x="745" y="935" class="lbl">iterate</text>
+
+      <rect x="370" y="1003" width="300" height="62" rx="8" class="proc bad"/>
+      <text x="520" y="1029" class="tn" text-anchor="middle">Ship → status: "shipped"</text>
+      <text x="520" y="1049" class="ts" text-anchor="middle">card moves to Handoff…</text>
+      <line x1="520" y1="1065" x2="520" y2="1102" class="fl" stroke="var(--danger)" marker-end="url(#f3d)"/>
+
+      <polygon points="520,1104 675,1146 520,1188 365,1146" class="dec bad"
+               fill="color-mix(in srgb, var(--danger) 8%, var(--surface))"/>
+      <text x="520" y="1143" class="tn sm" text-anchor="middle" fill="var(--danger)">…but external?</text>
+      <text x="520" y="1160" class="ts" text-anchor="middle">buildMode === "external"</text>
+
+      <path d="M675 1146 L830 1146 L830 940 L680 940" class="lp" stroke="var(--danger)" marker-end="url(#f3d)"/>
+      <text x="700" y="1140" class="yn n" fill="var(--danger)">YES</text>
+      <text x="700" y="1180" class="lbl d">stage derives back to</text>
+      <text x="700" y="1196" class="lbl d">Experimentation — the</text>
+      <text x="700" y="1212" class="lbl d">card snaps back</text>
+
+      <path d="M365 1146 L230 1146 L230 1240" class="lp" marker-end="url(#f3l)"/>
+      <text x="236" y="1196" class="yn">NO</text>
+      <rect x="100" y="1242" width="260" height="48" rx="24" class="term"/>
+      <text x="230" y="1272" class="tn sm" text-anchor="middle">Handoff — as intended</text>
+    </svg>
+  </div>
+  <figcaption><b>Type 3.</b> The last diamond is the bug, drawn as the code has it:
+  <code>stageShipped ? (external ? "experiment" : "handoff")</code>. Type 3 always takes the red branch,
+  so shipping is accepted and then undone on the next server render.</figcaption>
+</figure>
+
+<h2>When something changes</h2>
+<p class="kicker">How it's noticed, what fires, and what clears it</p>
+
+<div class="measure">
+<div class="rule">
+  <p class="lede">Nothing is ever alerted. Everything is recomputed.</p>
+  <p>There is no event bus, no webhook, no notification queue. Every alert, every step dot and the
+  "next action" are <em>derived on each read</em> from the same handful of ground-truth inputs. A
+  change doesn't fire anything — it changes an input, and the next render draws a different picture.
+  That's why the board, the tabs and the chip can never disagree.</p>
+</div>
+</div>
+
+<figure>
+  <div class="scroll">
+    <svg class="fig" viewBox="0 0 940 580" style="min-width:780px" role="img"
+      aria-label="Six ground-truth inputs feed derivePipeline and deriveFlow, which run on every render and produce the stage, the step dots, the alerts and the next action. Separately, the agent cannot see console changes and must poll the sync-status endpoint each session.">
+      <defs>
+        <marker id="f4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--line-strong)"/></marker>
+        <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/></marker>
+      </defs>
+
+      <text x="14" y="22" class="phase">GROUND TRUTH IN</text>
+      <text x="650" y="22" class="phase">WHAT YOU SEE OUT</text>
+
+      <g>
+        <rect x="14" y="36"  width="250" height="50" rx="7" class="proc"/>
+        <text x="139" y="58" class="tn sm" text-anchor="middle">The record</text>
+        <text x="139" y="76" class="ts"    text-anchor="middle">brief · pages · metric</text>
+
+        <rect x="14" y="104" width="250" height="50" rx="7" class="proc"/>
+        <text x="139" y="126" class="tn sm" text-anchor="middle">The branch</text>
+        <text x="139" y="144" class="ts"    text-anchor="middle">dist/variation.js · headSha</text>
+
+        <rect x="14" y="172" width="250" height="50" rx="7" class="proc"/>
+        <text x="139" y="194" class="tn sm" text-anchor="middle">Versions</text>
+        <text x="139" y="212" class="ts"    text-anchor="middle">cuts + certification</text>
+
+        <rect x="14" y="240" width="250" height="50" rx="7" class="proc"/>
+        <text x="139" y="262" class="tn sm" text-anchor="middle">Last push</text>
+        <text x="139" y="280" class="ts"    text-anchor="middle">version · verified</text>
+
+        <rect x="14" y="308" width="250" height="50" rx="7" class="proc"/>
+        <text x="139" y="330" class="tn sm" text-anchor="middle">Optimizely</text>
+        <text x="139" y="348" class="ts"    text-anchor="middle">experiment status</text>
+
+        <rect x="14" y="376" width="250" height="50" rx="7" class="proc"/>
+        <text x="139" y="398" class="tn sm" text-anchor="middle">QA</text>
+        <text x="139" y="416" class="ts"    text-anchor="middle">scenarios · test results</text>
+      </g>
+
+      <!-- bus in -->
+      <line x1="264" y1="61"  x2="308" y2="61"  class="fl"/>
+      <line x1="264" y1="129" x2="308" y2="129" class="fl"/>
+      <line x1="264" y1="197" x2="308" y2="197" class="fl"/>
+      <line x1="264" y1="265" x2="308" y2="265" class="fl"/>
+      <line x1="264" y1="333" x2="308" y2="333" class="fl"/>
+      <line x1="264" y1="401" x2="308" y2="401" class="fl"/>
+      <line x1="308" y1="61"  x2="308" y2="401" class="fl"/>
+      <line x1="308" y1="231" x2="352" y2="231" class="fl" marker-end="url(#f4)"/>
+
+      <!-- hub -->
+      <rect x="354" y="166" width="232" height="130" rx="10" class="proc human"/>
+      <text x="470" y="204" class="tn" text-anchor="middle">derivePipeline</text>
+      <text x="470" y="226" class="tn" text-anchor="middle">deriveFlow</text>
+      <text x="470" y="252" class="ts" text-anchor="middle">pure functions —</text>
+      <text x="470" y="268" class="ts" text-anchor="middle">no state, no cache,</text>
+      <text x="470" y="284" class="ts" text-anchor="middle">run on EVERY render</text>
+
+      <!-- bus out -->
+      <line x1="586" y1="231" x2="630" y2="231" class="fl" marker-end="url(#f4)"/>
+      <line x1="630" y1="95"  x2="630" y2="367" class="fl"/>
+      <line x1="630" y1="95"  x2="674" y2="95"  class="fl" marker-end="url(#f4)"/>
+      <line x1="630" y1="163" x2="674" y2="163" class="fl" marker-end="url(#f4)"/>
+      <line x1="630" y1="231" x2="674" y2="231" class="fl" marker-end="url(#f4)"/>
+      <line x1="630" y1="299" x2="674" y2="299" class="fl" marker-end="url(#f4)"/>
+      <line x1="630" y1="367" x2="674" y2="367" class="fl" marker-end="url(#f4)"/>
+
+      <g>
+        <rect x="676" y="70"  width="250" height="50" rx="7" class="proc"/>
+        <text x="801" y="92"  class="tn sm" text-anchor="middle">The stage</text>
+        <text x="801" y="110" class="ts"    text-anchor="middle">= the board column</text>
+
+        <rect x="676" y="138" width="250" height="50" rx="7" class="proc"/>
+        <text x="801" y="160" class="tn sm" text-anchor="middle">Step dots</text>
+        <text x="801" y="178" class="ts"    text-anchor="middle">worst alert wins</text>
+
+        <rect x="676" y="206" width="250" height="50" rx="7" class="proc"/>
+        <text x="801" y="228" class="tn sm" text-anchor="middle">Alerts</text>
+        <text x="801" y="246" class="ts"    text-anchor="middle">each links to its fix</text>
+
+        <rect x="676" y="274" width="250" height="50" rx="7" class="proc"/>
+        <text x="801" y="296" class="tn sm" text-anchor="middle">The one next action</text>
+        <text x="801" y="314" class="ts"    text-anchor="middle">the Up-next queue</text>
+
+        <rect x="676" y="342" width="250" height="50" rx="7" class="proc"/>
+        <text x="801" y="364" class="tn sm" text-anchor="middle">Blocked gates</text>
+        <text x="801" y="382" class="ts"    text-anchor="middle">hold the card in place</text>
+      </g>
+
+      <!-- the agent's blind spot -->
+      <rect x="14" y="452" width="912" height="106" rx="10" class="proc" stroke-dasharray="6 5"/>
+      <text x="34" y="480" class="tn sm">The one thing that can’t be derived: the agent’s copy</text>
+      <text x="34" y="504" class="lbl">A branch’s <tspan class="ts">.opmc/**</tspan> is a materialised copy of the brief. Edit the brief and it goes stale SILENTLY —</text>
+      <text x="34" y="522" class="lbl">nothing tells the instance working in that branch. So the agent must ask, every session:</text>
+      <text x="34" y="544" class="ts">GET /api/prototypes/sync-status?key=… → compare contentHash → differs? tell the user to Re-sync, then git pull</text>
+      <line x1="470" y1="418" x2="470" y2="448" class="fl a" stroke="var(--accent)" marker-end="url(#f4a)"/>
+    </svg>
+  </div>
+  <figcaption><b>Change propagation.</b> Six inputs, two pure functions, five outputs — recomputed every
+  time anyone looks. The only push-shaped thing in the system is the one that can't work: the agent's
+  checked-out copy of the brief, which it has to re-request each session.</figcaption>
+</figure>
+
+<div class="measure">
+<h3 style="font-size:17px;font-weight:650;margin:34px 0 8px">Every change, and what clears it</h3>
+</div>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>What changed</th><th>How it's noticed</th><th>What you see</th><th>What clears it</th></tr></thead>
+  <tbody>
+    <tr><td>Brief or target pages edited</td><td class="m">hash !== contentHashOf(proto)</td>
+        <td><b>Warn</b> — branch out of sync</td><td>Re-sync the branch</td></tr>
+    <tr><td>Agent pushed a build</td><td class="m">source.variationJs appears</td>
+        <td>Build gate opens; self-audit queued</td><td>—</td></tr>
+    <tr><td>Build no longer matches the brief</td><td class="m">codeHash or briefFingerprint moved</td>
+        <td><b>Brief BLOCKED</b> — drift</td><td>Update the brief, or dismiss the audit</td></tr>
+    <tr><td>Branch serving the inherited starter</td><td class="m">artifactProblem === "starter-build"</td>
+        <td><b>Danger</b> — review URL shows the wrong prototype</td><td>Build and push once</td></tr>
+    <tr><td>HEAD moved past the last cut</td><td class="m">latest.gitSha !== headSha</td>
+        <td>Next action becomes "Cut v<i>N</i>"</td><td>Cut a new version</td></tr>
+    <tr><td>Certification failed on a cut</td><td class="m">cert.passed === false</td>
+        <td><b>Danger</b> — named failing checks</td><td>Fix, then re-cut</td></tr>
+    <tr><td>Build moved past the QA spec</td><td class="m">coverageStale</td>
+        <td><b>Warn</b> — QA is stale</td><td>Regenerate scenarios / test cases</td></tr>
+    <tr><td>A test case failed</td><td class="m">qaFailing</td>
+        <td><b>Danger</b> — and a recommendation is auto-filed</td><td>Send the agent to fix, re-run</td></tr>
+    <tr><td>A newer version was cut than is live</td><td class="m">lastPush.version &lt; latest.version</td>
+        <td><b>Warn</b> — Opti running an older v</td><td>Push the latest version</td></tr>
+    <tr><td>A push didn't read back</td><td class="m">lastPush.verified === false</td>
+        <td><b>Danger</b> — unverified variation</td><td>Inspect it in Optimizely</td></tr>
+    <tr><td>Experiment started</td><td class="m">experimentStatus === "running"</td>
+        <td>Card LOCKED — push refused</td><td>Pause it in Optimizely</td></tr>
+    <tr><td>Experiment run ended</td><td class="m">adjudicationPending</td>
+        <td><b>Warn</b> — verdict not stamped</td><td>Close it out in Results</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p class="measure">Every alert carries an <span class="m">anchor</span> — the room that fixes it — which is
+what makes the status dots clickable and why <b>a missing brief gets no alert at all</b>: the blocked
+step already says it, and saying it twice would be the same fact in two places.</p>
+
+<div class="measure">
+<h2>What the flows can't show yet</h2>
+<p class="kicker">Three answers turn the dashed paths solid</p>
+
+<div class="rule flag">
+  <span class="tag open">Open</span>
+  <p>Every solid path above is traced from the code. The dashed ones are undecided — drawn as branches
+  rather than guessed at.</p>
+</div>
+
+<ol class="q">
+  <li><b>Where does type 1 end?</b>
+    <p>The two dashed terminals in its chart: does "live on the site as an injection" finish it, or does it
+    also graduate into production code through Handoff?</p></li>
+  <li><b>What opens type 1's Brief gate?</b>
+    <p><code>isBriefComplete</code> demands a primary metric globally. For a type with no experiment the
+    bar could be change + target pages, change alone, or a hand-checked analytics outcome.</p></li>
+  <li><b>Is Handoff real for type 3?</b>
+    <p>If yes, the red branch disappears and the stage resolver stops special-casing external. If no, the
+    drag onto Handoff should be refused with a reason rather than accepted and reverted.</p></li>
+</ol>
+
+<p style="margin-top:26px">Answer those and the change is mechanical: a third <span class="m">buildMode</span>,
+a per-type Brief rule, a per-type <span class="m">na</span> map across the five steps, and one correction
+to the stage resolver.</p>
+</div>
+
+<footer>
+  Traced from <code>derivePipeline</code>, <code>deriveFlow</code>, <code>brief-audit</code> and
+  <code>board.ts</code>. Predicates in the diamonds are the ones in the code, not paraphrases.
+</footer>
+
+</div>

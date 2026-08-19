@@ -1,0 +1,329 @@
+<title>The Missing Door</title>
+<style>
+  :root{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
+  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;
+    --faint:#6C7887;--line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
+  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;
+    --faint:#8A94A1;--line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.62;
+       margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1020px;margin:0 auto;} .measure{max-width:68ch;}
+  header.top{padding:52px 0 26px;border-bottom:1px solid var(--line);margin-bottom:8px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(30px,5vw,46px);line-height:1.03;letter-spacing:-.03em;font-weight:700;margin:0 0 14px;}
+  .standfirst{font-size:18px;color:var(--muted);margin:0;max-width:60ch;}
+  h2{font-size:clamp(21px,3vw,28px);line-height:1.16;letter-spacing:-.022em;font-weight:700;margin:58px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 20px;}
+  h3{font-size:17.5px;font-weight:650;margin:34px 0 8px;letter-spacing:-.01em;}
+  p{margin:0 0 15px;}
+  code,.m{font-family:var(--mono);font-size:.87em;background:color-mix(in srgb,var(--ink) 6%,transparent);
+          padding:.12em .38em;border-radius:4px;}
+  strong{font-weight:650;}
+
+  .thesis{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+          border-radius:10px;padding:22px 24px;margin:26px 0;}
+  .thesis .lede{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 10px;line-height:1.3;}
+  .thesis p:last-child{margin-bottom:0;}
+  .thesis.bad{border-left-color:var(--danger);} .thesis.warn{border-left-color:var(--warn);}
+  .thesis.ok{border-left-color:var(--ok);}
+
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:18px 0;}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font:650 11px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);}
+  td.n{font-family:var(--mono);font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .tbl{overflow-x:auto;}
+  .up{color:var(--ok);font-weight:650;} .down{color:var(--danger);font-weight:650;} .flat{color:var(--faint);}
+
+  figure{margin:30px 0 12px;}
+  .scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 18px;}
+  svg.fig{display:block;width:100%;height:auto;color:var(--ink);}
+  figcaption{color:var(--muted);font-size:13.5px;line-height:1.55;margin-top:11px;max-width:74ch;}
+  .bx{fill:var(--surface);stroke:var(--line-strong);stroke-width:1.5;}
+  .bx.insp{stroke:var(--accent);} .bx.comm{stroke:var(--ok);}
+  .tn{fill:var(--ink);font:650 13px var(--ui);} .tn.sm{font-size:11.5px;font-weight:600;}
+  .ts{fill:var(--muted);font:400 10.5px var(--mono);}
+  .lb{fill:var(--faint);font:700 10px var(--mono);letter-spacing:.11em;}
+  .fl{stroke:var(--line-strong);stroke-width:1.6;fill:none;}
+  .fl.dead{stroke:var(--danger);stroke-width:2;}
+  .el{fill:var(--muted);font:400 11px var(--ui);} .el.d{fill:var(--danger);font-weight:600;}
+
+  ol.moves{counter-reset:mv;list-style:none;padding:0;margin:24px 0 0;}
+  ol.moves>li{counter-increment:mv;position:relative;padding:0 0 0 52px;margin:0 0 34px;}
+  ol.moves>li::before{content:counter(mv);position:absolute;left:0;top:-2px;font:700 15px/34px var(--mono);
+    width:34px;height:34px;text-align:center;border-radius:9px;color:var(--accent);
+    background:color-mix(in srgb,var(--accent) 13%,transparent);}
+  ol.moves h3{margin:0 0 6px;font-size:17px;}
+  .ev{font-size:13px;color:var(--faint);font-family:var(--mono);margin:8px 0 0;}
+  .brief{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:24px 26px;margin:24px 0;}
+  .field{margin:0 0 18px;} .field:last-child{margin-bottom:0;}
+  .field .k{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 6px;}
+  .field .v{font-size:15.5px;margin:0;}
+  .hyp{font-size:16.5px;line-height:1.55;background:var(--surface);border:1px solid var(--line);
+       border-radius:9px;padding:16px 18px;margin:0;}
+  ul.tight{margin:0;padding-left:20px;} ul.tight li{margin-bottom:6px;}
+  footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Outrigger · home page · version 2</p>
+  <h1>The hero works. The page it opens onto doesn't.</h1>
+  <p class="standfirst">An evaluation of Home Page Hero No Offer at 18 days, against the live page — and
+  the change I'd make next, which is bigger than a hero.</p>
+</header>
+
+<div class="measure">
+<h2>What the test actually proved</h2>
+<p class="kicker">12,804 per arm, 18 days, powered to ±18.2%</p>
+
+<p>The mechanism is settled and it is strong. <strong>Hero CTA clicks −58.1%</strong>, p&lt;0.0001. The
+offer no longer takes the first click — 286 clicks a fortnight that used to go to a discount page now
+go somewhere else.</p>
+
+<p>And they genuinely go somewhere. Almost every one is accounted for:</p>
+</div>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Where the 286 went</th><th class="n">Control</th><th class="n">Variation</th><th class="n">Δ</th><th class="n">Lift</th></tr></thead>
+  <tbody>
+    <tr><td>Destination Exploration Tab</td><td class="n">864</td><td class="n">946</td><td class="n up">+82</td><td class="n">+8.3%</td></tr>
+    <tr><td>Navigation (the Explore menu)</td><td class="n">1,509</td><td class="n">1,589</td><td class="n up">+80</td><td class="n">+4.2%</td></tr>
+    <tr><td>Property Title</td><td class="n">496</td><td class="n">558</td><td class="n up">+62</td><td class="n">+11.3%</td></tr>
+    <tr><td>Destination Drop Down</td><td class="n">375</td><td class="n">427</td><td class="n up">+52</td><td class="n">+12.7%</td></tr>
+    <tr><td>Booking Complete</td><td class="n">158</td><td class="n">181</td><td class="n up">+23</td><td class="n">+13.3%</td></tr>
+    <tr><td><b>Property “Book Now”</b></td><td class="n">294</td><td class="n">295</td><td class="n flat">+1</td><td class="n flat">−0.7%</td></tr>
+    <tr><td><b>Offer CTA</b></td><td class="n">198</td><td class="n">199</td><td class="n flat">+1</td><td class="n flat">−0.6%</td></tr>
+    <tr><td>Property “Learn More”</td><td class="n">163</td><td class="n">155</td><td class="n down">−8</td><td class="n">−5.9%</td></tr>
+    <tr><td>Destination Highlights</td><td class="n">199</td><td class="n">187</td><td class="n down">−12</td><td class="n">−7.0%</td></tr>
+    <tr><td><b>Booking Engine: Rooms &amp; Rates</b></td><td class="n">547</td><td class="n">526</td><td class="n down">−21</td><td class="n down">−4.9%</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="measure">
+<p>Read the bottom half of that table carefully, because it is the whole finding. Guests open more
+destination tabs, use the dropdown more, and click into more properties. Then <strong>not one
+additional guest presses Book Now, opens an offer, or reaches the rates page.</strong> Every gain is a
+browse action. Every commerce action is flat or down.</p>
+
+<p>Scroll depth is now flat-to-slightly-negative at all four levels (−0.3%, −0.7%, −0.9%, −2.6%). The
+new hero doesn't send people <em>down</em> the page. It sends them <em>sideways</em>, into the explorer
+and the menu.</p>
+</div>
+
+<div class="thesis ok">
+  <p class="lede">The one genuinely good number: the guests who do get through are far better.</p>
+  <p>Bookings per arrival at Rooms &amp; Rates went from <b>28.9%</b> to <b>34.4%</b> — about a fifth
+  better. Fewer arrivals, materially more of them buying. The filter works. What's missing is volume
+  through it.</p>
+</div>
+
+<div class="measure">
+<h2>Why — and it isn't the hero</h2>
+<p class="kicker">I went and read the live page</p>
+
+<p>The home page runs <strong>two economies that never touch</strong>.</p>
+
+<p>There is an <b>inspiration economy</b>: the hero, the destination tabs, the property tiles, the
+Cirque promo, ten “Discover paradise” stories. Its exits are <span class="m">Learn more</span>,
+<span class="m">Oahu highlights</span>, <span class="m">Learn More</span>,
+<span class="m">View more stories</span>. Every one leads to more reading.</p>
+
+<p>And there is a <b>commerce economy</b>: <span class="m">BOOK NOW</span> in the header, the sticky
+<span class="m">BOOK NOW</span> bar, <span class="m">Book Now</span> on each tile, and five
+<span class="m">Check availability</span> buttons in the offers block. Every one of those assumes you
+already know where and when you're going.</p>
+
+<p>The old hero was a door between them: a price hook that dropped you straight into the commerce side.
+<strong>We removed that door and did not build another one.</strong> So the traffic we successfully
+redirected into inspiration now circulates there and leaves.</p>
+</div>
+
+<figure>
+  <div class="scroll">
+    <svg class="fig" viewBox="0 0 980 400" style="min-width:760px" role="img"
+      aria-label="Two columns: an inspiration economy whose exits all lead to more content, and a commerce economy whose entries all require knowing where and when. The old offer hero was the only link between them, and removing it left the inspiration side with no way through.">
+      <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--line-strong)"/></marker>
+        <marker id="a1d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="var(--danger)"/></marker></defs>
+
+      <text x="20" y="26" class="lb" fill="var(--accent)">INSPIRATION ECONOMY — every exit is content</text>
+      <text x="620" y="26" class="lb" fill="var(--ok)">COMMERCE ECONOMY — every entry needs dates</text>
+
+      <g>
+        <rect x="20" y="44" width="300" height="52" rx="8" class="bx insp"/>
+        <text x="36" y="68" class="tn sm">Hero — experience-led</text><text x="36" y="86" class="ts">exit: “Learn more”</text>
+        <rect x="20" y="110" width="300" height="52" rx="8" class="bx insp"/>
+        <text x="36" y="134" class="tn sm">Destination tabs  +8.3%</text><text x="36" y="152" class="ts">exit: “Oahu highlights”  −7.0%</text>
+        <rect x="20" y="176" width="300" height="52" rx="8" class="bx insp"/>
+        <text x="36" y="200" class="tn sm">Property tiles  +11.3%</text><text x="36" y="218" class="ts">exit: “Learn More”  −5.9%</text>
+        <rect x="20" y="242" width="300" height="52" rx="8" class="bx insp"/>
+        <text x="36" y="266" class="tn sm">Discover paradise · 10 stories</text><text x="36" y="284" class="ts">exit: “View more stories”  0.46%</text>
+      </g>
+
+      <g>
+        <rect x="660" y="44" width="300" height="52" rx="8" class="bx comm"/>
+        <text x="676" y="68" class="tn sm">Header BOOK NOW</text><text x="676" y="86" class="ts">needs where + when</text>
+        <rect x="660" y="110" width="300" height="52" rx="8" class="bx comm"/>
+        <text x="676" y="134" class="tn sm">Tile “Book Now”  −0.7%</text><text x="676" y="152" class="ts">needs when</text>
+        <rect x="660" y="176" width="300" height="52" rx="8" class="bx comm"/>
+        <text x="676" y="200" class="tn sm">Offers · 5× “Check availability”</text><text x="676" y="218" class="ts">−0.6%</text>
+        <rect x="660" y="242" width="300" height="52" rx="8" class="bx comm"/>
+        <text x="676" y="266" class="tn sm">Rooms &amp; Rates  −4.9%</text><text x="676" y="284" class="ts">the metric that matters</text>
+      </g>
+
+      <path d="M330 132 L520 132 L520 200 L650 200" class="fl dead" stroke-dasharray="7 6" marker-end="url(#a1d)"/>
+      <path d="M330 200 L520 200" class="fl dead" stroke-dasharray="7 6"/>
+      <text x="356" y="122" class="el d">no door</text>
+      <text x="356" y="330" class="el d">The old offer hero WAS the door. It went straight from the first screen into a rate.</text>
+      <text x="356" y="352" class="el d">We closed it on purpose — correctly — and did not open another.</text>
+
+      <line x1="330" y1="70" x2="650" y2="70" class="fl" stroke-dasharray="3 5"/>
+      <text x="420" y="62" class="el">v1 removed this route</text>
+    </svg>
+  </div>
+  <figcaption><b>The diagnosis.</b> Not a hero problem. The page's inspiration surfaces have no exit
+  into a rate, so redirected attention has nowhere to convert.</figcaption>
+</figure>
+
+<div class="measure">
+<h2>Version 2 — the change I'd make</h2>
+<p class="kicker">Keep the hero. Give the page a door at every step.</p>
+
+<div class="thesis">
+  <p class="lede">Stop asking guests to declare a booking. Ask them a question instead.</p>
+  <p>Every commerce entry on this page demands a decision — where, when, book. Every inspiration exit
+  offers only more reading. Version 2 puts one soft question in the hero and then lets its answer make
+  every downstream surface priceable.</p>
+</div>
+</div>
+
+<ol class="moves">
+  <li>
+    <h3>Put a soft intent capture in the hero — island and month, not a date grid</h3>
+    <p>The hero currently spends its click on <span class="m">Learn more</span>. Replace that with
+    “Where, and roughly when?” — island chips and a month, no exact dates, no guest count. One tap and
+    a month. That is a far lower commitment than the booking engine asks for, and it is enough to price
+    anything.</p>
+    <p>This is the load-bearing change. Everything below only works because the page now knows two
+    things it currently never learns until the very end.</p>
+    <p class="ev">Evidence: the hero's 286 displaced clicks prove attention is available at the top of
+    the page. Nothing currently captures it.</p>
+  </li>
+  <li>
+    <h3>Make the destination tabs end in properties and rates, not “highlights”</h3>
+    <p>The tabs are the single biggest gainer (+8.3%, and the dropdown +12.7%) and their exit button
+    is the one thing that went <em>down</em> (−7.0%). Guests are opening the explorer and refusing what
+    it offers them. Replace “Oahu highlights” with the island's properties showing a from-rate for the
+    chosen month.</p>
+    <p class="ev">Evidence: +82 clicks into the tabs, −12 out of the highlights button.</p>
+  </li>
+  <li>
+    <h3>One action per property tile: “See rates”, replacing both “Book Now” and “Learn More”</h3>
+    <p>Tiles carry two competing CTAs and the guest picks neither — Book Now is flat (+1 click over
+    eighteen days), Learn More is down 5.9%. Meanwhile the property <em>name</em> is up 11.3%. They
+    want the place, not the brochure and not the commitment. “See rates” is the same destination as
+    Book Now in a form somebody still choosing will actually press.</p>
+    <p class="ev">Evidence: Title +11.3% against Book Now −0.7% and Learn More −5.9%.</p>
+  </li>
+  <li>
+    <h3>Cut “Discover paradise” from the home page</h3>
+    <p>Ten story links earning 0.46%, down 8.8%, sitting in a page where only a quarter of visitors
+    reach the bottom. It is the largest block on the page by height and close to the smallest by
+    return. Removing it moves the offers block — the most commerce-dense thing on the page, five
+    “Check availability” buttons — meaningfully further up.</p>
+    <p class="ev">Evidence: Story Clicked 0.50% → 0.46%; Scroll 100% only 24% and falling.</p>
+  </li>
+  <li>
+    <h3>Do not add anything below the fold</h3>
+    <p>Scroll is flat-to-negative at every depth. Any new inspirational content would be served to
+    strictly the same eyeballs. This is the constraint that rules out the obvious follow-up, and it is
+    the one thing in this test that is genuinely settled in the negative.</p>
+    <p class="ev">Evidence: −0.3%, −0.7%, −0.9%, −2.6% across the four depths, composite −1.0%.</p>
+  </li>
+</ol>
+
+<div class="measure">
+<h3>The tension, named</h3>
+<p>Putting a search-shaped thing in the hero is the most conventional move in hotel web design, and v1
+was explicitly about escaping conventional discount-led framing. That tension is real and I'd resolve
+it this way: <strong>a rate for your dates is utility; a percentage off is a promise.</strong> Showing
+what a room costs in March is not the thing v1 removed. Leading with “40% off” is. Keep the imagery,
+keep the experience-led line, and let the question sit underneath it rather than replacing it.</p>
+
+<h2>The brief, ready to freeze</h2>
+</div>
+
+<div class="brief">
+  <h3 style="margin-top:0">Home Page — From Looking to Rates</h3>
+  <div class="field">
+    <p class="k">Hypothesis</p>
+    <p class="hyp">We believe that capturing island and month in the hero, and giving the destination
+    explorer and property tiles a direct rates entry that uses it, for home page visitors on the
+    experience-led hero, will cause <b>more arrivals at Rooms &amp; Rates</b> — because the new hero
+    successfully creates browsing intent and the page currently offers that intent no route into a
+    price.</p>
+  </div>
+  <div class="field">
+    <p class="k">Primary metric · expected to INCREASE</p>
+    <p class="v"><b>Visit Page: Booking Engine: Rooms &amp; Rates</b> — baseline 4.27%. The only step
+    between proven intent and revenue, and the one thing v1 moved the wrong way.</p>
+  </div>
+  <div class="field">
+    <p class="k">Guardrails</p>
+    <ul class="tight">
+      <li><b>Hero CTA Click</b> — must stay down. A rebound means the door we opened is the old one.</li>
+      <li><b>Destination explorer engagement</b> — the biggest v1 gain; must not be traded away</li>
+      <li><b>Property tile engagement</b> — the other gain</li>
+      <li><b>Offer engagement</b> — flat in v1; a fall means we've made the page transactional</li>
+      <li><b>Scroll depth engagement</b> — already drifting down; must not accelerate</li>
+      <li><b>Bookings per arrival</b> — 34.4% in v1. Volume must not come at the cost of quality.</li>
+    </ul>
+  </div>
+  <div class="field">
+    <p class="k">Duration — computed</p>
+    <p class="v">v1 accrued <b>12,804 per arm in 18 days</b> (~711/arm/day). At a 4.27% baseline,
+    a 20% relative move needs about <b>9,600 per arm — roughly 14 days</b>. A 10% move would need
+    ~38,000 per arm, about eight weeks. <b>Commit to detecting 20%.</b></p>
+  </div>
+  <div class="field">
+    <p class="k">Watched, not decisive</p>
+    <p class="v"><b>Booking Complete</b> (1.23%). Needs ~36,000 per arm to resolve 20% — about eight
+    weeks. Pre-registering it as primary guarantees an unresolvable test.</p>
+  </div>
+</div>
+
+<div class="measure">
+<div class="thesis warn">
+  <p class="lede">One check before building.</p>
+  <p>The 28.9% → 34.4% quality finding assumes bookings pass through
+  <span class="m">Visit Page: Booking Engine: Rooms &amp; Rates</span>. The page has at least four other
+  routes into booking — header, sticky bar, tile Book Now, and five offer “Check availability” buttons.
+  If a material share of bookings enters another way, that ratio compares two different populations and
+  the primary metric may be measuring only part of the funnel. One analytics check settles it.</p>
+</div>
+
+<h3>What I would not do</h3>
+<p><b>Not another hero copy test.</b> −58.1% at p&lt;0.0001 is as settled as this programme gets;
+running it again buys nothing. <b>Not more home page content</b> — scroll says it would not be seen.
+<b>Not a return to offer-led framing</b> — offer engagement was flat when the offer left the hero,
+which means offer demand is inelastic to the hero and the discount was never earning its position.</p>
+</div>
+
+<footer>
+  Read from the live readout at 18 days (12,804/arm, ±18.2% detectable) and from
+  <code>outrigger.com</code> as it stands. Counts and lifts are the experiment's own; the
+  bookings-per-arrival ratio and the click accounting are derived and labelled as such.
+</footer>
+
+</div>

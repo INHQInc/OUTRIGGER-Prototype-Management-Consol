@@ -1,0 +1,390 @@
+<title>Verndale, Prioritised</title>
+<style>
+  :root{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
+  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;
+    --faint:#6C7887;--line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
+  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;
+    --faint:#8A94A1;--line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.62;
+       margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1060px;margin:0 auto;} .measure{max-width:68ch;}
+  header.top{padding:52px 0 26px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(30px,5vw,44px);line-height:1.04;letter-spacing:-.03em;font-weight:700;margin:0 0 14px;}
+  .standfirst{font-size:18px;color:var(--muted);margin:0;max-width:62ch;}
+  h2{font-size:clamp(21px,3vw,27px);line-height:1.16;letter-spacing:-.022em;font-weight:700;margin:56px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 20px;}
+  h3{font-size:17.5px;font-weight:650;margin:32px 0 8px;letter-spacing:-.01em;}
+  p{margin:0 0 15px;}
+  code,.m{font-family:var(--mono);font-size:.87em;background:color-mix(in srgb,var(--ink) 6%,transparent);
+          padding:.12em .38em;border-radius:4px;}
+  blockquote{margin:0 0 15px;padding:2px 0 2px 16px;border-left:3px solid var(--line-strong);color:var(--muted);
+             font-style:italic;}
+  blockquote b{color:var(--ink);font-style:normal;}
+  .thesis{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+          border-radius:10px;padding:20px 22px;margin:24px 0;}
+  .thesis.ok{border-left-color:var(--ok);} .thesis.warn{border-left-color:var(--warn);}
+  .thesis.bad{border-left-color:var(--danger);}
+  .thesis .lede{font-size:17.5px;font-weight:650;margin:0 0 9px;line-height:1.32;letter-spacing:-.012em;}
+  .thesis p:last-child{margin-bottom:0;}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:18px 0;}
+  th,td{text-align:left;padding:10px 11px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font:650 10.5px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);}
+  td.n{font-family:var(--mono);font-size:12px;text-align:center;white-space:nowrap;}
+  .tbl{overflow-x:auto;}
+  .P{font:700 11px var(--mono);padding:4px 7px;border-radius:5px;color:#fff;background:var(--accent);}
+  .P.p2{background:#3F6FD8}.P.p3{background:#5C82C9}.P.p4{background:#7A93BC}
+  .P.p5{background:var(--warn)}.P.p6{background:var(--warn);opacity:.8}.P.p7{background:var(--faint)}
+  .P.p8{background:var(--faint);opacity:.75}.P.p9{background:var(--faint);opacity:.6}
+  .hi{color:var(--ok);font-weight:650} .lo{color:var(--danger);font-weight:650}
+  .opt{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:0;margin:0 0 20px;overflow:hidden;}
+  .opt .hd{display:flex;gap:13px;align-items:flex-start;padding:18px 22px 0;}
+  .opt h3{margin:0;font-size:18.5px;}
+  .opt .src{font:600 10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:5px 0 0;}
+  .opt .bd{padding:12px 22px 20px;}
+  .lab{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:16px 0 6px;}
+  .lab.ev{color:var(--accent);} .lab.mod{color:var(--ok);}
+  .opt p{font-size:15.5px;margin:0 0 10px;}
+  ul.tight{margin:0;padding-left:20px;} ul.tight li{margin-bottom:6px;font-size:15px;}
+  figure{margin:26px 0 10px;} .scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);
+         border-radius:14px;padding:20px 18px;} svg.fig{display:block;width:100%;height:auto;color:var(--ink);}
+  figcaption{color:var(--muted);font-size:13.5px;margin-top:11px;max-width:74ch;}
+  footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">Outrigger · home page · Verndale review</p>
+  <h1>Verndale, prioritised</h1>
+  <p class="standfirst">Every proposal from the content audit and the page annotations, ranked against
+  what the hero experiment actually measured — with a modified approach wherever the evidence points
+  somewhere better.</p>
+</header>
+
+<div class="measure">
+<h2>The short version</h2>
+<p class="kicker">Where an eighteen-day experiment and a content audit landed in the same place</p>
+
+<div class="thesis ok">
+  <p class="lede">Verndale's central diagnosis and the experiment's are the same finding.</p>
+  <blockquote>“The homepage should move from being a collection of promotions, destinations, stories and
+  selling points to <b>becoming a guided journey from inspiration to action.</b>”</blockquote>
+  <p>The experiment measured that gap rather than describing it. The new hero moved <b>286 clicks</b>
+  out of the offer and into browsing — and property “Book Now” gained <b>one click in eighteen days</b>,
+  the offer CTA gained <b>one</b>, and Rooms &amp; Rates <b>fell 21</b>. Inspiration works. The journey
+  to action doesn't exist.</p>
+</div>
+
+<div class="thesis ok">
+  <p class="lede">And their most important constraint is the one the data proves hardest.</p>
+  <blockquote>“The recommendation is <b>not</b> to add more content. It is to give every part of the
+  homepage a defined role within the customer journey and <b>remove or deprioritize</b> content that
+  does not support that journey.”</blockquote>
+  <p>Scroll depth is flat to negative at all four levels — <b>−0.3%, −0.7%, −0.9%, −2.6%</b>. Anything
+  added below the fold is served to the same eyeballs. Two independent methods, same answer: this page
+  needs subtraction.</p>
+  <p>Which is why the two annotations proposing <em>new sections</em> are the two I'd modify hardest —
+  they contradict Verndale's own principle.</p>
+</div>
+
+<div class="thesis bad">
+  <p class="lede">The one thing missing from the audit is where the money is.</p>
+  <p>Nothing in the content audit or the annotations mentions <b>dates</b>. Yet every route from this
+  page into the booking engine — header, sticky bar, tile “Book Now”, five offer “Check availability”
+  buttons — arrives <b>without them</b>, landing the guest on an empty search form.</p>
+  <p>That is almost certainly why “Book Now” gained one click in eighteen days. It's a door into a
+  waiting room. It's a mechanism failure, not a content one, which is why a content audit wouldn't
+  surface it — and it's the cheapest, highest-value fix on this page.</p>
+</div>
+</div>
+
+<h2>The priority table</h2>
+<p class="kicker">Ranked by evidence strength × effect potential ÷ build cost</p>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>#</th><th style="width:30%">Proposal</th><th>Source</th><th class="n">Evidence</th><th class="n">Effect</th><th class="n">Build</th><th>Verdict</th></tr></thead>
+  <tbody>
+    <tr><td><span class="P">P1</span></td><td><b>Carry dates into the booking engine</b></td><td>—</td>
+        <td class="n hi">Strong</td><td class="n hi">High</td><td class="n hi">Low</td><td>Do first. Not in the audit.</td></tr>
+    <tr><td><span class="P p2">P2</span></td><td><b>Birds-eye view of all locations</b></td><td>Annotation 3</td>
+        <td class="n hi">Strong</td><td class="n hi">High</td><td class="n">Med</td><td>Ship as the explorer</td></tr>
+    <tr><td><span class="P p3">P3</span></td><td><b>Softer CTAs than “Book Now”</b></td><td>Annotation 4</td>
+        <td class="n hi">Strong</td><td class="n">Med-Hi</td><td class="n hi">Low</td><td>Yes — and delete one CTA</td></tr>
+    <tr><td><span class="P p4">P4</span></td><td><b>Search by vacation type</b></td><td>Annotation 7</td>
+        <td class="n">Indirect</td><td class="n hi">High</td><td class="n lo">High</td><td>Fold into the explorer</td></tr>
+    <tr><td><span class="P p5">P5</span></td><td><b>Book-direct value block</b></td><td>Annotation 5</td>
+        <td class="n warn">Mixed</td><td class="n">Med</td><td class="n">Med</td><td>Test as microcopy first</td></tr>
+    <tr><td><span class="P p6">P6</span></td><td><b>“Signature Experiences” section</b></td><td>Annotation 6</td>
+        <td class="n lo">Against</td><td class="n">Med</td><td class="n">Med</td><td>Right idea, wrong vehicle</td></tr>
+    <tr><td><span class="P p7">P7</span></td><td><b>Rename “Discover paradise”</b></td><td>Annotation 7</td>
+        <td class="n lo">Low ceiling</td><td class="n lo">Low</td><td class="n hi">Low</td><td>Repurpose the slot instead</td></tr>
+    <tr><td><span class="P p8">P8</span></td><td><b>Value prop / five brand pillars</b></td><td>Annotation 2</td>
+        <td class="n">None yet</td><td class="n">Med</td><td class="n">Med</td><td>Risky — sits on proven ground</td></tr>
+    <tr><td><span class="P p9">P9</span></td><td><b>Gift cards &amp; email copy</b></td><td>Annotation 8</td>
+        <td class="n lo">Tiny</td><td class="n lo">Low</td><td class="n hi">Low</td><td>Content fix, not a test</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="measure">
+<p class="thesis warn" style="font-size:15px"><b>On Homepage 2.0 itself.</b> Verndale's seven-section
+structure — Promise, Choose Your Journey, Why Outrigger, Find the Place That Fits, Experience the
+Destination, Make the Trip Possible, Book with Confidence, Continue the Journey — is a
+<b>destination, not a test</b>. You can't A/B a rebuild. Treat it as the target state and let each
+test above move the page toward it: P2 and P4 together <em>are</em> “Find the Place That Fits”; P1 and
+P3 <em>are</em> “Make the Trip Possible”; P5 <em>is</em> “Book with Confidence”. The structure earns
+its keep as a scoring rubric for what to build next, not as a launch.</p>
+</div>
+
+<figure>
+  <div class="scroll">
+    <svg class="fig" viewBox="0 0 980 330" style="min-width:740px" role="img"
+      aria-label="Today's home page sections mapped against Verndale's proposed Homepage 2.0 structure, showing which experiments move which sections.">
+      <text x="10" y="20" font-size="11" font-weight="700" fill="var(--faint)" letter-spacing="1.4">TODAY</text>
+      <text x="530" y="20" font-size="11" font-weight="700" fill="var(--accent)" letter-spacing="1.4">HOMEPAGE 2.0 — VERNDALE</text>
+      <g font-size="12.5">
+        <g fill="var(--surface)" stroke="var(--line-strong)" stroke-width="1.3">
+          <rect x="10" y="32" width="300" height="30" rx="6"/><rect x="10" y="68" width="300" height="30" rx="6"/>
+          <rect x="10" y="104" width="300" height="30" rx="6"/><rect x="10" y="140" width="300" height="30" rx="6"/>
+          <rect x="10" y="176" width="300" height="30" rx="6"/><rect x="10" y="212" width="300" height="30" rx="6"/>
+          <rect x="10" y="248" width="300" height="30" rx="6"/>
+        </g>
+        <g fill="var(--ink)">
+          <text x="24" y="52">Hero — experience-led</text><text x="24" y="88">Destination tabs + dropdown</text>
+          <text x="24" y="124">Property tiles · Book Now / Learn More</text><text x="24" y="160">Top Offers · 5× Check availability</text>
+          <text x="24" y="196">Cirque du Soleil promo</text><text x="24" y="232">Discover paradise · 10 stories</text>
+          <text x="24" y="268">Gift cards · email signup</text>
+        </g>
+        <g fill="color-mix(in srgb, var(--accent) 8%, var(--surface))" stroke="var(--accent)" stroke-width="1.3">
+          <rect x="530" y="32" width="300" height="30" rx="6"/><rect x="530" y="68" width="300" height="30" rx="6"/>
+          <rect x="530" y="104" width="300" height="30" rx="6"/><rect x="530" y="140" width="300" height="30" rx="6"/>
+          <rect x="530" y="176" width="300" height="30" rx="6"/><rect x="530" y="212" width="300" height="30" rx="6"/>
+          <rect x="530" y="248" width="300" height="30" rx="6"/>
+        </g>
+        <g fill="var(--ink)">
+          <text x="544" y="52">The Outrigger Promise</text><text x="544" y="88">Choose Your Journey</text>
+          <text x="544" y="124">Why Outrigger</text><text x="544" y="160">Find the Place That Fits</text>
+          <text x="544" y="196">Experience the Destination</text><text x="544" y="232">Make the Trip Possible</text>
+          <text x="544" y="268">Book with Confidence · Continue</text>
+        </g>
+      </g>
+      <g stroke="var(--accent)" stroke-width="1.6" fill="none" opacity=".8">
+        <path d="M312 83 C 420 83, 430 155, 528 155"/>
+        <path d="M312 119 C 420 119, 430 227, 528 227"/>
+        <path d="M312 227 C 420 227, 430 83, 528 83"/>
+      </g>
+      <g font-size="11" fill="var(--accent)" font-weight="600">
+        <text x="352" y="100">P2 + P4 →</text><text x="352" y="140">P1 + P3 →</text><text x="352" y="212">P7 repurpose ↗</text>
+      </g>
+      <text x="10" y="310" font-size="11.5" fill="var(--muted)">The tests are the route. The structure is the destination — it scores what to build, it isn't a launch.</text>
+    </svg>
+  </div>
+  <figcaption><b>Their structure as a rubric.</b> Every recommended test maps to a section of Homepage
+  2.0, so the page converges on Verndale's target without a rebuild anyone has to fund at once.</figcaption>
+</figure>
+
+<h2>Each proposal, with the evidence</h2>
+<p class="kicker">What they said · what the data says · what I'd change</p>
+
+<div class="opt"><div class="hd"><span class="P">P1</span><div>
+  <h3>Carry the guest's dates into the booking engine</h3>
+  <p class="src">Not in the audit — from the experiment</p></div></div>
+  <div class="bd">
+  <p class="lab ev">The evidence</p>
+  <p>Property “Book Now” moved from <b>294 → 295 clicks</b> in eighteen days. Offer CTA, <b>198 → 199</b>.
+  Both reach the booking engine already. Neither converts, because both land on an empty search form.</p>
+  <p>I verified the engine honours dates: <span class="m">reservation.outrigger.com/?chain=18497&amp;arrive=…&amp;depart=…</span>
+  applies them and lands on the rated “Select a Hotel” grid. And every property in the page's own JSON
+  carries a <span class="m">PropertySabreID</span>, so each card can build its own dated link.</p>
+  <p class="lab mod">What to build</p>
+  <p>Capture island and rough month once. Append <span class="m">arrive</span>/<span class="m">depart</span>
+  to every existing booking link. No new component, no rate feed, no CMS change.</p>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p2">P2</span><div>
+  <h3>“Birds-eye view of where your properties are”</h3>
+  <p class="src">Annotation 3 — and “I also missed the drop down at first”</p></div></div>
+  <div class="bd">
+  <blockquote>“Would love ability to view all your locations for a birds-eye-view of where your
+  properties [are] (I also missed the drop down at first).”</blockquote>
+  <p class="lab ev">The evidence</p>
+  <p>The destination surfaces are the biggest gainers on the page — tabs <b>+8.3%</b>, dropdown
+  <b>+12.7%</b> — and the explorer's own exit button, Destination Highlights, is <b>−7.0%</b>. Guests
+  open it in growing numbers and refuse what it offers. Verndale's “I missed the dropdown” is a
+  discoverability complaint about the single best-performing control on the page.</p>
+  <p class="lab mod">Modified approach</p>
+  <p>Not a map <em>section</em> — a two-view explorer replacing the current selector. <b>Grid</b> for
+  inspiration, <b>Map</b> (with the list as its left pane) for decision, sharing one zoom so the list is
+  always “what's in view”. Their three headline suggestions all work; <i>Pick Your Paradise</i> is the
+  one that isn't generic.</p>
+  <p>Absorb the dropdown rather than replace it — it's your biggest gainer, and drilling is for
+  browsers while the dropdown serves people who already know.</p>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p3">P3</span><div>
+  <h3>“Book Now may feel too aggressive on the home page”</h3>
+  <p class="src">Annotation 4</p></div></div>
+  <div class="bd">
+  <blockquote>Test softer CTA variations: “Explore Dates”, “View Options”, “Plan Your Stay” · progressive
+  CTAs, softer on homepage → stronger on property page · personalisation, returning visitors see “Book
+  Now” · microcopy such as “No payment required”. And: “Explore Property” or “View Property” instead of
+  “Learn more”.</blockquote>
+  <p class="lab ev">The evidence</p>
+  <p>Correct, and the number is brutal: <b>one extra click in eighteen days</b>. Meanwhile “Learn More”
+  fell <b>−5.9%</b> while the property <em>name</em> rose <b>+11.3%</b>. Guests want the place — not the
+  brochure, and not the commitment.</p>
+  <p class="lab mod">Modified approach</p>
+  <ul class="tight">
+    <li><b>Delete a CTA, don't rename both.</b> Two competing actions and guests take neither. One
+    action per card. <i>“Explore Dates”</i> is the best of their suggestions because it names what
+    actually happens next.</li>
+    <li><b>Softening the verb alone won't fix it.</b> The destination is a blank form. Pair this with
+    P1 or it's a nicer-sounding door into the same waiting room.</li>
+    <li><b>Their microcopy idea is the cheap version of P5</b> — “No payment required” under the CTA
+    does the book-direct reassurance job without spending a section on it.</li>
+  </ul>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p4">P4</span><div>
+  <h3>“Search by vacation types rather than location”</h3>
+  <p class="src">Annotation 7 — adventure · wellness · romance · family</p></div></div>
+  <div class="bd">
+  <p class="lab ev">The evidence</p>
+  <p>No direct read from the experiment, but it aligns with the audit's own second theme — <i>“help
+  travelers choose with confidence”</i> — and with the strongest behavioural signal we have: guests open
+  properties to <em>compare</em> them (<b>+11.3%</b>) and the page gives them nothing to compare on. A
+  first-timer can't rank Kaua'i against Kona; they can absolutely say “romantic” or “with kids”.</p>
+  <p class="lab mod">Modified approach</p>
+  <p><b>A second axis on the explorer, not a separate feature.</b> Where <i>and</i> what kind, filtering
+  one result set. Building it as its own section adds page length the scroll data says nobody will
+  reach.</p>
+  <p>The tagging is the real cost. Note the property JSON ships
+  <span class="m">PropertyHighlights.Amenities</span> as an <b>empty array</b> — but the property pages
+  carry full amenity lists, so the raw material exists and needs harvesting plus roughly twenty synonym
+  groups to collapse “Swimming pool” and “Outdoor pool &amp; hot tub” into one key.</p>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p5">P5</span><div>
+  <h3>A book-direct value block</h3>
+  <p class="src">Annotation 5 — with the Marriott Bonvoy example</p></div></div>
+  <div class="bd">
+  <blockquote>“Would benefit from a headline/section that promotes the value of booking direct for
+  people who come here to ‘validate’ site and then book on third-party sites.”</blockquote>
+  <p class="lab ev">The evidence — mixed, and worth reading carefully</p>
+  <p>Offer engagement was <b>flat</b> when the offer left the hero (<b>+2.2%, p=0.86</b>). Demand for
+  rate messaging on this page is inelastic — more of it did not produce more clicks. That argues against
+  another rate-flavoured block.</p>
+  <p>But their hypothesis is different from ours: it's about <b>leakage to OTAs</b>, not about
+  discount appetite. That's genuinely untested, and it's the audit's fifth strategic theme. It deserves
+  a run — just not on the assumption that offer messaging is under-supplied here.</p>
+  <p class="lab mod">Modified approach</p>
+  <p>Test the <b>microcopy version first</b> — their own annotation 4 suggestion, a line under the CTA.
+  It costs no scroll depth, no new section, and isolates the reassurance effect. If it moves,
+  <em>then</em> fund the block. Measure it on <b>Rooms &amp; Rates arrivals</b>, never on offer clicks.</p>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p6">P6</span><div>
+  <h3>“Signature Experiences Start Here”</h3>
+  <p class="src">Annotation 6</p></div></div>
+  <div class="bd">
+  <blockquote>“Would love to add a headline/section to reinforce authentic experiences… And showcase
+  other examples since Cirque de Soleil ‘Auana is only at Waikiki.”</blockquote>
+  <p class="lab ev">The evidence — against the vehicle, not the idea</p>
+  <p>Adding a section contradicts <b>Verndale's own principle</b> (“the recommendation is not to add
+  more content”) and the scroll data rules it out independently: flat to negative at all four depths.
+  The neighbouring Cirque block already earns almost nothing, and Story clicks sit at <b>0.46%</b>.</p>
+  <p class="lab mod">Modified approach</p>
+  <p><b>Put the signature experience on the property, not in a section.</b> The differentiators are
+  already in the amenity data and they're excellent —
+  <b>Monkeypod Kitchen</b> at Reef, <b>Duke's Waikiki</b> and <b>Blue Note Hawaii</b> at Waikiki Beach,
+  <b>'Auana</b> at Beachcomber, <b>Appetito</b> at Paradise, <b>Holokai Catamaran</b>. Surface them as
+  the computed second line on each card in the explorer's list.</p>
+  <p>That answers their own follow-on point exactly — it showcases what's distinctive at
+  <em>every</em> property instead of one — and it costs no page length.</p>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p7">P7</span><div>
+  <h3>Rename “Discover paradise”</h3>
+  <p class="src">Annotation 7 — “Travel Inspiration” or “Vacation Ideas”</p></div></div>
+  <div class="bd">
+  <p class="lab ev">The evidence</p>
+  <p>The critique is fair — the label doesn't set expectations for blog content. But the block earns
+  <b>0.46%</b> and is <b>falling (−8.8%)</b>. Renaming the lowest-earning section on the page has a
+  ceiling of roughly nothing.</p>
+  <p class="lab mod">Modified approach</p>
+  <p><b>Don't rename it — repurpose the slot.</b> It's ten story links occupying the largest block on a
+  page only a quarter of visitors reach the bottom of. Put the <b>vacation-type chooser (P4)</b> there.
+  Verndale's two halves of annotation 7 solve each other: the weakest real estate on the page becomes
+  the home of their strongest idea.</p>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p8">P8</span><div>
+  <h3>Value prop &amp; the five brand pillars</h3>
+  <p class="src">Annotation 2</p></div></div>
+  <div class="bd">
+  <p class="lab ev">The evidence — none yet, and that's the problem</p>
+  <p>Renowned beach locations, the must-see beach bar, live music, signature experiences, conservation.
+  Strong brand material and it maps to Homepage 2.0's “Why Outrigger”. But it sits on the one piece of
+  ground where we have a <b>settled result</b>: hero CTA <b>−58.1%, p&lt;0.0001</b>. Changing the area
+  around a proven win risks giving it back.</p>
+  <p class="lab mod">Modified approach</p>
+  <p>Run it only <b>after</b> P1–P3, and pre-register <b>Hero CTA Click must stay down</b> as a hard
+  guardrail. If offer clicks rebound, the pillars have reopened the door the hero test closed.</p>
+  </div></div>
+
+<div class="opt"><div class="hd"><span class="P p9">P9</span><div>
+  <h3>Gift cards and email signup copy</h3>
+  <p class="src">Annotation 8 (both)</p></div></div>
+  <div class="bd">
+  <p class="lab ev">The evidence</p>
+  <p>Gift Card clicks: <b>0.21%, −1.1%</b> — among the smallest numbers on the page. Their questions are
+  good ones (does it expire, does it work at any hotel) and the email critique is sound.</p>
+  <p class="lab mod">Modified approach</p>
+  <p><b>Fix them, don't test them.</b> These are content corrections worth making because they're right,
+  not experiments worth spending two weeks of traffic on. Email signup in particular serves a different
+  goal with a different metric — it shouldn't compete for home page test capacity aimed at bookings.</p>
+  </div></div>
+
+<div class="measure">
+<h2>The sequence I'd run</h2>
+<p class="kicker">Each ~14 days at current traffic to resolve a 20% move</p>
+
+<ol class="tight" style="padding-left:22px">
+  <li><b>P1 — dates into the engine.</b> Cheapest, strongest evidence, and it's the prerequisite that
+  makes P2 and P3 worth measuring. Also the only one nobody has proposed.</li>
+  <li><b>P3 — one CTA per card, “Explore Dates”.</b> Trivial build, rides on P1, directly answers the
+  one-click-in-eighteen-days finding.</li>
+  <li><b>P2 — the explorer.</b> Grid + Map, replacing the destination selector, exits carrying dates.
+  Your map prototype is most of the work already.</li>
+  <li><b>P4 — vacation type</b> as the explorer's second axis, in the “Discover paradise” slot.</li>
+  <li><b>P5 — book-direct microcopy</b>, then the block only if it moves.</li>
+</ol>
+
+<p style="margin-top:18px">P6 folds into P2 as card content. P7 is absorbed by P4. P8 waits until the
+hero result is banked. P9 is a content ticket.</p>
+
+<div class="thesis">
+  <p class="lede">One thing worth saying to Verndale.</p>
+  <p>The audit is strong on <b>clarity</b> — what each block says, whether it sets expectations, whether
+  the language matches intent. Nearly every annotation is right on its own terms. Where it doesn't
+  reach is <b>mechanism</b>: what actually happens when a guest presses the thing. The single largest
+  finding on this page is that four separate routes into the booking engine all arrive without dates.
+  No amount of better copy on those buttons fixes it, and no content audit would have found it.</p>
+  <p>Worth pairing their next round with the experiment data directly — their instincts were right on
+  “Book Now” and on the birds-eye view, and the numbers would have told them how right, and why.</p>
+</div>
+</div>
+
+<footer>
+  Verndale material from the Content Audit board (Round 2: Homepage) and the annotated page review.
+  Experiment figures from Home Page Hero No Offer at 18 days, 12,804 per arm, ±18.2% detectable.
+  Booking-engine parameter behaviour verified live; property data from outrigger.com.
+</footer>
+</div>

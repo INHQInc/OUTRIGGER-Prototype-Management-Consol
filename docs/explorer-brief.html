@@ -1,0 +1,364 @@
+<title>The Dated Explorer</title>
+<style>
+  :root{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
+  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;
+    --faint:#6C7887;--line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
+  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;
+    --faint:#8A94A1;--line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.62;
+       margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1000px;margin:0 auto;} .measure{max-width:68ch;}
+  header.top{padding:52px 0 26px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(30px,5vw,44px);line-height:1.04;letter-spacing:-.03em;font-weight:700;margin:0 0 14px;}
+  .standfirst{font-size:18px;color:var(--muted);margin:0;max-width:60ch;}
+  h2{font-size:clamp(21px,3vw,27px);line-height:1.16;letter-spacing:-.022em;font-weight:700;margin:54px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 20px;}
+  h3{font-size:17px;font-weight:650;margin:30px 0 8px;}
+  p{margin:0 0 15px;}
+  code,.m{font-family:var(--mono);font-size:.87em;background:color-mix(in srgb,var(--ink) 6%,transparent);
+          padding:.12em .38em;border-radius:4px;}
+  .brief{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:26px 28px;margin:24px 0;}
+  .field{margin:0 0 20px;} .field:last-child{margin-bottom:0;}
+  .k{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 7px;}
+  .v{font-size:15.5px;margin:0;}
+  .box{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:15px 17px;margin:0;
+       font-size:16px;line-height:1.55;}
+  ul.tight{margin:0;padding-left:20px;} ul.tight li{margin-bottom:7px;font-size:15px;}
+  .thesis{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+          border-radius:10px;padding:20px 22px;margin:24px 0;}
+  .thesis.warn{border-left-color:var(--warn);} .thesis.bad{border-left-color:var(--danger);}
+  .thesis .lede{font-size:17.5px;font-weight:650;margin:0 0 9px;line-height:1.32;letter-spacing:-.012em;}
+  .thesis p:last-child{margin-bottom:0;}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:18px 0;}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font:650 11px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);}
+  td.n{font-family:var(--mono);font-size:12.5px;}
+  .tbl{overflow-x:auto;}
+  .no{color:var(--danger);font-weight:650;} .yes{color:var(--ok);font-weight:650;}
+  pre{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:16px 18px;
+      overflow-x:auto;font-family:var(--mono);font-size:12.5px;line-height:1.6;margin:14px 0;}
+  footer{margin-top:66px;padding-top:22px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Outrigger · pre-registration · ready to freeze</p>
+  <h1>The Dated Explorer</h1>
+  <p class="standfirst">The brief for turning the destination selector into a list, grid and map
+  exploration tool where every view carries the guest's dates into the booking engine.</p>
+</header>
+
+<div class="measure">
+<div class="thesis" style="border-left-color:var(--ok)">
+  <p class="lede">Pre-flight answered, and it changes the shape of this brief.</p>
+  <p>I loaded <span class="m">reservation.outrigger.com/?chain=18497&amp;arrive=2026-10-02&amp;depart=2026-10-05&amp;adult=2</span>
+  and the engine <b>honours the dates</b> — Check-in Fri Oct 2, Check-out Mon Oct 5, 2 adults — and
+  lands directly on results. The canonical parameter set is
+  <span class="m">arrive · depart · adult · child · rooms · chain · dest · level · locale</span>.
+  <b>Carrying dates into the engine is a front-end change. Nothing needs building server-side.</b></p>
+  <p>And the page it lands on is not a form. It is <b>“Select a Hotel”</b>: a property grid with
+  photography, location, a <b>from-rate per night</b> (“From $210”, “From $567”), a sort control, a
+  “Details” link, a <b>VIEW RATES</b> button on every card — and social proof
+  (“Booked in last 27 minutes”).</p>
+</div>
+
+<div class="thesis bad">
+  <p class="lede">Which means the tool you want to build largely exists — behind a date wall.</p>
+  <p>Outrigger already has a rated, sorted, cross-destination property comparison view. It is called
+  <b>Select a Hotel</b>, it lives in SynXis, and <b>the only way to reach it is to already know your
+  dates</b>. The home page sends people to browse; the comparison tool sits one wall away; and the wall
+  is a date field.</p>
+  <p>That is a much better problem than the one this brief opened with. It reframes the home page's job:
+  not to rebuild comparison, but to <b>manufacture the dates that unlock it</b> — and to supply the one
+  thing the engine genuinely cannot: geography, and a reason to care.</p>
+</div>
+
+<div class="thesis warn">
+  <p class="lede">So challenge your own scope before you fund it.</p>
+  <p><b>The list view may be redundant.</b> The engine's grid already does rated comparison, sortable,
+  across every destination — better than a marketing page can without a rate feed. <b>The grid view</b>
+  is close to what the home page already shows. <b>The map view is the one the engine cannot do</b>:
+  SynXis has no geography, and “which island, and how far apart are they” is the question first-time
+  Hawai'i visitors most need answered.</p>
+  <p>My honest read: build the <b>date capture</b> and the <b>map</b>. Let the engine be the list. If
+  the first test proves dates are the barrier, you will have bought the comparison view for free.</p>
+</div>
+
+<div class="thesis bad">
+  <p class="lede">The original correction, which still stands.</p>
+  <p>My first draft put a from-rate on every card. You're right that the site has no rates — they only
+  exist in the booking engine. But the home page's own source says something more useful than that.</p>
+  <p><b>All three Sabre SynXis widget bundles are already loading on outrigger.com:</b>
+  <span class="m">shs-widgets-calendar</span>, <span class="m">shs-widgets-searchbar</span>, and
+  <span class="m">shs-widgets-best-price</span>. The calendar is instantiated —
+  <span class="m">&lt;sabre-shs-widgets-calendar api=…&gt;</span> is in the markup. The search bar and
+  the best-price widget are <b>loaded and never used</b>.</p>
+  <p>So a date capture is a supported component, not a custom build. And a rate on a card may be one
+  component away rather than one integration away — <b>subject to the pre-flight below</b>, since I am
+  inferring what <span class="m">best-price</span> renders from its name, not from having seen it run.</p>
+</div>
+
+<div class="thesis">
+  <p class="lede">Which reframes the whole test — and probably explains the flat Book Now.</p>
+  <p>The home page already deep-links into SynXis with real parameters:
+  <span class="m">chain</span>, <span class="m">dest</span>, <span class="m">nights</span>,
+  <span class="m">promo</span>, <span class="m">filter</span>, <span class="m">adult</span>,
+  <span class="m">level</span>. Every offer tile does it. What none of them carry is
+  <b>a date</b>.</p>
+  <p>That is very likely why property “Book Now” gained exactly <b>one click</b> in eighteen days. It
+  does reach the booking engine — and lands the guest on an empty search form. It is a door into a
+  waiting room.</p>
+  <p><b>So the rule is not “put a price on the card”. It is: carry the guest's dates into the engine so
+  arriving means seeing rooms, not filling in a form.</b> That is buildable today with parameters the
+  site already uses.</p>
+</div>
+</div>
+
+<div class="brief">
+  <div class="field">
+    <p class="k">Name</p>
+    <p class="v"><b>Home Page Destination Explorer — List, Grid, Map</b></p>
+  </div>
+
+  <div class="field">
+    <p class="k">The change</p>
+    <p class="box">Capture an island and a rough month once on the home page, and replace the
+    destination tabs with a persistent exploration tool offering three views of the same result set —
+    grid, list and map — where every card, row and pin opens the booking engine
+    <b>with that destination and those dates already applied</b>, rather than opening a landing page or
+    an empty search form.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Hypothesis</p>
+    <p class="box">We believe that capturing a destination and rough dates on the home page, and
+    turning the destination selector into a real exploration tool whose every exit carries that context
+    into the booking engine, for home page visitors on the experience-led hero — especially first-time
+    visitors with no prior sense of the islands — will cause <b>more arrivals at the Rooms &amp; Rates
+    booking engine</b>, because the new hero already sends materially more guests into the explorer,
+    the explorer currently offers them nothing but more reading, and the one route that does reach the
+    engine drops them on an empty search form.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Audience</p>
+    <p class="v">All home page visitors, on the experience-led hero as the new control. Pre-register
+    <b>first-time visitors</b> as the segment of interest — the original hero brief named them, and
+    they are the guests who cannot tell one property from another.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Primary metric · expected to INCREASE</p>
+    <p class="v"><span class="m">Visit Page: Booking Engine: Rooms &amp; Rates</span> — baseline
+    <b>4.27%</b>. The only step between proven intent and revenue, and the one measure v1 moved the
+    wrong way.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Guardrails — what must not fall back</p>
+    <ul class="tight">
+      <li><span class="m">Hero CTA Click</span> — must stay down. A rebound means we reopened the old door.</li>
+      <li><span class="m">Destination explorer engagement</span> — v1's biggest gain (+7.3% composite)</li>
+      <li><span class="m">Property tile engagement</span> — the other gain (+4.7% composite)</li>
+      <li><span class="m">Offer engagement</span> — flat in v1; a fall means the page turned transactional</li>
+      <li><span class="m">Scroll depth engagement</span> — already drifting down; must not accelerate</li>
+      <li><b>Bookings per Rooms &amp; Rates arrival</b> — 34.4% in v1. Volume must not cost quality.</li>
+    </ul>
+  </div>
+
+  <div class="field">
+    <p class="k">The anti-goal — the measure that catches the failure mode</p>
+    <p class="box"><b>Explorer engagements per Rooms &amp; Rates arrival must not increase.</b> If it
+    rises, the tool attracted more attention and converted none of it — which is exactly what v1 did,
+    and the reason this metric exists. This is a stop condition, not a nice-to-have.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Watched, not decisive</p>
+    <p class="v"><span class="m">Booking Complete</span> (baseline 1.23%). At this traffic, resolving a
+    twenty percent move needs roughly <b>36,000 per arm — about eight weeks</b>. Pre-registering it as
+    primary would guarantee an unresolvable test.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Power and duration — computed, not guessed</p>
+    <p class="v">v1 accrued <b>12,804 per arm in 18 days</b> (~711/arm/day) and resolved ±18.2%. At a
+    4.27% baseline the primary needs about <b>9,600 per arm — roughly 14 days</b> for a twenty percent
+    relative move. A ten percent move would need ~38,000 per arm, about eight weeks.
+    <b>Pre-commit to detecting twenty percent.</b></p>
+  </div>
+
+  <div class="field">
+    <p class="k">Target page</p>
+    <p class="v"><span class="m">outrigger.com</span> — home page only. No change below the fold.</p>
+  </div>
+</div>
+
+<div class="measure">
+<h2>What gets built</h2>
+<p class="kicker">One result set, three lenses, one exit verb</p>
+</div>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>View</th><th>The question it answers</th><th>What each card carries</th></tr></thead>
+  <tbody>
+    <tr><td><b>Grid</b><br><span style="color:var(--faint);font-size:13px">default</span></td>
+        <td>“Which of these looks like my trip?”</td>
+        <td>Photography, one line of character, two or three attribute chips — <i>plus a rate, if the pre-flight clears</i></td></tr>
+    <tr><td><b>List</b></td>
+        <td>“How do these actually differ?”</td>
+        <td>Comparison row — beach type, walk to sand, pool, dining, ideal-for. Sortable, cross-island. <i>Rate column if the pre-flight clears.</i></td></tr>
+    <tr><td><b>Map</b></td>
+        <td>“Where is this relative to everything else?”</td>
+        <td>Real island geography, proximity to beach/airport/Waikīkī, multi-property trips</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="measure">
+<p><b>Shared across all three:</b> one result set and one filter state (a view switch is a change of
+lens, never a restart); one captured context — island and month — carried into every exit URL; and one
+exit verb, <b>“See rates”</b>, everywhere. Not Book Now in grid, Learn More in list and Visit property
+on the map.</p>
+
+<p>The exit is a SynXis deep link built from the guest's own answers —
+<span class="m">reservation.outrigger.com/?chain=18497&amp;dest=…&amp;hotel=…&amp;arrive=…&amp;depart=…</span>
+— so the booking engine opens on rooms rather than on a form. The site already builds these links for
+every offer tile; it has simply never put a date in one.</p>
+
+<div class="thesis bad">
+  <p class="lede">The exit rule is the test. Everything else is the packaging.</p>
+  <p>v1 moved 286 clicks into browsing and gained <b>one</b> click on Book Now, <b>one</b> on the offer
+  CTA, and lost <b>21</b> on Rooms &amp; Rates. A richer explorer that still exits into a page — or into
+  an undated search form — will reproduce that at greater expense.</p>
+  <p>Your <b>Regional Map Display</b> prototype is currently measured on “clicks on the ‘Visit property’
+  link” — a click into a page. If the map view inherits that exit, it inherits the outcome.</p>
+</div>
+
+<h2>What has to be instrumented first</h2>
+<p class="kicker">The brief cannot be adjudicated without these</p>
+
+<p>The current event set can tell us the explorer was used. It cannot tell us <em>which view earned
+it</em>, and that is most of what we would want to learn. Before the start gate:</p>
+
+<ul class="tight">
+  <li><b>View switch</b> — grid / list / map, so we can attribute the effect to a lens rather than to the tool</li>
+  <li><b>Filter and sort applied</b> — which axes guests actually use, which is the input to the next iteration</li>
+  <li><b>Explorer → rates exit</b>, tagged with the originating view — distinct from today's
+      <span class="m">Home: Destination Highlights Button Click</span> and from the map prototype's
+      “Visit property” link</li>
+  <li><b>Shortlist add</b>, if the list view ships with one</li>
+</ul>
+
+<p>Without the first and third, the anti-goal ratio can't be computed, and the anti-goal is the reason
+this brief is safe to run.</p>
+
+<div class="thesis warn">
+  <p class="lede">Pre-flight — three things to confirm before the build is scoped.</p>
+  <p><b>1. Does <span class="m">reservation.outrigger.com</span> honour arrival and departure
+  parameters?</b> <b style="color:var(--ok)">ANSWERED — yes.</b> Verified live: dates, guests and room
+  count all apply, and the engine lands on the rated hotel grid. This brief is a front-end change.</p>
+  <p><b>1b. How do we filter the engine to one island?</b> <span class="m">dest=ORH</span> did
+  <em>not</em> filter — the results came back chain-wide (Maldives, Thailand, Fiji alongside Waikīkī)
+  and the URL normalised to <span class="m">level=chain</span>. An island-scoped exit needs the correct
+  region code or <span class="m">level=hotel&amp;hotel=&lt;id&gt;</span>. This is now the one unknown
+  that actually blocks the build.</p>
+  <p><b>2. What does <span class="m">shs-widgets-best-price</span> actually render?</b> Its script is
+  already on the home page and nothing instantiates it. The engine clearly holds per-property from-rates
+  for a date range — it prints them on every card — so the widget almost certainly surfaces the same
+  figure. Still worth confirming, but <b>the brief no longer depends on it</b>: the dated exit carries
+  the hypothesis on its own.</p>
+  <p><b>3. Is <span class="m">shs-widgets-searchbar</span> the right Plan Bar?</b> Also loaded, also
+  unused. Using Sabre's own component beats building one, provided it can be styled to the brand.</p>
+</div>
+
+<div class="thesis warn">
+  <p class="lede">One data check before the start gate.</p>
+  <p>Confirm that <span class="m">Booking Complete</span> actually sits downstream of
+  <span class="m">Visit Page: Booking Engine: Rooms &amp; Rates</span>. The home page has at least four
+  other routes into booking — header, sticky bar, tile Book Now, and five offer “Check availability”
+  buttons. If a material share of bookings enters another way, the primary metric measures only part of
+  the funnel and the 34.4% quality guardrail compares two different populations.</p>
+</div>
+
+<h2>Explicitly out of scope</h2>
+<ul class="tight">
+  <li><b>Anything below the fold.</b> Scroll is flat to negative at all four depths; new content there would be served to the same eyeballs.</li>
+  <li><b>The hero.</b> −58.1% at p&lt;0.0001 is settled. Changing it again in the same test would confound the explorer's effect.</li>
+  <li><b>Offer-led framing.</b> Offer engagement was flat when the offer left the hero — demand for it is inelastic to the home page.</li>
+  <li><b>Room-attribute taxonomy.</b> Choosing by room type rather than property is a bigger, separate idea; it should not ride along and dilute this reading.</li>
+  <li><b>Building a rate feed.</b> If the best-price widget doesn't do it, we do without. The dated exit is the hypothesis; rates on cards are an amplifier.</li>
+</ul>
+
+<h3>The smaller test worth considering instead</h3>
+<p>Add the date capture and change only the current explorer's exit — from
+<span class="m">Oahu highlights</span> to a dated SynXis deep link — and run that alone for two weeks.
+No new views, no new content. It isolates the exact mechanism this whole brief rests on, on the
+highest-traffic surface, for a fraction of the build.</p>
+<p>If it moves the primary, the three-view build is funded by evidence. If it doesn't, the exit rule is
+wrong and better views would not have saved it. Given the tile Book Now result — one click in eighteen
+days into an undated form — this is the cheapest way to find out whether dates are the barrier.</p>
+</div>
+
+<div class="measure">
+<h2>Paste-ready</h2>
+<p class="kicker">For the Brief room</p>
+</div>
+
+<pre>NAME
+Home Page Destination Explorer — List, Grid, Map
+
+CHANGE
+Capture an island and a rough month once on the home page, and replace the
+destination tabs with a persistent exploration tool offering three views of the
+same result set — grid, list and map — where every card, row and pin opens the
+booking engine with that destination and those dates already applied, rather
+than a landing page or an empty search form.
+
+HYPOTHESIS
+We believe that capturing a destination and rough dates on the home page, and
+turning the destination selector into a real exploration tool whose every exit
+carries that context into the booking engine, for home page visitors on the
+experience-led hero — especially first-time visitors with no prior sense of the
+islands — will cause more arrivals at the Rooms &amp; Rates booking engine,
+because the new hero already sends materially more guests into the explorer,
+the explorer offers them nothing but more reading, and the one route that does
+reach the engine drops them on an empty search form.
+
+PRIMARY METRIC (increase)
+Visit Page: Booking Engine: Rooms &amp; Rates
+
+GUARDRAILS
+Hero CTA Click · Destination explorer engagement · Property tile engagement
+Offer engagement · Scroll depth engagement · Bookings per Rooms &amp; Rates arrival
+
+ANTI-GOAL (stop condition)
+Explorer engagements per Rooms &amp; Rates arrival must not increase
+
+WATCHED, NOT DECISIVE
+Booking Complete
+
+DURATION
+~14 days to resolve a 20% relative move at 711/arm/day
+
+PRE-FLIGHT
+1. Does reservation.outrigger.com honour arrive/depart params?
+2. What does shs-widgets-best-price render? (loaded, never instantiated)
+3. Can shs-widgets-searchbar be brand-styled? (loaded, never instantiated)</pre>
+
+<footer>
+  Built from the hero readout at 18 days (12,804/arm, ±18.2% detectable), the live
+  <code>outrigger.com</code> home page, and the OUTRIGGER — UX Audit reference board. Every figure is
+  the experiment's own; the click accounting and bookings-per-arrival ratio are derived.
+</footer>
+
+</div>

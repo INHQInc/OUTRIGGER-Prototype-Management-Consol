@@ -1,0 +1,298 @@
+<title>After the Hero Test</title>
+<style>
+  :root{--paper:#F5F7FA;--surface:#FFFFFF;--surface2:#EDF1F6;--ink:#111823;--muted:#5A6675;--faint:#8A94A3;
+    --line:#DDE3EA;--line-strong:#C0CAD7;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0D1117;--surface:#161B22;--surface2:#1C222B;--ink:#E7EDF5;--muted:#9AA7B8;--faint:#6E7B8C;
+    --line:#242C38;--line-strong:#3D4757;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
+  :root[data-theme="dark"]{--paper:#0D1117;--surface:#161B22;--surface2:#1C222B;--ink:#E7EDF5;--muted:#9AA7B8;
+    --faint:#6E7B8C;--line:#242C38;--line-strong:#3D4757;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
+  :root[data-theme="light"]{--paper:#F5F7FA;--surface:#FFFFFF;--surface2:#EDF1F6;--ink:#111823;--muted:#5A6675;
+    --faint:#8A94A3;--line:#DDE3EA;--line-strong:#C0CAD7;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16px;line-height:1.62;
+       margin:0;padding:0 20px 90px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1000px;margin:0 auto;} .measure{max-width:70ch;}
+  header.top{padding:48px 0 26px;border-bottom:1px solid var(--line);margin-bottom:12px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(28px,4.6vw,42px);line-height:1.06;letter-spacing:-.026em;font-weight:700;margin:0 0 12px;}
+  .standfirst{font-size:17.5px;color:var(--muted);margin:0;max-width:62ch;}
+  h2{font-size:clamp(20px,2.8vw,26px);line-height:1.18;letter-spacing:-.02em;font-weight:700;margin:56px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 18px;}
+  h3{font-size:17px;font-weight:650;margin:32px 0 8px;letter-spacing:-.008em;}
+  p{margin:0 0 14px;}
+  code,.m{font-family:var(--mono);font-size:.875em;background:color-mix(in srgb,var(--ink) 6%,transparent);
+          padding:.12em .38em;border-radius:4px;}
+  strong{font-weight:650;}
+
+  .verdict{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+           border-radius:10px;padding:20px 22px;margin:24px 0;}
+  .verdict.ok{border-left-color:var(--ok);} .verdict.warn{border-left-color:var(--warn);}
+  .verdict.bad{border-left-color:var(--danger);}
+  .verdict .lede{font-weight:650;margin:0 0 8px;font-size:17px;letter-spacing:-.01em;}
+  .verdict p:last-child{margin-bottom:0;}
+  .tag{display:inline-block;font:600 10.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+       padding:5px 8px;border-radius:5px;margin:0 0 11px;}
+  .tag.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);}
+  .tag.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent);}
+  .tag.acc{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);}
+
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:18px 0;}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font:650 11px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);}
+  td.n{font-family:var(--mono);font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums;}
+  .tbl{overflow-x:auto;}
+  .up{color:var(--ok);font-weight:650;} .down{color:var(--danger);font-weight:650;}
+  .flat{color:var(--faint);}
+  .sig{font:650 9.5px/1 var(--mono);letter-spacing:.06em;padding:3px 5px;border-radius:4px;
+       color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent);}
+  .nsig{font:600 9.5px/1 var(--mono);letter-spacing:.06em;padding:3px 5px;border-radius:4px;
+        color:var(--faint);background:color-mix(in srgb,var(--ink) 8%,transparent);}
+
+  .brief{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:24px 26px;margin:22px 0;}
+  .brief h3{margin-top:0;}
+  .field{margin:0 0 18px;}
+  .field .k{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+            margin:0 0 6px;}
+  .field .v{font-size:15.5px;margin:0;}
+  .hyp{font-size:16.5px;line-height:1.55;background:var(--surface);border:1px solid var(--line);
+       border-radius:9px;padding:16px 18px;margin:0;}
+  ul.tight{margin:0;padding-left:20px;} ul.tight li{margin-bottom:6px;}
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:20px 0 0;}
+  ol.steps>li{counter-increment:s;position:relative;padding:0 0 0 44px;margin:0 0 24px;}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:0;font:650 12px/28px var(--mono);
+    width:28px;height:28px;text-align:center;border-radius:50%;color:var(--accent);
+    background:color-mix(in srgb,var(--accent) 13%,transparent);}
+  ol.steps b{display:block;margin-bottom:3px;}
+  ol.steps p{margin:0;color:var(--muted);font-size:15px;}
+  .fn{font-size:12.5px;color:var(--faint);}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Outrigger · post-experiment brief</p>
+  <h1>The hero worked. The handoff didn't.</h1>
+  <p class="standfirst">Home Page Hero No Offer — what 17 days and 10,791 guests per arm actually
+  established, and the test that should follow it.</p>
+</header>
+
+<div class="measure">
+<h2>The headline you may not expect</h2>
+<p class="kicker">The readout calls the booking-engine dip "what it cost". The counts say something else</p>
+</div>
+
+<div class="verdict ok">
+  <span class="tag ok">The most important number isn't on the dashboard</span>
+  <p class="lede">Fewer guests reached Rooms &amp; Rates — and more of them booked.</p>
+  <p>Booking-engine visits fell from <b>436 → 414</b>. Completed bookings rose from <b>117 → 142</b>.
+  If those sit on the same path, the arrival-to-booking rate went from <b>26.8% → 34.3%</b> — roughly a
+  <b>28% relative improvement in how well the booking engine converts</b>. The funnel didn't spring a
+  leak. It got <em>narrower and better qualified</em>.</p>
+  <p class="fn" style="margin-top:10px">Stated as a signal, not a finding. Neither underlying number is
+  significant on its own (p=0.328 and p=0.147), and a ratio of two noisy counts is noisier still. It
+  also assumes bookings arrive via that page — <span class="m">Property Book Now CTA</span> is a second
+  entry point and rose slightly too. <b>Confirm the path before you build on this.</b></p>
+</div>
+
+<div class="measure">
+<h2>What actually happened</h2>
+<p class="kicker">Four findings, in order of how settled they are</p>
+</div>
+
+<h3>1 · The mechanism is proven</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Metric</th><th class="n">Control</th><th class="n">Variation</th><th class="n">Lift</th><th>Settled?</th></tr></thead>
+  <tbody><tr><td><b>Hero CTA Click</b></td><td class="n">3.67%</td><td class="n">1.60%</td>
+    <td class="n down">−56.4%</td><td><span class="sig">p&lt;0.0001</span></td></tr></tbody>
+</table></div>
+<p class="measure">Well beyond luck, and the experiment was powered to ±20.5%. The offer no longer takes
+the first click. This half of the hypothesis is closed.</p>
+
+<h3>2 · The clicks moved — they didn't disappear</h3>
+<p class="measure">The hero lost <b>221 clicks</b> (396 → 175). Almost exactly that many reappeared
+elsewhere on the page:</p>
+<div class="tbl"><table>
+  <thead><tr><th>Where attention went</th><th class="n">Control</th><th class="n">Variation</th><th class="n">Δ clicks</th><th class="n">Lift</th></tr></thead>
+  <tbody>
+    <tr><td>Destination Exploration Tab</td><td class="n">661</td><td class="n">731</td><td class="n up">+70</td><td class="n">+9.1%</td></tr>
+    <tr><td>Navigation</td><td class="n">1,168</td><td class="n">1,235</td><td class="n up">+67</td><td class="n">+4.3%</td></tr>
+    <tr><td>Destination Drop Down</td><td class="n">297</td><td class="n">333</td><td class="n up">+36</td><td class="n">+10.6%</td></tr>
+    <tr><td>Property Title</td><td class="n">393</td><td class="n">428</td><td class="n up">+35</td><td class="n">+7.4%</td></tr>
+    <tr><td>Offer CTA <span class="fn">(elsewhere on page)</span></td><td class="n">150</td><td class="n">167</td><td class="n up">+17</td><td class="n">+9.8%</td></tr>
+    <tr><td>Property Learn More</td><td class="n">132</td><td class="n">121</td><td class="n down">−11</td><td class="n">−9.6%</td></tr>
+    <tr><td>Destination Highlights</td><td class="n">151</td><td class="n">145</td><td class="n down">−6</td><td class="n">−5.3%</td></tr>
+    <tr><td>Story</td><td class="n">50</td><td class="n">45</td><td class="n down">−5</td><td class="n">−11.3%</td></tr>
+  </tbody>
+</table></div>
+<p class="measure">Net redistribution ≈ <b>+208 against −221 lost</b>. Individually none of these clears
+significance, but a near-perfect one-to-one transfer across eight independent metrics is not what noise
+looks like. <b>Attention was re-pointed, not destroyed.</b></p>
+
+<h3>3 · But nobody read more of the page</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Scroll depth</th><th class="n">Control</th><th class="n">Variation</th><th class="n">Lift</th><th>p</th></tr></thead>
+  <tbody>
+    <tr><td>25%</td><td class="n">39.30%</td><td class="n">39.62%</td><td class="n flat">+0.8%</td><td><span class="nsig">0.627</span></td></tr>
+    <tr><td>50%</td><td class="n">34.42%</td><td class="n">34.63%</td><td class="n flat">+0.6%</td><td><span class="nsig">0.737</span></td></tr>
+    <tr><td>75%</td><td class="n">30.84%</td><td class="n">30.91%</td><td class="n flat">+0.2%</td><td><span class="nsig">0.917</span></td></tr>
+    <tr><td>100%</td><td class="n">22.51%</td><td class="n">22.26%</td><td class="n flat">−1.1%</td><td><span class="nsig">0.660</span></td></tr>
+  </tbody>
+</table></div>
+<p class="measure">Dead flat at every depth. This kills a tempting follow-up: <b>"add more inspirational
+content down the home page" is not supported.</b> Guests consume exactly as much page as before — they
+just choose differently within it. More content would be served to the same eyeballs.</p>
+
+<h3>4 · Removing the offer did not reduce offer-seeking</h3>
+<p class="measure">Offer CTA <b>+9.8%</b>, See-all-offers <b>+33.8%</b>, offer engagement composite
+<b>+11.8%</b>. Guests who want a deal still find one — slightly more readily. That closes off the
+obvious commercial objection to shipping this hero.</p>
+
+<div class="measure">
+<h2>The verdict to stamp</h2>
+<p class="kicker">Adjudicated against the frozen pre-registration, honestly</p>
+</div>
+
+<div class="verdict warn">
+  <span class="tag warn">Partial — mechanism confirmed, outcome unproven</span>
+  <p>The brief claimed two things. <b>Fewer hero offer clicks:</b> settled, decisively. <b>More
+  downstream exploration lifting bookings:</b> the direction is right on every exploration metric and on
+  bookings, but nothing crossed significance in 17 days, and the booking-engine step moved the wrong
+  way. Stamp it as <em>confirmed on the primary, not adjudicable on the outcome</em> — not as a win.</p>
+</div>
+
+<div class="verdict ok">
+  <span class="tag ok">Recommendation — ship the hero anyway</span>
+  <p>No guardrail breached. Scroll behaviour unharmed, offer-seeking unharmed, bookings leaning
+  positive, and the strategic goal — stop leading with a discount — is achieved outright. The one
+  negative, booking-engine visits, is unproven and plausibly a qualification effect rather than a loss.
+  <b>Ship it, and make it the new control.</b> The follow-up must run on top of the new hero, or you'll
+  spend another 17 days re-learning what you already know.</p>
+</div>
+
+<div class="measure">
+<h2>The follow-up brief</h2>
+<p class="kicker">Ready to freeze as a pre-registration</p>
+
+<p>The gap is specific and the data points straight at it. Guests explore destinations more
+(<b>+9.1%</b>), open the dropdown more (<b>+10.6%</b>) and click into properties more (<b>+7.4%</b>) —
+then reach Rooms &amp; Rates <em>less</em> (<b>−6.4%</b>). Exploration intent is being manufactured
+successfully and then dropped on the floor. <b>The next test is the bridge from exploring a place to
+shopping a room</b> — not the hero, and not more home page content.</p>
+</div>
+
+<div class="brief">
+  <h3>Home Page Hero — Explore to Rooms</h3>
+
+  <div class="field">
+    <p class="k">Hypothesis</p>
+    <p class="hyp">We believe that giving the destination explorer and property tiles a direct
+    <b>“See rooms &amp; rates”</b> entry — carrying the guest into room selection rather than into
+    another browse page — for home page visitors who engage with exploration on the new
+    experience-led hero, will cause <b>more arrivals at the Rooms &amp; Rates booking engine</b>,
+    because the intent the new hero creates currently has no short path to a room, which in turn
+    should carry through to bookings.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Primary metric · expected to INCREASE</p>
+    <p class="v"><b>Visit Page: Booking Engine: Rooms &amp; Rates</b> — baseline 4.04%. It is the one
+    step that moved the wrong way, and the only step between proven intent and revenue.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Guardrails — protect what already works</p>
+    <ul class="tight">
+      <li><b>Hero CTA Click</b> — must stay down; if it rebounds the new hero has been undone</li>
+      <li><b>Destination explorer engagement</b> — the composite that gained; must not fall</li>
+      <li><b>Property tile engagement</b> — the other gainer</li>
+      <li><b>Offer engagement</b> — must not fall; it rose last time</li>
+      <li><b>Scroll depth engagement</b> — flat is fine; a drop means we've buried something</li>
+    </ul>
+  </div>
+
+  <div class="field">
+    <p class="k">Directional outcome — NOT the decision metric</p>
+    <p class="v"><b>Booking Complete</b> (baseline 1.08%). At this traffic, detecting a 20% move on a
+    1.08% metric needs roughly <b>36,000 per arm — about eight weeks</b>. Pre-registering it as primary
+    would guarantee an unresolvable test. Watch it; don't bet the decision on it.</p>
+  </div>
+
+  <div class="field">
+    <p class="k">Power and duration — computed, not guessed</p>
+    <p class="v">This run achieved <b>10,791/arm in 17 days</b> (~635/arm/day) and could resolve ±20.5%
+    on a ~3.7% metric. The new primary sits at 4.04%, so <b>17–21 days detects roughly a 20% relative
+    move</b>. A 10% move would need ~38,000/arm — about nine weeks. <b>Pre-commit to detecting 20%</b>
+    and accept that smaller effects won't resolve.</p>
+  </div>
+
+  <div class="field" style="margin-bottom:0">
+    <p class="k">Audience</p>
+    <p class="v">Home page visitors, new hero shown to all. If the sample allows, pre-register
+    <b>first-time visitors</b> as the segment of interest — the original brief named them, and they're
+    the guests with no prior brand context to fall back on.</p>
+  </div>
+</div>
+
+<div class="measure">
+<h3>What to build — three candidates, ranked by what the data supports</h3>
+</div>
+
+<ol class="steps">
+  <li><b>Rooms-first destination explorer</b>
+    <p>The explorer tab is the single biggest gainer (+9.1%, +70 clicks). Whatever it currently leads
+    to, it isn't rooms. Give each destination result a direct rooms-and-dates entry so the click
+    <em>after</em> exploration is a shopping click. Highest-traffic surface, most direct line to the
+    primary metric.</p></li>
+  <li><b>Property tile goes to rooms, not to a landing page</b>
+    <p>Property Title clicks rose <b>+7.4%</b> while Property Learn More fell <b>−9.6%</b> — guests want
+    the place, not more prose about it. Point the tile's primary action at Rooms &amp; Rates for that
+    property. Small change, and the metrics already argue for it.</p></li>
+  <li><b>Carry the intent forward</b>
+    <p>After two or more exploration actions, surface a lightweight dates-and-occupancy prompt so the
+    booking engine is reached pre-qualified. Most speculative of the three and the most build; hold it
+    unless the first two under-deliver.</p></li>
+</ol>
+
+<div class="measure">
+<h2>One thing to settle first</h2>
+<p class="kicker">It decides whether the follow-up's primary metric is the right one</p>
+
+<div class="verdict">
+  <span class="tag acc">Data hygiene</span>
+  <p class="lede">Confirm bookings actually pass through that page.</p>
+  <p>The whole "narrower but better-qualified funnel" reading rests on Booking Complete sitting
+  downstream of <span class="m">Visit Page: Booking Engine: Rooms &amp; Rates</span>. If a material
+  share of bookings enters another way — <span class="m">Property Book Now CTA</span> rose slightly —
+  then the 26.8% → 34.3% figure is comparing two different populations and means much less. One
+  analytics check settles it, and it decides whether the follow-up's primary metric is the right one.</p>
+</div>
+
+<h2>The sequence</h2>
+<p class="kicker">In order</p>
+</div>
+
+<ol class="steps">
+  <li><b>Stop it in Optimizely, then close it out in Prism</b>
+    <p>Ending the run raises the adjudication prompt; stamping the verdict against the frozen
+    pre-registration is what makes this a record rather than a memory. Stamp it partial.</p></li>
+  <li><b>Ship the new hero as the permanent control</b>
+    <p>No guardrail breached and the strategic goal is met. Everything downstream now assumes it.</p></li>
+  <li><b>Confirm the booking path</b>
+    <p>Whether Booking Complete actually sits downstream of Rooms &amp; Rates. One analytics check, and
+    it decides whether the follow-up's primary metric is the right one.</p></li>
+  <li><b>Freeze the follow-up brief and build candidate 1</b>
+    <p>Rooms-first destination explorer. Pre-register at 20% detectable, 17–21 days, with Booking
+    Complete watched but not decisive.</p></li>
+</ol>
+
+<footer>
+  Drawn from the live readout on <code>prism.brandgraphai.com</code> — Home Page Hero Ocean View, bound
+  2026-08-03, 17 days observed, 10,791/arm. Every figure is from the experiment's own numbers; the
+  arrival-to-booking ratio and the click-transfer total are derived and labelled as such.
+</footer>
+
+</div>

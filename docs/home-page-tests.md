@@ -1,0 +1,336 @@
+# Home Page Tests — working file
+
+Running record for the Outrigger home page A/B programme. Every proposal here must be
+backed by experiment data or explicitly marked as unevidenced. This file becomes the
+source for a PPTX of recommended next tests.
+
+**Rule for this document:** anything suggested — mine, Verndale's, or hybrid — states the
+evidence from the hero experiment, or says plainly that it has none.
+
+---
+
+## 1 · The experiment we are reasoning from
+
+**Home Page Hero No Offer** — experience-led hero ("World's best ocean views") vs
+discount-led control ("Ocean views on sale / 40% off"). Bound 2026-08-03.
+**12,804 per arm · 18 days · powered to ±18.2%.** Still LIVE at time of writing.
+
+### Settled
+| Metric | Control | Variation | Lift | p |
+|---|---|---|---|---|
+| **Hero CTA Click** | 3.87% (496) | 1.62% (210) | **−58.1%** | <0.0001 |
+
+### The redistribution — 286 clicks lost, ~260 recovered
+| Metric | Control | Variation | Δ | Lift |
+|---|---|---|---|---|
+| Destination Exploration Tab | 864 | 946 | +82 | +8.3% |
+| Navigation (Explore menu) | 1,509 | 1,589 | +80 | +4.2% |
+| Property Title Clicked | 496 | 558 | +62 | +11.3% |
+| Destination Drop Down Item | 375 | 427 | +52 | +12.7% |
+| Booking Complete | 158 | 181 | +23 | +13.3% |
+| **Property "Book Now"** | 294 | 295 | **+1** | −0.7% |
+| **Offer CTA Click** | 198 | 199 | **+1** | −0.6% |
+| Property "Learn More" | 163 | 155 | −8 | −5.9% |
+| Destination Highlights Button | 199 | 187 | −12 | −7.0% |
+| **BE: Rooms & Rates** | 547 | 526 | **−21** | −4.9% |
+
+### Ruled out (tight intervals around zero — settled nulls, not unknowns)
+Scroll depth **flat to negative at all four levels**: 25% −0.3%, 50% −0.7%, 75% −0.9%,
+100% −2.6%; composite −1.0%. **Adding content below the fold is ruled out** — it would be
+served to the same eyeballs.
+
+### Derived signals (not significant — treat as leads)
+- **Bookings per BE arrival: 28.9% → 34.4%** (158/547 vs 181/526). Fewer, better-qualified
+  arrivals. *Unconfirmed:* assumes bookings pass through that page; there are ≥4 other routes.
+- **Offer demand is inelastic to the hero.** Offer engagement composite +2.2%, p=0.86 when
+  the offer left the hero entirely. The 40%-off headline was not earning its position.
+
+### Power for the next test
+711/arm/day. Primary candidate **BE: Rooms & Rates** baseline 4.27% → ~9,600/arm →
+**~14 days** for a 20% relative move. **Booking Complete** at 1.23% needs ~36,000/arm
+(~8 weeks) — **can never be the decision metric.**
+
+---
+
+## 2 · The core diagnosis
+
+**The home page runs two economies that never touch.**
+
+- *Inspiration*: hero, destination tabs, property tiles, Cirque, 10 stories.
+  Exits: `Learn more`, `Oahu highlights`, `Learn More`, `View more stories` — all content.
+- *Commerce*: header BOOK NOW, sticky BOOK NOW, tile Book Now, 5× `Check availability`.
+  Entries: all assume you already know where and when.
+
+The old offer hero was the door between them. v1 removed it — correctly — and built no
+replacement. Redirected attention now circulates in inspiration and leaves.
+
+**Verndale reached the same diagnosis independently:** *"The homepage should move from being
+a collection of promotions, destinations, stories and selling points to becoming a guided
+journey from inspiration to action."*
+
+---
+
+## 3 · Technical findings (verified)
+
+### Booking engine — Sabre SynXis
+- Host `reservation.outrigger.com`, chain `18497`. **Honours date params — verified live.**
+- Canonical set: `arrive · depart · adult · child · rooms · chain · dest · level · locale`
+- `?chain=18497&arrive=2026-10-02&depart=2026-10-05&adult=2` → lands on **"Select a Hotel"**:
+  a property grid with photography, location, **from-rate per night**, sort control,
+  VIEW RATES per card, and social proof ("Booked in last 27 minutes").
+- **Existing site links carry `chain·dest·nights·promo·filter·adult·level` but NEVER a date.**
+  This is very likely why tile Book Now gained 1 click in 18 days — it lands on a blank form.
+- `dest=ORH` did **not** filter to Hawai'i (normalised to `level=chain`, returned worldwide).
+  Island scoping needs the right region code or `level=hotel&hotel=<SabreID>`. **OPEN.**
+
+### SynXis widgets already on the home page
+- `shs-widgets-calendar` — **instantiated** (`<sabre-shs-widgets-calendar api=…>`)
+- `shs-widgets-searchbar` — script loaded, **never used**
+- `shs-widgets-best-price` — script loaded, **never used**. If it renders a rate, cards get
+  from-rates as a component call, not an integration. **OPEN — unverified.**
+
+### Property data
+- Home page carries a `destinationselection` JSON: **16 properties, 5 destinations**
+  (Hawaii 8 across O'ahu 4 / Maui 2 / Hawai'i Island 1 / Kaua'i 1; Thailand 4; Fiji 2;
+  Mauritius 1; Maldives 1). Hierarchy is **irregular** — only Hawaii has a region tier.
+- Per property: `PropertyName · PropertyDescription · PropertySabreID · PropertyCity/State ·
+  Url · Images · HeroImageUrl`
+- **Empty on every property:** `PropertyHighlights.Amenities` = `[]`, `Prices` = fallback span,
+  `PricingInfo` all null with `IsFallback: true`, `data-average-nightly-rate="0"`.
+  → The price pipeline **exists and is switched off or broken.** Worth one question to whoever
+  owns the CMS integration.
+- **No coordinates on the home page.** They DO exist on every property page as schema.org
+  `GeoCoordinates`. Harvested 16/16, amenities 15/16 (Phi Phi returns none — different template).
+- **The map prototype's `COORDS` has 26 properties** — includes "by Outrigger" condos
+  (Kiahuna Plantation, Waipouli, Royal Kahana, Kapalua Villas, Napili Shores, Palms at Wailea,
+  Kaanapali Eldorado, Regency on Beachwalk, Waikiki Shore). It has an `isCondo()` split.
+  **OPEN QUESTION: do condos belong in the explorer? 16 or 26 decides the navigation.**
+- **Data bug:** outrigger.com JSON-LD gives Surin Beach `97.15982` — ~120 km west of Phuket,
+  open ocean. Correct ≈ `98.286`. Already corrected in the map prototype; now corrected in
+  `docs/outrigger-properties.js`. **Should be fixed at source.**
+
+### Assets produced
+- `docs/outrigger-properties.js` — 16 properties: dest/region/name/sabreId/lat/lng/city/url/desc/
+  amenities, plus `outriggerBookingUrl()` (dated deep link), `outriggerBounds()`
+  (antimeridian-safe), `outriggerDistinctive()` (amenity diff).
+- **Antimeridian gotcha:** estate spans Mauritius 57°E → Hawai'i −159°. Raw longitudes span
+  337° so `fitBounds` draws the long way round the globe. Normalise negatives by +360 → 147°.
+
+### Existing map prototype — `INHQInc/outrigger-prototypes` branch `prototype/josh-s-cool-protype`
+Substantial and reusable: hand-built Outrigger-branded Mapbox style, **lazy Mapbox load on
+scroll-into-view** (cost already handled), SVG fallback basemap if Mapbox is blocked,
+clustering, label declutter, reduced-motion, injection-timing contract for OPMC + Optimizely.
+Mapbox token is a `pk.` public token (safe client-side).
+**Changes needed:** `discoverProperties()` scrapes DOM cards → use the lookup;
+**card CTA is "Visit property" → a page** (line ~418) → change to dated SynXis link.
+
+---
+
+## 4 · Verndale's material
+
+### Content audit — strategic themes (Checkpoint 1)
+1. Better communicate what makes Outrigger different
+2. Help travellers choose with confidence
+3. Build a stronger brand narrative across the site
+4. Elevate authentic experiences as a competitive advantage
+5. Reinforce the value of booking direct throughout the journey
+
+### Homepage summary (Checkpoint 2)
+> "The homepage should move from being a collection of promotions, destinations, stories and
+> selling points to **becoming a guided journey from inspiration to action.**"
+
+Must serve four intents: **book a stay · compare destinations/resorts · find inspiration &
+experiences · decide if Outrigger is right for them.**
+
+**Business goals:** increase direct bookings · build brand awareness and differentiation ·
+move visitors from consideration to the next stage.
+
+> "The recommendation is **not** to add more content. It is to give every part of the homepage
+> a defined role within the customer journey and **remove or deprioritize** content that does
+> not support that journey."
+
+*(This matches our scroll finding exactly — two independent methods, same answer.)*
+
+### Homepage 2.0 — proposed structure
+1. **The Outrigger Promise** — brand awareness + direct booking
+2. **Choose Your Journey** — funnel progression; orientation to book / explore / discover
+3. **Why Outrigger** — brand awareness + consideration
+4. **Find the Place That Fits** — consideration + resort discovery, organised by traveller interest
+5. **Experience the Destination** — brand preference + consideration
+6. **Make the Trip Possible** — conversion; offers, packages, planning
+7. **Book Outrigger with Confidence** — direct booking; addresses hesitation
+8. **Continue the Journey** — engagement + future conversion
+
+**Operating model:** "A fixed narrative with a flexible editorial layer."
+Fixed = Promise, Intent, Brand, Destinations, Experience, Planning, Action.
+Flexible = featured destinations, seasonal stories, offers, campaigns, experiences, cultural content.
+> "New content should refresh an existing role in the story rather than create another
+> competing section."
+
+### Page annotations (numbered on the marked-up home page)
+- **2 — Value prop / five brand pillars:** renowned beach locations · the must-see beach bar ·
+  authentic live music · signature experiences · commitment to conservation
+- **3 — Destination selector:** "Would love ability to view all your locations for a
+  birds-eye-view of where your properties [are] (I also missed the drop down at first)."
+  Headline options: Explore Our Destinations / Choose Your Destination / Pick Your Paradise
+- **4 — Property tile CTAs:** "Book Now may feel too aggressive on the home page." Consider
+  softer variants (Explore Dates, View Options, Plan Your Stay); progressive CTAs; personalisation
+  (returning → Book Now, new → Check Availability); microcopy ("No payment required",
+  "Free cancellation"). Also: "Explore Property" / "View Property" instead of "Learn more".
+- **5 — Top Offers:** add a book-direct value headline for people who validate here then book on
+  OTAs. Reference: Marriott Bonvoy "The Best Rates Are Always Here" + 4 benefit icons.
+- **6 — Cirque block:** add "Signature Experiences Start Here" section; showcase more than Cirque
+  since 'Auana is Waikīkī-only.
+- **7 — Discover paradise:** rename (Travel Inspiration / Vacation Ideas). And: let people search
+  by **vacation type** — adventure · wellness & spa · romantic · family. Reference: Marriott
+  "Your Next Somewhere".
+- **8 — Gift cards:** benefit-led headline; answer does it expire / does it work at any hotel.
+- **8 — Email signup:** benefit-driven headline with scannable bullets.
+
+---
+
+## 5 · Priority ranking
+
+Ranked by evidence strength × effect potential ÷ build cost.
+
+| # | Proposal | Source | Evidence | Effect | Build | Verdict |
+|---|---|---|---|---|---|---|
+| **P1** | Carry dates into the booking engine | **New (ours)** | Strong | High | Low | Do first |
+| **P2** | Birds-eye view of all locations → the explorer | Verndale 3 | Strong | High | Med | Ship |
+| **P3** | Softer CTA than "Book Now" | Verndale 4 | Strong | Med-Hi | Low | Yes + delete one CTA |
+| **P4** | Search by vacation type | Verndale 7 | Indirect | High | High | Fold into explorer |
+| **P5** | Book-direct value block | Verndale 5 | Mixed | Med | Med | Microcopy first |
+| **P6** | "Signature Experiences" section | Verndale 6 | **Against** | Med | Med | Right idea, wrong vehicle |
+| **P7** | Rename "Discover paradise" | Verndale 7 | Low ceiling | Low | Low | Repurpose the slot |
+| **P8** | Value prop / brand pillars | Verndale 2 | None yet | Med | Med | Risky — sits on proven ground |
+| **P9** | Gift cards & email copy | Verndale 8 | Tiny | Low | Low | Content fix, not a test |
+
+### P1 — Carry dates into the booking engine · **NEW, not in the audit**
+**Evidence:** Book Now 294→295 (+1 in 18 days). Offer CTA 198→199. Both already reach the
+engine; both land on an empty form. Engine honours `arrive`/`depart` — verified. Every property
+has a `PropertySabreID` on the page.
+**Build:** capture island + rough month once; append dates to existing links. No new component,
+no rate feed, no CMS change.
+
+### P2 — The explorer (Verndale's birds-eye view)
+**Evidence:** tabs +8.3%, dropdown +12.7% (biggest gains on the page); Destination Highlights
+exit −7.0%. Guests open it and refuse what it offers.
+**Modified:** two views — **Grid** (inspiration) and **Map** (decision; the list is the map's
+left pane, sharing one zoom so it's always "what's in view"). Replaces the existing selector —
+hide the old component in the variation, inject the new one. Map opens at **world scale**
+(the four Waikīkī properties land on the same pixel at estate scale; the real question is
+Hawai'i vs Thailand vs Fiji). Absorb the dropdown as a "jump", don't replace it. Mapbox behind
+a `[Map View]` toggle / lazy load for cost.
+**Navigation rule for the irregular hierarchy:** *the row always shows the children of wherever
+you are.* Regions if it has them, nothing more if it has properties. Counts on chips
+("Mauritius 1", "Hawai'i 8") turn the asymmetry into information.
+
+### P3 — One CTA per card, "Explore Dates"
+**Evidence:** Book Now +1 click; Learn More −5.9%; Property Title +11.3% — they want the place,
+not the brochure, not the commitment.
+**Modified:** delete a CTA rather than rename both. Softening the verb alone won't work —
+the destination is still a blank form, so pair with P1. Their microcopy idea
+("No payment required") is the cheap version of P5.
+
+### P4 — Vacation type as the explorer's second axis
+**Evidence:** indirect. Aligns with audit theme 2 and with the +11.3% compare behaviour.
+**Modified:** a filter on one result set, not a new section (scroll rules that out). Put it in
+the "Discover paradise" slot. Tagging cost is real — amenities exist on property pages, need
+harvesting plus ~20 synonym groups ("Swimming pool" vs "Outdoor pool & hot tub").
+
+### P5 — Book-direct
+**Evidence, mixed:** offer engagement was FLAT (+2.2%, p=0.86) when the offer left the hero →
+rate messaging is inelastic here. BUT their hypothesis is OTA leakage, which is untested and is
+audit theme 5.
+**Modified:** test microcopy under the CTA first — no scroll cost, isolates the reassurance
+effect. Fund the block only if it moves. Measure on **BE arrivals**, never on offer clicks.
+
+### P6 — Signature experiences
+**Evidence against the vehicle:** contradicts Verndale's own "don't add content" principle and
+the flat scroll data. Cirque block already earns little; stories 0.46%.
+**Modified:** put the signature experience **on the property card**, not in a section. The
+differentiators are already in the amenity data — Monkeypod Kitchen (Reef), Duke's + Blue Note
+(Waikiki Beach), 'Auana (Beachcomber), Appetito (Paradise), Holokai Catamaran. Computed as the
+card's second line via the amenity diff. Answers their own "showcase more than Cirque" point at
+zero page length.
+
+### P7 — Discover paradise
+**Evidence:** critique is fair but the block earns 0.46% and is falling −8.8%.
+**Modified:** don't rename — **repurpose the slot for P4**. Verndale's two halves of annotation
+7 solve each other: weakest real estate becomes home to their strongest idea.
+
+### P8 — Brand pillars
+**Evidence:** none yet. Sits adjacent to the one settled result (hero −58.1%, p<0.0001).
+**Modified:** run after P1–P3; pre-register **Hero CTA Click must stay down** as a hard guardrail.
+
+### P9 — Gift cards / email
+**Evidence:** Gift Card 0.21%, −1.1%. Fix them because they're right; don't spend test capacity.
+
+---
+
+## 6 · Standing measurement frame for every test above
+
+- **Primary:** `Visit Page: Booking Engine: Rooms & Rates` (baseline 4.27%), expected INCREASE.
+  ~14 days for a 20% relative move.
+- **Guardrails:** Hero CTA Click (must stay down) · Destination explorer engagement ·
+  Property tile engagement · Offer engagement · Scroll depth engagement ·
+  Bookings per BE arrival (34.4% — volume must not cost quality).
+- **Anti-goal / stop condition:** *explorer engagements per Rooms & Rates arrival must NOT
+  increase.* If it rises we built a better toy. This is the metric v1 lacked.
+- **Watched, not decisive:** Booking Complete.
+
+**New instrumentation required before the explorer can be adjudicated:** view switch
+(grid/map), filter+sort applied, explorer→rates exit tagged with originating view, shortlist add.
+Without the first and third, the anti-goal ratio cannot be computed.
+
+---
+
+## 7 · Open questions
+
+1. **Do condos belong in the explorer?** 16 (JSON) vs 26 (map prototype). Decides whether
+   navigation is flat-and-filtered or drill/search.
+2. **What does `shs-widgets-best-price` render?** Loaded, never instantiated. If it gives a
+   from-rate, cards get rates for free.
+3. **How do we scope the engine to one island?** `dest=ORH` doesn't filter.
+4. **Do all bookings pass through `Visit Page: Booking Engine: Rooms & Rates`?** Decides whether
+   the primary metric measures the whole funnel and whether 34.4% is a real comparison.
+5. **Mobile share of home page traffic** — decides how much the split-pane/hover problem matters.
+6. **Capture bar: hero or above the explorer?** Hero catches everyone; explorer catches the engaged.
+
+---
+
+## 8 · What I would say to Verndale
+
+The audit is strong on **clarity** — what each block says, whether it sets expectations. Nearly
+every annotation is right on its own terms, and two are strongly confirmed by the data
+("Book Now may feel too aggressive"; "birds-eye view of your locations").
+
+Where it doesn't reach is **mechanism**: what happens when a guest presses the thing. The largest
+finding on this page is that four separate routes into the booking engine all arrive without
+dates. No amount of better copy on those buttons fixes it, and no content audit would find it.
+
+Their Homepage 2.0 structure is a **destination, not a test** — you can't A/B a rebuild. Use it
+as the scoring rubric: P2+P4 *are* "Find the Place That Fits"; P1+P3 *are* "Make the Trip
+Possible"; P5 *is* "Book with Confidence".
+
+---
+
+## 9 · Artifacts produced this session
+
+| Doc | URL |
+|---|---|
+| Verndale, prioritised | https://claude.ai/code/artifact/24f55bee-259c-4b93-a6b9-40849d9046d8 |
+| Grid and Map (explorer mockups) | https://claude.ai/code/artifact/3e5a9460-9b11-4ee5-97ad-9ab01edb09f2 |
+| Five Doors (5 big ideas) | https://claude.ai/code/artifact/5daefdb3-4aa2-4c1c-aea4-8f56df9a6382 |
+| The Missing Door (v2 evaluation) | https://claude.ai/code/artifact/337bfc44-54f1-4a7f-9d14-b325d57aba09 |
+| After the Hero Test (post-experiment brief) | https://claude.ai/code/artifact/1bef58e8-a1fa-4db4-a97d-de05739085de |
+| The Dated Explorer (pre-registration) | https://claude.ai/code/artifact/5ccb2262-dc58-4711-a2ad-5e7123871618 |
+| Three Views One Exit (explorer spec) | https://claude.ai/code/artifact/a7eec46d-f76b-4d10-93e6-1ed092411ba6 |
+
+Local files: `docs/outrigger-properties.js` · `docs/verndale-priorities.html` ·
+`docs/explorer-v2.html` · `docs/five-doors.html` · `docs/hero-v2.html` ·
+`docs/after-the-hero-test.html` · `docs/explorer-brief.html` · `docs/explorer-spec.html` ·
+`docs/prototype-flow.html` · `docs/pm-card-directions.html`
+
+**Next step when resuming:** ideate remaining hybrid ideas, then generate the PPTX of
+recommended next tests from section 5.

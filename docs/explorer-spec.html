@@ -1,0 +1,207 @@
+<title>Three Views One Exit</title>
+<style>
+  :root{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
+  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;
+    --faint:#6C7887;--line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
+  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;
+    --faint:#8A94A1;--line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.62;
+       margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1010px;margin:0 auto;} .measure{max-width:68ch;}
+  header.top{padding:52px 0 26px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(30px,5vw,44px);line-height:1.04;letter-spacing:-.03em;font-weight:700;margin:0 0 14px;}
+  .standfirst{font-size:18px;color:var(--muted);margin:0;max-width:60ch;}
+  h2{font-size:clamp(21px,3vw,27px);line-height:1.16;letter-spacing:-.022em;font-weight:700;margin:56px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 20px;}
+  h3{font-size:17.5px;font-weight:650;margin:32px 0 8px;letter-spacing:-.01em;}
+  p{margin:0 0 15px;}
+  code,.m{font-family:var(--mono);font-size:.87em;background:color-mix(in srgb,var(--ink) 6%,transparent);
+          padding:.12em .38em;border-radius:4px;}
+  strong{font-weight:650;}
+  .thesis{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+          border-radius:10px;padding:20px 22px;margin:24px 0;}
+  .thesis .lede{font-size:18px;font-weight:650;letter-spacing:-.015em;margin:0 0 9px;line-height:1.32;}
+  .thesis p:last-child{margin-bottom:0;}
+  .thesis.bad{border-left-color:var(--danger);} .thesis.warn{border-left-color:var(--warn);}
+  .view{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin:0 0 18px;}
+  .view .q{font:650 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 8px;}
+  .view h3{margin:0 0 4px;font-size:19px;}
+  .view .sub{color:var(--muted);font-size:14.5px;margin:0 0 14px;}
+  .rowlab{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:16px 0 5px;}
+  ul.tight{margin:0;padding-left:20px;} ul.tight li{margin-bottom:6px;font-size:15px;}
+  .exit{background:color-mix(in srgb,var(--ok) 9%,transparent);border:1px solid color-mix(in srgb,var(--ok) 35%,var(--line));
+        border-radius:8px;padding:11px 14px;margin:14px 0 0;font-size:14.5px;}
+  .exit b{color:var(--ok);}
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:18px 0;}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font:650 11px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);}
+  td.n{font-family:var(--mono);font-size:12.5px;}
+  .tbl{overflow-x:auto;}
+  .no{color:var(--danger);font-weight:650;} .yes{color:var(--ok);font-weight:650;}
+  footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Outrigger · home page · destination explorer</p>
+  <h1>Three views, one exit</h1>
+  <p class="standfirst">Evolving the destination selector into a real exploration tool — list, grid and
+  map — and the single rule that decides whether it earns anything.</p>
+</header>
+
+<div class="measure">
+<h2>You've picked the right surface</h2>
+<p class="kicker">It's the best-performing thing on the page and the worst-converting</p>
+
+<p>The destination explorer is where v1's redirected attention actually went. Destination tabs
+<strong>+8.3%</strong> (+82 clicks), the dropdown <strong>+12.7%</strong> (+52). Those are the two
+biggest relative gains on the page.</p>
+
+<p>And its own exit button — <span class="m">Home: Destination Highlights Button Click</span> — is
+<strong>−7.0%</strong>. More guests are opening the explorer and <em>fewer</em> are taking what it
+offers them. It is simultaneously the most attractive surface on the page and a dead end. Rebuilding
+it is well-aimed.</p>
+</div>
+
+<div class="thesis bad">
+  <p class="lede">The rule that decides this: every view must exit into a price, never into a page.</p>
+  <p>v1's whole lesson in one line. We successfully moved 286 clicks out of the offer and into
+  browsing, and gained <b>one</b> click on Book Now, <b>one</b> on the offer CTA, and <b>lost 21</b> on
+  Rooms &amp; Rates. A richer explorer that still exits into a destination page or a property landing
+  page will reproduce that result at greater expense — more beautiful browsing, the same flat
+  commerce.</p>
+  <p>Worth flagging directly: your <b>Regional Map Display</b> prototype is measured on
+  <em>“clicks on the ‘Visit property’ link from a map overlay”</em>. That is a click into a
+  <em>page</em>. If the map view inherits that exit, it inherits the outcome.</p>
+</div>
+
+<div class="measure">
+<h2>Three views are three questions</h2>
+<p class="kicker">Not three skins on the same data</p>
+
+<p>The failure mode of a view switcher is that all three render the same cards in different shapes,
+which gives the guest a choice they have no reason to care about. Each view earns its place only if it
+answers a question the others answer badly.</p>
+</div>
+
+<div class="view">
+  <p class="q">Grid — “which of these looks like my trip?”</p>
+  <h3>Grid view · the inspiration lens</h3>
+  <p class="sub">Image-first. The default, and the closest thing to what exists today.</p>
+  <p class="rowlab">What it shows</p>
+  <ul class="tight">
+    <li>Large photography, one line of character — not a paragraph of description</li>
+    <li>A from-rate for the guest's month, and an availability signal</li>
+    <li>Two or three attribute chips: <em>reef swimming · walk to Duke's · adults-only quiet</em></li>
+  </ul>
+  <p class="rowlab">Why it exists</p>
+  <p style="margin:0">Guests who don't know Hawai'i choose emotionally, from an image. This is the view
+  that lets them.</p>
+  <div class="exit"><b>Exit →</b> See rooms &amp; rates for that property, on the captured dates.</div>
+</div>
+
+<div class="view">
+  <p class="q">List — “how do these actually differ?”</p>
+  <h3>List view · the comparison lens</h3>
+  <p class="sub">The view the current page has no equivalent of, and the one the data most argues for.</p>
+  <p class="rowlab">What it shows</p>
+  <ul class="tight">
+    <li>A real comparison row per property: from-rate, beach type, walk time to the sand, pool, dining, ideal-for</li>
+    <li>Sortable — by price, by proximity to the beach, by size</li>
+    <li>Cross-island by default, so “Oahu or Maui?” is answerable in one screen</li>
+  </ul>
+  <p class="rowlab">Why it exists</p>
+  <p style="margin:0">Property titles rose <strong>+11.3%</strong> while Learn More fell
+  <strong>−5.9%</strong> and Book Now stayed flat. Guests are opening properties to
+  <em>compare them</em>, and the page gives them nothing to compare on — so they open several, learn
+  nothing decisive, and leave. This view is the direct answer to that behaviour.</p>
+  <div class="exit"><b>Exit →</b> See rooms &amp; rates, or add to a shortlist that carries into the engine.</div>
+</div>
+
+<div class="view">
+  <p class="q">Map — “where is this in relation to everything else?”</p>
+  <h3>Map view · the geography lens</h3>
+  <p class="sub">Absorbs the Regional Map Display prototype — with its exit changed.</p>
+  <p class="rowlab">What it shows</p>
+  <ul class="tight">
+    <li>Islands and properties in real relation to one another — the thing a grid genuinely cannot express</li>
+    <li>Proximity to what guests actually ask about: the beach, the airport, Waikīkī, the volcano</li>
+    <li>Multi-property trips — the only view that can make “three nights O'ahu, four on Maui” legible</li>
+  </ul>
+  <p class="rowlab">Why it exists</p>
+  <p style="margin:0">First-time visitors to Hawai'i frequently do not know the islands are separate
+  flights. The map is the only view that answers a question they don't know they have.</p>
+  <div class="exit"><b>Exit →</b> Pin opens rooms &amp; rates for that property, <b>not</b> a “Visit property” page link.</div>
+</div>
+
+<div class="measure">
+<h2>What the three must share</h2>
+<p class="kicker">Or it's three tools, not one</p>
+
+<p><strong>One result set and one filter state.</strong> Switching view must never lose context. If a
+guest has narrowed to “O'ahu, March, near the beach”, all three render that narrowing. A view switch is
+a change of lens, never a restart.</p>
+
+<p><strong>One dated context.</strong> This is where the explorer meets the Plan Bar. Every rate shown
+in every view is a rate for <em>their</em> month. Without that, all three views degrade to a brochure
+with three layouts — which is precisely today's problem with more engineering behind it.</p>
+
+<p><strong>One exit verb.</strong> “See rates” in all three. Not Book Now in grid, Learn More in list
+and Visit property on the map. One card grammar, one action, so the guest learns the tool once.</p>
+
+<h2>How we'd know it worked</h2>
+<p class="kicker">Including the measure that catches the failure mode</p>
+</div>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Measure</th><th>Direction</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><b>Visit Page: Booking Engine: Rooms &amp; Rates</b><br><span style="color:var(--faint);font-size:13px">baseline 4.27%</span></td>
+        <td class="yes">Increase — primary</td><td>The only step between proven intent and revenue</td></tr>
+    <tr><td><b>Explorer engagements per Rooms &amp; Rates arrival</b><br><span style="color:var(--faint);font-size:13px">the anti-goal ratio</span></td>
+        <td class="no">Must NOT increase</td><td>Catches the exact failure v1 hit — more browsing, no more booking. If this rises, we've built a better toy.</td></tr>
+    <tr><td>Destination explorer engagement</td><td>Guardrail — must not fall</td><td>v1's biggest gain; don't trade it away</td></tr>
+    <tr><td>Property tile engagement</td><td>Guardrail — must not fall</td><td>The other v1 gain</td></tr>
+    <tr><td>Bookings per Rooms &amp; Rates arrival<br><span style="color:var(--faint);font-size:13px">34.4% in v1</span></td>
+        <td>Guardrail — must hold</td><td>Volume must not come at the cost of qualification</td></tr>
+    <tr><td>Booking Complete</td><td class="n">Watched, not decisive</td><td>At 1.23% it needs ~8 weeks to resolve; it cannot be the decision metric</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="measure">
+<p>At v1's traffic — 12,804 per arm over 18 days — a 20% move on the primary resolves in about
+<strong>14 days</strong>.</p>
+
+<div class="thesis warn">
+  <p class="lede">The one thing that would make this fail.</p>
+  <p>Building all three views beautifully and leaving the exits as they are. The explorer would then do
+  what it does today, only better: attract more attention and convert none of it. <b>If you ship
+  nothing else from this spec, ship the exit change</b> — every view, every card, every pin, into a
+  dated rate. That single decision is worth more than the three views combined, and it is testable on
+  the existing explorer before any of this is built.</p>
+</div>
+
+<h3>What I'd sequence</h3>
+<p>Change the current explorer's exit from <span class="m">Oahu highlights</span> to a dated rates
+entry, and run that alone. It is a small change on the highest-traffic surface, it isolates the
+mechanism, and it tells you whether the three-view build is worth funding before you fund it. Then build
+the views on a proven exit.</p>
+</div>
+
+<footer>
+  Built from the hero readout at 18 days (12,804/arm, ±18.2% detectable), the live
+  <code>outrigger.com</code> home page, and the OUTRIGGER — UX Audit reference board. Counts and lifts
+  are the experiment's own.
+</footer>
+
+</div>

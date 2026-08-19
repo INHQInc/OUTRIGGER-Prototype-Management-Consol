@@ -1,0 +1,345 @@
+<title>Grid and Map</title>
+<style>
+  :root{--paper:#F6F7F9;--surface:#FFFFFF;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0C1014;--surface:#151A21;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;}}
+  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;}
+  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;}
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.6;
+       margin:0;padding:0 20px 90px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1120px;margin:0 auto;} .measure{max-width:66ch;}
+  header.top{padding:50px 0 24px;border-bottom:1px solid var(--line);margin-bottom:12px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(29px,5vw,42px);line-height:1.05;letter-spacing:-.03em;font-weight:700;margin:0 0 13px;}
+  .standfirst{font-size:17.5px;color:var(--muted);margin:0;max-width:60ch;}
+  h2{font-size:clamp(20px,2.8vw,26px);line-height:1.16;letter-spacing:-.022em;font-weight:700;margin:50px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 18px;}
+  p{margin:0 0 14px;} code,.m{font-family:var(--mono);font-size:.87em;
+    background:color-mix(in srgb,var(--ink) 6%,transparent);padding:.12em .38em;border-radius:4px;}
+  .note{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+        border-radius:9px;padding:15px 18px;margin:10px 0 24px;font-size:14.5px;color:var(--muted);}
+  .note b{color:var(--ink);} .note.warn{border-left-color:var(--warn);}
+  .q{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 6px;}
+  ul.tight{margin:0;padding-left:20px;} ul.tight li{margin-bottom:7px;font-size:15px;}
+
+  .screen{background:#fff;color:#12212E;border:1px solid #D9E0E8;border-radius:12px;overflow:hidden;
+          box-shadow:0 1px 3px rgba(16,32,48,.06),0 8px 28px rgba(16,32,48,.07);margin:16px 0 8px;}
+  .screen *{box-sizing:border-box;}
+  .cap{background:#0E2A3F;color:#fff;padding:13px 18px;display:flex;gap:9px;align-items:center;flex-wrap:wrap;}
+  .cap .lbl{font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;opacity:.6;}
+  .sel{border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:7px 13px;font-size:13.5px;background:transparent;}
+  .sel.on{background:#fff;color:#0E2A3F;border-color:#fff;font-weight:650;}
+  .cap .rt{margin-left:auto;display:flex;gap:9px;align-items:center;font-size:13.5px;}
+  .cap .rt b{background:rgba(255,255,255,.14);padding:7px 12px;border-radius:6px;font-weight:600;}
+  .vbar{display:flex;gap:2px;padding:11px 18px 0;border-bottom:1px solid #E5EAF0;align-items:center;}
+  .vt{padding:9px 15px;font-size:13.5px;font-weight:600;color:#5D6B7A;border-bottom:2px solid transparent;}
+  .vt.on{color:#0E2A3F;border-bottom-color:#0E2A3F;}
+  .vt .cost{font-size:10.5px;color:#8A97A4;font-weight:500;margin-left:5px;}
+  .vbar .cnt{margin-left:auto;font-size:12.5px;color:#7A8794;padding-bottom:9px;}
+
+  .split{display:grid;grid-template-columns:340px 1fr;min-height:400px;}
+  @media (max-width:820px){.split{grid-template-columns:1fr}}
+  .pane{border-right:1px solid #E5EAF0;overflow:hidden;}
+  .prow{display:flex;gap:11px;padding:12px 14px;border-bottom:1px solid #EEF2F6;align-items:center;}
+  .prow.hi{background:#EAF2F7;box-shadow:inset 3px 0 0 #0E2A3F;}
+  .sw{width:52px;height:44px;border-radius:6px;flex:none;}
+  .s1{background:linear-gradient(140deg,#2C7DA0,#8ECAE6)}
+  .s2{background:linear-gradient(140deg,#14557B,#7FB8CC)}
+  .s3{background:linear-gradient(140deg,#1B7A6B,#94CFC2)}
+  .s4{background:linear-gradient(140deg,#3E5C8A,#B6C7E0)}
+  .s5{background:linear-gradient(140deg,#A8672C,#E3B27E)}
+  .pn{font-size:13.5px;font-weight:650;line-height:1.25;margin:0 0 2px;}
+  .pm{font-size:11.5px;color:#5D6B7A;margin:0;}
+  .pgo{margin-left:auto;font-size:11px;font-weight:700;color:#0E2A3F;white-space:nowrap;}
+  .maph{background:#CFE3EE;position:relative;}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <p class="eyebrow">Outrigger · home page explorer · v2</p>
+  <h1>Grid and Map</h1>
+  <p class="standfirst">Two views. Grid, and Map — where the list is part of the map view rather than a
+  view of its own, sharing one zoom. Drawn against all sixteen properties at their real coordinates.</p>
+</header>
+
+<div class="measure">
+<div class="note"><p class="q">Why the map opens at world scale</p>
+Projecting all sixteen properties, the four Waikīkī hotels land on <b>the same pixel</b> — they sit
+within 800 metres of each other. At estate scale the map isn't showing properties, it's showing
+<b>five destinations across three oceans</b>. That's the question a tab strip can't answer:
+Hawai‘i, or Thailand, or Fiji?</div>
+</div>
+
+<h2>Map — world scale</h2>
+<p class="kicker">The list is always “what's in view”. Zoom changes both.</p>
+
+<div class="screen">
+  <div class="cap"><span class="lbl">Where</span><span class="sel on">Anywhere</span>
+    <span class="sel">Hawai‘i</span><span class="sel">Thailand</span><span class="sel">Fiji</span>
+    <span class="sel">Mauritius</span><span class="sel">Maldives</span>
+    <span class="rt"><span class="lbl">When</span><b>October 2026</b></span></div>
+  <div class="vbar"><div class="vt">▦ Grid</div><div class="vt on">◎ Map<span class="cost">· loads on demand</span></div>
+    <span class="cnt">16 resorts · 5 destinations</span></div>
+  <div class="split">
+    <div class="pane">
+      <div class="prow"><span class="sw s1"></span><div><p class="pn">Hawai‘i</p><p class="pm">8 resorts · O‘ahu, Maui, Hawai‘i Island, Kaua‘i</p></div><span class="pgo">View →</span></div>
+      <div class="prow"><span class="sw s2"></span><div><p class="pn">Thailand</p><p class="pm">4 resorts · Khao Lak, Koh Samui, Surin, Phi Phi</p></div><span class="pgo">View →</span></div>
+      <div class="prow hi"><span class="sw s3"></span><div><p class="pn">Fiji</p><p class="pm">2 resorts · Castaway Island, Fiji Beach Resort</p></div><span class="pgo">View →</span></div>
+      <div class="prow"><span class="sw s4"></span><div><p class="pn">Mauritius</p><p class="pm">1 resort · Mauritius Beach Resort</p></div><span class="pgo">View →</span></div>
+      <div class="prow"><span class="sw s5"></span><div><p class="pn">Maldives</p><p class="pm">1 resort · Maafushivaru</p></div><span class="pgo">View →</span></div>
+      <div class="prow" style="border:0;color:#7A8794;font-size:12px;padding-top:14px">Hovering a row lifts its cluster on the map, and the reverse.</div>
+    </div>
+    <div class="maph">
+      <svg viewBox="0 0 980 470" style="display:block;width:100%;height:auto" role="img"
+        aria-label="World-scale map showing five Outrigger destination clusters at their real projected positions: Mauritius, Maldives, Thailand, Fiji and Hawaii, spanning the Indian and Pacific oceans. Fiji is highlighted.">
+        <rect width="980" height="470" fill="#CFE3EE"/>
+        <g stroke="#B4D2E2" stroke-width="1">
+          <path d="M0 90H980M0 180H980M0 270H980M0 360H980"/>
+          <path d="M165 0V470M310 0V470M480 0V470M650 0V470M820 0V470"/>
+        </g>
+        <g fill="#B7CBB0" opacity=".85">
+          <path d="M60 300 q40-40 100-30 t70 60 q10 50-60 60 t-110-30 q-20-40 0-60z"/>
+          <path d="M250 120 q70-50 150-20 t80 90 q-10 50-90 50 t-140-40 q-20-50 0-80z"/>
+          <path d="M620 400 q60-25 120 5 t60 50 H620z"/>
+        </g>
+        <g font-size="12" fill="#5E7F92" font-family="ui-monospace,monospace">
+          <text x="10" y="86">30°N</text><text x="10" y="176">15°N</text><text x="10" y="266">0°</text><text x="10" y="356">15°S</text>
+        </g>
+
+        <!-- clusters at real projected positions -->
+        <g>
+          <circle cx="79" cy="385" r="17" fill="#0E2A3F"/><text x="79" y="390" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+          <text x="79" y="418" font-size="12.5" fill="#12212E" text-anchor="middle" font-weight="600">Mauritius</text>
+
+          <circle cx="166" cy="215" r="17" fill="#0E2A3F"/><text x="166" y="220" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">1</text>
+          <text x="166" y="248" font-size="12.5" fill="#12212E" text-anchor="middle" font-weight="600">Maldives</text>
+
+          <circle cx="310" cy="180" r="22" fill="#0E2A3F"/><text x="310" y="186" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+          <text x="310" y="216" font-size="12.5" fill="#12212E" text-anchor="middle" font-weight="600">Thailand</text>
+
+          <circle cx="752" cy="367" r="24" fill="#1D4ED8" stroke="#fff" stroke-width="3"/>
+          <text x="752" y="373" font-size="14" font-weight="700" fill="#fff" text-anchor="middle">2</text>
+          <text x="752" y="404" font-size="13" fill="#1D4ED8" text-anchor="middle" font-weight="700">Fiji</text>
+
+          <circle cx="893" cy="92" r="26" fill="#0E2A3F"/><text x="893" y="98" font-size="15" font-weight="700" fill="#fff" text-anchor="middle">8</text>
+          <text x="893" y="130" font-size="12.5" fill="#12212E" text-anchor="middle" font-weight="600">Hawai‘i</text>
+        </g>
+        <text x="16" y="458" font-size="11.5" fill="#5E7F92">Clusters at real projected coordinates · longitudes normalised across the antimeridian</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<div class="measure">
+<div class="note"><p class="q">What this view is for</p>
+Hawai‘i to Maldives is not a different pin, it's a different holiday. This is the only surface on the
+site that says so. It also absorbs the destination dropdown — <b>your biggest gainer at +12.7%</b> —
+rather than replacing it: choosing a destination is just zooming the map.</div>
+</div>
+
+<h2>Map — zoomed to O‘ahu</h2>
+<p class="kicker">Same pane, same components. Only the scope changed.</p>
+
+<div class="screen">
+  <div class="cap"><span class="lbl">Where</span><span class="sel">Anywhere</span>
+    <span class="sel on">Hawai‘i · O‘ahu</span>
+    <span class="rt"><span class="lbl">When</span><b>October 2026</b></span></div>
+  <div class="vbar"><div class="vt">▦ Grid</div><div class="vt on">◎ Map</div>
+    <span class="cnt">4 resorts on O‘ahu</span></div>
+  <div class="split">
+    <div class="pane">
+      <div class="prow"><span class="sw s1"></span><div><p class="pn">Reef Waikiki Beach Resort</p><p class="pm">Beachfront · Monkeypod Kitchen · Holokai Catamaran</p></div><span class="pgo">See rates</span></div>
+      <div class="prow hi"><span class="sw s2"></span><div><p class="pn">Waikiki Beach Resort</p><p class="pm">Beachfront · Duke's Waikiki · Blue Note Hawaii</p></div><span class="pgo">See rates</span></div>
+      <div class="prow"><span class="sw s3"></span><div><p class="pn">Waikiki Beachcomber Hotel</p><p class="pm">Craft hotel · ‘Auana by Cirque du Soleil</p></div><span class="pgo">See rates</span></div>
+      <div class="prow"><span class="sw s4"></span><div><p class="pn">Waikīkī Paradise Hotel</p><p class="pm">Craft hotel · Appetito Craft Pizza &amp; Wine Bar</p></div><span class="pgo">See rates</span></div>
+      <div class="prow" style="border:0;color:#7A8794;font-size:12px;padding-top:14px">Second lines are computed — the amenities that <i>differ</i>, not the ones all four share.</div>
+    </div>
+    <div class="maph">
+      <svg viewBox="0 0 980 470" style="display:block;width:100%;height:auto" role="img"
+        aria-label="Zoomed map of Waikiki showing the four Outrigger properties in a line along the beach, about 800 metres end to end, with Waikiki Beach Resort highlighted.">
+        <rect width="980" height="470" fill="#CFE3EE"/>
+        <path d="M0 250 Q 200 214 420 226 T 980 208 V470 H0Z" fill="#EADFC4"/>
+        <path d="M0 250 Q 200 214 420 226 T 980 208" stroke="#E4C9A0" stroke-width="16" fill="none" opacity=".9"/>
+        <g fill="#B7CBB0" opacity=".7"><path d="M0 300 H980 V470 H0Z"/></g>
+        <text x="30" y="150" font-size="15" fill="#4E7186" font-weight="600">Pacific Ocean</text>
+        <text x="30" y="392" font-size="15" fill="#5D7A52" font-weight="600">Waikīkī</text>
+
+        <g>
+          <circle cx="128" cy="243" r="15" fill="#0E2A3F"/>
+          <text x="128" y="288" font-size="12" fill="#12212E" text-anchor="middle" font-weight="600">Reef</text>
+          <circle cx="470" cy="228" r="20" fill="#1D4ED8" stroke="#fff" stroke-width="3"/>
+          <text x="470" y="278" font-size="12.5" fill="#1D4ED8" text-anchor="middle" font-weight="700">Waikiki Beach Resort</text>
+          <circle cx="632" cy="224" r="15" fill="#0E2A3F"/>
+          <text x="632" y="268" font-size="12" fill="#12212E" text-anchor="middle" font-weight="600">Beachcomber</text>
+          <circle cx="806" cy="216" r="15" fill="#0E2A3F"/>
+          <text x="806" y="260" font-size="12" fill="#12212E" text-anchor="middle" font-weight="600">Paradise</text>
+        </g>
+        <g stroke="#0E2A3F" stroke-width="1.5" opacity=".5" stroke-dasharray="5 5">
+          <path d="M128 243 H806"/></g>
+        <text x="467" y="330" font-size="12.5" fill="#3E5766" text-anchor="middle">about 800 m end to end — all four on one stretch of beach</text>
+        <text x="16" y="458" font-size="11.5" fill="#5E7F92">Pins at real relative coordinates · schematic coastline</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<div class="measure">
+<div class="note"><p class="q">The thing the booking engine can never tell you</p>
+That all four O‘ahu properties sit on <b>one stretch of beach, 800 metres end to end</b>. A guest
+choosing between them is not choosing a location — they're choosing a building. SynXis shows four rows
+and no way to know that. This is the map's whole argument, and it survives at every zoom.</div>
+</div>
+
+<h2>Grid — unchanged, and still the default</h2>
+<p class="kicker">Different job: grid sells, map decides.</p>
+
+<div class="screen">
+  <div class="cap"><span class="lbl">Where</span><span class="sel on">Hawai‘i · O‘ahu</span>
+    <span class="rt"><span class="lbl">When</span><b>October 2026</b></span></div>
+  <div class="vbar"><div class="vt on">▦ Grid</div><div class="vt">◎ Map<span class="cost">· loads on demand</span></div>
+    <span class="cnt">4 resorts on O‘ahu</span></div>
+  <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:13px">
+    <div style="border:1px solid #E5EAF0;border-radius:10px;overflow:hidden">
+      <div class="sw s1" style="width:100%;height:104px;border-radius:0"></div>
+      <div style="padding:11px 12px 12px"><p class="pn" style="font-size:13.5px">Reef Waikiki Beach Resort</p>
+      <p class="pm" style="margin:0 0 9px">Cultural activities, local artwork, Monkeypod Kitchen.</p>
+      <span style="display:block;text-align:center;background:#0E2A3F;color:#fff;font-size:12.5px;font-weight:650;padding:8px;border-radius:6px">See rates</span></div></div>
+    <div style="border:1px solid #E5EAF0;border-radius:10px;overflow:hidden">
+      <div class="sw s2" style="width:100%;height:104px;border-radius:0"></div>
+      <div style="padding:11px 12px 12px"><p class="pn" style="font-size:13.5px">Waikiki Beach Resort</p>
+      <p class="pm" style="margin:0 0 9px">Sunsets, surf lessons, and the legendary Duke's.</p>
+      <span style="display:block;text-align:center;background:#0E2A3F;color:#fff;font-size:12.5px;font-weight:650;padding:8px;border-radius:6px">See rates</span></div></div>
+    <div style="border:1px solid #E5EAF0;border-radius:10px;overflow:hidden">
+      <div class="sw s3" style="width:100%;height:104px;border-radius:0"></div>
+      <div style="padding:11px 12px 12px"><p class="pn" style="font-size:13.5px">Waikiki Beachcomber</p>
+      <p class="pm" style="margin:0 0 9px">Hawai‘i's first craft hotel, curated by local artists.</p>
+      <span style="display:block;text-align:center;background:#0E2A3F;color:#fff;font-size:12.5px;font-weight:650;padding:8px;border-radius:6px">See rates</span></div></div>
+    <div style="border:1px solid #E5EAF0;border-radius:10px;overflow:hidden">
+      <div class="sw s4" style="width:100%;height:104px;border-radius:0"></div>
+      <div style="padding:11px 12px 12px"><p class="pn" style="font-size:13.5px">Waikīkī Paradise Hotel</p>
+      <p class="pm" style="margin:0 0 9px">Modern design, deep cultural heritage. Waikīkī's newest.</p>
+      <span style="display:block;text-align:center;background:#0E2A3F;color:#fff;font-size:12.5px;font-weight:650;padding:8px;border-radius:6px">See rates</span></div></div>
+  </div>
+</div>
+
+
+<div class="measure">
+<h2>Navigating the hierarchy</h2>
+<p class="kicker">One row that drills — because the estate isn't a uniform depth</p>
+
+<div class="note warn"><p class="q">The problem</p>
+Hawai‘i has four regions beneath it. Thailand, Fiji, Mauritius and Maldives have none — properties hang
+straight off the destination. A fixed two-row tab strip shows an <b>empty second row four times out of
+five</b>, and privileges Hawai‘i structurally for no reason a guest would understand.</div>
+
+<div class="note"><p class="q">The rule</p>
+<b>The row always shows the children of wherever you are.</b> If the current node has regions, the row
+shows regions. If it has properties, the row shows nothing more — the list already has them. One rule,
+both depths, never an empty row.</div>
+</div>
+
+<h3 style="font-size:17px;font-weight:650;margin:26px 0 8px">Level 0 — anywhere</h3>
+<div class="screen"><div class="cap">
+  <span class="lbl">Where</span>
+  <span class="sel on">Anywhere</span>
+  <span class="sel">Hawai‘i <b style="opacity:.55;font-weight:500">8</b></span>
+  <span class="sel">Thailand <b style="opacity:.55;font-weight:500">4</b></span>
+  <span class="sel">Fiji <b style="opacity:.55;font-weight:500">2</b></span>
+  <span class="sel">Mauritius <b style="opacity:.55;font-weight:500">1</b></span>
+  <span class="sel">Maldives <b style="opacity:.55;font-weight:500">1</b></span>
+  <span class="rt"><span class="lbl">When</span><b>October 2026</b></span></div>
+  <div style="padding:13px 18px;font-size:13px;color:#5D6B7A">Map at world scale · list shows 5 destinations · counts tell you whether drilling is worth it</div>
+</div>
+
+<h3 style="font-size:17px;font-weight:650;margin:26px 0 8px">Level 1 — Hawai‘i, which <em>has</em> regions</h3>
+<div class="screen"><div class="cap">
+  <span class="sel" style="opacity:.75">← Anywhere</span>
+  <span style="opacity:.4">/</span>
+  <span class="lbl" style="opacity:.9">Hawai‘i</span>
+  <span class="sel on">All 8</span>
+  <span class="sel">O‘ahu <b style="opacity:.55;font-weight:500">4</b></span>
+  <span class="sel">Maui <b style="opacity:.55;font-weight:500">2</b></span>
+  <span class="sel">Hawai‘i Island <b style="opacity:.55;font-weight:500">1</b></span>
+  <span class="sel">Kaua‘i <b style="opacity:.55;font-weight:500">1</b></span>
+  <span class="rt"><span class="lbl">When</span><b>October 2026</b></span></div>
+  <div style="padding:13px 18px;font-size:13px;color:#5D6B7A">Map zooms to the islands · list shows all 8 · “All 8” stays selected until you pick an island</div>
+</div>
+
+<h3 style="font-size:17px;font-weight:650;margin:26px 0 8px">Level 1 — Thailand, which has <em>no</em> region tier</h3>
+<div class="screen"><div class="cap">
+  <span class="sel" style="opacity:.75">← Anywhere</span>
+  <span style="opacity:.4">/</span>
+  <span class="lbl" style="opacity:.9">Thailand</span>
+  <span style="font-size:13px;opacity:.6">4 resorts — no sub-regions, so the row stops here</span>
+  <span class="rt"><span class="lbl">When</span><b>October 2026</b></span></div>
+  <div style="padding:13px 18px;font-size:13px;color:#5D6B7A">Map zooms to the Andaman coast and the Gulf · list shows Khao Lak, Koh Samui, Surin, Phi Phi</div>
+</div>
+
+<h3 style="font-size:17px;font-weight:650;margin:26px 0 8px">Level 2 — O‘ahu</h3>
+<div class="screen"><div class="cap">
+  <span class="sel" style="opacity:.75">← Anywhere</span>
+  <span style="opacity:.4">/</span>
+  <span class="sel" style="opacity:.75">Hawai‘i</span>
+  <span style="opacity:.4">/</span>
+  <span class="lbl" style="opacity:.9">O‘ahu</span>
+  <span style="font-size:13px;opacity:.6">4 resorts on one stretch of Waikīkī</span>
+  <span class="rt"><span class="lbl">When</span><b>October 2026</b></span></div>
+  <div style="padding:13px 18px;font-size:13px;color:#5D6B7A">Map at street scale · list shows the four, second lines computed from what differs</div>
+</div>
+
+<div class="measure">
+<div class="note"><p class="q">Three things this gets right</p>
+<ul class="tight" style="margin-top:4px">
+  <li><b>Zooming the map <em>is</em> navigating.</b> The row and the map are one state. Click the Hawai‘i
+  cluster and the row drills; drill the row and the map flies. Neither is a separate control to learn.</li>
+  <li><b>Counts do real work.</b> “Mauritius 1” tells you not to bother drilling. “Hawai‘i 8” tells you
+  there's something to explore. The asymmetry stops being a design problem and becomes information.</li>
+  <li><b>The dropdown survives as a jump.</b> Your biggest gainer (+12.7%) is people going straight to a
+  destination. Drilling is for browsers; keep a “Jump to…” select for people who already know. Same
+  state, second door.</li>
+</ul></div>
+
+<div class="note warn"><p class="q">The one I'd watch</p>
+<b>“All 8” vs picking an island.</b> At Hawai‘i level the list shows all eight across four islands,
+which is a genuinely useful comparison — but it's also the moment a guest might want the map to stay
+put while they scan. Worth prototyping whether selecting an island <em>filters</em> the list or
+<em>zooms</em> the map, or both. My instinct is both, but it's the kind of thing that only reveals
+itself in the hand.</div>
+</div>
+
+<div class="measure">
+<h2>What's settled, and what isn't</h2>
+
+<div class="note"><p class="q">Settled</p>
+<b>Two views, not three.</b> Grid sells; Map decides. The list isn't a view — it's the map's left
+pane, sharing one zoom, so it is always “what's in view”. The destination dropdown is absorbed rather
+than replaced.<br><br>
+<b>Everything here is powered by data that exists.</b> Coordinates 16/16, amenities 15/16, Sabre IDs
+for the dated exit — all in <span class="m">docs/outrigger-properties.js</span>.</div>
+
+<div class="note warn"><p class="q">Not settled</p>
+<ul class="tight" style="margin-top:4px">
+  <li><b>Mobile.</b> Split-pane doesn't fit a phone and hover doesn't exist on touch. It becomes
+  list-first with the map as a sheet, or a card carousel that pans the map — a second design, not a
+  reflow. Your mobile share decides how much that matters, and I can't see it.</li>
+  <li><b>The synonym map.</b> Those computed second lines only work once “Swimming pool” and “Outdoor
+  pool &amp; hot tub” collapse to one key. About twenty groups across the estate — an afternoon of
+  judgement, and the last human work in the whole build.</li>
+  <li><b>Phi Phi Island Resort</b> returned no amenities — different page template. One property to
+  handle by hand.</li>
+</ul></div>
+</div>
+
+<footer>
+  Sixteen properties at real coordinates from schema.org GeoCoordinates on outrigger.com property
+  pages. Clusters and pins are truly positioned; coastlines and landmasses are schematic. No rates
+  shown — the site has none, and the dated exit doesn't need them.
+</footer>
+</div>

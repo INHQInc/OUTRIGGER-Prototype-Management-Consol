@@ -1,0 +1,503 @@
+<title>PM Card Directions</title>
+<style>
+  :root {
+    --paper:#F5F7FA; --surface:#FFFFFF; --surface2:#EEF2F7; --ink:#111823; --muted:#5A6675; --faint:#8A94A3;
+    --line:#DDE3EA; --line-strong:#C0CAD7;
+    --accent:#1D4ED8; --ok:#0E7C4A; --warn:#B45309; --danger:#B42318;
+    --ui: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --paper:#0D1117; --surface:#161B22; --surface2:#1E242D; --ink:#E7EDF5; --muted:#9AA7B8; --faint:#6E7B8C;
+    --line:#242C38; --line-strong:#3D4757;
+    --accent:#6C9BFF; --ok:#3FBF84; --warn:#E0A140; --danger:#F27063; } }
+  :root[data-theme="dark"] {
+    --paper:#0D1117; --surface:#161B22; --surface2:#1E242D; --ink:#E7EDF5; --muted:#9AA7B8; --faint:#6E7B8C;
+    --line:#242C38; --line-strong:#3D4757;
+    --accent:#6C9BFF; --ok:#3FBF84; --warn:#E0A140; --danger:#F27063; }
+  :root[data-theme="light"] {
+    --paper:#F5F7FA; --surface:#FFFFFF; --surface2:#EEF2F7; --ink:#111823; --muted:#5A6675; --faint:#8A94A3;
+    --line:#DDE3EA; --line-strong:#C0CAD7;
+    --accent:#1D4ED8; --ok:#0E7C4A; --warn:#B45309; --danger:#B42318; }
+
+  body { background:var(--paper); color:var(--ink); font-family:var(--ui); font-size:16px;
+         line-height:1.6; margin:0; padding:0 20px 90px; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1120px; margin:0 auto; }
+  .measure { max-width:66ch; }
+
+  header.top { padding:48px 0 24px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+  .eyebrow { font:600 11.5px/1 var(--mono); letter-spacing:.13em; text-transform:uppercase; color:var(--accent); margin:0 0 12px; }
+  h1 { font-size:clamp(28px,4.6vw,40px); line-height:1.07; letter-spacing:-.025em; font-weight:700; margin:0 0 12px; }
+  .standfirst { font-size:17.5px; color:var(--muted); margin:0; max-width:62ch; }
+
+  h2 { font-size:clamp(20px,2.8vw,26px); line-height:1.18; letter-spacing:-.02em; font-weight:700; margin:60px 0 3px; }
+  h2 + .kicker { color:var(--faint); font:500 13px/1.5 var(--ui); margin:0 0 20px; }
+  h3 { font-size:16.5px; font-weight:650; margin:30px 0 8px; }
+  p { margin:0 0 14px; }
+  code,.m { font-family:var(--mono); font-size:.875em; background:color-mix(in srgb,var(--ink) 6%,transparent);
+            padding:.12em .38em; border-radius:4px; }
+
+  .board { background:var(--surface2); border:1px solid var(--line); border-radius:16px;
+           padding:22px; margin:22px 0 8px; }
+  .board-lbl { font:700 10.5px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase;
+               color:var(--faint); margin:0 0 16px; }
+  .row { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:16px; align-items:start; }
+
+  /* ── shared card chrome ─────────────────────────────── */
+  .c { background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:13px 14px; }
+  .c.live { border-color:color-mix(in srgb,var(--warn) 50%,var(--line)); }
+  .c.done { border-color:color-mix(in srgb,var(--ok) 45%,var(--line)); }
+  .c .nm { font-size:14.5px; font-weight:650; line-height:1.3; margin:0 0 5px; }
+  .c .ds { font-size:12.5px; color:var(--muted); line-height:1.42; margin:0 0 9px; }
+  .c hr { border:0; border-top:1px solid var(--line); margin:10px 0; }
+  .dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex:none; }
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--danger)}
+  .dot.idle{background:var(--faint)} .dot.live{background:var(--warn)}
+  .pill { display:inline-flex; align-items:center; gap:6px; font:650 10.5px/1 var(--mono);
+          letter-spacing:.06em; text-transform:uppercase; padding:5px 8px; border-radius:5px; }
+  .pill.live{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
+  .pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+  .pill.you{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+  .pill.idle{color:var(--faint);background:color-mix(in srgb,var(--ink) 7%,transparent)}
+  .btn { display:block; width:100%; text-align:center; font:650 12.5px var(--ui); padding:8px 10px;
+         border-radius:7px; border:1px solid var(--accent); color:var(--accent);
+         background:color-mix(in srgb,var(--accent) 9%,transparent); cursor:default; }
+  .btn.ghost { border-color:var(--line-strong); color:var(--muted); background:transparent; }
+  .meta { font-size:11.5px; color:var(--faint); display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .warnline { font-size:12px; color:var(--warn); line-height:1.4; margin:0 0 9px; display:flex; gap:6px; }
+  .badline  { font-size:12px; color:var(--danger); line-height:1.4; margin:0 0 9px; display:flex; gap:6px; }
+  .devtext { font-family:var(--mono); font-size:11.5px; color:var(--muted); line-height:1.45; }
+
+  /* status sentence, direction A */
+  .status { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:650;
+            color:var(--muted); margin:0 0 7px; }
+  .status .who { color:var(--ink); }
+
+  /* stage bar, direction C */
+  .bar { display:flex; gap:3px; margin:9px 0 8px; }
+  .bar i { height:5px; border-radius:3px; flex:1; background:color-mix(in srgb,var(--ink) 12%,transparent); }
+  .bar i.on { background:var(--ok); }
+  .bar i.now{ background:var(--accent); }
+  .bar i.bad{ background:var(--danger); }
+  .bar i.na { background:transparent; border:1px dashed var(--line-strong); height:3px; margin-top:1px; }
+
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:26px; margin:18px 0 0; }
+  @media (max-width:760px){ .split{grid-template-columns:1fr} }
+  .gain h4,.cost h4 { font:650 11px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; margin:0 0 9px; }
+  .gain h4 { color:var(--ok); } .cost h4 { color:var(--warn); }
+  .gain ul,.cost ul { margin:0; padding-left:18px; font-size:14.5px; color:var(--muted); }
+  .gain li,.cost li { margin-bottom:7px; }
+
+  table { border-collapse:collapse; width:100%; font-size:14.5px; margin:18px 0; }
+  th,td { text-align:left; padding:10px 13px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font:650 11.5px var(--ui); letter-spacing:.06em; text-transform:uppercase; color:var(--faint); }
+  td.was { font-family:var(--mono); font-size:12px; color:var(--muted); }
+  .tbl { overflow-x:auto; }
+
+  .rule { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:22px 0; }
+  .rule.bug { border-color:color-mix(in srgb,var(--danger) 45%,var(--line)); }
+  .rule .lede { font-weight:650; margin:0 0 7px; }
+  .rule p:last-child{margin-bottom:0}
+  .tag { display:inline-block; font:600 10.5px/1 var(--mono); letter-spacing:.09em; text-transform:uppercase;
+         padding:5px 8px; border-radius:5px; margin:0 0 11px; color:var(--danger);
+         background:color-mix(in srgb,var(--danger) 13%,transparent); }
+  footer { margin-top:64px; padding-top:20px; border-top:1px solid var(--line); color:var(--faint); font-size:13px; }
+  .fn { font-size:12.5px; color:var(--faint); margin-top:10px; }
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Prism · card directions</p>
+  <h1>What a project manager's card looks like</h1>
+  <p class="standfirst">Three directions, drawn against your five real prototypes. Same derivation
+  underneath, same gates — only what the card says and what it leads with changes.</p>
+</header>
+
+<div class="measure">
+<h2>Today</h2>
+<p class="kicker">The same two cards, exactly as they render now</p>
+</div>
+
+<div class="board">
+  <p class="board-lbl">Current · board card</p>
+  <div class="row">
+    <div class="c">
+      <p class="nm">Opti Forms CSS Updates</p>
+      <p class="ds">No-op placeholder artifact. Guards against double-execution via
+        window.__opmc[NS] and logs '[opmc] …: no build yet —…</p>
+      <div class="bar"><i class="on"></i><i class="bad"></i><i></i><i></i><i></i></div>
+      <p class="ds" style="margin:0 0 6px"><span style="color:var(--faint)">Next: </span>Build with the agent</p>
+      <p class="warnline">The brief or pages changed since the branch was last synced — Re-sync so the
+        agent builds against the current brief.</p>
+      <div class="meta"><span>📊 Wedding inquiry form submissions (submit-butto…</span></div>
+    </div>
+    <div class="c">
+      <p class="nm">Room Compare</p>
+      <p class="ds">A room-comparison feature on the Rooms &amp; Suites page. Each room card gets a
+        'Compare' checkbox (styled to brand…</p>
+      <div class="bar"><i class="on"></i><i class="on"></i><i class="bad"></i><i class="now"></i><i></i></div>
+      <p class="ds" style="margin:0 0 6px"><span style="color:var(--faint)">Next: </span>Cut a new version</p>
+      <p class="warnline">QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.</p>
+      <div class="meta"><span class="devtext">v1</span><span>📊 Check Availability clicks…</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="measure">
+<p class="fn">Four tells in nine lines: an artifact description about <code>window.__opmc[NS]</code>,
+a next action phrased as a repo command, an alert about branch syncing, and a bare
+<code>v1</code>. No owner, no elapsed time, nothing about whether this is on track.</p>
+</div>
+
+<h2>Direction A · Led by who it's waiting on</h2>
+<p class="kicker">The first line answers the only question a PM opens the board to ask</p>
+
+<div class="board">
+  <p class="board-lbl">Direction A</p>
+  <div class="row">
+    <div class="c">
+      <p class="status"><span class="dot warn"></span><span class="who">Waiting on you</span> · 6 days</p>
+      <p class="nm">Opti Forms CSS Updates</p>
+      <p class="ds">Restyle the wedding enquiry form to brand standards and better form layout.</p>
+      <p class="warnline">You changed the brief — the builder is still working from the older copy.</p>
+      <div class="btn">Send the builder your changes</div>
+      <hr>
+      <div class="meta"><span>Unassigned</span><span>·</span><span>Not yet in an experiment</span></div>
+      <div class="meta" style="margin-top:5px"><span>Measures wedding enquiry submissions · 3 guardrails</span></div>
+    </div>
+    <div class="c">
+      <p class="status"><span class="dot warn"></span><span class="who">Waiting on you</span> · 2 days</p>
+      <p class="nm">Room Compare</p>
+      <p class="ds">Let guests pick up to three rooms and see them side by side.</p>
+      <p class="warnline">The quality checks are out of date — the build changed after they were written.</p>
+      <div class="btn">Refresh the quality checks</div>
+      <hr>
+      <div class="meta"><span>Unassigned</span><span>·</span><span>Ready to send to Optimizely after this</span></div>
+      <div class="meta" style="margin-top:5px"><span>Measures Check Availability clicks · 4 guardrails</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="measure split">
+  <div class="gain"><h4>What it buys</h4><ul>
+    <li>Scanning the board answers "what needs me" without opening anything.</li>
+    <li>The blocker is stated as a consequence, not a mechanism.</li>
+    <li>One button, and it's the thing the queue already computed.</li>
+  </ul></div>
+  <div class="cost"><h4>What it costs</h4><ul>
+    <li>The work itself drops to second billing — bad if you scan for <em>what</em> rather than <em>who</em>.</li>
+    <li>Needs owner actually populated, or every card says "Unassigned".</li>
+    <li>Cards with nothing waiting look empty and read as unimportant.</li>
+  </ul></div>
+</div>
+
+<h2>Direction B · Led by the outcome</h2>
+<p class="kicker">What we're claiming, and whether it's holding up</p>
+
+<div class="board">
+  <p class="board-lbl">Direction B</p>
+  <div class="row">
+    <div class="c live">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:6px">
+        <p class="nm" style="margin:0">Home Page Hero No Offer</p>
+        <span class="pill live"><span class="dot live"></span>Live</span>
+      </div>
+      <p class="ds">Replace the discount-led hero with inspirational, experience-led creative.</p>
+      <hr>
+      <p style="font-size:13px;margin:0 0 4px"><b>We expect hero CTA clicks to fall.</b></p>
+      <p class="ds" style="margin:0 0 9px">Watching 11 guardrails so a drop here doesn't cost us bookings.</p>
+      <div class="btn ghost">See how it's doing</div>
+      <hr>
+      <div class="meta"><span>Live · running in Optimizely</span><span>·</span><span>build 2 of 2 is live</span></div>
+    </div>
+    <div class="c done">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:6px">
+        <p class="nm" style="margin:0">Regional Map Display</p>
+        <span class="pill ok"><span class="dot ok"></span>Handed off</span>
+      </div>
+      <p class="ds">An interactive branded map with clickable property pins on the destination page.</p>
+      <hr>
+      <p style="font-size:13px;margin:0 0 4px"><b>Measured on clicks through to a property.</b></p>
+      <p class="ds" style="margin:0 0 9px">Never ran as an experiment — handed straight to production code.</p>
+      <div class="btn ghost">Open the handoff package</div>
+      <hr>
+      <div class="meta"><span>Done</span><span>·</span><span>3 guardrails defined</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="measure split">
+  <div class="gain"><h4>What it buys</h4><ul>
+    <li>The card states the claim, which is what a readout or a stakeholder asks for.</li>
+    <li>An expected <em>direction</em> ("we expect this to fall") stops a drop reading as failure.</li>
+    <li>Reads well for live and finished work — the half of the board that isn't a task.</li>
+  </ul></div>
+  <div class="cost"><h4>What it costs</h4><ul>
+    <li>Weakest exactly where work is stuck — an unstarted card has no outcome to lead with.</li>
+    <li>Needs the hypothesis written well; a vague brief makes a vague card.</li>
+    <li>Pushes the next action below the fold of the card.</li>
+  </ul></div>
+</div>
+
+<h2>Direction C · Led by position and time</h2>
+<p class="kicker">Closest to a conventional PM board — compact, scannable, many at once</p>
+
+<div class="board">
+  <p class="board-lbl">Direction C</p>
+  <div class="row">
+    <div class="c">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">
+        <p class="nm" style="margin:0">Room Detail Overlay</p><span class="pill live"><span class="dot live"></span>Live</span>
+      </div>
+      <div class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="now"></i><i></i></div>
+      <div class="meta"><span>Brief</span><span>·</span><span>Build</span><span>·</span><span>Check</span><span>·</span>
+        <span style="color:var(--accent);font-weight:650">Testing</span><span>·</span><span>Done</span></div>
+      <hr>
+      <div class="meta" style="font-size:12px"><span>Unassigned</span><span>·</span><span>testing for 4 days</span></div>
+      <p class="ds" style="margin:8px 0 0">Nothing to do — it decides itself when it has the traffic.</p>
+    </div>
+    <div class="c">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:6px">
+        <p class="nm" style="margin:0">Opti Forms CSS Updates</p><span class="pill you">You</span>
+      </div>
+      <div class="bar"><i class="on"></i><i class="bad"></i><i></i><i></i><i></i></div>
+      <div class="meta"><span>Brief</span><span>·</span>
+        <span style="color:var(--danger);font-weight:650">Build</span><span>·</span><span>Check</span><span>·</span>
+        <span>Testing</span><span>·</span><span>Done</span></div>
+      <hr>
+      <div class="meta" style="font-size:12px"><span>Unassigned</span><span>·</span><span>stuck in Build 6 days</span></div>
+      <p class="warnline" style="margin:8px 0 9px">The builder has an older copy of your brief.</p>
+      <div class="btn">Send your changes</div>
+    </div>
+  </div>
+</div>
+
+<div class="measure split">
+  <div class="gain"><h4>What it buys</h4><ul>
+    <li>Position and aging at a glance — "stuck in Build 6 days" is the sentence PMs act on.</li>
+    <li>Compact enough to see a whole programme without scrolling.</li>
+    <li>The stage strip is already derived; it just gets named in plain words.</li>
+  </ul></div>
+  <div class="cost"><h4>What it costs</h4><ul>
+    <li>Least room for the <em>why</em> — the hypothesis nearly disappears.</li>
+    <li>Aging is only meaningful once you decide what "too long" is per stage.</li>
+    <li>Renaming the five stages ripples into tabs, emails and the readout.</li>
+  </ul></div>
+</div>
+
+<h2>The vocabulary, applied</h2>
+<p class="kicker">One mapping module, read by every surface — not strings edited in place</p>
+
+<div class="tbl">
+<table>
+  <thead><tr><th style="width:44%">Today</th><th>A project manager's version</th></tr></thead>
+  <tbody>
+    <tr><td class="was">Cut a new version</td><td>Send the latest build to Optimizely</td></tr>
+    <tr><td class="was">Re-sync the branch</td><td>Send the builder your changes <i>— or delete the concept entirely</i></td></tr>
+    <tr><td class="was">Build with the agent</td><td>Start building</td></tr>
+    <tr><td class="was">The brief or pages changed since the branch was last synced</td><td>You changed the brief — the builder is still working from the older copy</td></tr>
+    <tr><td class="was">QA is stale — the build moved past the spec</td><td>The quality checks are out of date — the build changed after they were written</td></tr>
+    <tr><td class="was">v4 ✓ · pushed v2</td><td>Live: build 2 · Ready: build 4</td></tr>
+    <tr><td class="was">Certification failed on v4</td><td>Quality check failed — <i>named checks</i></td></tr>
+    <tr><td class="was">0/2 pages inject</td><td>Not working yet on either page</td></tr>
+    <tr><td class="was">Blocked · Brief</td><td>Waiting on you — it needs a success metric</td></tr>
+    <tr><td class="was">not bound</td><td>Not yet in an experiment</td></tr>
+    <tr><td class="was">starting traffic is a human act</td><td>You start it in Optimizely when you're ready</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Should the card say which kind it is?</h2>
+<p class="kicker">Yes — but label the exception, not the taxonomy</p>
+
+<div class="measure">
+<p>Type 2 is the norm. Badging every card <span class="m">console + experiment</span> spends a line on
+every card to say "normal", which is noise. The two that <em>change what you should expect</em> are the
+ones worth a word — and the word should be what it means, not what we call it internally.</p>
+</div>
+
+<div class="board">
+  <p class="board-lbl">Label the exceptions</p>
+  <div class="row">
+    <div class="c">
+      <p class="status"><span class="dot warn"></span><span class="who">Waiting on you</span> · 2 days</p>
+      <p class="nm">Room Compare</p>
+      <p class="ds">Let guests pick up to three rooms and see them side by side.</p>
+      <div class="bar"><i class="on"></i><i class="on"></i><i class="now"></i><i></i><i></i></div>
+      <hr>
+      <div class="meta"><span>Measured experiment · 4 guardrails</span></div>
+      <p class="fn" style="margin-top:9px">Type 2 — <b>no badge</b>. All five stages apply; this is the
+      default and needs no explaining.</p>
+    </div>
+
+    <div class="c">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:6px">
+        <p class="nm" style="margin:0">Regional Map Display</p>
+        <span class="pill idle">Not measured</span>
+      </div>
+      <p class="ds">An interactive branded map with clickable property pins.</p>
+      <div class="bar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="now"></i></div>
+      <div class="meta"><span>Brief</span><span>·</span><span>Build</span><span>·</span><span>Check</span>
+        <span>·</span><span style="color:var(--accent);font-weight:650">Live</span></div>
+      <hr>
+      <div class="meta"><span>Goes live as an injection — never runs as an experiment</span></div>
+      <p class="fn" style="margin-top:9px">Type 1 — <b>four segments, not five</b>. There is no Testing
+      stage in this lifecycle, so there is no slot for one.</p>
+    </div>
+
+    <div class="c live">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:6px">
+        <p class="nm" style="margin:0">Home Page Hero No Offer</p>
+        <span class="pill live"><span class="dot live"></span>Live</span>
+      </div>
+      <p class="ds">Replace the discount-led hero with experience-led creative.</p>
+      <div class="bar"><i class="on"></i><i class="now"></i><i></i></div>
+      <div class="meta"><span>Brief</span><span>·</span>
+        <span style="color:var(--accent);font-weight:650">Testing</span><span>·</span><span>Decided</span></div>
+      <hr>
+      <div class="meta"><span>Built in Optimizely · we measure it, they built it</span></div>
+      <p class="fn" style="margin-top:9px">Type 3 — <b>three segments</b>. Two thirds of the way through
+      its own life, instead of looking two-fifths incomplete forever.</p>
+    </div>
+  </div>
+</div>
+
+<div class="measure">
+<h3>Same width, different divisions</h3>
+
+<p>A stage that can never happen shouldn't occupy a slot. Today all five segments render on every card,
+so a type-3 sits at two dark segments it will never light and reads as permanently behind. That's the
+board asserting something false.</p>
+
+<p>But dropping to a shorter bar creates a new problem: a 2-of-2 bar and a 2-of-5 bar look nothing alike,
+and you lose the ability to compare progress down a column. So keep <b>the bar the same total width on
+every card and divide it by that type's own stages</b> — five thin segments for a measured experiment,
+four for an injection, three for an Opti-built test. Progress then reads as a <em>proportion</em>, which
+is comparable across every card, and no card ever shows a stage it cannot reach.</p>
+
+<p>That's the honest version of "how far along is this": far through <em>its own</em> process, not far
+through the longest process any prototype could have. A type-3 that's testing genuinely is nearly done,
+and it should look it.</p>
+
+<p class="fn"><b>On this example:</b> Regional Map Display is really a type-2 in the current model — it
+just shipped without ever binding an experiment, which is the type-1 use case being done by hand. It's
+shown here as the card it <em>would</em> have once the type exists. Whether that fourth segment is
+"Live" or is followed by a Handoff is open question 1.</p>
+
+<h3>The bigger point: nothing asks you</h3>
+
+<p>The type is currently a <span class="m">Built where</span> toggle in <b>Settings → Details</b>, found
+only if you know to look. Creation asks nothing, so everything begins as a full-pipeline console build.
+That is the same failure you named earlier — <i>"you need to know to go look at a page to even know
+that"</i> — occurring at step one, and it's worse there than anywhere else, because the wrong answer
+shapes every gate that follows.</p>
+
+<p><b>Ask it once, at creation.</b> "What kind of thing is this?" with three plain answers — <i>a change
+we'll measure with an experiment</i>, <i>a change we just want live</i>, <i>an experiment already built
+in Optimizely</i>. Answer it once and the console can stop offering steps that will never apply to this
+prototype. That deletes actions rather than renaming them, which we already agreed beats everything
+else on the list.</p>
+
+<p>Keep it changeable in Settings, with the warning it has now: switching a type-2 that already has a
+branch and cut versions over to type-3 orphans real work.</p>
+</div>
+
+<div class="measure">
+<div class="rule bug">
+  <span class="tag">Found while pulling your data</span>
+  <p class="lede">Two of your five descriptions are build commentary, not descriptions.</p>
+  <p>In the Table view right now, <b>Opti Forms CSS Updates</b> reads <i>"No-op placeholder artifact.
+  Guards against double-execution via window.__opmc[NS]…"</i> and <b>Home Page Hero No Offer</b> reads
+  <i>"Nothing shipped and nothing rendered. The artifact is an unbuilt OPMC placeholder…"</i>. Those are
+  descriptions of the <em>build artifact</em>, sitting where the description of the <em>work</em> goes.</p>
+  <p>That second one deserves a look independently of any of this: it is marked <b>LIVE</b> with 2
+  versions while its description says the artifact renders nothing. Either the text is stale or a live
+  experiment is serving an empty variation — worth checking before it costs you a result.</p>
+</div>
+
+<h2>Which columns can a card even go in?</h2>
+<p class="kicker">Two different reasons for "no", and the board currently says the same thing to both</p>
+
+<div class="measure">
+<p>Once types exist, some columns aren't merely closed to a card — they're <b>not part of its world</b>.
+An Opti-built prototype has no Build stage, ever. Today, dragging one at Build bounces with
+<i>"Build means a real build exists on the branch. It moves when the agent pushes one."</i> — which is
+not just unhelpful, it's <em>false for that card</em>. It will never have a build, and no amount of
+waiting will move it there.</p>
+</div>
+
+<div class="tbl">
+<table>
+  <thead><tr><th style="width:22%">Column</th><th>Type 1 · injectable</th><th>Type 2 · measured</th><th>Type 3 · Opti-built</th></tr></thead>
+  <tbody>
+    <tr><td><b>Brief</b></td><td>derived</td><td>derived</td><td>derived</td></tr>
+    <tr><td><b>Build</b></td><td>derived</td><td>derived</td><td><span class="bad-t">not in its life</span></td></tr>
+    <tr><td><b>Check</b></td><td>derived</td><td>derived</td><td><span class="bad-t">not in its life</span></td></tr>
+    <tr><td><b>Testing</b></td><td><span class="bad-t">not in its life</span></td><td>derived</td><td>derived</td></tr>
+    <tr><td><b>Done</b></td><td>open Q1</td><td><b>you decide</b> — the ship</td><td>open Q3</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="measure">
+<p>So there are three states, not two:</p>
+
+<p><b>Not in its life.</b> The column is irrelevant to this card. It shouldn't refuse a drop with an
+explanation — it should visibly not be a place, greyed out for the whole drag the moment you pick the
+card up.</p>
+
+<p><b>In its life, but derived.</b> Real stage, but a machine observation puts the card there, not you.
+Refusing is right; the reason should be stated <em>during</em> the drag, in the column, rather than as a
+toast after you've already failed.</p>
+
+<p><b>Yours to declare.</b> The ship, plus reordering inside a column. These are the only two moves a
+person makes, and they're the ones that should light up.</p>
+
+<h3>Show the rule while dragging, not after</h3>
+
+<p>This is what actually fixes the complaint you started with. On pick-up, the board already knows the
+card's type and stage, so it can paint the answer immediately: <b>legal targets accent-lit</b>,
+<b>derived columns plain with a one-line reason in place</b>, <b>out-of-life columns greyed to about a
+third</b>. You learn the rule by looking instead of by failing, and the toast drops back to being a
+fallback rather than the primary teacher.</p>
+
+<p>It also means the honest count is small and knowable: for any card there is at most <em>one</em>
+legal cross-column move, and often none. That's worth showing plainly rather than leaving someone to
+discover it by dragging at five columns in turn.</p>
+
+<p class="fn">Note the two open questions land right here. Until Q1 and Q3 are answered, the Done column
+for types 1 and 3 is neither "yours" nor "not in its life" — which is exactly why a type-3 ship is
+currently accepted and then silently reverted.</p>
+</div>
+
+<h2>What I'd do</h2>
+<p class="kicker">A recommendation, not a menu</p>
+
+<p><b>A for the frame, B for the body.</b> Lead with who it's waiting on and for how long — that's the
+question the board exists to answer, and it's the line that makes it stop feeling like a build system.
+Then let the card body change with the stage: work that's waiting shows the blocker and one button
+(A); work that's live or finished shows the claim and how it's doing (B). A card for a running
+experiment shouldn't be shaped like a task, because it isn't one.</p>
+
+<p>C's contribution is the <b>aging</b> — "stuck in Build 6 days" — which I'd take into A's status line
+rather than building a third card. One card grammar per room still holds; the body varies by stage, the
+frame doesn't.</p>
+
+<p>None of this touches a gate. The derivation, the first-gate hold, the running-experiment lock and the
+refusal to start traffic all stay exactly as they are — which is what keeps the "don't let them mess
+themselves up" half intact while the tool stops sounding like a terminal.</p>
+
+<p class="fn"><b>On the numbers shown:</b> owner reads "Unassigned" because the model has an
+<code>owner</code> field that nothing populates and the card never renders. Elapsed times ("6 days",
+"4 days") are illustrative of the shape — they're derivable from <code>updatedAt</code>, which the card
+doesn't currently read. Everything else — names, descriptions, metrics, guardrail counts, version
+numbers, live states — is your real data as of this build.</p>
+</div>
+
+<footer>
+  Drawn against prism.brandgraphai.com · build <code>bf1d33a</code>. Same derivation, same gates;
+  only the words and the order change.
+</footer>
+
+</div>

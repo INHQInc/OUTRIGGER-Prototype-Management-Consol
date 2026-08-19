@@ -1,0 +1,290 @@
+<title>Explorer View Options</title>
+<style>
+  :root{--paper:#F6F7F9;--surface:#FFFFFF;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0C1014;--surface:#151A21;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
+  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
+  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
+
+  /* The mockups depict a light website, so the "screen" stays light in both themes —
+     the page chrome around it follows the reader. */
+  .m-ink:#12212E;
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.6;
+       margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1080px;margin:0 auto;} .measure{max-width:66ch;}
+  header.top{padding:50px 0 24px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(29px,5vw,42px);line-height:1.05;letter-spacing:-.03em;font-weight:700;margin:0 0 13px;}
+  .standfirst{font-size:17.5px;color:var(--muted);margin:0;max-width:60ch;}
+  h2{font-size:clamp(20px,2.8vw,26px);line-height:1.16;letter-spacing:-.022em;font-weight:700;margin:52px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 18px;}
+  p{margin:0 0 14px;}
+  code,.m{font-family:var(--mono);font-size:.87em;background:color-mix(in srgb,var(--ink) 6%,transparent);
+          padding:.12em .38em;border-radius:4px;}
+
+  /* ── the mock "screen" ─────────────────────────────────────── */
+  .screen{background:#FFFFFF;color:#12212E;border:1px solid #D9E0E8;border-radius:12px;overflow:hidden;
+          box-shadow:0 1px 3px rgba(16,32,48,.06),0 8px 28px rgba(16,32,48,.07);margin:18px 0 10px;}
+  .screen *{box-sizing:border-box;}
+  .cap{background:#0E2A3F;color:#fff;padding:14px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .cap .lbl{font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;opacity:.62;margin-right:2px;}
+  .chip{border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:6px 13px;font-size:13.5px;
+        color:#fff;background:transparent;}
+  .chip.on{background:#fff;color:#0E2A3F;border-color:#fff;font-weight:650;}
+  .cap .mo{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:13.5px;}
+  .cap .mo b{background:rgba(255,255,255,.14);padding:6px 12px;border-radius:6px;font-weight:600;}
+
+  .vbar{display:flex;gap:2px;align-items:center;padding:12px 18px 0;border-bottom:1px solid #E5EAF0;}
+  .vt{padding:9px 16px;font-size:13.5px;font-weight:600;color:#5D6B7A;border-bottom:2px solid transparent;
+      display:flex;gap:7px;align-items:center;}
+  .vt.on{color:#0E2A3F;border-bottom-color:#0E2A3F;}
+  .vbar .cnt{margin-left:auto;font-size:12.5px;color:#7A8794;padding-bottom:9px;}
+
+  .body{padding:18px;}
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;}
+  .card{border:1px solid #E5EAF0;border-radius:10px;overflow:hidden;background:#fff;}
+  .ph{height:118px;position:relative;}
+  .ph span{position:absolute;left:10px;bottom:8px;color:#fff;font-size:11px;letter-spacing:.05em;
+           text-transform:uppercase;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.5);}
+  .o1{background:linear-gradient(150deg,#2C7DA0,#61A5C2 55%,#A9D6E5);}
+  .o2{background:linear-gradient(150deg,#14557B,#2A7F9E 60%,#7FB8CC);}
+  .o3{background:linear-gradient(150deg,#1B7A6B,#43A392 58%,#94CFC2);}
+  .o4{background:linear-gradient(150deg,#3E5C8A,#6D8CBF 60%,#B6C7E0);}
+  .cbody{padding:11px 12px 12px;}
+  .cnm{font-size:14px;font-weight:650;line-height:1.28;margin:0 0 4px;color:#12212E;}
+  .cch{font-size:12px;color:#5D6B7A;line-height:1.4;margin:0 0 9px;}
+  .tags{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 10px;}
+  .tg{font-size:10.5px;font-weight:600;color:#2C5C7A;background:#EAF2F7;border-radius:4px;padding:3px 7px;}
+  .rate{font-size:12px;color:#7A8794;border:1px dashed #C4D0DA;border-radius:5px;padding:5px 8px;margin:0 0 9px;
+        text-align:center;}
+  .cta{display:block;text-align:center;background:#0E2A3F;color:#fff;font-size:13px;font-weight:650;
+       padding:9px;border-radius:7px;}
+
+  table.lv{width:100%;border-collapse:collapse;font-size:13px;}
+  table.lv th{text-align:left;font:650 10.5px var(--ui);letter-spacing:.07em;text-transform:uppercase;
+              color:#7A8794;padding:0 10px 9px;border-bottom:1px solid #E5EAF0;white-space:nowrap;}
+  table.lv td{padding:12px 10px;border-bottom:1px solid #EEF2F6;vertical-align:middle;color:#12212E;}
+  table.lv .pn{font-weight:650;font-size:13.5px;}
+  table.lv .sub{color:#5D6B7A;font-size:11.5px;}
+  table.lv .mini{display:block;text-align:center;background:#0E2A3F;color:#fff;font-size:11.5px;font-weight:650;
+                 padding:7px 12px;border-radius:6px;white-space:nowrap;}
+  .sortrow{display:flex;gap:8px;align-items:center;margin:0 0 12px;font-size:12.5px;color:#5D6B7A;}
+  .sortrow b{background:#F1F5F9;border:1px solid #E5EAF0;border-radius:6px;padding:5px 10px;color:#12212E;font-weight:600;}
+
+  .note{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+        border-radius:9px;padding:15px 18px;margin:8px 0 26px;font-size:14.5px;color:var(--muted);}
+  .note b{color:var(--ink);}
+  .note.warn{border-left-color:var(--warn);}
+  .q{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 6px;}
+  ul.tight{margin:0;padding-left:20px;} ul.tight li{margin-bottom:7px;font-size:15px;}
+  footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Outrigger · home page · destination explorer</p>
+  <h1>Three views, drawn</h1>
+  <p class="standfirst">The same four O‘ahu properties in grid, list and map — sharing one capture bar,
+  one filter state and one exit. Real property names and real characteristics; no invented rates.</p>
+</header>
+
+<div class="measure">
+<div class="note"><b>What's shared across all three.</b> The dark bar at the top is the capture — island
+and month, answered once. The view switcher sits directly under it. Changing view never changes the
+result set or loses the answer: it is a change of lens, not a restart.</div>
+</div>
+
+<h2>Grid — “which of these looks like my trip?”</h2>
+<p class="kicker">The default. Emotional choice, for guests who don't know the islands.</p>
+
+<div class="screen">
+  <div class="cap">
+    <span class="lbl">Where</span>
+    <span class="chip on">O‘ahu</span><span class="chip">Maui</span><span class="chip">Hawai‘i Island</span><span class="chip">Kaua‘i</span>
+    <span class="mo"><span class="lbl">When</span><b>October 2026</b></span>
+  </div>
+  <div class="vbar">
+    <div class="vt on">▦ Grid</div><div class="vt">☰ List</div><div class="vt">◎ Map</div>
+    <span class="cnt">4 places on O‘ahu</span>
+  </div>
+  <div class="body">
+    <div class="grid3">
+      <div class="card"><div class="ph o1"><span>Waikīkī</span></div><div class="cbody">
+        <p class="cnm">OUTRIGGER Reef Waikiki Beach Resort</p>
+        <p class="cch">Cultural activities, local artwork, and Monkeypod Kitchen by Merriman.</p>
+        <div class="tags"><span class="tg">Beachfront</span><span class="tg">Dining</span></div>
+        <div class="rate">rate slot — if best-price clears</div>
+        <span class="cta">See rates</span></div></div>
+
+      <div class="card"><div class="ph o2"><span>Waikīkī</span></div><div class="cbody">
+        <p class="cnm">OUTRIGGER Waikiki Beach Resort</p>
+        <p class="cch">Sunsets, surf lessons, and the legendary Duke's Waikiki.</p>
+        <div class="tags"><span class="tg">Beachfront</span><span class="tg">Surf</span></div>
+        <div class="rate">rate slot — if best-price clears</div>
+        <span class="cta">See rates</span></div></div>
+
+      <div class="card"><div class="ph o3"><span>Waikīkī</span></div><div class="cbody">
+        <p class="cnm">OUTRIGGER Waikiki Beachcomber Hotel</p>
+        <p class="cch">Hawai‘i's first craft hotel, curated by local artists. Home of Cirque du Soleil ‘Auana.</p>
+        <div class="tags"><span class="tg">Craft hotel</span><span class="tg">Steps to sand</span></div>
+        <div class="rate">rate slot — if best-price clears</div>
+        <span class="cta">See rates</span></div></div>
+
+      <div class="card"><div class="ph o4"><span>Waikīkī</span></div><div class="cbody">
+        <p class="cnm">OUTRIGGER Waikīkī Paradise Hotel</p>
+        <p class="cch">Waikīkī's newest craft hotel — modern design, deep cultural heritage.</p>
+        <div class="tags"><span class="tg">Craft hotel</span><span class="tg">New</span></div>
+        <div class="rate">rate slot — if best-price clears</div>
+        <span class="cta">See rates</span></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="measure">
+<div class="note"><p class="q">What changes vs today</p>
+Today's tile carries a paragraph of copy and <b>two</b> competing CTAs — Book Now and Learn More. Guests
+click neither (+1 and −5.9%). Here: one line of character, two attribute chips, <b>one</b> action.
+The dashed rate slot is where a from-rate would sit <b>only if</b> the SynXis best-price widget can
+supply it — the card works without it.</div>
+</div>
+
+<h2>List — “how do these actually differ?”</h2>
+<p class="kicker">The view the home page has no equivalent of, and the one property-title behaviour argues for.</p>
+
+<div class="screen">
+  <div class="cap">
+    <span class="lbl">Where</span>
+    <span class="chip on">O‘ahu</span><span class="chip">Maui</span><span class="chip">Hawai‘i Island</span><span class="chip">Kaua‘i</span>
+    <span class="mo"><span class="lbl">When</span><b>October 2026</b></span>
+  </div>
+  <div class="vbar">
+    <div class="vt">▦ Grid</div><div class="vt on">☰ List</div><div class="vt">◎ Map</div>
+    <span class="cnt">4 places on O‘ahu</span>
+  </div>
+  <div class="body">
+    <div class="sortrow">Sort <b>Relevance ▾</b> <span style="opacity:.6">· by rate · by beach access · by newest</span></div>
+    <table class="lv">
+      <thead><tr><th>Property</th><th>Setting</th><th>Known for</th><th>Best for</th><th>Rate</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><span class="pn">Reef Waikiki Beach Resort</span><br><span class="sub">Waikīkī, O‘ahu</span></td>
+            <td>Beachfront</td><td>Monkeypod Kitchen; cultural programming</td><td>Food and culture</td>
+            <td class="sub">—</td><td><span class="mini">See rates</span></td></tr>
+        <tr><td><span class="pn">Waikiki Beach Resort</span><br><span class="sub">Waikīkī, O‘ahu</span></td>
+            <td>Beachfront</td><td>Duke's Waikiki; surf lessons</td><td>Sun and surf</td>
+            <td class="sub">—</td><td><span class="mini">See rates</span></td></tr>
+        <tr><td><span class="pn">Waikiki Beachcomber Hotel</span><br><span class="sub">Waikīkī, O‘ahu</span></td>
+            <td>Steps to the sand</td><td>Craft hotel; Cirque du Soleil ‘Auana</td><td>Design and nightlife</td>
+            <td class="sub">—</td><td><span class="mini">See rates</span></td></tr>
+        <tr><td><span class="pn">Waikīkī Paradise Hotel</span><br><span class="sub">Waikīkī, O‘ahu</span></td>
+            <td>Waikīkī</td><td>Newest craft hotel; local artist design</td><td>Modern and quiet</td>
+            <td class="sub">—</td><td><span class="mini">See rates</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="measure">
+<div class="note warn"><p class="q">The honest caveat on this one</p>
+Property titles rose <b>+11.3%</b> while Learn More fell and Book Now stayed flat — guests are opening
+properties <b>to compare them</b>, which is what this view is for. But the rate column is empty without
+the best-price widget, and <b>the booking engine's own “Select a Hotel” page already does rated,
+sortable comparison</b>. This view has to earn its place on the attributes the engine doesn't carry:
+setting, known-for, best-for. If it can't, send people to the engine's list instead.</div>
+</div>
+
+<h2>Map — “where is this in relation to everything else?”</h2>
+<p class="kicker">The one view the booking engine genuinely cannot do.</p>
+
+<div class="screen">
+  <div class="cap">
+    <span class="lbl">Where</span>
+    <span class="chip">O‘ahu</span><span class="chip">Maui</span><span class="chip">Hawai‘i Island</span><span class="chip">Kaua‘i</span>
+    <span class="mo"><span class="lbl">When</span><b>October 2026</b></span>
+  </div>
+  <div class="vbar">
+    <div class="vt">▦ Grid</div><div class="vt">☰ List</div><div class="vt on">◎ Map</div>
+    <span class="cnt">All Hawai‘i · 4 islands</span>
+  </div>
+  <div class="body" style="padding:0">
+    <svg viewBox="0 0 1000 420" style="display:block;width:100%;height:auto;background:#D9EAF2" role="img"
+      aria-label="Schematic map of the Hawaiian islands with Outrigger property pins on Oahu, and an open card for the Waikiki cluster.">
+      <defs><filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="1.6" flood-opacity=".28"/></filter></defs>
+      <rect width="1000" height="420" fill="#D9EAF2"/>
+      <g fill="#8FBF7F" stroke="#6FA75F" stroke-width="1.5">
+        <path d="M120 118 q28-22 62-10 t54 20 q16 16-6 30 t-58 16 q-40 2-54-18 t2-38z"/>
+        <path d="M300 168 q34-26 74-12 t56 26 q12 18-14 28 t-70 10 q-38-2-50-20 t4-32z"/>
+        <path d="M486 214 q30-18 58-6 t40 24 q8 14-14 20 t-56 4 q-30-4-36-18 t8-24z"/>
+        <path d="M620 246 q56-34 116-8 t76 62 q14 40-40 56 t-118-10 q-54-30-54-56 t20-44z"/>
+      </g>
+      <text x="150" y="112" font="600 15px sans-serif" fill="#3A5F30" font-size="15" font-weight="600">Kaua‘i</text>
+      <text x="330" y="162" font-size="15" font-weight="600" fill="#3A5F30">O‘ahu</text>
+      <text x="512" y="208" font-size="15" font-weight="600" fill="#3A5F30">Maui</text>
+      <text x="690" y="240" font-size="15" font-weight="600" fill="#3A5F30">Hawai‘i Island</text>
+
+      <g filter="url(#sh)">
+        <circle cx="352" cy="196" r="15" fill="#0E2A3F"/>
+        <text x="352" y="201" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">4</text>
+      </g>
+      <circle cx="530" cy="228" r="11" fill="#fff" stroke="#0E2A3F" stroke-width="2.5"/>
+      <circle cx="712" cy="290" r="11" fill="#fff" stroke="#0E2A3F" stroke-width="2.5"/>
+      <circle cx="176" cy="128" r="11" fill="#fff" stroke="#0E2A3F" stroke-width="2.5"/>
+
+      <g filter="url(#sh)">
+        <rect x="382" y="150" width="286" height="132" rx="10" fill="#fff"/>
+        <text x="400" y="176" font-size="14.5" font-weight="700" fill="#12212E">Waikīkī, O‘ahu</text>
+        <text x="400" y="197" font-size="12.5" fill="#5D6B7A">Four properties, all within a short walk</text>
+        <text x="400" y="216" font-size="12.5" fill="#5D6B7A">of the same stretch of beach.</text>
+        <text x="400" y="240" font-size="12" fill="#7A8794">Honolulu airport · about 25 minutes</text>
+        <rect x="400" y="252" width="112" height="26" rx="6" fill="#0E2A3F"/>
+        <text x="456" y="269" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">See rates</text>
+        <text x="524" y="269" font-size="12" fill="#5D6B7A">or view the four</text>
+      </g>
+      <text x="24" y="400" font-size="12" fill="#5A7A8A">Schematic — island shapes are indicative, not surveyed.</text>
+    </svg>
+  </div>
+</div>
+
+<div class="measure">
+<div class="note"><p class="q">Why this one is the keeper</p>
+SynXis has no geography. A first-time visitor does not know the islands are separate flights, that all
+four O‘ahu properties sit on one stretch of Waikīkī, or how far Maui is from Kona. This view answers a
+question guests <b>don't know they have</b> — and it is the only one of the three that a booking engine
+could never replace. Your <b>Regional Map Display</b> prototype is most of this already; what it needs
+is the exit changed from “Visit property” to a dated rates link.</div>
+</div>
+
+<div class="measure">
+<h2>What I'd decide from here</h2>
+<p class="kicker">Three questions, in the order they matter</p>
+
+<ul class="tight">
+  <li><b>Does the capture bar belong in the hero or above the explorer?</b> In the hero it catches
+  everyone; above the explorer it catches only the engaged. The hero is the stronger position and the
+  bigger design argument — it's also where v1 proved attention exists.</li>
+  <li><b>Does the list view survive?</b> It only earns its place on setting / known-for / best-for —
+  attributes the engine doesn't carry. If we can't populate those well, the engine's own list is better
+  than ours and we should send people to it.</li>
+  <li><b>Is the map a view, or the whole thing?</b> There's a real argument that the map <em>is</em> the
+  explorer — pick an island, see what's there, go — and that grid and list are just the map's results
+  in other shapes.</li>
+</ul>
+
+<p>Once those are settled, the build is: one capture bar, one result set, one exit URL pattern, and
+whichever views survive.</p>
+</div>
+
+<footer>
+  Property names and characteristics from outrigger.com. No rates shown — the marketing site has none,
+  and the dashed slots mark where they'd go only if the SynXis best-price widget can supply them.
+  Island shapes are schematic.
+</footer>
+
+</div>

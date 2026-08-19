@@ -1,0 +1,271 @@
+<title>Five Doors</title>
+<style>
+  :root{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
+    --line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+    --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
+    --line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
+  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;
+    --faint:#6C7887;--line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
+  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;
+    --faint:#8A94A1;--line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
+
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.62;
+       margin:0;padding:0 20px 96px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1010px;margin:0 auto;} .measure{max-width:68ch;}
+  header.top{padding:52px 0 26px;border-bottom:1px solid var(--line);margin-bottom:10px;}
+  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
+  h1{font-size:clamp(30px,5vw,46px);line-height:1.03;letter-spacing:-.03em;font-weight:700;margin:0 0 14px;}
+  .standfirst{font-size:18px;color:var(--muted);margin:0;max-width:60ch;}
+  h2{font-size:clamp(21px,3vw,27px);line-height:1.16;letter-spacing:-.022em;font-weight:700;margin:56px 0 3px;}
+  h2+.kicker{color:var(--faint);font:500 13px/1.5 var(--ui);margin:0 0 20px;}
+  p{margin:0 0 15px;}
+  code,.m{font-family:var(--mono);font-size:.87em;background:color-mix(in srgb,var(--ink) 6%,transparent);
+          padding:.12em .38em;border-radius:4px;}
+  strong{font-weight:650;}
+
+  .thesis{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
+          border-radius:10px;padding:20px 22px;margin:24px 0;}
+  .thesis .lede{font-size:18px;font-weight:650;letter-spacing:-.015em;margin:0 0 9px;line-height:1.32;}
+  .thesis p:last-child{margin-bottom:0;}
+  .thesis.warn{border-left-color:var(--warn);}
+
+  .idea{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:0;margin:0 0 22px;
+        overflow:hidden;}
+  .idea .hd{display:flex;gap:16px;align-items:flex-start;padding:20px 24px 0;}
+  .idea .no{font:700 15px/38px var(--mono);width:38px;height:38px;flex:none;text-align:center;border-radius:10px;
+            color:var(--accent);background:color-mix(in srgb,var(--accent) 13%,transparent);}
+  .idea h3{font-size:20px;letter-spacing:-.018em;font-weight:700;margin:4px 0 2px;}
+  .idea .one{color:var(--muted);font-size:14.5px;margin:0;}
+  .idea .bd{padding:14px 24px 20px 78px;}
+  @media (max-width:640px){.idea .bd{padding-left:24px}}
+  .idea .bd p{font-size:15.5px;}
+  .rowlab{font:650 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+          margin:16px 0 5px;}
+  .ev{font-size:13.5px;color:var(--muted);border-left:2px solid var(--line-strong);padding-left:12px;margin:0;}
+  .ev b{color:var(--ink);font-family:var(--mono);font-size:12.5px;}
+  .tags{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0 0;}
+  .tag{font:600 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:5px 8px;border-radius:5px;
+       color:var(--muted);background:color-mix(in srgb,var(--ink) 7%,transparent);}
+  .tag.f{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);}
+  .tag.c{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent);}
+  .tag.u{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);}
+  .risk{font-size:14px;color:var(--muted);margin:0;}
+  .risk b{color:var(--warn);}
+
+  table{border-collapse:collapse;width:100%;font-size:14px;margin:18px 0;}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font:650 11px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);}
+  td.n{font-family:var(--mono);font-size:12.5px;text-align:center;}
+  .tbl{overflow-x:auto;}
+  footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+</style>
+
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Outrigger · home page · five ideas</p>
+  <h1>Five doors from looking to booking</h1>
+  <p class="standfirst">The experiment proved we can move attention. It also proved the page has nowhere
+  for that attention to go. Five ways to build the exit — ranked, each with the evidence behind it.</p>
+</header>
+
+<div class="measure">
+<div class="thesis">
+  <p class="lede">The finding everything below is built on.</p>
+  <p>Over eighteen days the new hero moved <b>286 clicks</b> off the offer. Every one reappeared in a
+  browse action — destination tabs +82, the Explore menu +80, property titles +62, the dropdown +52.
+  And <b>not a single commerce action moved</b>: property “Book Now” gained <b>one click</b>, Offer CTA
+  gained <b>one</b>, Rooms &amp; Rates <b>fell 21</b>.</p>
+  <p>The guests who did reach the booking engine converted far better — <b>28.9% → 34.4%</b>. The
+  filter works. There is just no door into it.</p>
+</div>
+
+<h2>What your reference board already says</h2>
+<p class="kicker">Twenty-five collected home pages, read against our own data</p>
+
+<p>The gallery is overwhelmingly one thing: <strong>editorial, destination-led, image-first</strong> —
+Aman, One&amp;Only, Peninsula, Vignette, Belmond. Soft single lines (“Memories Well Made”, “Your
+One&amp;Only escape, your way”, “Begin your journey”), destination carousels, property grids with
+almost no copy, offers present but subordinate, stories at the bottom.</p>
+
+<p>That board is a strong argument that v1's direction was right. It is also, almost entirely, a
+collection of <em>styles</em> — and our problem is not style, it's mechanism. With one exception worth
+crediting: <strong>several of the references put a search directly beneath an editorial hero</strong>
+and lose nothing of the mood for it. That pattern is the answer to idea one, and it is already on your
+board.</p>
+</div>
+
+<h2>The five</h2>
+<p class="kicker">Ranked by expected effect on Rooms &amp; Rates arrivals</p>
+
+<div class="idea">
+  <div class="hd"><span class="no">1</span><div>
+    <h3>The Plan Bar — ask once, price everything</h3>
+    <p class="one">An island and a rough month captured in the hero, which then follows the guest down the page.</p>
+  </div></div>
+  <div class="bd">
+    <p>The hero currently spends its only click on <span class="m">Learn more</span>. Replace that with
+    one soft question — island chips and a month, no date grid, no guest count. One tap and a month.</p>
+    <p>The answer then <strong>docks as a slim persistent bar</strong> and makes every surface below it
+    priceable: destination cards show a from-rate, property tiles show real availability, offers
+    re-render as <em>your</em> rate rather than a generic percentage. This is the foundation the other
+    four stand on — nothing else on this list works as well without it.</p>
+    <p class="rowlab">Why this, from our data</p>
+    <p class="ev">The hero proved it can command attention — <b>286 clicks redirected</b>. Nothing on
+    the page currently captures that attention as intent. Reaching a rate today requires supplying
+    dates at the <em>end</em> of a long browse; capturing them at the start makes every later click a
+    rates click.</p>
+    <p class="rowlab">Risk</p>
+    <p class="risk"><b>It's the most conventional move in hotel web design</b> and v1 was about escaping
+    convention. Resolve it on the distinction: a rate for your dates is <em>utility</em>; a percentage
+    off is a <em>promise</em>. Keep the imagery and the experience-led line, and let the question sit
+    underneath rather than replace it — which is exactly what the references on your board do.</p>
+    <div class="tags"><span class="tag f">New feature</span><span class="tag u">New UX</span></div>
+  </div>
+</div>
+
+<div class="idea">
+  <div class="hd"><span class="no">2</span><div>
+    <h3>Choose the room, not the resort</h3>
+    <p class="one">Invert the taxonomy. Guests have opinions about ocean-front and steps-to-the-beach. They have none about Reef versus Beachcomber.</p>
+  </div></div>
+  <div class="bd">
+    <p>The home page asks guests to pick a <em>property</em> — a brand abstraction a first-time visitor
+    cannot hold an opinion about. Replace the primary choice with the thing they actually want:
+    <strong>ocean-front room · steps to the sand · suite with a lanai · adults-only quiet · family
+    connecting rooms</strong>. Pick the want, and the page returns which properties have it, on your
+    dates, from a price.</p>
+    <p>This is the most dramatic idea on the list and I think the most valuable, because it removes a
+    decision the guest is not equipped to make and replaces it with one they made before they arrived.
+    It also fits the brand's actual promise — the hero is selling a <em>view</em>, and then the page
+    asks you to choose a <em>hotel</em>.</p>
+    <p class="rowlab">Why this, from our data</p>
+    <p class="ev">Property titles <b>+11.3%</b> — they open properties. Property “Learn More”
+    <b>−5.9%</b> — they don't want the brochure. Property “Book Now” <b>−0.7%</b> — they won't commit.
+    They are opening properties to <em>compare</em>, and the page gives them nothing to compare on.</p>
+    <p class="rowlab">Risk</p>
+    <p class="risk"><b>It fights the property-brand hierarchy</b> and every stakeholder who owns a
+    property will feel demoted. It's also the biggest content lift — every room needs attribute
+    tagging. Worth piloting on one island before the estate.</p>
+    <div class="tags"><span class="tag c">New content</span><span class="tag f">New feature</span><span class="tag u">New UX</span></div>
+  </div>
+</div>
+
+<div class="idea">
+  <div class="hd"><span class="no">3</span><div>
+    <h3>Live rates on every browse surface</h3>
+    <p class="one">If a card is worth clicking, it's worth pricing. Destination cards and property tiles carry a real from-rate.</p>
+  </div></div>
+  <div class="bd">
+    <p>Every exploration surface on the page today ends in a content CTA:
+    <span class="m">Oahu highlights</span>, <span class="m">Learn More</span>,
+    <span class="m">View more stories</span>. Put a live from-rate and an availability signal on the
+    destination cards and the property tiles, and give each a single action — <strong>“See
+    rates”</strong>, replacing the Book Now / Learn More pair guests are currently refusing both of.</p>
+    <p>Pair it with the Plan Bar and the rate is for <em>their</em> month, which is the difference
+    between a price and a quote.</p>
+    <p class="rowlab">Why this, from our data</p>
+    <p class="ev">Destination tabs <b>+8.3%</b> and dropdown <b>+12.7%</b> are the biggest gains on the
+    page — and the explorer's own exit button, Destination Highlights, is <b>−7.0%</b>. Guests are
+    opening the explorer and refusing what it offers them.</p>
+    <p class="rowlab">Risk</p>
+    <p class="risk"><b>Rates on a brand page can read as a discount page</b> — the exact framing v1
+    removed. Show a from-rate, never a strike-through or a percentage. And it needs a live rate feed on
+    a cached marketing page, which is real engineering.</p>
+    <div class="tags"><span class="tag f">New feature</span><span class="tag u">New UX</span></div>
+  </div>
+</div>
+
+<div class="idea">
+  <div class="hd"><span class="no">4</span><div>
+    <h3>Flexible dates first — “sometime in March”</h3>
+    <p class="one">A price-by-month calendar, so a guest can enter the funnel before they've decided anything.</p>
+  </div></div>
+  <div class="bd">
+    <p>The booking engine demands exact dates. Most home page visitors don't have them — they have a
+    season and a feeling. Offer <strong>a month view with the cheapest nights surfaced</strong>, let
+    them enter on “first week of March, four nights”, and firm it up inside the engine.</p>
+    <p>This is the single biggest commitment barrier on the path, and it sits right at the point our
+    data shows guests stopping.</p>
+    <p class="rowlab">Why this, from our data</p>
+    <p class="ev">Rooms &amp; Rates arrivals <b>−4.9%</b> while every upstream browse metric rose. The
+    guests are there and qualified — arrivals convert at <b>34.4%</b> — but the last step asks for a
+    precision they don't have yet.</p>
+    <p class="rowlab">Risk</p>
+    <p class="risk"><b>Flexible search is expensive to compute</b> across an estate, and a cheapest-night
+    view can pull demand into low-rate dates you'd rather not discount. Cap it at a from-rate per week
+    rather than a full price grid.</p>
+    <div class="tags"><span class="tag f">New feature</span></div>
+  </div>
+</div>
+
+<div class="idea">
+  <div class="hd"><span class="no">5</span><div>
+    <h3>The hero you can tap — the view becomes the room</h3>
+    <p class="one">Desire is formed by the image. Make the image the entry point.</p>
+  </div></div>
+  <div class="bd">
+    <p>The hero already shows the thing being sold: a view. Today it's a poster you can only
+    <span class="m">Learn more</span> about. Put quiet hotspots on it — <strong>“this is the view from
+    an Ocean Front King at OUTRIGGER Reef — see it from $X”</strong> — so the shortest possible path
+    exists between wanting what you're looking at and pricing it.</p>
+    <p>Not one of the twenty-five references on your board does this. They all treat the hero as a
+    poster. It uses assets you already own, it is unmistakably premium rather than transactional, and
+    it converts the most-viewed pixel on the site into a commerce surface without putting a single
+    price in the headline.</p>
+    <p class="rowlab">Why this, from our data</p>
+    <p class="ev">Scroll depth is <b>flat to negative at all four levels</b> — nothing new below the
+    fold will be seen. Any new idea has to earn its place <em>in the first viewport</em>, and the hero
+    is the only real estate that qualifies.</p>
+    <p class="rowlab">Risk</p>
+    <p class="risk"><b>Interactive heroes age badly and can feel gimmicky</b> if overdone. One or two
+    hotspots, revealed on hover or after a beat, never a busy overlay. Also the highest production cost
+    per destination — shoot once, reuse hard.</p>
+    <div class="tags"><span class="tag c">New content</span><span class="tag f">New feature</span><span class="tag u">New UX</span></div>
+  </div>
+</div>
+
+<div class="measure">
+<h2>How I'd sequence them</h2>
+<p class="kicker">One test at a time, on the metric that's actually broken</p>
+</div>
+
+<div class="tbl">
+<table>
+  <thead><tr><th>Idea</th><th class="n">Effect</th><th class="n">Build</th><th class="n">Brand risk</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td><b>1 · Plan Bar</b></td><td class="n">High</td><td class="n">Medium</td><td class="n">Medium</td><td>First — everything else is better with it</td></tr>
+    <tr><td><b>3 · Live rates on browse surfaces</b></td><td class="n">High</td><td class="n">Medium</td><td class="n">Medium</td><td>Second — pairs with 1, same test if scoped tightly</td></tr>
+    <tr><td><b>2 · Choose the room, not the resort</b></td><td class="n">Highest</td><td class="n">High</td><td class="n">High</td><td>Pilot one island once 1 and 3 have landed</td></tr>
+    <tr><td><b>4 · Flexible dates</b></td><td class="n">Medium</td><td class="n">High</td><td class="n">Low</td><td>When the rate infrastructure from 1/3 exists</td></tr>
+    <tr><td><b>5 · Tappable hero</b></td><td class="n">Medium</td><td class="n">Medium</td><td class="n">Low</td><td>Standalone — can run in parallel, different surface</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="measure">
+<p>All five share one primary metric: <strong>Visit Page: Booking Engine: Rooms &amp; Rates</strong>,
+baseline 4.27%. At the traffic v1 accrued — 12,804 per arm in 18 days — a 20% move resolves in
+<strong>about 14 days</strong>. Guardrails carry over from v1: hero CTA must stay down, destination
+explorer and property tile engagement must not fall back, offer engagement must not fall, and
+bookings-per-arrival must hold at 34.4% — volume must not cost quality.</p>
+
+<div class="thesis warn">
+  <p class="lede">What I would not spend a test on.</p>
+  <p><b>More inspirational content.</b> Scroll is flat to negative at every depth; it would be served to
+  the same eyeballs. <b>Another hero copy test</b> — −58.1% at p&lt;0.0001 is as settled as this
+  programme gets. <b>Returning to offer-led framing</b> — offer engagement was flat when the offer left
+  the hero, which means offer demand is inelastic to it and that headline was never earning its place.</p>
+</div>
+</div>
+
+<footer>
+  Built from the live readout at 18 days (12,804/arm, ±18.2% detectable), the current
+  <code>outrigger.com</code> home page, and the OUTRIGGER — UX Audit reference board. Counts and lifts
+  are the experiment's own; the click accounting and bookings-per-arrival ratio are derived.
+</footer>
+
+</div>
