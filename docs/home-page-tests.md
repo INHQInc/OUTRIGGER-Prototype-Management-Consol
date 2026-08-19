@@ -795,3 +795,64 @@ as required instrumentation (§6); it is what makes bundling safe rather than sl
 guardrail, you know something inside it did harm even before you know which part.
 
 **Order:** A first (no dependencies, biggest combined evidence), then B, then C.
+
+---
+
+## 13. Live mock-up on prep.outrigger.com — confirmed facts (2026-08-19)
+
+Built as browser-injected variation JS: [`prototypes/home-page-v2/variation.js`](../prototypes/home-page-v2/variation.js).
+All three changes applied and verified against the real DOM.
+
+### 13a. RESOLVED: the widget *does* take the promo code
+
+This closes the open question from §7. The attribute contract, lifted from the
+`/offers/campaign/2026/bc/ohr` header CTA:
+
+```html
+<button type="button" data-bs-toggle="offcanvas" data-bs-target="#bookingWidget"
+        class="button bw-magic-link"
+        data-bw-chain="18497"
+        data-bw-offer-code="OCEANVIEW"
+        data-bw-offer-code-type="Promotion"
+        data-bw-length-of-stay="5">Search availability</button>
+```
+
+Verified live: clicking it opens the widget with **Apply Special Rate → "Promo Code"**,
+the code field populated `OCEANVIEW`, and the widget's own confirmation
+**"Success! Your rate has been applied."** Hidden field `promo=OCEANVIEW`.
+
+The promo codes did not need to be authored — they were already sitting in the offer
+tiles' outbound hrefs (`?promo=OCEANVIEW&nights=5`), so the variation parses them out
+of the existing link and re-emits them as widget attributes. Nothing to maintain.
+
+### 13b. NEW, and it matters for Test B: `data-bw-length-of-stay`
+
+The widget accepts a **stay length** hint. That is a real, existing mechanism for
+lowering the date cost — not the flexible/month-view idea, which does not exist in
+this widget. Test B's mechanism should be written against this attribute plus a
+pre-filled or one-tap arrival, not against a mode the widget does not have.
+
+### 13c. The gate, measured
+
+With the promo applied and the widget open, the hidden fields read
+`arrive="Invalid Date"`, `depart="Invalid Date"`. The guest still cannot proceed
+without picking both dates from a two-month calendar. The gate in §2 is real and
+sits exactly where the diagnosis said it does.
+
+### 13d. What was built
+
+| Change | Result |
+|---|---|
+| Trip Planner banner under `.destination-selection` | Styled from the site's own `.promotion-banner` (`rgb(0,69,97)`, DuplicateSans 40/52, Montserrat-Light 16/25). Four vacation-type chips + CTA into `#favoritesOffcanvas`. |
+| Property tiles | "Book Now" → **View Availability** (widget and every `data-bw-*` preserved); "Learn More" → **View Rooms** → `{property}/rooms-suites`. 8 tiles on Oahu, 6 on Maui. |
+| Offer tiles | 9 CTAs switched from `reservation.outrigger.com` links to widget opens carrying the promo. **Zero** direct engine links left on the page. |
+
+All `/rooms-suites` URLs verified 200. The variation re-applies on DOM churn, so
+destination tab switches (Oahu → Maui) pick up new tiles with no stale labels or links.
+
+### 13e. One visual note
+
+The banner's dark blue sits **directly above the Top Offers section, which is also
+dark navy** — two dark bands with only a faint seam between them. Worth deciding
+whether the banner should be lighter, or Top Offers re-grounded, before this is shown
+as a finished comp.
