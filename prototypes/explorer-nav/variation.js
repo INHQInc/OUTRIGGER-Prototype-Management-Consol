@@ -69,29 +69,30 @@
       '#opmc-count{display:none}',
 
       '#' + NAV_ID + '{display:block;width:100%;margin:0 0 6px}',
-      '#opmc-bar{background:' + NAVY + ';color:#fff;border-radius:8px;padding:12px 16px;' +
-        'display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
-      '#opmc-bar .barlbl{font:600 10.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.1em;' +
-        'text-transform:uppercase;opacity:.6;margin-right:2px}',
-      '#opmc-bar .barnote{font-size:13px;opacity:.65}',
+      // The bar sits inside the explorer's sand section. A solid navy band fought
+      // it, so navy is reserved for the SELECTED chip — which also makes "one
+      // thing is always selected" unmissable.
+      '#opmc-bar{background:#fff;border:1px solid rgba(51,41,38,.13);border-radius:8px;padding:10px 12px;' +
+        'display:flex;align-items:center;gap:9px;flex-wrap:wrap}',
+      '#opmc-bar .barnote{font:500 13px/1 Montserrat-Light,sans-serif;color:rgba(51,41,38,.6);padding:0 4px}',
 
-      '#opmc-crumb{display:flex;align-items:center;gap:10px;margin:0}',
-      '#opmc-crumb button{width:30px;height:30px;border-radius:6px;border:1px solid rgba(255,255,255,.3);' +
-        'background:transparent;color:#fff;cursor:pointer;font-size:15px;line-height:1;display:inline-flex;' +
-        'align-items:center;justify-content:center;padding:0;transition:.15s}',
-      '#opmc-crumb button:hover{background:#fff;color:' + NAVY + ';border-color:#fff}',
-      '#opmc-crumb button:focus-visible{outline:2px solid #fff;outline-offset:2px}',
+      '#opmc-crumb{display:flex;align-items:center;gap:9px;margin:0}',
+      '#opmc-crumb button{width:30px;height:30px;border-radius:6px;border:1px solid rgba(51,41,38,.28);' +
+        'background:transparent;color:rgba(51,41,38,.75);cursor:pointer;font-size:15px;line-height:1;' +
+        'display:inline-flex;align-items:center;justify-content:center;padding:0;transition:.15s}',
+      '#opmc-crumb button:hover{background:' + NAVY + ';color:#fff;border-color:' + NAVY + '}',
+      '#opmc-crumb button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:2px}',
 
-      '#opmc-children{display:flex;flex-wrap:wrap;gap:9px;padding:0;margin:0;list-style:none;align-items:center}',
-      '#opmc-children button{font:500 13.5px/1 DuplicateSans-Medium,sans-serif;color:#fff;background:transparent;' +
-        'border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:8px 13px;cursor:pointer;' +
-        'transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}',
-      '#opmc-children button:hover{background:#fff;color:' + NAVY + ';border-color:#fff}',
-      '#opmc-children button.on{background:#fff;color:' + NAVY + ';border-color:#fff;font-weight:650}',
-      '#opmc-children button.on i{opacity:.7}',
-      '#opmc-children button:focus-visible{outline:2px solid #fff;outline-offset:2px}',
-      '#opmc-children button i{font-style:normal;opacity:.55;font-weight:500;font-size:12px}',
-      '#opmc-children button:hover i{opacity:.7}',
+      '#opmc-children{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none;align-items:center}',
+      '#opmc-children button{font:500 13.5px/1 DuplicateSans-Medium,sans-serif;color:rgb(51,41,38);' +
+        'background:transparent;border:1px solid rgba(51,41,38,.28);border-radius:7px;padding:8px 13px;' +
+        'cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}',
+      '#opmc-children button:hover{border-color:' + NAVY + ';color:' + NAVY + '}',
+      '#opmc-children button.on{background:' + NAVY + ';color:#fff;border-color:' + NAVY + ';font-weight:650}',
+      '#opmc-children button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:2px}',
+      '#opmc-children button i{font-style:normal;opacity:.5;font-weight:500;font-size:12px}',
+      '#opmc-children button:hover i{opacity:.75}',
+      '#opmc-children button.on i{opacity:.75}',
       '@media(max-width:767px){#opmc-bar{padding:11px 12px;gap:8px}' +
         '#opmc-children button{font-size:12.5px;padding:7px 11px}}'
     ].join('');
@@ -117,12 +118,11 @@
     kids.setAttribute('aria-label', 'Choose a destination');
 
     var bar = document.createElement('div'); bar.id = 'opmc-bar';
-    var barlbl = document.createElement('span'); barlbl.className = 'barlbl'; barlbl.textContent = 'Where';
 
     h2.parentNode.insertBefore(nav, h2);
     nav.parentNode.insertBefore(title, nav);
     title.appendChild(h2); title.appendChild(count);
-    bar.appendChild(barlbl); bar.appendChild(crumb); bar.appendChild(kids);
+    bar.appendChild(crumb); bar.appendChild(kids);
     nav.appendChild(bar);
 
     var state = { level: 1, dest: (h2.textContent || '').trim(), region: null };  // region filled in on first render
