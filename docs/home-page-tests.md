@@ -597,3 +597,40 @@ whether 12c ever ships.
 1. Fix the destination params now (URL only, no dependency)
 2. Widget gains promo support (external dependency, raise it)
 3. Then route offers through the widget per 12c
+
+### 12f · Offer click → pick a property first (Bryan)
+
+**Supersedes the `hotel=<SabreID>` fix in 12e**, which was wrong: offers are portfolio-wide
+("Ocean views on sale" applies across many properties), so no single property ID can be baked
+into the link.
+
+**The flow:** offer click → *which property?* → then the widget (or engine) with property +
+promo attached.
+
+**Why this is the right shape — it matches revealed behaviour.**
+Guests pick properties readily (**Property Title +11.3%**) and refuse date commitment
+(**Book Now +1 click / 18 days**). Asking for the *property* first and *dates* second orders
+the two commitments in the sequence guests already demonstrate they prefer. The current offer
+route asks for neither and delivers a worldwide list; the widget-only route asks for dates
+first, which is the harder of the two.
+
+**Four things it fixes at once:**
+1. Kills the worldwide-list destination — the guest arrives somewhere relevant
+2. Asks the *cheap* commitment first, deferring the expensive one
+3. Preserves promo attribution without needing widget promo support (**unblocks 12c's
+   dependency** — the promo can ride the property choice into the existing direct link)
+4. Reuses property data already on the page (`PropertySabreID`, name, image, description)
+
+**And it is a cheap pilot of the deferred explorer.** A property picker scoped to one offer is
+the explorer hypothesis in miniature: *does giving guests a property choice before a date demand
+increase progression?* If it moves, the full explorer (old P2) is funded by evidence. If it
+doesn't, that is a strong signal before anyone builds the big version.
+
+**Design notes**
+- Show which properties the offer is actually valid at — not all 16
+- Reuse the tile pattern from N1: image, name, one distinctive detail, one action
+- Ungated: picking a property must not itself demand dates
+- Instrument `offer → property picked → widget opened → engine` as separate steps; this is the
+  first place on the page where we can see a funnel rather than a single click
+
+**Status:** strongest near-term candidate alongside N1. No external dependency.
