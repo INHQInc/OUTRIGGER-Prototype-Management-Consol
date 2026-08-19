@@ -96,6 +96,11 @@
   function tiles() {
     var n = 0;
     document.querySelectorAll('.card-cta-info').forEach(function (cta) {
+      // `.card-cta-info` is NOT unique to the home page's property tiles — the
+      // booking widget's own property picker renders the same markup inside
+      // #bookingWidget. Relabelling those rewrites the booking flow itself, so
+      // anything inside an offcanvas is off limits.
+      if (cta.closest('#bookingWidget, .offcanvas')) return;
       var bn = cta.querySelector('.bw-magic-link');
       var lm = cta.querySelector('.card-view-property');
       if (!bn || !lm || cta.dataset.mockDone === '1') return;
