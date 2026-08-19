@@ -634,3 +634,91 @@ doesn't, that is a strong signal before anyone builds the big version.
   first place on the page where we can see a funnel rather than a single click
 
 **Status:** strongest near-term candidate alongside N1. No external dependency.
+
+---
+---
+
+# ★ CURRENT STATE — START HERE (2026-08-19)
+
+Sections 1–9 are reference. Sections 10–12f are a running log **containing two corrections I
+made to my own reasoning** — read this section instead; it supersedes them.
+
+## The experiment (unchanged, authoritative)
+Home Page Hero No Offer · 12,804/arm · 18 days · ±18.2% detectable · **still LIVE**.
+- **Settled:** Hero CTA Click **−58.1%**, p<0.0001
+- **Redistribution:** 286 clicks left the hero; ~260 reappeared in browse actions
+  (dest tab +82, nav +80, property title +62, dropdown +52)
+- **Every commerce action flat:** Book Now **+1 click**, Offer CTA **+1**, Rooms & Rates **−21**
+- **Ruled out:** scroll flat/negative at all four depths → **do not add content below the fold**
+- **Quality signal:** bookings per BE arrival 28.9% → 34.4% (unconfirmed)
+- **Power:** 711/arm/day. BE Rooms & Rates (4.27%) → ~14 days for a 20% move.
+  Booking Complete (1.23%) → ~8 weeks, **can never be the decision metric**
+
+## The one reading everything now rests on
+Same card, same guests, two paths:
+**Property Title (ungated link) +11.3%** vs **Book Now (opens date-gated widget) +1 click.**
+Guests take the ungated path by an order of magnitude. **Cheap commitments first, expensive
+ones later.**
+
+## How the page actually works (corrected — I had this wrong twice)
+- **Property tiles, header, sticky bar** → open the on-site widget → **force date selection**
+- **Offer tiles** → direct SynXis link, **no dates**, and `dest=ORH` is discarded
+  (`level=chain`) → **worldwide list**
+- Both mechanisms are flat. Opposite causes, same outcome: **neither serves a guest still
+  choosing.**
+- **Standing principle (decided):** every home page CTA routes through the widget.
+  **Exception: the property title stays an ungated link** — it is the only path that works.
+- **Widget cannot pass a promo code today, and is meant to.** Defect. Blocks any offer reroute
+  that depends on it.
+
+## Decisions taken
+| Item | Status |
+|---|---|
+| Carry dates into the engine (old P1) | **Dropped** — capture already exists in the widget |
+| Explorer / birds-eye map (old P2) | **Deferred** — too complicated for now |
+| Vacation type (old P4) | **Reshaped** → Trip Planner banner, metric question unresolved |
+| All CTAs use the widget | **Adopted** |
+| Offer → pick a property first | **Adopted** — strongest near-term candidate |
+
+## The live shortlist
+1. **Offer click → pick a property → then dates.** Orders commitments the way guests prefer.
+   Fixes the worldwide-list destination, preserves promo without waiting on the widget fix, and
+   is a **cheap pilot of the deferred explorer**. No external dependency.
+2. **Soften the widget's date default** (month / flexible instead of exact-date grid). With every
+   CTA routed through the widget this sits in front of **100% of booking intent** — the largest
+   single lever available.
+3. **N1 · Rebuild the property tile.** One ungated action ("View Property" — *not* "Explore
+   Dates", which promises the friction), marketing sentence replaced by the distinctive detail
+   from the amenity diff (Monkeypod / Duke's + Blue Note / 'Auana / Appetito / Holokai).
+   Delivers Verndale's annotation 6 at zero page length. Three converging signals.
+4. **Trip Planner banner** — blocked on: *promote the favourites feature, or build a
+   vacation-type chooser?* Different tests, different primary metrics. Saving ≠ booking.
+
+## Standing measurement frame
+- **Primary:** `Visit Page: Booking Engine: Rooms & Rates` (4.27%), INCREASE, ~14 days for 20%
+- **Guardrails:** Hero CTA must stay down · destination explorer engagement · property tile
+  engagement · offer engagement · scroll depth · bookings per BE arrival (34.4%)
+- **Anti-goal:** engagements per BE arrival must **not** increase (catches "better toy")
+- **Watched only:** Booking Complete
+
+## Open questions
+1. Trip Planner banner — promote favourites, or build a vacation-type chooser?
+2. Do condos belong in the explorer? 16 (page JSON) vs 26 (map prototype)
+3. Does `shs-widgets-best-price` render a rate? Loaded on the page, never instantiated;
+   `data-average-nightly-rate="0"` with `fallback="true"` says the pipeline is wired and off
+4. Do all bookings pass through `Visit Page: BE: Rooms & Rates`? Decides whether the primary
+   metric sees the whole funnel
+5. Mobile share of home page traffic
+6. Widget promo pass-through — when?
+
+## Assets
+- `docs/outrigger-properties.js` — 16 properties: SabreID, lat/lng, amenities, deep-link
+  builder, antimeridian-safe bounds, amenity diff. **Surin longitude corrected** (source data
+  is ~120 km wrong; also fixed in the map prototype)
+- Map prototype: `INHQInc/outrigger-prototypes` → `prototype/josh-s-cool-protype`. Branded
+  Mapbox style, lazy load, SVG fallback, clustering. Change needed: card CTA "Visit property"
+  → a real destination
+- Artifacts: see §9
+
+**Next action:** finish ideating, then generate the PPTX of recommended tests from the live
+shortlist above. Every item must cite its experiment evidence or be marked unevidenced.
