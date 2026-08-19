@@ -1,0 +1,25 @@
+{
+  "key": "home-page-v2",
+  "name": "Home page v2 — Travel Quiz banner, tile CTAs, offers into the widget",
+  "description": "Travel Quiz promo banner full-bleed under the destination explorer; property tiles relabelled View Availability / View Rooms with the second pointed at /rooms-suites; offer CTAs open the on-site widget carrying the promo code instead of linking out to the booking engine; Top Offers moved onto the destination explorer's sand ground.",
+  "status": "draft",
+  "targets": [
+    {
+      "siteKey": "prep-outrigger",
+      "slug": "home",
+      "version": "latest"
+    }
+  ],
+  "injections": [
+    {
+      "type": "js",
+      "file": "overlay.js"
+    }
+  ],
+  "liveUrls": [
+    "https://prep.outrigger.com/",
+    "https://www.outrigger.com/"
+  ],
+  "createdAt": "2026-08-19T00:00:00.000Z",
+  "updatedAt": "2026-08-19T00:00:00.000Z"
+}
