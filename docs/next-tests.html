@@ -46,6 +46,23 @@
   .note{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
         border-radius:9px;padding:16px 19px;margin:26px 0;font-size:15px;color:var(--muted);}
   .note b{color:var(--ink);}
+  .sep{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px 26px;margin:34px 0 26px;}
+  .sep h2{font-size:21px;letter-spacing:-.02em;font-weight:700;margin:0 0 4px;}
+  .sep .sub{color:var(--muted);font-size:14.5px;margin:0 0 20px;}
+  .rule{display:flex;gap:13px;align-items:flex-start;margin:0 0 13px;}
+  .rule .no{font:700 12px/22px var(--mono);width:22px;height:22px;flex:none;text-align:center;border-radius:6px;
+            background:var(--surface2);color:var(--muted);}
+  .rule p{margin:0;font-size:15px;}
+  table.sepgrid{margin-top:20px;font-size:14px;}
+  table.sepgrid th{text-align:left;font:650 10.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+    color:var(--faint);padding:0 9px 8px;border-bottom:1px solid var(--line-strong);}
+  table.sepgrid td{padding:11px 9px;vertical-align:top;}
+  table.sepgrid td:first-child{font-weight:650;white-space:nowrap;}
+  .tag{display:inline-block;font:650 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+       padding:4px 8px;border-radius:5px;white-space:nowrap;}
+  .tag.tog{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok);}
+  .tag.alo{background:color-mix(in srgb,var(--danger) 13%,transparent);color:var(--danger);}
+  .tag.acc{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn);}
   footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
 </style>
 
@@ -190,6 +207,70 @@
     building a <b>vacation-type chooser</b>? Different builds, different primary metrics. Saving is
     not booking.</p>
   </div>
+</div>
+
+
+<div class="sep">
+  <h2>What can share a test, and what can't</h2>
+  <p class="sub">Six changes, three tests. The split isn't about how big each change is — it's about
+  whether the result would still mean something afterwards.</p>
+
+  <div class="rule"><span class="no">1</span><p><b>One hypothesis per test — not one change.</b>
+  Two changes belong together when a single sentence explains why both should work. If you need two
+  sentences, you need two tests.</p></div>
+  <div class="rule"><span class="no">2</span><p><b>Anything global runs alone.</b> A change to a
+  component every other CTA passes through can't be attributed to any one of them.</p></div>
+  <div class="rule"><span class="no">3</span><p><b>Anything that could move the primary
+  <i>down</i> runs alone.</b> Bundled with a winner, a diversion is invisible — the bundle nets
+  positive and you ship the thing that costs you bookings.</p></div>
+  <div class="rule"><span class="no">4</span><p><b>Instrumentation buys you the rest.</b> Changes
+  that fire distinguishable events can share a test, because the funnel tells you which stage moved.
+  That is the difference between bundling and guessing.</p></div>
+
+  <table class="sepgrid">
+    <tr><th>Change</th><th>Goes</th><th>Why</th></tr>
+
+    <tr><td>Property tile —<br>one ungated CTA</td><td><span class="tag tog">Bundle A</span></td>
+      <td>Same hypothesis as the offer picker: defer the expensive commitment. Fires its own event, so
+      the funnel separates it from the offer path afterwards.</td></tr>
+
+    <tr><td>Offer tile —<br>pick a property first</td><td><span class="tag tog">Bundle A</span></td>
+      <td>Same sentence, different surface. <span class="m">offer → property picked → widget opened →
+      engine reached</span> keeps it distinguishable inside the bundle.</td></tr>
+
+    <tr><td>Tile copy —<br>distinctive detail</td><td><span class="tag acc">Bundle A · accepted risk</span></td>
+      <td><b>This is the one honest compromise.</b> Strictly it's a different lever — content quality,
+      not commitment cost — and it could carry the bundle on its own. It rides along because it lives
+      inside the same card as the CTA change and can't be isolated without a third arm. If A wins,
+      tile engagement in the guardrails tells you whether the copy or the CTA did the work; if you
+      want certainty, run the copy as arm 3.</td></tr>
+
+    <tr><td>Widget date default</td><td><span class="tag alo">Test B alone</span></td>
+      <td><b>Rule 2.</b> It sits behind every CTA on the page, including both of A's. Bundled, a win
+      can't be assigned to the tile, the picker, or the gate — and the gate is the most valuable thing
+      to learn about, because it's in front of 100% of booking intent.</td></tr>
+
+    <tr><td>Trip Planner banner</td><td><span class="tag alo">Test C alone</span></td>
+      <td><b>Rule 3.</b> It is the only change here that can plausibly <i>reduce</i> Rooms &amp; Rates
+      arrivals — it offers a cheaper commitment than booking, directly after the surface that
+      creates booking intent. Bundled with A, A's lift would hide the diversion and you'd ship both.</td></tr>
+
+    <tr><td>Funnel instrumentation</td><td><span class="tag tog">Ships before A</span></td>
+      <td>Not a variant — it's the precondition that makes bundling A legitimate. Land it first,
+      confirm the events fire, then start A.</td></tr>
+  </table>
+
+  <p style="font-size:14.5px;color:var(--muted);margin:22px 0 0;padding-top:16px;border-top:1px solid var(--line)">
+  <b>Why not run all six at once?</b> You'd get one number and no idea which change produced it — and
+  because C can move the primary the other way, that number could be positive while a change inside it
+  is losing you bookings. The hero experiment is the precedent: it moved several things at once and
+  the useful finding came from the metrics that <i>disagreed</i> with each other, not the headline.</p>
+
+  <p style="font-size:14.5px;color:var(--muted);margin:14px 0 0">
+  <b>Sequencing.</b> Instrumentation → <b>A</b> (~14 days) → <b>B</b> (~14 days) → <b>C</b>, last
+  because its build depends on an unresolved product question and its risk is best judged once you know
+  what A and B did to the funnel. A and B could run concurrently only if held to disjoint audiences —
+  otherwise B's change is present inside A's arms.</p>
 </div>
 
 <div class="measure">
