@@ -151,9 +151,9 @@
         b.setAttribute('data-bw-offer-code-type', 'Promotion');
       }
       if (nights) b.setAttribute('data-bw-length-of-stay', nights);
-      b.setAttribute('data-alt-cta-text', 'Search availability');
+      b.setAttribute('data-alt-cta-text', 'View Availability');
       b.setAttribute('data-tag-item', 'top_offers_widget_cta');
-      b.innerHTML = 'Search availability' + ARROW('#332926');
+      b.innerHTML = 'View Availability' + ARROW('#332926');
 
       a.replaceWith(b);
       n++;
