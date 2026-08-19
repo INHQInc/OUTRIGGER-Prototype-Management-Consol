@@ -472,3 +472,40 @@ evidence in the experiment and it was only half-read until now.
 Replacing the tile's two competing CTAs with **one ungated action** — and the marketing sentence
 with the distinctive detail — will increase progression from the tile, because the data shows
 guests already prefer the ungated path by an order of magnitude.
+
+### 12b · Correction to the correction — the routes split two ways
+
+Confirmed by Bryan. **Three of four routes gate on dates; one doesn't and has none.**
+
+| Route | Mechanism | Date behaviour | Measured |
+|---|---|---|---|
+| Property tiles | opens the on-site widget (`#bookingWidget`) | **forces date selection** | +1 click / 18 days |
+| Header BOOK NOW | opens the widget | **forces date selection** | not separately measured |
+| Sticky bar BOOK NOW | opens the widget | **forces date selection** | not separately measured |
+| **Offer tiles** ×5 | **direct link to SynXis** | **no dates** — `promo` + `nights` only | +1 click / 18 days |
+
+Verified offer links carry `chain · dest · nights · promo · filter · adult · level` and **never
+`arrive`/`depart`**, e.g. `?level=hotel&chain=18497&promo=OCEANVIEW&nights=5&dest=ORH`.
+Note `dest=ORH` does not filter — SynXis normalises to `level=chain` and returns worldwide.
+
+### The synthesis — both failure modes, same outcome
+- **Gated routes** demand a commitment (exact dates) *before* the guest has chosen a property.
+- **The ungated route** ships them to a rates engine with **no dates and no property**, i.e. a
+  worldwide list with a nights count.
+
+Both are flat. **Neither serves a guest who is still choosing.** That is the finding, and it no
+longer depends on which mechanism you look at.
+
+### What this does to P1
+P1 only ever applied to **the offer tiles** — the one route where appending `arrive`/`depart`
+is both possible and meaningful. It is also the lowest-volume route (198 clicks). So P1 was
+always smaller than I framed it, and removing it costs less than section 10 claims.
+
+**The bigger opportunity is the other three routes**, and it is not "carry dates" — it is
+**relax the date gate**: month-level or flexible default in the widget instead of an exact-date
+grid. Same capture, less commitment.
+
+### Standing evidence for the tile test (unchanged and strengthened)
+Same card, same guests: ungated **Property Title +11.3%**, gated **Book Now +1 click**. They
+take the ungated path by an order of magnitude. An ungated primary action on the tile
+("View Property") is the cheapest way to act on that.
