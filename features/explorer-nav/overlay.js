@@ -125,7 +125,9 @@
           if (state.dest === name) return;
           state.dest = name; state.region = null;
           paintDests();          // repaint immediately; no waiting, no jump
-          item.click();
+          // resolve live, for the same detached-node reason as the regions
+          var live = destItems().filter(function (x) { return label(x) === name; })[0] || item;
+          live.click();
           setTimeout(renderRegions, 700);
         });
         destBtns[name] = b;
@@ -153,6 +155,10 @@
 
       rb.forEach(function (src) {
         var name = label(src);
+        // The site REPLACES these tab nodes after render, so a captured reference
+        // goes detached and .click() on it silently does nothing. Resolve the
+        // live node at click time instead — data-region-index is stable.
+        var idx = src.getAttribute('data-region-index');
         var li = document.createElement('li'), b = document.createElement('button');
         b.type = 'button';
         b.textContent = name.replace(' (Big Island)', '');
@@ -166,7 +172,13 @@
           // paint the selection now; the site filters the cards underneath
           [].slice.call(regs.querySelectorAll('button')).forEach(function (x) { x.classList.remove('on'); x.removeAttribute('aria-current'); });
           b.classList.add('on'); b.setAttribute('aria-current', 'true');
-          src.click();
+          var live = idx !== null
+            ? document.querySelector('.destination-selection-tabs-lists button[data-region-index="' + idx + '"]')
+            : null;
+          if (!live) {
+            live = regionBtns().filter(function (x) { return label(x) === name; })[0];
+          }
+          if (live) live.click();
         });
         li.appendChild(b); regs.appendChild(li);
       });
