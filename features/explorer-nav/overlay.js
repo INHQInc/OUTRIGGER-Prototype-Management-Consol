@@ -56,6 +56,8 @@
       '#destination-selection .col-md-4{display:none !important}',
       '#destination-selection .col-md-8{flex:0 0 100%;max-width:100%}',
       '.destination-selection-tabs-list{display:none !important}',  // site's own tabs — we drive them
+      // the wrapper is flex; without this the bar sits BESIDE the name and overlaps it
+      '.destination-selection-tabs{display:block !important}',
 
       // the destination name keeps its own line; the bar carries the navigation
       '#opmc-title{display:flex;align-items:baseline;margin:0 0 16px}',
