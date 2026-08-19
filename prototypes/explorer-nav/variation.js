@@ -5,10 +5,14 @@
  * this same hierarchy — on the map, zooming IS navigating, so the levels here
  * are the levels there.
  *
- *   Level 0  "Where to?"     → the five destinations, with counts
- *   Level 1  "Hawaii"        → its four islands, with counts
- *   Level 1  "Thailand"      → no sub-regions; the row stops, it does not sit empty
- *   Level 2  "Oahu"          → properties only
+ *   Level 0  "Where to?"     → the five destinations; the live one stays selected
+ *   Level 1  "Hawaii"        → its four islands; one always selected, defaulting
+ *                              to whatever the site is already showing
+ *   Level 1  "Thailand"      → no sub-regions; the bar says so rather than sitting empty
+ *
+ * There is no level 2. Drilling into a region hid its siblings and left the bar
+ * with a lone back arrow — selecting a region now marks it and filters the cards
+ * while the other islands stay one click away. Something is ALWAYS selected.
  *
  * The rule: THE ROW SHOWS THE CHILDREN OF WHEREVER YOU ARE. One rule, every
  * depth, never an empty row — which matters because the estate is lopsided:
@@ -83,6 +87,8 @@
         'border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:8px 13px;cursor:pointer;' +
         'transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}',
       '#opmc-children button:hover{background:#fff;color:' + NAVY + ';border-color:#fff}',
+      '#opmc-children button.on{background:#fff;color:' + NAVY + ';border-color:#fff;font-weight:650}',
+      '#opmc-children button.on i{opacity:.7}',
       '#opmc-children button:focus-visible{outline:2px solid #fff;outline-offset:2px}',
       '#opmc-children button i{font-style:normal;opacity:.55;font-weight:500;font-size:12px}',
       '#opmc-children button:hover i{opacity:.7}',
@@ -119,11 +125,12 @@
     bar.appendChild(barlbl); bar.appendChild(crumb); bar.appendChild(kids);
     nav.appendChild(bar);
 
-    var state = { level: 1, dest: (h2.textContent || '').trim(), region: null };
+    var state = { level: 1, dest: (h2.textContent || '').trim(), region: null };  // region filled in on first render
 
-    function pill(label, n, onClick) {
+    function pill(label, n, onClick, selected) {
       var li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.textContent = label;
+      if (selected) { b.className = 'on'; b.setAttribute('aria-current', 'true'); }
       if (n) { var i = document.createElement('i'); i.textContent = n; b.appendChild(i); }
       // the parenthetical is dead weight in a chip
       b.firstChild.nodeValue = b.firstChild.nodeValue.replace(' (Big Island)', '');
@@ -152,7 +159,6 @@
 
       if (state.level === 0) {
         h2.textContent = 'Where to?';
-        count.textContent = '5 destinations · 16 resorts';
         destItems().forEach(function (item) {
           var name = (item.innerText || '').replace(/\s+/g, ' ').trim();
           if (!name) return;
@@ -160,37 +166,34 @@
             item.click();
             state.level = 1; state.dest = name; state.region = null;
             setTimeout(render, 900);
-          });
+          }, name === state.dest);              // the live destination stays selected
         });
         return;
       }
 
-      if (state.level === 1) {
-        crumbBtn('All destinations', function () { state.level = 0; render(); });
-        h2.textContent = state.dest;
-        var rb = regionBtns();
-        if (rb.length) {
-          count.textContent = plural(COUNTS.dest[state.dest] || rb.length, 'resort');
-          rb.forEach(function (b) {
-            var name = (b.innerText || '').replace(/\s+/g, ' ').trim();
-            pill(name, COUNTS.region[name] || '', function () {
-              b.click();
-              state.level = 2; state.region = name;
-              setTimeout(render, 900);
-            });
-          });
-        } else {
-          // lopsided estate: this destination has no region tier, so the row stops
-          note('No sub-regions \u2014 all ' + plural(COUNTS.dest[state.dest] || 0, 'resort') + ' shown');
-        }
+      // level 1 — the destination, with its regions as siblings. Selecting a
+      // region marks it and filters; it does NOT drill away from the others,
+      // so there is always exactly one chip selected and nothing to get lost in.
+      crumbBtn('All destinations', function () { state.level = 0; render(); });
+      h2.textContent = state.dest;
+
+      var rb = regionBtns();
+      if (!rb.length) {
+        note('No sub-regions \u2014 all ' + plural(COUNTS.dest[state.dest] || 0, 'resort') + ' shown');
         return;
       }
 
-      // level 2 — one arrow, up exactly one level. Two arrows side by side
-      // (to the destination and to all destinations) read as a glitch.
-      crumbBtn(state.dest, function () { state.level = 1; state.region = null; render(); });
-      h2.textContent = state.region;
-      note(plural(COUNTS.region[state.region] || 0, 'resort'));
+      // default to whatever the site is actually showing — the first region
+      if (!state.region) state.region = (rb[0].innerText || '').replace(/\s+/g, ' ').trim();
+
+      rb.forEach(function (b) {
+        var name = (b.innerText || '').replace(/\s+/g, ' ').trim();
+        pill(name, COUNTS.region[name] || '', function () {
+          b.click();
+          state.region = name;
+          setTimeout(render, 700);
+        }, name === state.region);
+      });
     }
 
     render();
