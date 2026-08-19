@@ -41,30 +41,31 @@
     var st = document.createElement('style');
     st.id = 'opmc-tq-style';
     st.textContent = [
-      '#opmc-tq-banner{position:relative;width:100%;display:block;overflow:hidden;' +
-        'background:linear-gradient(180deg,#12354C 0%,#0A1F2E 55%,#050F18 100%)}',
+      '#opmc-tq-banner{position:relative;width:100%;display:block;overflow:hidden;background:#0E2E42}',
+      // ONE layer at cover. Compositing the art over a hand-made gradient left a hard
+      // vertical seam where the two grounds met — letting the artwork be the ground
+      // across the full width removes the boundary entirely.
       '#opmc-tq-banner .tq-bg{position:absolute;inset:0;background-image:url("' + PROMO_IMG + '");' +
-        'background-size:auto 118%;background-position:right -40px center;background-repeat:no-repeat;opacity:.9}',
-      // second, mirrored and faint, so the field reads as artwork rather than one lone motif
-      '#opmc-tq-banner .tq-bg2{position:absolute;inset:0;background-image:url("' + PROMO_IMG + '");' +
-        'background-size:auto 150%;background-position:left 46% top -90px;background-repeat:no-repeat;' +
-        'opacity:.16;transform:scaleX(-1)}',
+        'background-size:cover;background-position:center 32%;background-repeat:no-repeat}',
       '#opmc-tq-banner .tq-scrim{position:absolute;inset:0;background:linear-gradient(90deg,' +
-        'rgba(8,26,40,.94) 0%,rgba(8,26,40,.7) 38%,rgba(8,26,40,.1) 72%,rgba(8,26,40,0) 100%)}',
+        'rgba(8,26,40,.9) 0%,rgba(8,26,40,.72) 34%,rgba(8,26,40,.35) 62%,rgba(8,26,40,.12) 100%)}',
       '#opmc-tq-banner .tq-inner{position:relative;max-width:1280px;margin:0 auto;padding:88px 36px;' +
         'display:flex;flex-direction:column;align-items:flex-start;min-height:440px;justify-content:center}',
       '#opmc-tq-banner .tq-eyebrow{font:900 14px/18px DuplicateIonic-Black,sans-serif;color:#fff;' +
         'letter-spacing:4px;text-transform:uppercase;margin:0 0 28px}',
       '#opmc-tq-banner .tq-title{font:clamp(34px,4.4vw,56px)/1.1 DuplicateSans-Regular,sans-serif;' +
         'color:#fff;margin:0 0 18px;max-width:16ch}',
-      '#opmc-tq-banner .tq-text{font:325 16px/25px Montserrat-Light,sans-serif;color:#fff;margin:0 0 34px;max-width:52ch}',
+      '#opmc-tq-banner .tq-text{font:325 16px/25px Montserrat-Light,sans-serif;color:#fff;margin:0 0 34px;max-width:50ch}',
       '#opmc-tq-banner .tq-cta{font:500 16px/16px DuplicateSans-Medium,sans-serif;color:#fff;background:transparent;' +
         'border:1px solid #fff;padding:16px;display:inline-flex;align-items:center;text-decoration:none;transition:.15s}',
       '#opmc-tq-banner .tq-cta:hover{background:#fff;color:#0B2233}',
       '#opmc-tq-banner .tq-cta:hover path{stroke:#0B2233}',
+      // Top Offers onto the destination explorer's sand ground. `.is-sand` is the site's
+      // own theme (it flips the type to dark); the explorer's exact warm tone is not any
+      // theme class, so it is set explicitly so the two sections read as one surface.
+      '.offers-slider.is-sand{background-color:rgb(241,239,237) !important}',
       '@media(max-width:767px){#opmc-tq-banner .tq-inner{padding:56px 20px;min-height:340px}' +
-        '#opmc-tq-banner .tq-bg{background-size:auto 70%;background-position:right -60px bottom}' +
-        '#opmc-tq-banner .tq-scrim{background:linear-gradient(180deg,rgba(8,26,40,.5) 0%,rgba(8,26,40,.92) 100%)}}'
+        '#opmc-tq-banner .tq-scrim{background:linear-gradient(180deg,rgba(8,26,40,.55) 0%,rgba(8,26,40,.9) 100%)}}'
     ].join('');
     document.head.appendChild(st);
   }
@@ -79,7 +80,6 @@
     el.setAttribute('data-tag-item', 'travel_quiz_banner');
     el.innerHTML =
       '<div class="tq-bg" aria-hidden="true"></div>' +
-      '<div class="tq-bg2" aria-hidden="true"></div>' +
       '<div class="tq-scrim" aria-hidden="true"></div>' +
       '<div class="tq-inner">' +
         '<div class="tq-eyebrow">Outrigger Travel Quiz</div>' +
@@ -150,7 +150,15 @@
     return n;
   }
 
-  function apply() { styles(); banner(); tiles(); offers(); }
+  /* ------------------------------------------------- 4. Top Offers → sand */
+  function offersTheme() {
+    var o = document.querySelector('.offers-slider');
+    if (!o || o.classList.contains('is-sand')) return;
+    o.classList.remove('is-turquoise');
+    o.classList.add('is-sand');
+  }
+
+  function apply() { styles(); banner(); tiles(); offers(); offersTheme(); }
 
   apply();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
