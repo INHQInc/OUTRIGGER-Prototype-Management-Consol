@@ -722,3 +722,41 @@ ones later.**
 
 **Next action:** finish ideating, then generate the PPTX of recommended tests from the live
 shortlist above. Every item must cite its experiment evidence or be marked unevidenced.
+
+---
+
+### ★ addendum · Trip Planner banner placed directly under the destination explorer
+
+**Decision (Bryan):** the Trip Planner banner sits **immediately below the destination explorer**.
+
+**In favour.** It is high on the page, so scroll depth (flat/negative at every level) does not
+bury it — a real advantage over any lower placement. And it is adjacent to the moment the
+"which trip is this?" question is live, which is when a save is most meaningful.
+
+**The risk, and it comes straight from the data.** The single clearest reading in the
+experiment is that **guests take the cheapest available commitment** — ungated Property Title
+**+11.3%** against gated Book Now **+1 click**. A *save* is cheaper than a *rates click*. Placed
+directly after the explorer, the banner offers an easier alternative at exactly the moment we
+want progression.
+
+**So the question is empirical and sharp: does it capture leavers, or divert progressors?**
+- Capturing someone who was going to leave anyway = pure gain
+- Diverting someone who would have reached rates = a loss disguised as engagement
+
+**How to tell them apart — required for this test:**
+| Measure | Direction |
+|---|---|
+| `Visit Page: BE: Rooms & Rates` | **Primary. Must not fall.** This is the whole question. |
+| Trip Planner starts / saves per visitor | Secondary — the thing the banner is for |
+| Explorer engagements per BE arrival | **Anti-goal — must not increase** |
+| Bookings per BE arrival (34.4%) | Guardrail |
+
+If saves rise **and** BE arrivals hold, it captured leavers — ship it. If saves rise **and** BE
+arrivals fall, it diverted progressors — move it below the offers, or make it conditional.
+
+**Cheaper variant worth considering:** show it **conditionally** — after two or more exploration
+actions with no rates click. That targets the leaver population directly rather than offering
+everyone an easier exit, and it removes the cannibalisation risk instead of measuring it.
+
+**Still unresolved (blocking the brief):** is this promoting the existing **favourites** feature,
+or building a **vacation-type chooser**? Different builds, different primary metrics.
