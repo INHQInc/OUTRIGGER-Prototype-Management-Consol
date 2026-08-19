@@ -15,8 +15,9 @@
  * Hawaii has regions beneath it and the other four destinations do not. A fixed
  * two-row strip would show an empty second row four times out of five.
  *
- * The large destination name is the "you are here"; the back chips above it are
- * the way out. Counts do real work — "Mauritius 1" tells you not to bother
+ * The large destination name is the "you are here"; the back chip sits beside
+ * it. All of it on ONE row — back · name · count · children — because stacking
+ * them cost ~110px and pushed the property cards below the fold. Counts do real work — "Mauritius 1" tells you not to bother
  * drilling, "Hawaii 8" tells you there is something to explore.
  *
  * Switching is delegated to the site's own controls (the destination dropdown's
@@ -51,26 +52,31 @@
       '#destination-selection .col-md-4{display:none !important}',
       '#destination-selection .col-md-8{flex:0 0 100%;max-width:100%}',
       '.destination-selection-tabs-list{display:none !important}',  // site's own tabs — we drive them
-      '#' + NAV_ID + '{width:100%}',
-      '#opmc-crumb{display:flex;align-items:center;gap:10px;margin:0 0 2px;min-height:26px}',
-      '#opmc-crumb button{font:500 15px/15px DuplicateSans-Medium,sans-serif;color:rgba(51,41,38,.7);' +
-        'background:none;border:0;padding:4px 0;cursor:pointer;display:inline-flex;align-items:center;gap:6px}',
+
+      // ONE row: back · name · count · children. Stacking these cost ~110px of
+      // vertical space and pushed the property cards below the fold.
+      '#' + NAV_ID + '{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px 18px;width:100%;margin:0 0 4px}',
+      '#opmc-crumb{display:flex;align-items:baseline;gap:8px;margin:0}',
+      '#opmc-crumb button{font:500 15px/15px DuplicateSans-Medium,sans-serif;color:rgba(51,41,38,.62);' +
+        'background:none;border:0;padding:0;cursor:pointer;display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}',
       '#opmc-crumb button:hover{color:rgb(0,69,97)}',
       '#opmc-crumb button:focus-visible{outline:2px solid rgb(0,69,97);outline-offset:2px}',
-      '#opmc-title{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 14px}',
-      'h2.destination-selection-selected{position:relative;padding-bottom:6px;margin:0 !important}',
+      '#opmc-crumb .sep{opacity:.3;font-size:15px}',
+      '#opmc-title{display:flex;align-items:baseline;gap:12px;margin:0}',
+      'h2.destination-selection-selected{position:relative;padding-bottom:5px;margin:0 !important;white-space:nowrap}',
       'h2.destination-selection-selected::after{content:"";position:absolute;left:0;right:0;bottom:0;' +
         'height:3px;background:rgb(0,69,97)}',
-      '#opmc-count{font:500 15px/15px Montserrat-Light,sans-serif;color:rgba(51,41,38,.6)}',
-      '#opmc-children{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none}',
-      '#opmc-children button{font:500 16px/16px DuplicateSans-Medium,sans-serif;color:rgb(51,41,38);' +
-        'background:transparent;border:1px solid rgba(51,41,38,.32);border-radius:999px;padding:10px 18px;' +
-        'cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:7px}',
+      '#opmc-count{font:500 14px/14px Montserrat-Light,sans-serif;color:rgba(51,41,38,.55);white-space:nowrap}',
+      '#opmc-children{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none;align-items:baseline}',
+      '#opmc-children button{font:500 15px/15px DuplicateSans-Medium,sans-serif;color:rgb(51,41,38);' +
+        'background:transparent;border:1px solid rgba(51,41,38,.3);border-radius:999px;padding:9px 16px;' +
+        'cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}',
       '#opmc-children button:hover{background:rgb(0,69,97);border-color:rgb(0,69,97);color:#fff}',
       '#opmc-children button:focus-visible{outline:2px solid rgb(0,69,97);outline-offset:2px}',
-      '#opmc-children button i{font-style:normal;opacity:.55;font-size:13px}',
-      '#opmc-children button:hover i{opacity:.8}',
-      '@media(max-width:767px){#opmc-children button{font-size:14px;padding:8px 14px}}'
+      '#opmc-children button i{font-style:normal;opacity:.5;font-size:12.5px}',
+      '#opmc-children button:hover i{opacity:.85}',
+      '@media(max-width:900px){h2.destination-selection-selected{white-space:normal}' +
+        '#opmc-children button{font-size:14px;padding:8px 14px}}'
     ].join('');
     document.head.appendChild(st);
   }
@@ -94,9 +100,8 @@
     kids.setAttribute('aria-label', 'Choose a destination');
 
     h2.parentNode.insertBefore(nav, h2);
-    nav.appendChild(crumb); nav.appendChild(title);
     title.appendChild(h2); title.appendChild(count);
-    nav.appendChild(kids);
+    nav.appendChild(crumb); nav.appendChild(title); nav.appendChild(kids);
 
     var state = { level: 1, dest: (h2.textContent || '').trim(), region: null };
 
