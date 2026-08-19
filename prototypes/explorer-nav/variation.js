@@ -51,12 +51,17 @@
       // tier 1 — destinations. Selected one keeps the site's 60px headline;
       // the rest sit on its baseline at the site's tab size.
       '#opmc-dests{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 20px;padding:0;margin:0 0 18px;list-style:none}',
-      '#opmc-dests h2.destination-selection-selected{margin:0 !important;position:relative;padding-bottom:6px}',
-      '#opmc-dests h2.destination-selection-selected::after{content:"";position:absolute;left:0;right:0;bottom:0;' +
-        'height:3px;background:' + NAVY + '}',
+      'h2.destination-selection-selected{display:none !important}',   // we render the name ourselves
       '#opmc-dests button{font:500 18px/18px DuplicateSans-Medium,sans-serif;color:rgba(51,41,38,.5);' +
-        'background:none;border:0;padding:6px 0;cursor:pointer;transition:color .15s;white-space:nowrap}',
+        'background:none;border:0;padding:6px 0;cursor:pointer;white-space:nowrap;position:relative;' +
+        'transition:color .15s}',
       '#opmc-dests button:hover{color:' + NAVY + '}',
+      // the selected destination IS the headline — a class change, never a DOM move
+      '#opmc-dests button.on{font:60px/66px DuplicateSans-Regular,sans-serif;color:rgb(33,37,41);' +
+        'padding:0 0 6px;cursor:default}',
+      '#opmc-dests button.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;' +
+        'background:' + NAVY + '}',
+      '@media(max-width:767px){#opmc-dests button.on{font-size:38px;line-height:44px}}',
       '#opmc-dests button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:3px}',
 
       // tier 2 — regions of the selected destination
@@ -102,39 +107,49 @@
     nav.appendChild(regs); nav.appendChild(note);
 
     var state = { dest: label(h2), region: null };
+    var destBtns = {};   // name -> button, built once
 
-    function render() {
-      dests.innerHTML = ''; regs.innerHTML = ''; note.textContent = '';
-
-      // tier 1 — the selected destination IS the headline; the rest sit beside it
+    // Destination row is built ONCE. Switching only toggles a class — clearing
+    // and rebuilding it (and moving the 60px heading between list items) made
+    // the whole row collapse and re-flow for a frame, which read as a flicker.
+    function buildDests() {
       destItems().forEach(function (item) {
         var name = label(item);
-        if (!name) return;
+        if (!name || destBtns[name]) return;
         var li = document.createElement('li');
-        if (name === state.dest) {
-          h2.textContent = name;
-          li.appendChild(h2);
-        } else {
-          var b = document.createElement('button');
-          b.type = 'button'; b.textContent = name;
-          b.setAttribute('data-tag-item', 'home_destination_select');
-          b.addEventListener('click', function () {
-            item.click();
-            state.dest = name; state.region = null;
-            setTimeout(render, 900);
-          });
-          li.appendChild(b);
-        }
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = name;
+        b.setAttribute('data-tag-item', 'home_destination_select');
+        b.addEventListener('click', function () {
+          if (state.dest === name) return;
+          state.dest = name; state.region = null;
+          paintDests();          // repaint immediately; no waiting, no jump
+          item.click();
+          setTimeout(renderRegions, 700);
+        });
+        destBtns[name] = b;
+        li.appendChild(b);
         dests.appendChild(li);
       });
+    }
 
-      // tier 2 — regions of it, one always selected
+    function paintDests() {
+      Object.keys(destBtns).forEach(function (name) {
+        var b = destBtns[name], on = name === state.dest;
+        b.classList.toggle('on', on);
+        if (on) { b.setAttribute('aria-current', 'true'); b.setAttribute('role', 'heading'); b.setAttribute('aria-level', '2'); }
+        else { b.removeAttribute('aria-current'); b.removeAttribute('role'); b.removeAttribute('aria-level'); }
+      });
+    }
+
+    // Regions genuinely differ per destination, so this row is rebuilt — but it
+    // is the small row, and it is rebuilt only after the site has switched.
+    function renderRegions() {
       var rb = regionBtns();
-      if (!rb.length) {
-        note.textContent = 'All resorts in ' + state.dest + ' shown';
-        return;
-      }
-      if (!state.region) state.region = label(rb[0]);   // match what the site is already showing
+      regs.innerHTML = ''; note.textContent = '';
+      if (!rb.length) { note.textContent = 'All resorts in ' + state.dest + ' shown'; return; }
+      if (!state.region) state.region = label(rb[0]);
 
       rb.forEach(function (src) {
         var name = label(src);
@@ -146,13 +161,18 @@
         if (n) { var i = document.createElement('i'); i.textContent = n; b.appendChild(i); }
         b.setAttribute('data-tag-item', 'home_region_select');
         b.addEventListener('click', function () {
-          src.click();
+          if (state.region === name) return;
           state.region = name;
-          setTimeout(render, 700);
+          // paint the selection now; the site filters the cards underneath
+          [].slice.call(regs.querySelectorAll('button')).forEach(function (x) { x.classList.remove('on'); x.removeAttribute('aria-current'); });
+          b.classList.add('on'); b.setAttribute('aria-current', 'true');
+          src.click();
         });
         li.appendChild(b); regs.appendChild(li);
       });
     }
+
+    function render() { buildDests(); paintDests(); renderRegions(); }
 
     render();
     var ctl = { render: render, state: state };
