@@ -15,9 +15,13 @@
  * Hawaii has regions beneath it and the other four destinations do not. A fixed
  * two-row strip would show an empty second row four times out of five.
  *
- * The large destination name is the "you are here"; the back chip sits beside
- * it. All of it on ONE row — back · name · count · children — because stacking
- * them cost ~110px and pushed the property cards below the fold. Counts do real work — "Mauritius 1" tells you not to bother
+ * The large destination name is the "you are here". Navigation lives in a navy
+ * bar directly beneath it: a back arrow and the child chips. Counts are dropped
+ * from the name row — "Hawaii 8 resorts ← All destinations" put four competing
+ * text elements on one line and read as clutter.
+ *
+ * NOTE: render() owns every mutation inside the bar. Do NOT add a MutationObserver
+ * that edits the bar — an earlier version did and looped the renderer to a hang. Counts do real work — "Mauritius 1" tells you not to bother
  * drilling, "Hawaii 8" tells you there is something to explore.
  *
  * Switching is delegated to the site's own controls (the destination dropdown's
@@ -39,7 +43,7 @@
     dest:   { 'Hawaii': 8, 'Thailand': 4, 'Fiji': 2, 'Mauritius': 1, 'Maldives': 1 },
     region: { 'Oahu': 4, 'Maui': 2, 'Hawaii Island (Big Island)': 1, 'Kauai': 1 }
   };
-  var STYLE_ID = 'opmc-nav-style', NAV_ID = 'opmc-nav';
+  var STYLE_ID = 'opmc-nav-style', NAV_ID = 'opmc-nav', NAVY = 'rgb(0,69,97)';
 
   function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
@@ -53,30 +57,35 @@
       '#destination-selection .col-md-8{flex:0 0 100%;max-width:100%}',
       '.destination-selection-tabs-list{display:none !important}',  // site's own tabs — we drive them
 
-      // ONE row: back · name · count · children. Stacking these cost ~110px of
-      // vertical space and pushed the property cards below the fold.
-      '#' + NAV_ID + '{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px 18px;width:100%;margin:0 0 4px}',
-      '#opmc-crumb{display:flex;align-items:baseline;gap:8px;margin:0}',
-      '#opmc-crumb button{font:500 15px/15px DuplicateSans-Medium,sans-serif;color:rgba(51,41,38,.62);' +
-        'background:none;border:0;padding:0;cursor:pointer;display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}',
-      '#opmc-crumb button:hover{color:rgb(0,69,97)}',
-      '#opmc-crumb button:focus-visible{outline:2px solid rgb(0,69,97);outline-offset:2px}',
-      '#opmc-crumb .sep{opacity:.3;font-size:15px}',
-      '#opmc-title{display:flex;align-items:baseline;gap:12px;margin:0}',
-      'h2.destination-selection-selected{position:relative;padding-bottom:5px;margin:0 !important;white-space:nowrap}',
-      'h2.destination-selection-selected::after{content:"";position:absolute;left:0;right:0;bottom:0;' +
-        'height:3px;background:rgb(0,69,97)}',
-      '#opmc-count{font:500 14px/14px Montserrat-Light,sans-serif;color:rgba(51,41,38,.55);white-space:nowrap}',
-      '#opmc-children{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none;align-items:baseline}',
-      '#opmc-children button{font:500 15px/15px DuplicateSans-Medium,sans-serif;color:rgb(51,41,38);' +
-        'background:transparent;border:1px solid rgba(51,41,38,.3);border-radius:999px;padding:9px 16px;' +
-        'cursor:pointer;transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}',
-      '#opmc-children button:hover{background:rgb(0,69,97);border-color:rgb(0,69,97);color:#fff}',
-      '#opmc-children button:focus-visible{outline:2px solid rgb(0,69,97);outline-offset:2px}',
-      '#opmc-children button i{font-style:normal;opacity:.5;font-size:12.5px}',
-      '#opmc-children button:hover i{opacity:.85}',
-      '@media(max-width:900px){h2.destination-selection-selected{white-space:normal}' +
-        '#opmc-children button{font-size:14px;padding:8px 14px}}'
+      // the destination name keeps its own line; the bar carries the navigation
+      '#opmc-title{display:flex;align-items:baseline;margin:0 0 16px}',
+      'h2.destination-selection-selected{margin:0 !important}',
+      '#opmc-count{display:none}',
+
+      '#' + NAV_ID + '{display:block;width:100%;margin:0 0 6px}',
+      '#opmc-bar{background:' + NAVY + ';color:#fff;border-radius:8px;padding:12px 16px;' +
+        'display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
+      '#opmc-bar .barlbl{font:600 10.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.1em;' +
+        'text-transform:uppercase;opacity:.6;margin-right:2px}',
+      '#opmc-bar .barnote{font-size:13px;opacity:.65}',
+
+      '#opmc-crumb{display:flex;align-items:center;gap:10px;margin:0}',
+      '#opmc-crumb button{width:30px;height:30px;border-radius:6px;border:1px solid rgba(255,255,255,.3);' +
+        'background:transparent;color:#fff;cursor:pointer;font-size:15px;line-height:1;display:inline-flex;' +
+        'align-items:center;justify-content:center;padding:0;transition:.15s}',
+      '#opmc-crumb button:hover{background:#fff;color:' + NAVY + ';border-color:#fff}',
+      '#opmc-crumb button:focus-visible{outline:2px solid #fff;outline-offset:2px}',
+
+      '#opmc-children{display:flex;flex-wrap:wrap;gap:9px;padding:0;margin:0;list-style:none;align-items:center}',
+      '#opmc-children button{font:500 13.5px/1 DuplicateSans-Medium,sans-serif;color:#fff;background:transparent;' +
+        'border:1px solid rgba(255,255,255,.3);border-radius:7px;padding:8px 13px;cursor:pointer;' +
+        'transition:.15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}',
+      '#opmc-children button:hover{background:#fff;color:' + NAVY + ';border-color:#fff}',
+      '#opmc-children button:focus-visible{outline:2px solid #fff;outline-offset:2px}',
+      '#opmc-children button i{font-style:normal;opacity:.55;font-weight:500;font-size:12px}',
+      '#opmc-children button:hover i{opacity:.7}',
+      '@media(max-width:767px){#opmc-bar{padding:11px 12px;gap:8px}' +
+        '#opmc-children button{font-size:12.5px;padding:7px 11px}}'
     ].join('');
     document.head.appendChild(st);
   }
@@ -99,9 +108,14 @@
     var kids   = document.createElement('ul');  kids.id = 'opmc-children';
     kids.setAttribute('aria-label', 'Choose a destination');
 
+    var bar = document.createElement('div'); bar.id = 'opmc-bar';
+    var barlbl = document.createElement('span'); barlbl.className = 'barlbl'; barlbl.textContent = 'Where';
+
     h2.parentNode.insertBefore(nav, h2);
+    nav.parentNode.insertBefore(title, nav);
     title.appendChild(h2); title.appendChild(count);
-    nav.appendChild(crumb); nav.appendChild(title); nav.appendChild(kids);
+    bar.appendChild(barlbl); bar.appendChild(crumb); bar.appendChild(kids);
+    nav.appendChild(bar);
 
     var state = { level: 1, dest: (h2.textContent || '').trim(), region: null };
 
@@ -109,20 +123,30 @@
       var li = document.createElement('li'), b = document.createElement('button');
       b.type = 'button'; b.textContent = label;
       if (n) { var i = document.createElement('i'); i.textContent = n; b.appendChild(i); }
+      // the parenthetical is dead weight in a chip
+      b.firstChild.nodeValue = b.firstChild.nodeValue.replace(' (Big Island)', '');
       b.setAttribute('data-tag-item', 'home_destination_nav_pill');
       b.addEventListener('click', onClick);
       li.appendChild(b); kids.appendChild(li);
     }
     function crumbBtn(label, onClick) {
       var b = document.createElement('button'); b.type = 'button';
-      b.innerHTML = '<span aria-hidden="true">&larr;</span>' + label;
+      b.textContent = '\u2190';
+      b.setAttribute('aria-label', 'Back to ' + label);
+      b.title = 'Back to ' + label;
       b.setAttribute('data-tag-item', 'home_destination_nav_back');
       b.addEventListener('click', onClick);
       crumb.appendChild(b);
     }
 
+    function note(text) {
+      var n = document.createElement('span'); n.className = 'barnote'; n.textContent = text;
+      bar.appendChild(n);
+    }
+
     function render() {
       crumb.innerHTML = ''; kids.innerHTML = ''; count.textContent = '';
+      var stale = bar.querySelector('.barnote'); if (stale) stale.remove();
 
       if (state.level === 0) {
         h2.textContent = 'Where to?';
@@ -139,9 +163,8 @@
         return;
       }
 
-      crumbBtn('All destinations', function () { state.level = 0; render(); });
-
       if (state.level === 1) {
+        crumbBtn('All destinations', function () { state.level = 0; render(); });
         h2.textContent = state.dest;
         var rb = regionBtns();
         if (rb.length) {
@@ -156,18 +179,16 @@
           });
         } else {
           // lopsided estate: this destination has no region tier, so the row stops
-          count.textContent = plural(COUNTS.dest[state.dest] || 0, 'resort') +
-            ' — no sub-regions, so the row stops here';
+          note('No sub-regions \u2014 all ' + plural(COUNTS.dest[state.dest] || 0, 'resort') + ' shown');
         }
         return;
       }
 
-      // level 2 — inside a region
-      var sep = document.createElement('span'); sep.textContent = '/'; sep.style.opacity = '.35';
-      crumb.appendChild(sep);
+      // level 2 — one arrow, up exactly one level. Two arrows side by side
+      // (to the destination and to all destinations) read as a glitch.
       crumbBtn(state.dest, function () { state.level = 1; state.region = null; render(); });
       h2.textContent = state.region;
-      count.textContent = plural(COUNTS.region[state.region] || 0, 'resort');
+      note(plural(COUNTS.region[state.region] || 0, 'resort'));
     }
 
     render();
