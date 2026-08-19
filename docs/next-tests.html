@@ -1,303 +1,151 @@
 <title>Next Three Tests</title>
 <style>
-  :root{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;--faint:#8A94A1;
-    --line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;
+  :root{--paper:#F7F8FA;--card:#FFFFFF;--ink:#0E1621;--muted:#5A6572;--faint:#94A0AD;--line:#E1E6EC;
+    --accent:#12507E;--ok:#0B7A47;--dn:#B0261C;--flat:#94A0AD;
     --ui:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-    --paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;--faint:#6C7887;
-    --line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}}
-  :root[data-theme="dark"]{--paper:#0C1014;--surface:#151A21;--surface2:#1C232C;--ink:#E8EEF5;--muted:#9BA7B4;
-    --faint:#6C7887;--line:#232B35;--line-strong:#3A4553;--accent:#6C9BFF;--ok:#3FBF84;--warn:#E0A140;--danger:#F27063;}
-  :root[data-theme="light"]{--paper:#F6F7F9;--surface:#FFFFFF;--surface2:#ECF0F5;--ink:#0F1720;--muted:#57626F;
-    --faint:#8A94A1;--line:#DCE2E9;--line-strong:#BEC7D2;--accent:#1D4ED8;--ok:#0E7C4A;--warn:#B45309;--danger:#B42318;}
-  body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:16.5px;line-height:1.6;
-       margin:0;padding:0 20px 90px;-webkit-font-smoothing:antialiased;}
-  .wrap{max-width:1000px;margin:0 auto;} .measure{max-width:68ch;}
-  header.top{padding:50px 0 24px;border-bottom:1px solid var(--line);margin-bottom:26px;}
-  .eyebrow{font:600 11.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 12px;}
-  h1{font-size:clamp(30px,5vw,44px);line-height:1.04;letter-spacing:-.03em;font-weight:700;margin:0 0 13px;}
-  .standfirst{font-size:17.5px;color:var(--muted);margin:0;max-width:62ch;}
-  p{margin:0 0 14px;} code,.m{font-family:var(--mono);font-size:.87em;
-    background:color-mix(in srgb,var(--ink) 6%,transparent);padding:.12em .38em;border-radius:4px;}
+    --paper:#0B0F14;--card:#141A21;--ink:#EAF0F6;--muted:#9CA8B5;--faint:#67737F;--line:#232C36;
+    --accent:#6FAEDC;--ok:#48C489;--dn:#F0736A;--flat:#67737F;}}
+  :root[data-theme="dark"]{--paper:#0B0F14;--card:#141A21;--ink:#EAF0F6;--muted:#9CA8B5;--faint:#67737F;
+    --line:#232C36;--accent:#6FAEDC;--ok:#48C489;--dn:#F0736A;--flat:#67737F;}
+  :root[data-theme="light"]{--paper:#F7F8FA;--card:#FFFFFF;--ink:#0E1621;--muted:#5A6572;--faint:#94A0AD;
+    --line:#E1E6EC;--accent:#12507E;--ok:#0B7A47;--dn:#B0261C;--flat:#94A0AD;}
+  *{box-sizing:border-box}
+  body{background:var(--paper);color:var(--ink);font-family:var(--ui);margin:0;padding:0 22px 80px;
+       -webkit-font-smoothing:antialiased;line-height:1.45;}
+  .wrap{max-width:880px;margin:0 auto;}
+  header.top{padding:56px 0 30px;}
+  .eyebrow{font:650 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0 0 14px;}
+  h1{font-size:clamp(32px,6vw,50px);line-height:1;letter-spacing:-.035em;font-weight:700;margin:0 0 14px;}
+  .lede{font-size:19px;color:var(--muted);margin:0;max-width:44ch;}
 
-  .test{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin:0 0 26px;overflow:hidden;}
-  .test .top{display:flex;gap:15px;align-items:flex-start;padding:20px 24px 0;}
-  .badge{font:700 15px/40px var(--mono);width:40px;height:40px;flex:none;text-align:center;border-radius:11px;
-         color:#fff;background:var(--accent);}
-  .badge.b{background:#4C7AD1}.badge.c{background:var(--warn)}
-  .test h2{font-size:21px;letter-spacing:-.02em;font-weight:700;margin:2px 0 3px;}
-  .test .sub{color:var(--muted);font-size:14.5px;margin:0;}
-  .test .body{padding:8px 24px 22px;}
-  .k{font:650 10.5px/1 var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--faint);
-     margin:20px 0 7px;padding-top:14px;border-top:1px solid var(--line);}
-  .k:first-of-type{border-top:0;padding-top:0;margin-top:14px;}
-  .k.h{color:var(--accent);} .k.e{color:var(--ok);} .k.v{color:#8B5CF6;} .k.r{color:var(--danger);}
-  .hyp{font-size:16.5px;line-height:1.5;background:var(--surface2);border-radius:9px;padding:15px 17px;margin:0;}
-  ul.c{margin:0;padding-left:19px;} ul.c li{margin-bottom:7px;font-size:15px;}
-  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:2px 0 0;}
-  td{padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:middle;}
-  td.n{font-family:var(--mono);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
-  .up{color:var(--ok);font-weight:700} .dn{color:var(--danger);font-weight:700} .fl{color:var(--faint);font-weight:700}
-  blockquote{margin:0 0 10px;padding:2px 0 2px 15px;border-left:3px solid var(--line-strong);color:var(--muted);
-             font-style:italic;font-size:15px;}
-  .risk{background:color-mix(in srgb,var(--danger) 7%,transparent);border:1px solid color-mix(in srgb,var(--danger) 30%,var(--line));
-        border-radius:9px;padding:13px 16px;font-size:14.5px;margin:0;}
-  .note{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);
-        border-radius:9px;padding:16px 19px;margin:26px 0;font-size:15px;color:var(--muted);}
-  .note b{color:var(--ink);}
-  .sep{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px 26px;margin:34px 0 26px;}
-  .sep h2{font-size:21px;letter-spacing:-.02em;font-weight:700;margin:0 0 4px;}
-  .sep .sub{color:var(--muted);font-size:14.5px;margin:0 0 20px;}
-  .rule{display:flex;gap:13px;align-items:flex-start;margin:0 0 13px;}
-  .rule .no{font:700 12px/22px var(--mono);width:22px;height:22px;flex:none;text-align:center;border-radius:6px;
-            background:var(--surface2);color:var(--muted);}
-  .rule p{margin:0;font-size:15px;}
-  table.sepgrid{margin-top:20px;font-size:14px;}
-  table.sepgrid th{text-align:left;font:650 10.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
-    color:var(--faint);padding:0 9px 8px;border-bottom:1px solid var(--line-strong);}
-  table.sepgrid td{padding:11px 9px;vertical-align:top;}
-  table.sepgrid td:first-child{font-weight:650;white-space:nowrap;}
-  .tag{display:inline-block;font:650 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
-       padding:4px 8px;border-radius:5px;white-space:nowrap;}
-  .tag.tog{background:color-mix(in srgb,var(--ok) 15%,transparent);color:var(--ok);}
-  .tag.alo{background:color-mix(in srgb,var(--danger) 13%,transparent);color:var(--danger);}
-  .tag.acc{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn);}
-  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--faint);font-size:13px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:30px 32px;margin:0 0 18px;}
+  .hdr{display:flex;gap:14px;align-items:baseline;margin:0 0 22px;}
+  .n{font:700 13px/1 var(--mono);color:var(--accent);letter-spacing:.1em;flex:none;padding-top:6px;}
+  .hdr h2{font-size:clamp(23px,3.4vw,30px);line-height:1.12;letter-spacing:-.025em;font-weight:700;margin:0;
+          text-wrap:balance;}
+
+  .line{display:grid;grid-template-columns:74px 1fr;gap:16px;align-items:baseline;padding:13px 0;
+        border-top:1px solid var(--line);}
+  .line .lbl{font:650 10px/1.6 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);}
+  .line .txt{font-size:18px;line-height:1.4;margin:0;text-wrap:pretty;}
+  .line .txt b{font-weight:650;}
+
+  .proof{display:flex;flex-wrap:wrap;gap:10px 30px;align-items:flex-end;margin-top:6px;}
+  .stat{display:flex;flex-direction:column;gap:2px;}
+  .stat .v{font:700 clamp(26px,4.6vw,38px)/1 var(--mono);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+  .stat .v.up{color:var(--ok)} .stat .v.down{color:var(--dn)} .stat .v.fl{color:var(--flat)}
+  .stat .c{font-size:13.5px;color:var(--muted);}
+  .kicker{font-size:16px;color:var(--muted);margin:14px 0 0;padding-top:13px;border-top:1px solid var(--line);
+          text-wrap:pretty;}
+  .kicker b{color:var(--ink);font-weight:650;}
+
+  .rules{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 32px;margin:30px 0 0;}
+  .rules h2{font-size:21px;letter-spacing:-.02em;margin:0 0 6px;font-weight:700;}
+  .rules>p.s{color:var(--muted);font-size:16px;margin:0 0 20px;}
+  .rules dl{margin:0;display:grid;gap:15px;}
+  .rules dt{font-size:17px;font-weight:650;margin:0 0 3px;}
+  .rules dd{margin:0;font-size:16px;color:var(--muted);}
+  .seq{margin:22px 0 0;padding-top:17px;border-top:1px solid var(--line);font-size:16px;color:var(--muted);}
+  .seq b{color:var(--ink);font-weight:650;}
+  footer{margin-top:40px;color:var(--faint);font-size:13px;}
+  @media(max-width:560px){.line{grid-template-columns:1fr;gap:4px}}
 </style>
 
 <div class="wrap">
 <header class="top">
-  <p class="eyebrow">Outrigger · home page · recommended tests</p>
-  <h1>The next three tests</h1>
-  <p class="standfirst">One hypothesis each. Every change traced to a measurement from the hero
-  experiment, and to Verndale's audit where it supports it.</p>
+  <p class="eyebrow">Outrigger home page · what we test next</p>
+  <h1>Three tests, in order</h1>
+  <p class="lede">One idea each. Every one of them comes straight out of a number the last test
+  already gave us.</p>
 </header>
 
-<!-- ────────── A ────────── -->
-<div class="test">
-  <div class="top"><span class="badge">A</span><div>
-    <h2>Cheap commitment before expensive one</h2>
-    <p class="sub">Property tile rebuild + offer property-picker · run as one bundle</p></div></div>
-  <div class="body">
+<!-- 1 -->
+<div class="card">
+  <div class="hdr"><span class="n">01</span>
+    <h2>Let people pick a place before we ask for a date</h2></div>
 
-    <p class="k">What changes</p>
-    <ul class="c">
-      <li><b>Property tile.</b> Two competing CTAs become one <b>ungated</b> action —
-        “View Property”. “Learn More” is removed; the marketing sentence is replaced by the
-        property's <b>distinctive detail</b> (Monkeypod Kitchen · Duke's + Blue Note ·
-        ’Auana by Cirque du Soleil · Appetito), computed from the amenity diff.</li>
-      <li><b>Offer tiles.</b> A click asks <b>which property</b> first, then hands to the widget
-        with the promo attached — instead of linking straight out to a worldwide list.</li>
-    </ul>
+  <div class="line"><span class="lbl">Change</span>
+    <p class="txt">Property cards get <b>one</b> button that just opens the property — no dates asked.
+    Offer clicks ask <b>which hotel</b> first, then dates.</p></div>
 
-    <p class="k h">Hypothesis</p>
-    <p class="hyp">Guests asked to choose a <b>place</b> before a <b>date</b> will reach Rooms &amp;
-    Rates more often, because the page currently demands the expensive commitment first and they
-    decline it.</p>
+  <div class="line"><span class="lbl">Why</span>
+    <p class="txt">Right now the page asks for the hardest commitment first, and people say no.</p></div>
 
-    <p class="k e">Supporting metrics — hero experiment</p>
-    <table>
-      <tr><td><b>Property Title</b> — ungated link</td><td class="n">496 → 558</td><td class="n up">+11.3%</td></tr>
-      <tr><td><b>Property “Book Now”</b> — opens the date-gated widget</td><td class="n">294 → 295</td><td class="n fl">+1 click / 18 days</td></tr>
-      <tr><td><b>Property “Learn More”</b> — the brochure</td><td class="n">163 → 155</td><td class="n dn">−5.9%</td></tr>
-      <tr><td><b>Offer CTA</b> — dateless link to a worldwide list</td><td class="n">198 → 199</td><td class="n fl">−0.6%</td></tr>
-      <tr><td><b>Rooms &amp; Rates</b> — the step that leaked</td><td class="n">547 → 526</td><td class="n dn">−4.9%</td></tr>
-    </table>
-    <p style="font-size:14.5px;color:var(--muted);margin:12px 0 0">Same card, same guests, two paths:
-    the ungated one wins by an order of magnitude. That single comparison is the whole hypothesis.</p>
+  <div class="line"><span class="lbl">Proof</span>
+    <div class="proof">
+      <div class="stat"><span class="v up">+11.3%</span><span class="c">the link with no date ask</span></div>
+      <div class="stat"><span class="v fl">+1 click</span><span class="c">the button that demands dates — in 18 days</span></div>
+    </div></div>
 
-    <p class="k v">What supports it from Verndale</p>
-    <blockquote>“<b>Book Now</b> may feel too aggressive on the home page… Recommend more scannable
-    CTAs — <b>Explore Property</b> or <b>View Property</b> instead of ‘learn more’.” — annotation 4</blockquote>
-    <blockquote>“Showcase other examples since Cirque de Soleil ’Auana is only at Waikiki.” — annotation 6</blockquote>
-    <p style="font-size:14.5px;color:var(--muted);margin:0">Their instinct on Book Now is confirmed by
-    the number. Annotation 6 is delivered here as the tile's distinctive detail rather than as a new
-    section — which also honours their own principle: <i>“the recommendation is not to add more
-    content.”</i> Audit theme 2, <i>“help travelers choose with confidence,”</i> is the same idea.</p>
-  </div>
+  <p class="kicker"><b>Same card. Same people. One asks for a date, one doesn't.</b> That's the
+  whole idea. Verndale said the same thing — that Book Now feels too aggressive on the home page.</p>
 </div>
 
-<!-- ────────── B ────────── -->
-<div class="test">
-  <div class="top"><span class="badge b">B</span><div>
-    <h2>Soften the widget's date default</h2>
-    <p class="sub">Month / flexible instead of an exact-date grid · must run alone</p></div></div>
-  <div class="body">
+<!-- 2 -->
+<div class="card">
+  <div class="hdr"><span class="n">02</span>
+    <h2>Make picking dates one tap instead of four</h2></div>
 
-    <p class="k">What changes</p>
-    <ul class="c">
-      <li>The booking widget opens on <b>month or flexible dates</b> rather than demanding an exact
-        arrival and departure before it will proceed.</li>
-      <li>Nothing else. One component, one default.</li>
-    </ul>
+  <div class="line"><span class="lbl">Change</span>
+    <p class="txt">The booking widget still asks for a start and end date — but we fill them in for
+    you, or give you one-tap choices, instead of an empty calendar.</p></div>
 
-    <p class="k h">Hypothesis</p>
-    <p class="hyp">Reducing the <b>precision</b> demanded at the gate will increase progression
-    through it — because every CTA on the page now routes through this one widget, so the gate sits
-    in front of <b>100% of booking intent</b>.</p>
+  <div class="line"><span class="lbl">Why</span>
+    <p class="txt">Every single button on the page now goes through that one widget.</p></div>
 
-    <p class="k e">Supporting metrics — hero experiment</p>
-    <table>
-      <tr><td><b>Property “Book Now”</b> — the gate, measured</td><td class="n">294 → 295</td><td class="n fl">+1 click / 18 days</td></tr>
-      <tr><td><b>Property Title</b> — same card, no gate</td><td class="n">496 → 558</td><td class="n up">+11.3%</td></tr>
-      <tr><td><b>Destination explorer</b> — intent is being created</td><td class="n">864 → 946</td><td class="n up">+8.3%</td></tr>
-      <tr><td><b>Rooms &amp; Rates</b> — and not converting</td><td class="n">547 → 526</td><td class="n dn">−4.9%</td></tr>
-    </table>
-    <p style="font-size:14.5px;color:var(--muted);margin:12px 0 0">The gate is the only difference
-    between the two paths on the same card. Intent is rising upstream and falling at this step.</p>
+  <div class="line"><span class="lbl">Proof</span>
+    <div class="proof">
+      <div class="stat"><span class="v up">+8.3%</span><span class="c">more people exploring destinations</span></div>
+      <div class="stat"><span class="v down">−4.9%</span><span class="c">fewer reaching rates</span></div>
+    </div></div>
 
-    <p class="k v">What supports it from Verndale</p>
-    <blockquote>“Consider <b>progressive CTAs</b>: softer CTA on homepage → stronger CTA on property
-    page… add supporting microcopy under CTA to <b>reduce friction</b>.” — annotation 4</blockquote>
-    <p style="font-size:14.5px;color:var(--muted);margin:0">They identified the friction and proposed
-    treating it with wording. The measurement says the friction is the <b>date demand</b> itself, so
-    this treats the same problem one layer down.</p>
-
-    <p class="k r">Why it can't be bundled</p>
-    <p class="risk">It is <b>global</b> — it changes the handler every other CTA passes through. Bundled
-    with A, there would be no way to tell whether a move came from the tile, the offer picker, or the
-    gate. It also has the widest blast radius of the three, so it deserves a clean read.</p>
-  </div>
+  <p class="kicker"><b>We're creating more interest and losing it at the same step.</b> The widget
+  sits in front of one hundred percent of it.</p>
 </div>
 
-<!-- ────────── C ────────── -->
-<div class="test">
-  <div class="top"><span class="badge c">C</span><div>
-    <h2>Trip Planner banner</h2>
-    <p class="sub">Directly under the destination explorer · must stand alone · one question unresolved</p></div></div>
-  <div class="body">
+<!-- 3 -->
+<div class="card">
+  <div class="hdr"><span class="n">03</span>
+    <h2>A Trip Planner banner under the destination explorer</h2></div>
 
-    <p class="k">What changes</p>
-    <ul class="c">
-      <li>A wide banner sits <b>immediately below the destination explorer</b>, offering entry by
-        <b>vacation type</b> — adventure · wellness · romance · family.</li>
-      <li>It routes into the existing <b>Trip Planner</b> feature.</li>
-    </ul>
+  <div class="line"><span class="lbl">Change</span>
+    <p class="txt">A wide banner: pick your <b>kind</b> of trip — adventure, wellness, romance,
+    family — into the Trip Planner we already have.</p></div>
 
-    <p class="k h">Hypothesis</p>
-    <p class="hyp">Guests who explored but are not ready to book will engage a lower-commitment path
-    rather than leaving — <b>without</b> reducing progression to Rooms &amp; Rates.</p>
+  <div class="line"><span class="lbl">Why</span>
+    <p class="txt">Catch the people who are browsing and aren't ready to book yet.</p></div>
 
-    <p class="k e">Supporting metrics — hero experiment</p>
-    <table>
-      <tr><td><b>Destination dropdown</b> — the audience exists</td><td class="n">375 → 427</td><td class="n up">+12.7%</td></tr>
-      <tr><td><b>Destination explorer tabs</b> — and is growing</td><td class="n">864 → 946</td><td class="n up">+8.3%</td></tr>
-      <tr><td><b>Destination Highlights</b> — they refuse the current exit</td><td class="n">199 → 187</td><td class="n dn">−7.0%</td></tr>
-    </table>
+  <div class="line"><span class="lbl">Proof</span>
+    <div class="proof">
+      <div class="stat"><span class="v up">+12.7%</span><span class="c">using the destination dropdown</span></div>
+      <div class="stat"><span class="v down">−7.0%</span><span class="c">taking the exit we give them today</span></div>
+    </div></div>
 
-    <p class="k v">What supports it from Verndale</p>
-    <blockquote>“Consider providing an option for people to search by <b>vacation types</b> rather than
-    location to help people choose — adventure seekers · wellness &amp; spa · romantic getaways ·
-    family-friendly.” — annotation 7</blockquote>
-    <p style="font-size:14.5px;color:var(--muted);margin:0">This is Homepage 2.0's
-    <b>“Choose Your Journey”</b> section in its cheapest testable form.</p>
-
-    <p class="k r">The risk, and why it stands alone</p>
-    <p class="risk"><b>Guests take the cheapest available commitment</b> — that is what
-    Title <b>+11.3%</b> against Book Now <b>+1 click</b> means. <b>A save is cheaper than a rates
-    click.</b> Placed directly after the explorer, this may divert people who would otherwise have
-    progressed.<br><br>
-    So <b>Rooms &amp; Rates arrivals is the primary and must not fall.</b> Saves rise and arrivals
-    hold → it captured leavers, ship it. Saves rise and arrivals fall → it diverted progressors, move
-    it below the offers. Bundled with A, a win in A would mask exactly this.<br><br>
-    <b>Variant that removes the risk instead of measuring it:</b> show it conditionally, after two or
-    more exploration actions with no rates click — targeting leavers directly.<br><br>
-    <b>Unresolved and blocking:</b> is this promoting the existing <b>favourites</b> feature, or
-    building a <b>vacation-type chooser</b>? Different builds, different primary metrics. Saving is
-    not booking.</p>
-  </div>
+  <p class="kicker"><b>The one to watch.</b> People take the easiest option in front of them — and
+  saving a trip is easier than booking one. So rates traffic can't drop. If it does, the banner
+  moves further down the page. This is Verndale's vacation-type idea.</p>
 </div>
 
+<!-- rules -->
+<div class="rules">
+  <h2>Why three tests and not one</h2>
+  <p class="s">If we change everything at once, we get one number and no idea what caused it.</p>
+  <dl>
+    <dt>The card and the offer go together.</dt>
+    <dd>Same idea, and we can tag the clicks separately to see which one moved.</dd>
 
-<div class="sep">
-  <h2>What can share a test, and what can't</h2>
-  <p class="sub">Six changes, three tests. The split isn't about how big each change is — it's about
-  whether the result would still mean something afterwards.</p>
+    <dt>The widget goes alone.</dt>
+    <dd>It's behind every other button — bundled in, we couldn't tell what worked.</dd>
 
-  <div class="rule"><span class="no">1</span><p><b>One hypothesis per test — not one change.</b>
-  Two changes belong together when a single sentence explains why both should work. If you need two
-  sentences, you need two tests.</p></div>
-  <div class="rule"><span class="no">2</span><p><b>Anything global runs alone.</b> A change to a
-  component every other CTA passes through can't be attributed to any one of them.</p></div>
-  <div class="rule"><span class="no">3</span><p><b>Anything that could move the primary
-  <i>down</i> runs alone.</b> Bundled with a winner, a diversion is invisible — the bundle nets
-  positive and you ship the thing that costs you bookings.</p></div>
-  <div class="rule"><span class="no">4</span><p><b>Instrumentation buys you the rest.</b> Changes
-  that fire distinguishable events can share a test, because the funnel tells you which stage moved.
-  That is the difference between bundling and guessing.</p></div>
-
-  <table class="sepgrid">
-    <tr><th>Change</th><th>Goes</th><th>Why</th></tr>
-
-    <tr><td>Property tile —<br>one ungated CTA</td><td><span class="tag tog">Bundle A</span></td>
-      <td>Same hypothesis as the offer picker: defer the expensive commitment. Fires its own event, so
-      the funnel separates it from the offer path afterwards.</td></tr>
-
-    <tr><td>Offer tile —<br>pick a property first</td><td><span class="tag tog">Bundle A</span></td>
-      <td>Same sentence, different surface. <span class="m">offer → property picked → widget opened →
-      engine reached</span> keeps it distinguishable inside the bundle.</td></tr>
-
-    <tr><td>Tile copy —<br>distinctive detail</td><td><span class="tag acc">Bundle A · accepted risk</span></td>
-      <td><b>This is the one honest compromise.</b> Strictly it's a different lever — content quality,
-      not commitment cost — and it could carry the bundle on its own. It rides along because it lives
-      inside the same card as the CTA change and can't be isolated without a third arm. If A wins,
-      tile engagement in the guardrails tells you whether the copy or the CTA did the work; if you
-      want certainty, run the copy as arm 3.</td></tr>
-
-    <tr><td>Widget date default</td><td><span class="tag alo">Test B alone</span></td>
-      <td><b>Rule 2.</b> It sits behind every CTA on the page, including both of A's. Bundled, a win
-      can't be assigned to the tile, the picker, or the gate — and the gate is the most valuable thing
-      to learn about, because it's in front of 100% of booking intent.</td></tr>
-
-    <tr><td>Trip Planner banner</td><td><span class="tag alo">Test C alone</span></td>
-      <td><b>Rule 3.</b> It is the only change here that can plausibly <i>reduce</i> Rooms &amp; Rates
-      arrivals — it offers a cheaper commitment than booking, directly after the surface that
-      creates booking intent. Bundled with A, A's lift would hide the diversion and you'd ship both.</td></tr>
-
-    <tr><td>Funnel instrumentation</td><td><span class="tag tog">Ships before A</span></td>
-      <td>Not a variant — it's the precondition that makes bundling A legitimate. Land it first,
-      confirm the events fire, then start A.</td></tr>
-  </table>
-
-  <p style="font-size:14.5px;color:var(--muted);margin:22px 0 0;padding-top:16px;border-top:1px solid var(--line)">
-  <b>Why not run all six at once?</b> You'd get one number and no idea which change produced it — and
-  because C can move the primary the other way, that number could be positive while a change inside it
-  is losing you bookings. The hero experiment is the precedent: it moved several things at once and
-  the useful finding came from the metrics that <i>disagreed</i> with each other, not the headline.</p>
-
-  <p style="font-size:14.5px;color:var(--muted);margin:14px 0 0">
-  <b>Sequencing.</b> Instrumentation → <b>A</b> (~14 days) → <b>B</b> (~14 days) → <b>C</b>, last
-  because its build depends on an unresolved product question and its risk is best judged once you know
-  what A and B did to the funnel. A and B could run concurrently only if held to disjoint audiences —
-  otherwise B's change is present inside A's arms.</p>
+    <dt>The banner goes alone.</dt>
+    <dd>It's the only one that could make things <em>worse</em>. Bundled with a winner, we'd never
+    see it — and we'd ship it.</dd>
+  </dl>
+  <p class="seq"><b>Order:</b> tagging first, then 01, then 02, then 03. <b>Two weeks each.</b>
+  We're measuring one thing: people reaching Rooms &amp; Rates.</p>
 </div>
 
-<div class="measure">
-<div class="note">
-  <p style="margin:0 0 10px"><b>Attribution inside a bundle is recoverable — with instrumentation.</b></p>
-  <p style="margin:0 0 10px">Events at <span class="m">offer → property picked → widget opened →
-  engine reached</span> turn bundle A into a <b>funnel rather than a single number</b>, so you can see
-  which stage moved. That is what makes bundling safe rather than sloppy — and it is already on the
-  required-instrumentation list.</p>
-  <p style="margin:0"><b>And guardrails catch what attribution misses.</b> If a bundle moves the
-  primary but breaks a guardrail, you know something inside it did harm before you know which part.</p>
-</div>
-
-<div class="note">
-  <p style="margin:0 0 8px"><b>Shared measurement frame — all three tests</b></p>
-  <p style="margin:0 0 8px"><b>Primary:</b> <span class="m">Visit Page: Booking Engine: Rooms &amp;
-  Rates</span>, baseline 4.27%, expected to increase. <b>~14 days</b> for a 20% relative move at
-  711 visitors/arm/day.</p>
-  <p style="margin:0 0 8px"><b>Guardrails:</b> Hero CTA Click must stay down · destination explorer
-  engagement · property tile engagement · offer engagement · scroll depth · bookings per arrival (34.4%).</p>
-  <p style="margin:0"><b>Watched, not decisive:</b> Booking Complete — at a 1.23% baseline it needs
-  ~8 weeks to resolve and can never be the deciding metric.</p>
-</div>
-</div>
-
-<footer>
-  Figures from Home Page Hero No Offer at 18 days · 12,804 per arm · ±18.2% detectable.
-  Verndale quotes from the annotated home page review and the Content Audit board.
-</footer>
+<footer>Numbers from the Home Page Hero test · 18 days · 12,804 people per version.</footer>
 </div>
