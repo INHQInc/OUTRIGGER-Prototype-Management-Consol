@@ -856,3 +856,40 @@ The banner's dark blue sits **directly above the Top Offers section, which is al
 dark navy** — two dark bands with only a faint seam between them. Worth deciding
 whether the banner should be lighter, or Top Offers re-grounded, before this is shown
 as a finished comp.
+
+---
+
+## 14. Widget ground truth (instrumented, 2026-08-19) — Test B must be rewritten
+
+A dedicated pass read the live widget's DOM and its React props. Findings that
+change the test:
+
+**It is ONE combined range calendar, not two date fields.** `react-day-picker`
+in range mode inside Sabre's SynXis wrapper: `div.DayPicker.shs-widgets--calendar--component`.
+Click 1 sets check-in, click 2 sets check-out — **two interactions**, not four.
+Desktop shows two months, mobile one. `fromMonth = today`, so the back arrow is
+inert; `pagedNavigation: false`, so forward advances one month per click.
+
+**There is no flexible affordance of any kind.** A sweep of the widget's rendered
+text for *flexible / not sure / anytime / undecided / any month / exact dates /
+no dates* returned zero hits on both tabs, desktop and mobile. The month-caption
+dropdown (Aug 2026 → Jan 2028) is **view navigation only** — selecting Dec 2026
+moved the calendar but left Search disabled and the trip summary empty.
+
+**Two gates, and they disagree.** The in-calendar **Search** button is correctly
+disabled until both dates are set. The sticky footer **BOOK NOW** is *not gated at
+all* — on a clean load it is enabled, and the form's hidden inputs read
+`arrive=Invalid Date` / `depart=Invalid Date`. It is a plain native GET submit of
+`form#sabreBookingWidgetForm1` (action `reservation.outrigger.com`, `target=_blank`),
+so pressing it with no dates would send `arrive=Invalid%20Date&depart=Invalid%20Date`
+to the booking engine. **Not clicked** — what the engine does with that is unknown
+and worth checking before any date-related test runs.
+
+### What this means for Test B
+
+"One tap instead of four" was wrong on the count — it is two. The lever that
+survives is **pre-filling** (arrival, or a full range, that the guest confirms or
+changes) rather than reducing taps. `data-bw-length-of-stay` rides on the CTA and
+is accepted by the widget, but produces **no visible LOS control** in the calendar,
+so it cannot be assumed to do the work on its own — verify what it actually changes
+before building on it.
