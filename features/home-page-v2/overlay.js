@@ -245,8 +245,25 @@
       '#opmc-dests button:hover{color:' + NAVY + '}',
       '#opmc-dests button:focus-visible{outline:2px solid ' + NAVY + ';outline-offset:3px}',
       '#opmc-dests li.on{display:none}',        // the selected one IS the headline
-      '@media(max-width:767px){#opmc-head{font-size:38px;line-height:44px;white-space:normal}' +
-        '#opmc-topline{gap:4px 16px;margin-bottom:14px}#opmc-dests button{font-size:16px}}',
+      // MOBILE. Wrapping was the problem: the four destinations landed beside the
+      // headline on one cramped line, and the chips reflowed into ragged rows.
+      // Both tiers become single-line scrollers instead, and touch targets go to
+      // 44px. The site hides its own "Explore" eyebrow here, so the name leads.
+      '@media(max-width:767px){' +
+        '#opmc-topline{display:block;margin:0 0 12px}' +
+        '#opmc-head{font-size:34px;line-height:40px;white-space:normal;margin:0 0 12px;display:inline-block}' +
+        '#opmc-dests{flex-wrap:nowrap;overflow-x:auto;gap:20px;scrollbar-width:none;-ms-overflow-style:none;' +
+          'padding:0 12px 2px 0;scroll-snap-type:x proximity;overscroll-behavior-x:contain}' +
+        '#opmc-dests::-webkit-scrollbar{display:none}' +
+        '#opmc-dests li{scroll-snap-align:start;flex:0 0 auto}' +
+        '#opmc-dests button{font-size:16px;padding:10px 0}' +
+        '#opmc-regions{flex-wrap:nowrap;overflow-x:auto;gap:8px;scrollbar-width:none;-ms-overflow-style:none;' +
+          'padding:0 12px 2px 0;scroll-snap-type:x proximity;overscroll-behavior-x:contain}' +
+        '#opmc-regions::-webkit-scrollbar{display:none}' +
+        '#opmc-regions li{scroll-snap-align:start;flex:0 0 auto}' +
+        '#opmc-regions button{font-size:15px;padding:14px 16px}' +   // 44px tall
+        '#opmc-note{font-size:15px}' +
+      '}',
       '#' + NAV_ID + '{display:block;width:100%;margin:0 0 6px}',
       '#opmc-regions{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none;align-items:center}',
       '#opmc-regions button{font:500 16px/16px DuplicateSans-Medium,sans-serif;color:' + INK + ';' +
