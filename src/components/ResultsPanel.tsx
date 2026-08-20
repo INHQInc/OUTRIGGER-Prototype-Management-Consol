@@ -511,6 +511,9 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 }) {
   const [results, setResults] = useState<ExperimentResults | null>(null);
   const [resultsError, setResultsError] = useState<string | null>(null);
+  /** Metric names off the experiment DEFINITION. Present when the experiment
+   *  exists but hasn't started, so composites can be authored before traffic. */
+  const [attachedMetrics, setAttachedMetrics] = useState<string[]>([]);
   const [map, setMap] = useState<MetricMap | null>(null);
   const [stats, setStats] = useState<StatsReport | null>(null);
   const [verdict, setVerdict] = useState<VerdictRecord | null>(null);
@@ -605,6 +608,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       if (!res.ok) { setResultsError(data.error ?? "Couldn't load results."); return; }
       setResults(data.results ?? null);
       setResultsError(data.resultsError ?? null);
+      setAttachedMetrics(Array.isArray(data.attachedMetrics) ? data.attachedMetrics : []);
       setMap(data.metricMap ?? null);
       setDecision(data.decision ?? null);
       setStats(data.stats ?? null);
@@ -828,10 +832,21 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       </div>
     );
   }
-  if (!results && !verdict) {
+  // PRE-LAUNCH. A created-but-not-started experiment has no results, but its
+  // attached metrics are readable with zero traffic — so the composite editor
+  // is usable before the run rather than after it, which is the point of a
+  // pre-registered plan. Names only: no cells, no visitors, nothing that could
+  // read as a measurement. Stats and the verdict are untouched (the server
+  // still sees results: null and returns them null).
+  const preLaunch: ExperimentResults | null =
+    !results && attachedMetrics.length
+      ? { fetchedAt: new Date().toISOString(), variations: [], metrics: attachedMetrics.map((name) => ({ name, perVariation: [] })) }
+      : null;
+
+  if (!results && !verdict && !preLaunch) {
     return <div className="rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[13.5px] text-muted-2">{resultsError ?? "No results yet."}</div>;
   }
-  const live = results ?? (verdict?.state === "stamped" ? verdict.frozenResults ?? null : null);
+  const live = results ?? (verdict?.state === "stamped" ? verdict.frozenResults ?? null : null) ?? preLaunch;
   const statsEff = stats ?? (verdict?.state === "stamped" ? verdict.frozenStats ?? null : null);
 
   const optiPrimaryKey = optiPrimaryKeyOf(live);
@@ -1060,6 +1075,12 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       <div className="space-y-3">
         {err && <div className="text-[13px] text-danger">{err}</div>}
         {resultsError && <div className="text-[13px] text-warn">{resultsError}</div>}
+        {preLaunch && (
+          <div className="rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-[13px] text-muted-2">
+            This experiment hasn&rsquo;t started, so there are no numbers yet — these are the metrics attached to it in
+            Optimizely. Build your composites now and they&rsquo;ll be waiting when traffic arrives.
+          </div>
+        )}
         {planDrift.length > 0 && (
           <div className="rounded-lg border border-warn/50 bg-surface px-3.5 py-2.5 text-[13px]">
             <span className="text-warn font-semibold">⚠ Results report events the measurement plan never reviewed:</span>{" "}
