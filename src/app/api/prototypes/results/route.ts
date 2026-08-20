@@ -75,21 +75,36 @@ interface Bundle {
  *  join by NAME, and the same event attached as unique AND total conversions
  *  is two metrics with one registry name. */
 async function attachedMetricNames(client: OptimizelyClient, exp: { metrics?: { event_id?: number; aggregator?: string }[] } | null): Promise<string[]> {
-  const attached = exp?.metrics ?? [];
+  const attached = (exp?.metrics ?? []).slice(0, 40);
   if (!attached.length) return [];
-  const registry = await client.listEvents().catch(() => null);
-  if (!registry) return [];
-  const byId = new Map(registry.events.map((e) => [e.id, e.name]));
+
+  // Resolved ONE BY ONE, not by joining the project event list: that list is
+  // incomplete. Checked against a real not-started experiment — 9 attached
+  // metrics, 0 present in /events?project_id=, all 9 returned by /events/{id}.
+  const settled = await Promise.all(attached.map(async (m) => {
+    if (m.event_id === undefined) return null;
+    const ev = await client.getEvent(m.event_id).catch(() => null);
+    if (!ev?.name) return null;
+    // NAME IT THE WAY RESULTS WILL. Composites join by name, so a draft-authored
+    // composite must match the string the results payload uses once traffic
+    // starts, or it silently stops matching on the day it matters.
+    // Verified against 15 live metric rows: pageview events come back prefixed
+    // "Visit Page: ", click events come back bare. (`custom` had no live sample
+    // — treated as bare, which is the click behaviour.)
+    const name = ev.event_type === "pageview" ? `Visit Page: ${ev.name}` : ev.name;
+    return ({ name, aggregator: m.aggregator } as { name: string; aggregator?: string });
+  }));
+
   const rows: { name: string; aggregator?: string }[] = [];
-  for (const m of attached) {
-    const name = m.event_id !== undefined ? byId.get(m.event_id) : undefined;
-    if (name) rows.push({ name, aggregator: m.aggregator });
-  }
+  for (const row of settled) if (row) rows.push(row);
+
+  // Same disambiguation as the results trust boundary — composites join by
+  // NAME, and one event attached as both unique and total is two rows, one name.
   const counts = new Map<string, number>();
-  for (const r of rows) counts.set(r.name, (counts.get(r.name) ?? 0) + 1);
+  for (const row of rows) counts.set(row.name, (counts.get(row.name) ?? 0) + 1);
   const seen = new Map<string, number>();
-  return rows.map((r) => {
-    let name = (counts.get(r.name) ?? 0) > 1 ? `${r.name} (${r.aggregator ?? "metric"})` : r.name;
+  return rows.map((row) => {
+    let name = (counts.get(row.name) ?? 0) > 1 ? `${row.name} (${row.aggregator ?? "metric"})` : row.name;
     const n = seen.get(name) ?? 0;
     seen.set(name, n + 1);
     if (n > 0) name = `${name} #${n + 1}`;

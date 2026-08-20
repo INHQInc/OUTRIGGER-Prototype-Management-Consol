@@ -146,6 +146,14 @@ export class OptimizelyClient {
     return { events: all, truncated };
   }
 
+  /** ONE event by id. The project-scoped `/events` list does NOT contain every
+   *  event an experiment's metrics point at — verified against a real draft
+   *  (9 attached metrics, 0 of them in the project list, 9/9 resolvable here).
+   *  So attached metrics must be resolved by ID, never by joining a list. */
+  getEvent(eventId: string | number): Promise<OptiEvent> {
+    return this.req<OptiEvent>(`/events/${eventId}`);
+  }
+
   /** Read-only: LIVE experiment results (visitors, conversions, lift,
    *  significance per variation × metric). Raw — normalized at the caller's
    *  trust boundary (lib/prototypes/results.ts). */
