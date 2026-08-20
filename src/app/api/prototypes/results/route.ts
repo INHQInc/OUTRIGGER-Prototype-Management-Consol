@@ -418,6 +418,8 @@ export async function POST(req: NextRequest) {
     renameMetric?: { id?: string; label?: string };
     /** Promote a composite to the console's PRIMARY decision metric. */
     setPrimary?: string;
+    /** Raw metric row key → wrap it in a single-metric composite and nominate it. */
+    promoteMetric?: string;
     /** Stand the decision metric down entirely. The experiment then has no
      *  console primary and says so — better than being locked into one. */
     clearPrimary?: boolean;
@@ -1034,6 +1036,55 @@ export async function POST(req: NextRequest) {
     );
     if (touchedId === OPTI_PRIMARY_ID) {
       return NextResponse.json({ error: "That's Optimizely's own primary metric — change it in Optimizely, or nominate a different decision metric here." }, { status: 400 });
+    }
+
+    // Promote a RAW Optimizely row to the console's decision metric. The model
+    // keeps the decision metric as a composite (it carries a label, a direction
+    // of good and a definition, which a raw row has none of) — but the user
+    // shouldn't have to hand-build a one-metric composite to get there, which
+    // was the whole reason the row dropdown looked broken.
+    if (body.promoteMetric) {
+      const rowKey = String(body.promoteMetric);
+      const name = rowKey.replace(/^metric:/, "");
+      if (!name || rowKey.startsWith("composite:")) {
+        return NextResponse.json({ error: "Promote takes a raw metric row." }, { status: 400 });
+      }
+      let toLabel = "", fromLabel = "";
+      const map = await mutateMetricMap(g.proto.key, (cur) => {
+        const base = cur ?? { composites: [], confirmed: false };
+        // Reuse an existing composite for this exact single metric rather than
+        // stacking duplicates every time the dropdown is used.
+        const existing = base.composites.find((c) => c.events.length === 1 && c.events[0] === name && c.source !== "optimizely");
+        const id = existing?.id ?? `m-${Date.now().toString(36)}`;
+        const oldPrimary = base.composites.find((c) => c.role === "primary" && c.source !== "optimizely");
+        if (oldPrimary?.id === id) return null;               // already the primary
+        fromLabel = oldPrimary?.label ?? "(none)";
+        toLabel = existing?.label ?? name;
+        const promoted: CompositeMetric = existing
+          ? { ...existing, role: "primary" }
+          : { id, label: name, events: [name], role: "primary",
+              definition: "Nominated from the metrics index as this experiment's decision metric." };
+        return {
+          ...base,
+          composites: [
+            promoted,
+            // exactly one primary — any other console primary is demoted in the same write
+            ...base.composites.filter((c) => c.id !== id).map((c) => (c.role === "primary" && c.source !== "optimizely" ? { ...c, role: "info" as const } : c)),
+          ],
+          priorConfirmations: base.confirmed && base.confirmedAt
+            ? [...(base.priorConfirmations ?? []), { confirmedBy: base.confirmedBy ?? "?", confirmedAt: base.confirmedAt, briefAtConfirm: base.briefAtConfirm }]
+            : base.priorConfirmations,
+          confirmedBy: base.confirmed ? actor : base.confirmedBy,
+          confirmedAt: base.confirmed ? new Date().toISOString() : base.confirmedAt,
+          primaryHistory: [...(base.primaryHistory ?? []), { from: fromLabel, to: toLabel, at: new Date().toISOString(), by: actor }].slice(-8),
+          hiddenMeasures: (base.hiddenMeasures ?? []).filter((k) => k !== `composite:${id}` && k !== rowKey),
+        };
+      });
+      if (!toLabel) return NextResponse.json({ error: "That metric is already the decision metric." }, { status: 400 });
+      await audit(g.orgId, actor, "results.primary-changed", g.proto.name, `${fromLabel} → ${toLabel}`);
+      const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attachedMetrics: bundle.attachedMetrics, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
     if (body.setPrimary) {

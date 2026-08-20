@@ -1075,6 +1075,20 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       <div className="space-y-3">
         {err && <div className="text-[13px] text-danger">{err}</div>}
         {resultsError && <div className="text-[13px] text-warn">{resultsError}</div>}
+        {(() => {
+          // A console nomination only takes effect once the plan is confirmed;
+          // until then the engines fall back to Optimizely's primary. Silence
+          // here reads as "my change didn't save".
+          const ownPrimary = map?.composites?.find((c) => c.role === "primary" && c.source !== "optimizely");
+          if (!ownPrimary || decision?.source === "console") return null;
+          return (
+            <div className="rounded-lg border border-warn/40 bg-warn/5 px-3 py-2 text-[13px] text-muted-2">
+              <b className="text-foreground">{ownPrimary.label}</b> is nominated as your decision metric, but the plan
+              isn&rsquo;t confirmed — reporting is still using Optimizely&rsquo;s primary. Confirm the measurement plan to
+              put it in force.
+            </div>
+          );
+        })()}
         {preLaunch && (
           <div className="rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-[13px] text-muted-2">
             This experiment hasn&rsquo;t started, so there are no numbers yet — these are the metrics attached to it in
@@ -2453,10 +2467,21 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                   {role}
                   <select
                     value={role}
-                    onChange={(e) => setMetricRole(rowKey, e.target.value as "supporting" | "guardrail" | "exploratory")}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      // "primary" isn't a row role — it wraps the row in a
+                      // one-metric composite and nominates it, because the
+                      // decision metric carries a label, a direction and a
+                      // definition that a raw row has none of.
+                      if (v === "primary") void post("promoteMetric", { promoteMetric: rowKey });
+                      else setMetricRole(rowKey, v as "supporting" | "guardrail" | "exploratory");
+                    }}
                     aria-label={`Type of ${rowKey.replace(/^(metric|composite):/, "")}`}
-                    title="SUPPORTING — the summary is written about it · GUARDRAIL — must not drop · EXPLORATORY — watched, never evidence"
+                    title="PRIMARY — this experiment's decision metric, used instead of Optimizely's · SUPPORTING — the summary is written about it · GUARDRAIL — must not drop · EXPLORATORY — watched, never evidence"
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    {rowKey.startsWith("metric:") && rowKey !== statsEff?.primaryKey && (
+                      <option value="primary">primary (decision metric)</option>
+                    )}
                     <option value="supporting">supporting</option>
                     <option value="guardrail">guardrail</option>
                     <option value="exploratory">exploratory</option>
