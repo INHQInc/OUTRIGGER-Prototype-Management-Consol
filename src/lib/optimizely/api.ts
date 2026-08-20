@@ -103,7 +103,14 @@ export class OptimizelyClient {
       const body = await res.text().catch(() => "");
       throw new OptimizelyError(res.status, `Optimizely ${res.status}: ${body.slice(0, 300)}`);
     }
-    return (await res.json()) as T;
+    // 204 / empty body is a legitimate success: the results endpoint answers
+    // 204 No Content for an experiment that hasn't started. Calling res.json()
+    // on it throws "Unexpected end of JSON input", which surfaced to the user
+    // as a broken Analytics tab instead of "no results yet".
+    if (res.status === 204) return null as T;
+    const text = await res.text();
+    if (!text.trim()) return null as T;
+    return JSON.parse(text) as T;
   }
 
   /** Read-only: list all projects the token can access. Validates the token. */
