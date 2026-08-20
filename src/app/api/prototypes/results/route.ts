@@ -29,7 +29,10 @@ export const maxDuration = 60;
  * Experiment results + the statistics/verdict layer. Session-only (the
  * analyst spends console API credit; results are org analytics).
  *
- * GET  ?key=  → { results, resultsError?, metricMap, stats, verdict }
+ * GET  ?key=  → { results, resultsError?, attachedMetrics?, metricMap, stats, verdict }
+ *   `attachedMetrics` is the definition's metric names, present when the
+ *   experiment has no results yet (created but not started) so composites can
+ *   still be authored.
  *   Every GET: normalizes the Optimizely payload, records today's snapshot
  *   (first viewer of the day), computes the deterministic StatsReport, and
  *   re-derives the DRAFT verdict against the PUSHED version's frozen
@@ -54,6 +57,44 @@ interface Bundle {
    *  definition declares it. Only consulted when the console adjudicates that
    *  metric — absent means undeclared, and the readout says "assumed". */
   primaryDirection?: "increase" | "decrease";
+  /** Metric names attached to the experiment DEFINITION, resolved against the
+   *  event registry. Readable with ZERO TRAFFIC, which is the whole point: a
+   *  not-started experiment has no results, so `results` is null and the
+   *  composite editor previously had nothing to bind against. This travels
+   *  BESIDE results, never inside it — folding a zero-filled skeleton into
+   *  `results` would make analyze() record a daily snapshot of nothing and
+   *  derive a verdict from no data. */
+  attachedMetrics?: string[];
+}
+
+/** Names for the metrics on the experiment definition, joined to the registry.
+ *  Mirrors the measurement plan's zero-traffic binding (see the measurement
+ *  route's enumerateEvents) so both surfaces name metrics identically.
+ *
+ *  Disambiguated the same way the results trust boundary does it: composites
+ *  join by NAME, and the same event attached as unique AND total conversions
+ *  is two metrics with one registry name. */
+async function attachedMetricNames(client: OptimizelyClient, exp: { metrics?: { event_id?: number; aggregator?: string }[] } | null): Promise<string[]> {
+  const attached = exp?.metrics ?? [];
+  if (!attached.length) return [];
+  const registry = await client.listEvents().catch(() => null);
+  if (!registry) return [];
+  const byId = new Map(registry.events.map((e) => [e.id, e.name]));
+  const rows: { name: string; aggregator?: string }[] = [];
+  for (const m of attached) {
+    const name = m.event_id !== undefined ? byId.get(m.event_id) : undefined;
+    if (name) rows.push({ name, aggregator: m.aggregator });
+  }
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.name, (counts.get(r.name) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return rows.map((r) => {
+    let name = (counts.get(r.name) ?? 0) > 1 ? `${r.name} (${r.aggregator ?? "metric"})` : r.name;
+    const n = seen.get(name) ?? 0;
+    seen.set(name, n + 1);
+    if (n > 0) name = `${name} #${n + 1}`;
+    return name.slice(0, 200);
+  });
 }
 
 async function fetchResults(orgId: string, experimentId?: string): Promise<Bundle> {
@@ -68,7 +109,23 @@ async function fetchResults(orgId: string, experimentId?: string): Promise<Bundl
     const results = normalizeResults(raw);
     const weights: Record<string, number> = {};
     for (const v of exp?.variations ?? []) if (typeof v.weight === "number" && v.weight > 0) weights[String(v.variation_id)] = v.weight;
-    if (!results) return { results: null, error: "Optimizely returned no readable results yet — usually means no traffic so far.", experimentStatus: exp?.status };
+    if (!results) {
+      // Pre-launch is the COMMON case here, not an error: a created-but-not-
+      // started experiment has no results by definition. Hand back the
+      // definition's metrics so the composite editor is usable before launch.
+      const attachedMetrics = await attachedMetricNames(client, exp);
+      const notStarted = exp?.status && exp.status !== "running" && exp.status !== "paused";
+      return {
+        results: null,
+        experimentStatus: exp?.status,
+        attachedMetrics,
+        error: notStarted && attachedMetrics.length
+          ? undefined
+          : notStarted
+            ? "This experiment hasn't started and has no metrics attached in Optimizely yet — attach them there and they'll appear here."
+            : "Optimizely returned no readable results yet — usually means no traffic so far.",
+      };
+    }
     // Polarity is joined by EVENT ID, never by array position: the experiment
     // definition and the results payload are two different lists, and reading
     // "down is good" off the wrong metric would invert a verdict silently.
@@ -299,6 +356,8 @@ export async function GET(req: NextRequest) {
     results: bundle.results,
     resultsError: bundle.error,
     experimentStatus: bundle.experimentStatus,
+    // Zero-traffic metric names, so the composite editor works pre-launch.
+    attachedMetrics: bundle.attachedMetrics,
     // The STORED map — never the resolved one. The page round-trips this
     // object through confirm/propose/buildMetric, so handing it a composite
     // that exists only in memory would launder Optimizely's declaration into
