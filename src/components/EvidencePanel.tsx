@@ -46,6 +46,9 @@ interface Metric {
 export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; bound: boolean }) {
   const [board, setBoard] = useState<EvidenceBoard | null>(null);
   const [results, setResults] = useState<ExperimentResults | null>(null);
+  /** Arms from the experiment DEFINITION — present before any traffic, so the
+   *  control can be screenshotted while the experiment is still a draft. */
+  const [arms, setArms] = useState<{ variationId: string; name: string }[]>([]);
   const [stats, setStats] = useState<StatsReport | null>(null);
   const [loading, setLoading] = useState(bound);
   const [busy, setBusy] = useState<string | null>(null);
@@ -66,6 +69,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
       ]);
       if (b.board) setBoard(b.board);
       setResults(r.results ?? null);
+      setArms(Array.isArray(r.arms) ? r.arms : []);
       setStats(r.stats ?? null);
     } catch {
       setErr("Couldn't load the board.");
@@ -143,7 +147,10 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
 
   const shots = board?.shots ?? [];
   const marks = board?.marks ?? [];
-  const variations = results?.variations ?? [];
+  // Definition first: results only report arms that HAVE traffic, so before the
+  // run there was nothing to attach a control screenshot to, and during a run a
+  // zero-visitor arm would silently disappear from the board.
+  const variations = arms.length ? arms.map((a) => ({ variationId: a.variationId, name: a.name })) : (results?.variations ?? []);
 
   const markStyle = (mk: EvidenceMark) => ({ left: `${mk.x}%`, top: `${mk.y}%`, width: `${mk.w}%`, height: `${mk.h}%` });
   const toneOf = (mk: EvidenceMark): Tone => (mk.tone as Tone) ?? byKey[mk.measureKey]?.tone ?? "flat";

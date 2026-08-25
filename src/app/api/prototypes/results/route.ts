@@ -53,6 +53,11 @@ interface Bundle {
   error?: string;
   experimentStatus?: string;
   weights?: Record<string, number>;
+  /** Every arm from the experiment DEFINITION — id + name, present with zero
+   *  traffic. The results payload only lists arms that have visitors, so the
+   *  evidence board had nothing to attach a control screenshot to before the
+   *  run started (and would silently drop a zero-traffic arm during one). */
+  arms?: { variationId: string; name: string }[];
   /** Which way is GOOD on Optimizely's own primary metric, when the experiment
    *  definition declares it. Only consulted when the console adjudicates that
    *  metric — absent means undeclared, and the readout says "assumed". */
@@ -124,6 +129,9 @@ async function fetchResults(orgId: string, experimentId?: string): Promise<Bundl
     const results = normalizeResults(raw);
     const weights: Record<string, number> = {};
     for (const v of exp?.variations ?? []) if (typeof v.weight === "number" && v.weight > 0) weights[String(v.variation_id)] = v.weight;
+    const arms = (exp?.variations ?? [])
+      .filter((v) => !v.archived)
+      .map((v) => ({ variationId: String(v.variation_id), name: v.name }));
     if (!results) {
       // Pre-launch is the COMMON case here, not an error: a created-but-not-
       // started experiment has no results by definition. Hand back the
@@ -132,6 +140,7 @@ async function fetchResults(orgId: string, experimentId?: string): Promise<Bundl
       const notStarted = exp?.status && exp.status !== "running" && exp.status !== "paused";
       return {
         results: null,
+        arms,
         experimentStatus: exp?.status,
         attachedMetrics,
         error: notStarted && attachedMetrics.length
@@ -150,7 +159,7 @@ async function fetchResults(orgId: string, experimentId?: string): Promise<Bundl
       ? exp?.metrics?.find((m) => m.event_id === primaryEventId)?.winning_direction
       : undefined;
     const primaryDirection = wd === "decreasing" ? "decrease" as const : wd === "increasing" ? "increase" as const : undefined;
-    return { results, experimentStatus: exp?.status, weights: Object.keys(weights).length ? weights : undefined, primaryDirection };
+    return { results, arms, experimentStatus: exp?.status, weights: Object.keys(weights).length ? weights : undefined, primaryDirection };
   } catch (e) {
     return { results: null, error: e instanceof Error ? e.message : "Couldn't reach Optimizely results." };
   }
@@ -373,6 +382,7 @@ export async function GET(req: NextRequest) {
     experimentStatus: bundle.experimentStatus,
     // Zero-traffic metric names, so the composite editor works pre-launch.
     attachedMetrics: bundle.attachedMetrics,
+    arms: bundle.arms,
     // The STORED map — never the resolved one. The page round-trips this
     // object through confirm/propose/buildMetric, so handing it a composite
     // that exists only in memory would launder Optimizely's declaration into
