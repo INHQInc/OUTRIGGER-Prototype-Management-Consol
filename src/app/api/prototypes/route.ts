@@ -7,6 +7,7 @@ import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 import { apiOrgFromAuthHeader } from "@/lib/api-token";
+import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { defaultOrgRepo } from "@/lib/git/org-repos";
 
 /** A prototype's own branch — never the shared `starter` template. Coerces
@@ -35,6 +36,22 @@ function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?
     ...(refs.length ? { references: refs } : {}),
   };
 }
+
+/**
+ * What an org API token may write through PATCH.
+ *
+ * The token exists so the agent building a prototype can keep the brief honest
+ * as the build moves — a brief that still describes the starter banner three
+ * days into the work is worse than no brief, because the drift audit then
+ * measures the code against fiction. But a token is a bearer credential
+ * sitting in a shell env, so it must never be able to move the prototype's
+ * stage, repoint its repo or targets, or reassign its owner. Those stay with a
+ * signed-in human, exactly as lib/api-token.ts promises.
+ *
+ * Deny-by-default: any field outside this set is refused by name rather than
+ * silently dropped, so a caller that thinks it changed the stage finds out.
+ */
+const TOKEN_WRITABLE = new Set(["key", "brief", "hypothesis", "metrics"]);
 
 function slug(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "prototype";
@@ -148,10 +165,18 @@ export async function PATCH(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.key) return NextResponse.json({ error: "key required" }, { status: 400 });
   const store = await getContentStore();
-  const proto = await store.getPrototype(body.key);
-  if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404 });
-  const protoOrg = await resolvePrototypeOrg(proto);
-  if (!protoOrg || !(await canAccessOrg(protoOrg))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const g = await guardPrototypeAccess(body.key, req.headers.get("authorization"));
+  if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
+  const { proto, orgId: protoOrg, viaToken } = g;
+  if (viaToken) {
+    const reach = Object.keys(body as Record<string, unknown>)
+      .filter((k) => (body as Record<string, unknown>)[k] !== undefined && !TOKEN_WRITABLE.has(k));
+    if (reach.length) {
+      return NextResponse.json({
+        error: `An API token may only update the brief, hypothesis and metrics. Sign in to change: ${reach.join(", ")}`,
+      }, { status: 403 });
+    }
+  }
   const updated = { ...proto, updatedAt: new Date().toISOString() };
   const changes: string[] = [];
   if (body.status !== undefined) { updated.status = normalizeStage(body.status); changes.push(updated.status); }
@@ -192,7 +217,8 @@ export async function PATCH(req: NextRequest) {
   if (body.ticketUrl !== undefined) { updated.ticketUrl = body.ticketUrl?.trim() || undefined; changes.push("ticket"); }
   await store.putPrototype(updated);
   const user = await currentUser();
-  await audit(protoOrg, user?.name ?? user?.sub ?? "system", "prototype.update", proto.name, changes.join(" · "));
+  const actor = viaToken ? "api-token" : (user?.name ?? user?.sub ?? "system");
+  await audit(protoOrg, actor, "prototype.update", proto.name, changes.join(" · "));
   return NextResponse.json({ prototype: updated });
 }
 
