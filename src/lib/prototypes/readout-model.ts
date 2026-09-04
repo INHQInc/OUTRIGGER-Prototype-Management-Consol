@@ -103,7 +103,15 @@ const fig = (raw: number | undefined, text: (v: number) => string): Figure =>
     : { text: text(raw), raw, absent: false };
 
 const pctText = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
-const rateText = (v: number) => `${(v * 100).toFixed(1)}%`;
+// CONVERSION RATES NEED TWO DECIMALS BELOW 10%. At one decimal the decision
+// metric printed "2.3% vs 2.3%" beside a Change column reading "+1.4%" — the
+// table contradicted itself on its most important row. The real rates were
+// 2.311% and 2.280%. Above 10% a second decimal is noise (20.20%), so the
+// precision follows the magnitude: enough to separate two arms, never more.
+const rateText = (v: number) => {
+  const pct = v * 100;
+  return `${pct.toFixed(Math.abs(pct) >= 10 ? 1 : 2)}%`;
+};
 const countText = (v: number) => v.toLocaleString();
 
 export const asLift = (v?: number) => fig(v, pctText);
