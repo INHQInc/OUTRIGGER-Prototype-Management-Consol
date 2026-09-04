@@ -1,6 +1,12 @@
 node_modules/
 .next/
 .env*.local
+# `.env*.local` only matches names ENDING in .local — a real
+# `.env.local.bak.<ts>` sat untracked in the root holding nine live secrets
+# (GITHUB_TOKEN, OPTIMIZELY_API_TOKEN, VERCEL_TOKEN, AUTH_SECRET, …), one
+# `git add -A` from being committed. Match anything env-shaped instead.
+.env*
+!.env.example
 .vercel/
 snapshots/
 .DS_Store

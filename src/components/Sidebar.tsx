@@ -215,6 +215,11 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
           the commit alone, because there the environment is not the news. */}
       <div className={`pb-3 pt-1 text-[11px] leading-tight text-muted-2 print:hidden ${collapsed ? "px-1 text-center" : "px-4"}`}
         title={build.full ?? "running from source, not a build"}>
+        {/* THE CHANNEL LEADS. Two generations of this console now run side by
+            side on separate databases, and a commit hash cannot tell you which
+            one you are in — which is exactly the moment someone edits the
+            wrong prototype. */}
+        {!collapsed && <span className="mr-1.5 font-semibold">{build.channel}</span>}
         <span className="font-mono">{build.sha}</span>
         {!collapsed && build.env !== "production" && <span className="ml-1.5 uppercase tracking-wide">{build.env}</span>}
         {!collapsed && build.ref && build.ref !== "main" && <span className="ml-1.5">{build.ref}</span>}
