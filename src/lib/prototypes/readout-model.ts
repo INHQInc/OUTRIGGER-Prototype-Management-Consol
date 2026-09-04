@@ -603,7 +603,14 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
   );
 
   const decision = decisionKey ? byKey[decisionKey] ?? null : null;
-  const supporting = all.filter((m) => m.isDecision || m.role === "supporting" || m.role === "guardrail");
+  // HIDING A METRIC HAS TO MEAN IT STOPS SPEAKING. `hidden` was computed per row
+  // but never consulted here, so a hidden metric that still carried a supporting
+  // or guardrail role stayed in this set — and this set is what feeds the
+  // movements, biggest gain/cost, the "N of M metrics" count and the emailed
+  // table. It was hidden on the page and mailed to the leadership anyway.
+  // The decision metric is exempt on purpose: it can never be hidden (promoting
+  // a hidden metric clears the flag server-side) and it must always be shown.
+  const supporting = all.filter((m) => m.isDecision || (!m.hidden && (m.role === "supporting" || m.role === "guardrail")));
   const visibleRows = all.filter((m) => !m.hidden);
   const hiddenRows = all.filter((m) => m.hidden);
 

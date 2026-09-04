@@ -100,7 +100,13 @@ export function renderReadoutEmail(opts: {
   const v = model.verdict;
   const band = BAND[v?.severity ?? "neutral"];
   const decision = model.decision;
-  const rows = model.supporting.length ? model.supporting : model.all;
+  // `model.all` INCLUDES HIDDEN ROWS — it is the unfiltered set, and `hiddenRows`
+  // is its complement. Falling back to it meant that whenever nothing was marked
+  // supporting, the email printed every metric the reader had explicitly hidden:
+  // hidden on the page, mailed to the leadership. `visibleRows` is the same list
+  // already filtered by BOTH hide lists (the eye toggle's `hiddenMeasures` and the
+  // older `unfeatured`), and is what the page itself renders.
+  const rows = model.supporting.length ? model.supporting : model.visibleRows;
 
   const caveat = v?.directionCaveat
     ? `<div style="margin-top:12px;padding:11px 13px;background:#FFFFFF;border:1px solid ${AMBER_RULE};border-radius:6px;">
