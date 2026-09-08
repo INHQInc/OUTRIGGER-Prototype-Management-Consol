@@ -24,6 +24,7 @@
  * landing nowhere.
  */
 import nodemailer from "nodemailer";
+import { assertOutwardAllowed } from "../deploy/outward";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -150,6 +151,12 @@ export async function sendEmail(opts: {
   text: string;
   replyTo?: string;
 }): Promise<SendResult> {
+  // CO-HOSTING GUARD, before anything else. Two deployments share the
+  // customer's mail credentials and vercel.json runs the reports cron on both,
+  // so an unguarded second deployment mails real recipients a duplicate
+  // readout. Refused loudly rather than silently dropped: a report that did
+  // not send is a visible failure, one that sent twice is not recoverable.
+  assertOutwardAllowed("email");
   const reason = mailUnavailableReason();
   if (reason) throw new Error(reason);
   const provider = activeProvider()!;
