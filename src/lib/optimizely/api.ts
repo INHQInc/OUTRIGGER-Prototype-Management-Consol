@@ -7,6 +7,8 @@
  * starts an experiment (no traffic goes live) — a human does that in Optimizely.
  */
 
+import { assertOutwardAllowed } from "../deploy/outward";
+
 const BASE = "https://api.optimizely.com/v2";
 
 export class OptimizelyError extends Error {
@@ -90,6 +92,10 @@ export class OptimizelyClient {
   }
 
   private async req<T>(path: string, init?: RequestInit): Promise<T> {
+    // A WRITE REACHES THE CUSTOMER'S LIVE PROJECT. Guarded at the one choke
+    // point every call passes through, so a future write method inherits the
+    // check rather than having to remember it.
+    if ((init?.method ?? "GET").toUpperCase() !== "GET") assertOutwardAllowed("experiment-write");
     const res = await fetch(`${BASE}${path}`, {
       ...init,
       headers: {
