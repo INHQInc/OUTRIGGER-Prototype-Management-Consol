@@ -384,7 +384,10 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   };
 
   return (
-    <div className="space-y-4" ref={rootRef}>
+    // print-board, not print-report: the readout's print scope flattens every
+    // background to nothing, which is right for a document and wrong for a
+    // board whose whole content is tinted regions over a photograph.
+    <div className="space-y-4 print-board" ref={rootRef}>
       {err && <div className="text-[14px] text-danger print:hidden">{err}</div>}
 
       {/* caption — framing only; the verdict and findings stay on the readout */}
@@ -438,6 +441,18 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/prototypes/evidence/asset?key=${encodeURIComponent(prototypeKey)}&name=${encodeURIComponent(shot.asset)}`}
                 alt={`${shot.label} screenshot`} className="block w-full h-auto" onLoad={measure} />
+
+              {/* THE SCRIM. A page capture is a wall of the brand's own
+                  contrast, and the annotation layer has to win against it. A
+                  veil in the surface colour flattens the screenshot's detail
+                  without hiding it — the picture stays readable as context,
+                  and the boxes, lines and readings become the loudest thing on
+                  it. Under the marks, so a box's tint still lands on the real
+                  pixels; print-colour-adjust because a browser drops
+                  background colour on paper and would otherwise print the
+                  screenshot at full strength with pale callouts over it. */}
+              <div aria-hidden data-scrim
+                className="absolute inset-0 bg-surface/30 pointer-events-none" />
 
               <div
                 data-shot={shot.id}
