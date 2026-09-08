@@ -185,3 +185,17 @@ body {
   display: block; width: 100%; border: 0; padding: 0; margin: 0;
 }
 .print-frame > tfoot { display: none; }
+
+/* EVIDENCE BOARD IN PRINT.
+   A callout the reader pinned is part of the argument, not a hover affordance,
+   so it prints — at the position they dragged it to, since the position is a
+   percentage of the shot and the shot scales with the page. The editing chrome
+   (colour, note, swap, delete, the resize grip) is not part of the argument
+   and goes. */
+@media print {
+  [data-act="tone"], [data-act="note"], [data-act="swap"], [data-act="del"],
+  [data-grip="1"] { display: none !important; }
+  /* Shadows print as grey mush; a hairline reads. */
+  [id^="cal-"] .shadow-lg, [id^="cal-"] .shadow-sm { box-shadow: none !important; }
+  [id^="cal-"] { break-inside: avoid; }
+}

@@ -178,6 +178,17 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   const variations = arms.length ? arms.map((a) => ({ variationId: a.variationId, name: a.name })) : (results?.variations ?? []);
 
   const markStyle = (mk: EvidenceMark) => ({ left: `${mk.x}%`, top: `${mk.y}%`, width: `${mk.w}%`, height: `${mk.h}%` });
+
+  /** WHERE THE CALLOUT SITS. Stored per mark once the reader drags it; until
+   *  then, parked clear of the box — to its right if there is room, otherwise
+   *  its left — never on top of it, and never off the edge of the shot. The
+   *  old placement hung off the box's own top edge, which is precisely where
+   *  the thing being pointed at usually is. */
+  const calloutAt = (mk: EvidenceMark) => {
+    if (mk.lx !== undefined && mk.ly !== undefined) return { x: mk.lx, y: mk.ly };
+    const right = mk.x + mk.w + 2;
+    return { x: right < 66 ? right : Math.max(1, mk.x - 30), y: Math.max(1, mk.y - 1) };
+  };
   const toneOf = (mk: EvidenceMark): Tone => (mk.tone as Tone) ?? byKey[mk.measureKey]?.tone ?? "flat";
 
   return (
@@ -234,6 +245,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                 alt={`${shot.label} screenshot`} className="block w-full h-auto" />
 
               <div
+                data-shot={shot.id}
                 className={`absolute inset-0 ${drawing ? "cursor-crosshair" : ""}`}
                 onPointerDown={(e) => {
                   if (!drawing || e.target !== e.currentTarget) return;
@@ -307,54 +319,6 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                         window.addEventListener("pointerup", up);
                       }}
                     >
-                      {/* THE LABEL SITS OUTSIDE THE BOX, NOT ON ITS EDGE.
-                          At -top-3 the chip straddled the border and landed on
-                          whatever the box was highlighting — the one thing it
-                          must never cover. It now clears the box entirely, and
-                          flips below when the box is too near the top of the
-                          shot for there to be room above it. */}
-                      <span
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); setOpenMark(openMark === mk.id ? null : mk.id); }}
-                        className={`absolute left-0 ${mk.y < 9 ? "top-full mt-2" : "bottom-full mb-2"} inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-surface shadow-sm text-[13px] font-bold tabular-nums whitespace-nowrap cursor-pointer hover:border-border-strong ${TONE_CHIP[tone]}`}>
-                        <span className="font-semibold text-foreground max-w-[22rem] truncate">{meas?.label ?? mk.measureKey}</span>
-                        {meas?.delta ?? ""}
-                        <span className="text-muted-2 font-normal text-[12px]">{openMark === mk.id ? "\u2013" : "+"}</span>
-                        {drawing && (
-                          <>
-                            <button data-act="tone" onClick={(e) => { e.stopPropagation(); setPalette(palette === mk.id ? null : mk.id); }} className="text-muted-2 hover:text-foreground" title="Box colour">&#9679;</button>
-                            <button data-act="note" onClick={(e) => { e.stopPropagation(); setNoteFor(mk.id); setNoteText(mk.note ?? ""); }} className="text-muted-2 hover:text-foreground" title="What is happening here?">&#9998;</button>
-                            <button data-act="swap" onClick={(e) => { e.stopPropagation(); setPicking({ shotId: shot.id, box: { x: mk.x, y: mk.y, w: mk.w, h: mk.h }, markId: mk.id }); }} className="text-muted-2 hover:text-foreground" title="Change which element this is">&#8635;</button>
-                            <button data-act="del" onClick={(e) => { e.stopPropagation(); void post("dropMark", { dropMark: mk.id }); }} className="text-muted-2 hover:text-danger" title="Remove">&#215;</button>
-                          </>
-                        )}
-                      </span>
-
-                      {openMark === mk.id && meas && (
-                        <div
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className={`absolute left-0 ${mk.y < 9 ? "top-full mt-11" : "bottom-full mb-11"} z-20 w-72 rounded-xl border border-border-strong bg-surface shadow-lg p-3.5`}>
-                          <div className="text-[14px] font-bold leading-snug mb-2.5">{meas.label}</div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px] tabular-nums">
-                            <span className="text-muted-2">Change</span>
-                            <span className={`font-bold text-right ${tone === "up" ? "text-ok" : tone === "down" ? "text-danger" : "text-muted"}`}>{meas.delta}</span>
-                            <span className="text-muted-2">Variation</span>
-                            <span className="text-right font-semibold">{meas.focusRate}</span>
-                            {!meas.featureOnly && (
-                              <>
-                                <span className="text-muted-2">Control</span>
-                                <span className="text-right font-semibold">{meas.baseRate}</span>
-                              </>
-                            )}
-                            <span className="text-muted-2">Events</span>
-                            <span className="text-right">{meas.events}</span>
-                            <span className="text-muted-2">Reading</span>
-                            <span className="text-right">{meas.settled}</span>
-                          </div>
-                          <p className="text-[13px] text-muted leading-snug mt-2.5 pt-2.5 border-t border-border">{mk.note ?? meas.detail}</p>
-                        </div>
-                      )}
-
                       {palette === mk.id && drawing && (
                         <span className="absolute top-4 left-2 z-10 flex gap-1 p-1 rounded-lg border border-border-strong bg-surface shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
                           {([["", "A"], ["up", ""], ["down", ""], ["warn", ""], ["new", ""], ["flat", ""]] as const).map(([t, lbl]) => (
@@ -369,6 +333,96 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                       )}
 
                       {drawing && <span data-grip="1" className="absolute -right-2 -bottom-2 w-4 h-4 rounded bg-accent border-2 border-surface cursor-nwse-resize" />}
+                    </div>
+                  );
+                })}
+
+                {/* LEADER LINES. Drawn under the callouts so a line never
+                    crosses a label, and in one SVG so the geometry is computed
+                    from the same percentages the boxes and callouts use. */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
+                  {marks.filter((m) => m.shotId === shot.id).map((mk) => {
+                    const c = calloutAt(mk);
+                    return (
+                      <line key={`l-${mk.id}`}
+                        x1={mk.x + mk.w / 2} y1={mk.y + mk.h / 2} x2={c.x} y2={c.y}
+                        stroke="currentColor" strokeWidth="0.18" vectorEffect="non-scaling-stroke"
+                        className="text-border-strong" />
+                    );
+                  })}
+                </svg>
+
+                {/* CALLOUTS. Siblings of the boxes, not children — a callout
+                    can be dragged anywhere on the shot, including far from what
+                    it points at, and the leader line carries the connection. */}
+                {marks.filter((m) => m.shotId === shot.id).map((mk) => {
+                  const meas = byKey[mk.measureKey];
+                  const tone = toneOf(mk);
+                  const c = calloutAt(mk);
+                  const open = mk.pinned || openMark === mk.id;
+                  return (
+                    <div key={`c-${mk.id}`} id={`cal-${mk.id}`} className="absolute z-10" style={{ left: `${c.x}%`, top: `${c.y}%` }}>
+                      <span
+                        onPointerDown={(e) => {
+                          // DRAG THE LABEL, not the box. Window listeners, so the
+                          // gesture survives the pointer leaving the chip.
+                          if ((e.target as HTMLElement).closest("[data-act]")) return;
+                          e.stopPropagation();
+                          const host = (e.currentTarget.closest("[data-shot]") as HTMLElement)?.getBoundingClientRect();
+                          if (!host) return;
+                          const move = (ev: PointerEvent) => {
+                            const el = document.getElementById(`cal-${mk.id}`);
+                            if (!el) return;
+                            el.style.left = `${Math.min(97, Math.max(0, ((ev.clientX - host.left) / host.width) * 100))}%`;
+                            el.style.top = `${Math.min(97, Math.max(0, ((ev.clientY - host.top) / host.height) * 100))}%`;
+                          };
+                          const up = (ev: PointerEvent) => {
+                            window.removeEventListener("pointermove", move);
+                            window.removeEventListener("pointerup", up);
+                            const lx = Math.min(97, Math.max(0, ((ev.clientX - host.left) / host.width) * 100));
+                            const ly = Math.min(97, Math.max(0, ((ev.clientY - host.top) / host.height) * 100));
+                            if (Math.abs(lx - c.x) < 0.4 && Math.abs(ly - c.y) < 0.4) {
+                              setOpenMark(openMark === mk.id ? null : mk.id);   // a click, not a drag
+                              return;
+                            }
+                            void post("mark", { mark: { id: mk.id, lx, ly } });
+                          };
+                          window.addEventListener("pointermove", move);
+                          window.addEventListener("pointerup", up);
+                        }}
+                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-surface shadow-sm text-[13px] font-bold tabular-nums whitespace-nowrap cursor-move select-none ${TONE_CHIP[tone]}`}>
+                        <span className="font-semibold text-foreground max-w-[22rem] truncate">{meas?.label ?? mk.measureKey}</span>
+                        {meas?.delta ?? ""}
+                        <button data-act="pin" title={mk.pinned ? "Unpin" : "Pin open — stays open, and prints"}
+                          onClick={(e) => { e.stopPropagation(); void post("mark", { mark: { id: mk.id, pinned: !mk.pinned } }); }}
+                          className={`text-[12px] ${mk.pinned ? "text-accent" : "text-muted-2 hover:text-foreground"}`}>&#9679;</button>
+                        {drawing && (
+                          <>
+                            <button data-act="tone" onClick={(e) => { e.stopPropagation(); setPalette(palette === mk.id ? null : mk.id); }} className="text-muted-2 hover:text-foreground" title="Box colour">&#9673;</button>
+                            <button data-act="note" onClick={(e) => { e.stopPropagation(); setNoteFor(mk.id); setNoteText(mk.note ?? ""); }} className="text-muted-2 hover:text-foreground" title="What is happening here?">&#9998;</button>
+                            <button data-act="swap" onClick={(e) => { e.stopPropagation(); setPicking({ shotId: shot.id, box: { x: mk.x, y: mk.y, w: mk.w, h: mk.h }, markId: mk.id }); }} className="text-muted-2 hover:text-foreground" title="Change which element this is">&#8635;</button>
+                            <button data-act="del" onClick={(e) => { e.stopPropagation(); void post("dropMark", { dropMark: mk.id }); }} className="text-muted-2 hover:text-danger" title="Remove">&#215;</button>
+                          </>
+                        )}
+                      </span>
+
+                      {open && meas && (
+                        <div className="mt-1.5 w-72 rounded-xl border border-border-strong bg-surface shadow-lg p-3.5">
+                          <div className="text-[14px] font-bold leading-snug mb-2.5">{meas.label}</div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px] tabular-nums">
+                            <span className="text-muted-2">Change</span>
+                            <span className={`font-bold text-right ${tone === "up" ? "text-ok" : tone === "down" ? "text-danger" : "text-muted"}`}>{meas.delta}</span>
+                            <span className="text-muted-2">Variation</span>
+                            <span className="text-right font-semibold">{meas.focusRate}</span>
+                            {!meas.featureOnly && (<><span className="text-muted-2">Control</span><span className="text-right font-semibold">{meas.baseRate}</span></>)}
+                            <span className="text-muted-2">Events</span>
+                            <span className="text-right">{meas.events}</span>
+                            <span className="text-muted-2">Reading</span>
+                            <span className="text-right">{meas.settled}</span>
+                          </div>
+                          <p className="text-[13px] text-muted leading-snug mt-2.5 pt-2.5 border-t border-border">{mk.note ?? meas.detail}</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

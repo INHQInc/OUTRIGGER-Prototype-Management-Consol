@@ -113,6 +113,12 @@ export async function POST(req: NextRequest) {
           h: Math.max(0.5, clampPct(inc.h, existing?.h ?? 6)),
           tone: (inc.tone ?? existing?.tone) || undefined,
           note: inc.note !== undefined ? String(inc.note).slice(0, 240) : existing?.note,
+          // Label placement is clamped like the box, but may sit anywhere on the
+          // shot — including well away from what it points at, which is the
+          // whole reason it is stored separately.
+          lx: inc.lx !== undefined ? clampPct(inc.lx, existing?.lx ?? 0) : existing?.lx,
+          ly: inc.ly !== undefined ? clampPct(inc.ly, existing?.ly ?? 0) : existing?.ly,
+          pinned: inc.pinned !== undefined ? Boolean(inc.pinned) : existing?.pinned,
         };
         return {
           ...cur,
