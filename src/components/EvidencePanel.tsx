@@ -12,7 +12,7 @@
  * the reading beside it keeps the earned tone, so emphasis can't restate data.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ExperimentResults } from "@/lib/prototypes/results";
 import type { StatsReport, CellStats } from "@/lib/prototypes/stats";
 import type { EvidenceBoard, EvidenceMark } from "@/lib/prototypes/evidence";
@@ -33,6 +33,51 @@ const TONE_CHIP: Record<Tone, string> = {
   new: "border-accent/70 text-accent",
   flat: "border-border-strong text-muted",
 };
+
+const TONE_LINE: Record<Tone, string> = {
+  up: "text-ok",
+  down: "text-danger",
+  warn: "text-warn",
+  new: "text-accent",
+  flat: "text-muted",
+};
+
+/** ICONS. Drawn, not typed. A bare "\u25cf" tells a reader nothing about what it
+ *  does, and this row is the only affordance the board offers — the dot that
+ *  used to sit here was read as "open", which is why closing felt like losing
+ *  the annotation. */
+const ico = {
+  viewBox: "0 0 16 16", width: 13, height: 13, fill: "none", stroke: "currentColor",
+  strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+const IconExpand = () => (<svg {...ico}><path d="M6.5 2H2v4.5M9.5 2H14v4.5M6.5 14H2V9.5M9.5 14H14V9.5" /></svg>);
+const IconCollapse = () => (<svg {...ico}><path d="M2 6.5h4.5V2M14 6.5H9.5V2M2 9.5h4.5V14M14 9.5H9.5V14" /></svg>);
+const IconPin = () => (<svg {...ico}><circle cx="8" cy="5.4" r="3.2" /><path d="M8 8.6V14" /></svg>);
+const IconClose = () => (<svg {...ico}><path d="M4 4l8 8M12 4l-8 8" /></svg>);
+const IconTrash = () => (<svg {...ico}><path d="M2.6 4.2h10.8M6.2 4.2V2.4h3.6v1.8M4.3 4.2l.7 9.4h6l.7-9.4" /></svg>);
+
+/** A rectangle on a shot, in percent of that shot. */
+type Rect = { x: number; y: number; w: number; h: number };
+
+/** The point on `r`'s perimeter facing (tx, ty). Percent space is anisotropic —
+ *  a horizontal 1% is not a vertical 1% — but the leader line is drawn in that
+ *  same space, so clipping in it lands exactly on the rendered edge. */
+function edgePoint(r: Rect, tx: number, ty: number) {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const dx = tx - cx;
+  const dy = ty - cy;
+  if (!dx && !dy) return { x: cx, y: cy };
+  const sx = dx ? r.w / 2 / Math.abs(dx) : Infinity;
+  const sy = dy ? r.h / 2 / Math.abs(dy) : Infinity;
+  const k = Math.min(sx, sy, 1);
+  return { x: cx + dx * k, y: cy + dy * k };
+}
+
+/** useLayoutEffect warns during SSR; the measurement it drives only exists in a
+ *  browser anyway. */
+const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 interface Metric {
   key: string;
@@ -69,6 +114,15 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   const [picking, setPicking] = useState<{ shotId: string; box: { x: number; y: number; w: number; h: number }; markId?: string } | null>(null);
   const [noteFor, setNoteFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+  /** WHERE EACH CALLOUT ACTUALLY IS, measured from the DOM in percent of its
+   *  shot. The leader line has to touch the callout's edge, and a callout
+   *  changes size the moment it expands — so the attachment point cannot be a
+   *  constant computed from the mark alone. */
+  const [geo, setGeo] = useState<Record<string, Rect>>({});
+  const rootRef = useRef<HTMLDivElement>(null);
+  /** Frames spent waiting for a shot that measures zero. Bounded, so a shot
+   *  that is legitimately never laid out cannot spin. */
+  const waitedRef = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -147,6 +201,71 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   });
   const byKey = Object.fromEntries(metrics.map((m) => [m.key, m]));
 
+  const measure = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const next: Record<string, Rect> = {};
+    let unlaid = false;
+    root.querySelectorAll<HTMLElement>("[data-shot]").forEach((host) => {
+      const hb = host.getBoundingClientRect();
+      // A hidden pane, a background tab or a not-yet-laid-out panel measures
+      // zero, and nothing here would ever wake up: ResizeObserver callbacks
+      // are NOT delivered while a document is hidden. requestAnimationFrame
+      // is — on the first frame after it becomes visible.
+      if (!hb.width || !hb.height) { unlaid = true; return; }
+      host.querySelectorAll<HTMLElement>("[data-cal]").forEach((el) => {
+        const b = el.getBoundingClientRect();
+        next[el.dataset.cal as string] = {
+          x: ((b.left - hb.left) / hb.width) * 100,
+          y: ((b.top - hb.top) / hb.height) * 100,
+          w: (b.width / hb.width) * 100,
+          h: (b.height / hb.height) * 100,
+        };
+      });
+    });
+    if (unlaid && waitedRef.current < 90) {
+      waitedRef.current += 1;
+      requestAnimationFrame(() => measureRef.current());
+      return;
+    }
+    waitedRef.current = 0;
+    // Only re-render when something really moved, or a drag would loop.
+    setGeo((prev) => {
+      const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+      for (const k of keys) {
+        const a = prev[k];
+        const b = next[k];
+        if (!a || !b) return next;
+        if (Math.abs(a.x - b.x) > 0.04 || Math.abs(a.y - b.y) > 0.04 ||
+            Math.abs(a.w - b.w) > 0.04 || Math.abs(a.h - b.h) > 0.04) return next;
+      }
+      return prev;
+    });
+  }, []);
+  // The rAF retry above has to reach the CURRENT measure without making
+  // `measure` depend on itself.
+  const measureRef = useRef(measure);
+  measureRef.current = measure;
+
+  // Re-measure on anything that can change a callout's box: content, which one
+  // is open, the mode's extra buttons, and the shot's own size.
+  useMeasureEffect(() => { waitedRef.current = 0; measure(); }, [measure, board, openMark, drawing, stats]);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const again = () => { waitedRef.current = 0; measure(); };
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(again) : null;
+    ro?.observe(root);
+    root.querySelectorAll("[data-cal]").forEach((el) => ro?.observe(el));
+    window.addEventListener("resize", again);
+    document.addEventListener("visibilitychange", again);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", again);
+      document.removeEventListener("visibilitychange", again);
+    };
+  }, [measure, board, openMark, drawing]);
+
   // ── upload: downsize in the browser so a 27MB page capture never travels ──
   async function addShot(file: File, variationId: string, label: string) {
     if (!file.type.startsWith("image/")) { setErr("That isn't an image."); return; }
@@ -191,8 +310,25 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   };
   const toneOf = (mk: EvidenceMark): Tone => (mk.tone as Tone) ?? byKey[mk.measureKey]?.tone ?? "flat";
 
+  /** THE LEADER LINE, end to end. Both ends are computed from live rectangles,
+   *  so the line leaves the box on the side facing the callout and lands on the
+   *  callout's near edge — and when the callout expands, the landing point
+   *  slides to the edge of the bigger card instead of staying pinned to a
+   *  corner that is no longer the corner. */
+  const leader = (mk: EvidenceMark) => {
+    const c = calloutAt(mk);
+    const box: Rect = { x: mk.x, y: mk.y, w: mk.w, h: mk.h };
+    const cal: Rect = geo[mk.id] ?? { x: c.x, y: c.y, w: 0, h: 0 };
+    // Sitting on the thing it points at, a line would only add clutter.
+    if (cal.x < box.x + box.w && cal.x + cal.w > box.x &&
+        cal.y < box.y + box.h && cal.y + cal.h > box.y) return null;
+    const a = edgePoint(box, cal.x + cal.w / 2, cal.y + cal.h / 2);
+    const b = edgePoint(cal, box.x + box.w / 2, box.y + box.h / 2);
+    return { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={rootRef}>
       {err && <div className="text-[14px] text-danger print:hidden">{err}</div>}
 
       {/* caption — framing only; the verdict and findings stay on the readout */}
@@ -242,7 +378,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/prototypes/evidence/asset?key=${encodeURIComponent(prototypeKey)}&name=${encodeURIComponent(shot.asset)}`}
-                alt={`${shot.label} screenshot`} className="block w-full h-auto" />
+                alt={`${shot.label} screenshot`} className="block w-full h-auto" onLoad={measure} />
 
               <div
                 data-shot={shot.id}
@@ -284,13 +420,13 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                   return (
                     <div key={mk.id} style={markStyle(mk)}
                       title={[meas?.label, mk.note, meas?.detail].filter(Boolean).join(" — ")}
-                      className={`absolute rounded-lg border-2 ${TONE_BOX[tone]} ${selected === mk.id ? "ring-2 ring-accent" : ""}`}
+                      className={`absolute rounded-lg border-2 ${TONE_BOX[tone]} ${selected === mk.id ? "ring-2 ring-accent z-30" : "z-0 hover:z-30"}`}
                       onPointerDown={(e) => {
-                        if ((e.target as HTMLElement).dataset.act) return;
+                        if ((e.target as HTMLElement).closest("[data-act]")) return;
                         setSelected(mk.id);
                         if (!drawing) return;
                         e.stopPropagation();
-                        const resize = (e.target as HTMLElement).dataset.grip === "1";
+                        const resize = Boolean((e.target as HTMLElement).closest('[data-grip="1"]'));
                         const host = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
                         const el = e.currentTarget as HTMLElement;
                         // Pointer origin and box origin are different things —
@@ -332,7 +468,13 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                         </span>
                       )}
 
-                      {drawing && <span data-grip="1" className="absolute -right-2 -bottom-2 w-4 h-4 rounded bg-accent border-2 border-surface cursor-nwse-resize" />}
+                      {/* INSIDE the corner, deliberately. Hanging it outside put it
+                          under whichever callout was parked beside the box, so the
+                          grab read as a move and the box could never be resized. */}
+                      {drawing && (
+                        <span data-grip="1" title="Drag to resize"
+                          className="absolute right-0 bottom-0 w-4 h-4 rounded-tl rounded-br-[0.3rem] bg-accent border-l-2 border-t-2 border-surface cursor-nwse-resize touch-none print:hidden" />
+                      )}
                     </div>
                   );
                 })}
@@ -340,14 +482,32 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                 {/* LEADER LINES. Drawn under the callouts so a line never
                     crosses a label, and in one SVG so the geometry is computed
                     from the same percentages the boxes and callouts use. */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 100 100">
+                <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
                   {marks.filter((m) => m.shotId === shot.id).map((mk) => {
-                    const c = calloutAt(mk);
+                    const seg = leader(mk);
+                    if (!seg) return null;
+                    const line = TONE_LINE[toneOf(mk)];
+                    // Stroke widths are SCREEN pixels here: non-scaling-stroke
+                    // cancels the viewBox scale. The old 0.18 was sized for that
+                    // scale, so it drew a fifth of a pixel — a line nobody saw.
                     return (
-                      <line key={`l-${mk.id}`}
-                        x1={mk.x + mk.w / 2} y1={mk.y + mk.h / 2} x2={c.x} y2={c.y}
-                        stroke="currentColor" strokeWidth="0.18" vectorEffect="non-scaling-stroke"
-                        className="text-border-strong" />
+                      <g key={`l-${mk.id}`}>
+                        {/* the shot underneath is arbitrary, so the line carries its own ground */}
+                        <line x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2}
+                          stroke="currentColor" strokeWidth="4.5" strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke" className="text-surface" opacity="0.85" />
+                        <line x1={seg.x1} y1={seg.y1} x2={seg.x1} y2={seg.y1}
+                          stroke="currentColor" strokeWidth="9" strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke" className="text-surface" opacity="0.85" />
+                        <line x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2}
+                          stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke" className={line} />
+                        {/* a zero-length round-capped segment is a true circle even
+                            though the viewBox is stretched */}
+                        <line x1={seg.x1} y1={seg.y1} x2={seg.x1} y2={seg.y1}
+                          stroke="currentColor" strokeWidth="5.5" strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke" className={line} />
+                      </g>
                     );
                   })}
                 </svg>
@@ -360,67 +520,115 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                   const tone = toneOf(mk);
                   const c = calloutAt(mk);
                   const open = mk.pinned || openMark === mk.id;
+                  // Closing has to clear BOTH reasons a card is open. Clearing
+                  // only the transient one left a pinned card open, which read
+                  // as "the close button is broken" — and then as "it will
+                  // never come back", because the only other X on the chip was
+                  // the delete.
+                  const closeCard = () => {
+                    setOpenMark((v) => (v === mk.id ? null : v));
+                    if (mk.pinned) void post("mark", { mark: { id: mk.id, pinned: false } });
+                  };
+                  const toggleCard = () => { if (open) closeCard(); else setOpenMark(mk.id); };
                   return (
-                    <div key={`c-${mk.id}`} id={`cal-${mk.id}`} className="absolute z-10" style={{ left: `${c.x}%`, top: `${c.y}%` }}>
+                    <div key={`c-${mk.id}`} id={`cal-${mk.id}`} data-cal={mk.id}
+                      className={`absolute ${open ? "z-20" : "z-10"}`} style={{ left: `${c.x}%`, top: `${c.y}%` }}>
                       <span
                         onPointerDown={(e) => {
                           // DRAG THE LABEL, not the box. Window listeners, so the
                           // gesture survives the pointer leaving the chip.
                           if ((e.target as HTMLElement).closest("[data-act]")) return;
                           e.stopPropagation();
+                          const el = document.getElementById(`cal-${mk.id}`);
                           const host = (e.currentTarget.closest("[data-shot]") as HTMLElement)?.getBoundingClientRect();
-                          if (!host) return;
+                          if (!el || !host) return;
+                          // Grab OFFSET, or the callout snaps its own corner to
+                          // the cursor on the first pixel of every drag.
+                          const eb = el.getBoundingClientRect();
+                          const off = { x: e.clientX - eb.left, y: e.clientY - eb.top };
+                          const px = e.clientX;
+                          const py = e.clientY;
+                          const maxX = Math.max(0, 100 - (eb.width / host.width) * 100);
+                          const maxY = Math.max(0, 100 - (eb.height / host.height) * 100);
+                          const at = (ev: PointerEvent) => ({
+                            x: Math.min(maxX, Math.max(0, ((ev.clientX - off.x - host.left) / host.width) * 100)),
+                            y: Math.min(maxY, Math.max(0, ((ev.clientY - off.y - host.top) / host.height) * 100)),
+                          });
+                          let moved = false;
+                          let frame = 0;
                           const move = (ev: PointerEvent) => {
-                            const el = document.getElementById(`cal-${mk.id}`);
-                            if (!el) return;
-                            el.style.left = `${Math.min(97, Math.max(0, ((ev.clientX - host.left) / host.width) * 100))}%`;
-                            el.style.top = `${Math.min(97, Math.max(0, ((ev.clientY - host.top) / host.height) * 100))}%`;
+                            if (Math.abs(ev.clientX - px) + Math.abs(ev.clientY - py) > 3) moved = true;
+                            if (!moved) return;
+                            const p = at(ev);
+                            el.style.left = `${p.x}%`;
+                            el.style.top = `${p.y}%`;
+                            // The line follows the hand, not the commit.
+                            if (!frame) frame = requestAnimationFrame(() => { frame = 0; measure(); });
                           };
                           const up = (ev: PointerEvent) => {
                             window.removeEventListener("pointermove", move);
                             window.removeEventListener("pointerup", up);
-                            const lx = Math.min(97, Math.max(0, ((ev.clientX - host.left) / host.width) * 100));
-                            const ly = Math.min(97, Math.max(0, ((ev.clientY - host.top) / host.height) * 100));
-                            if (Math.abs(lx - c.x) < 0.4 && Math.abs(ly - c.y) < 0.4) {
-                              setOpenMark(openMark === mk.id ? null : mk.id);   // a click, not a drag
-                              return;
-                            }
-                            void post("mark", { mark: { id: mk.id, lx, ly } });
+                            if (frame) cancelAnimationFrame(frame);
+                            if (!moved) { toggleCard(); return; }   // a press, not a drag
+                            const p = at(ev);
+                            void post("mark", { mark: { id: mk.id, lx: p.x, ly: p.y } });
                           };
                           window.addEventListener("pointermove", move);
                           window.addEventListener("pointerup", up);
                         }}
-                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-surface shadow-sm text-[13px] font-bold tabular-nums whitespace-nowrap cursor-move select-none ${TONE_CHIP[tone]}`}>
+                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-surface shadow-sm text-[13px] font-bold tabular-nums whitespace-nowrap cursor-move select-none touch-none ${TONE_CHIP[tone]}`}>
                         <span className="font-semibold text-foreground max-w-[22rem] truncate">{meas?.label ?? mk.measureKey}</span>
                         {meas?.delta ?? ""}
-                        <button data-act="pin" title={mk.pinned ? "Unpin" : "Pin open — stays open, and prints"}
-                          onClick={(e) => { e.stopPropagation(); void post("mark", { mark: { id: mk.id, pinned: !mk.pinned } }); }}
-                          className={`text-[12px] ${mk.pinned ? "text-accent" : "text-muted-2 hover:text-foreground"}`}>&#9679;</button>
+                        {/* The affordance for the numbers. A bare dot here read as
+                            decoration; the lightbox corners read as "open this". */}
+                        <button data-act="open" title={open ? "Collapse the numbers" : "Open the numbers"}
+                          onClick={(e) => { e.stopPropagation(); toggleCard(); }}
+                          className="ml-0.5 text-muted-2 hover:text-foreground">
+                          {open ? <IconCollapse /> : <IconExpand />}
+                        </button>
                         {drawing && (
                           <>
+                            <span className="w-px self-stretch bg-border" />
                             <button data-act="tone" onClick={(e) => { e.stopPropagation(); setPalette(palette === mk.id ? null : mk.id); }} className="text-muted-2 hover:text-foreground" title="Box colour">&#9673;</button>
                             <button data-act="note" onClick={(e) => { e.stopPropagation(); setNoteFor(mk.id); setNoteText(mk.note ?? ""); }} className="text-muted-2 hover:text-foreground" title="What is happening here?">&#9998;</button>
                             <button data-act="swap" onClick={(e) => { e.stopPropagation(); setPicking({ shotId: shot.id, box: { x: mk.x, y: mk.y, w: mk.w, h: mk.h }, markId: mk.id }); }} className="text-muted-2 hover:text-foreground" title="Change which element this is">&#8635;</button>
-                            <button data-act="del" onClick={(e) => { e.stopPropagation(); void post("dropMark", { dropMark: mk.id }); }} className="text-muted-2 hover:text-danger" title="Remove">&#215;</button>
+                            {/* A trash can, not an X. As an X it sat where a close
+                                button belongs and deleted the annotation instead. */}
+                            <button data-act="del" onClick={(e) => { e.stopPropagation(); void post("dropMark", { dropMark: mk.id }); }} className="text-muted-2 hover:text-danger" title="Delete this box">
+                              <IconTrash />
+                            </button>
                           </>
                         )}
                       </span>
 
                       {open && meas && (
-                        <div className="mt-1.5 w-72 rounded-xl border border-border-strong bg-surface shadow-lg p-3.5">
-                          <div className="text-[14px] font-bold leading-snug mb-2.5">{meas.label}</div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px] tabular-nums">
-                            <span className="text-muted-2">Change</span>
-                            <span className={`font-bold text-right ${tone === "up" ? "text-ok" : tone === "down" ? "text-danger" : "text-muted"}`}>{meas.delta}</span>
-                            <span className="text-muted-2">Variation</span>
-                            <span className="text-right font-semibold">{meas.focusRate}</span>
-                            {!meas.featureOnly && (<><span className="text-muted-2">Control</span><span className="text-right font-semibold">{meas.baseRate}</span></>)}
-                            <span className="text-muted-2">Events</span>
-                            <span className="text-right">{meas.events}</span>
-                            <span className="text-muted-2">Reading</span>
-                            <span className="text-right">{meas.settled}</span>
+                        <div className="mt-1.5 w-72 rounded-xl border border-border-strong bg-surface shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
+                          <div className="flex items-start gap-2 px-3.5 pt-3 pb-2">
+                            <div className="text-[14px] font-bold leading-snug flex-1 min-w-0">{meas.label}</div>
+                            <button data-act="pin" title={mk.pinned ? "Unpin" : "Pin open — stays open, and prints"}
+                              onClick={(e) => { e.stopPropagation(); void post("mark", { mark: { id: mk.id, pinned: !mk.pinned } }); }}
+                              className={`shrink-0 mt-px ${mk.pinned ? "text-accent" : "text-muted-2 hover:text-foreground"}`}>
+                              <IconPin />
+                            </button>
+                            <button data-act="close" title="Close" onClick={(e) => { e.stopPropagation(); closeCard(); }}
+                              className="shrink-0 mt-px text-muted-2 hover:text-foreground">
+                              <IconClose />
+                            </button>
                           </div>
-                          <p className="text-[13px] text-muted leading-snug mt-2.5 pt-2.5 border-t border-border">{mk.note ?? meas.detail}</p>
+                          <div className="px-3.5 pb-3.5">
+                            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px] tabular-nums">
+                              <span className="text-muted-2">Change</span>
+                              <span className={`font-bold text-right ${tone === "up" ? "text-ok" : tone === "down" ? "text-danger" : "text-muted"}`}>{meas.delta}</span>
+                              <span className="text-muted-2">Variation</span>
+                              <span className="text-right font-semibold">{meas.focusRate}</span>
+                              {!meas.featureOnly && (<><span className="text-muted-2">Control</span><span className="text-right font-semibold">{meas.baseRate}</span></>)}
+                              <span className="text-muted-2">Events</span>
+                              <span className="text-right">{meas.events}</span>
+                              <span className="text-muted-2">Reading</span>
+                              <span className="text-right">{meas.settled}</span>
+                            </div>
+                            <p className="text-[13px] text-muted leading-snug mt-2.5 pt-2.5 border-t border-border">{mk.note ?? meas.detail}</p>
+                          </div>
                         </div>
                       )}
                     </div>
