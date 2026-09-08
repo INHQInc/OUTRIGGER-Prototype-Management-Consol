@@ -57,8 +57,15 @@ const IconPin = () => (<svg {...ico}><circle cx="8" cy="5.4" r="3.2" /><path d="
 const IconClose = () => (<svg {...ico}><path d="M4 4l8 8M12 4l-8 8" /></svg>);
 const IconTrash = () => (<svg {...ico}><path d="M2.6 4.2h10.8M6.2 4.2V2.4h3.6v1.8M4.3 4.2l.7 9.4h6l.7-9.4" /></svg>);
 
-/** A rectangle on a shot, in percent of that shot. */
-type Rect = { x: number; y: number; w: number; h: number };
+/** A rectangle on a shot, in percent of that shot. `cw`/`ch` are the collapsed
+ *  chip's own size — placement is driven by those, never by the whole callout,
+ *  so opening a card cannot shove its neighbours around the picture. */
+type Rect = { x: number; y: number; w: number; h: number; cw?: number; ch?: number };
+
+/** Do two rectangles touch, allowing a hair of breathing room? */
+const hits = (a: Rect, b: Rect, gap = 0.6) =>
+  a.x < b.x + b.w + gap && a.x + a.w + gap > b.x &&
+  a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
 
 /** The point on `r`'s perimeter facing (tx, ty). Percent space is anisotropic —
  *  a horizontal 1% is not a vertical 1% — but the leader line is drawn in that
@@ -108,9 +115,18 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   const [drawing, setDrawing] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [palette, setPalette] = useState<string | null>(null);
-  /** Which mark has its numbers open. Collapsed shows the name and the change;
-   *  expanded shows the rates, the counts and whether it is settled. */
-  const [openMark, setOpenMark] = useState<string | null>(null);
+  /** Which marks have their numbers open — a SET, because comparing two
+   *  elements means seeing both at once. A single id closed one card every
+   *  time another was opened, which made the board useless for exactly the
+   *  reading it exists to support. Pinning still means something different:
+   *  open across reloads, and on paper. */
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const setOpen = (id: string, on: boolean) => setOpenIds((prev) => {
+    if (prev.has(id) === on) return prev;
+    const next = new Set(prev);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+  });
   const [picking, setPicking] = useState<{ shotId: string; box: { x: number; y: number; w: number; h: number }; markId?: string } | null>(null);
   const [noteFor, setNoteFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -201,7 +217,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   });
   const byKey = Object.fromEntries(metrics.map((m) => [m.key, m]));
 
-  const measure = useCallback(() => {
+  const measure = useCallback(function remeasure() {
     const root = rootRef.current;
     if (!root) return;
     const next: Record<string, Rect> = {};
@@ -215,17 +231,20 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
       if (!hb.width || !hb.height) { unlaid = true; return; }
       host.querySelectorAll<HTMLElement>("[data-cal]").forEach((el) => {
         const b = el.getBoundingClientRect();
+        const chip = (el.firstElementChild as HTMLElement | null)?.getBoundingClientRect() ?? b;
         next[el.dataset.cal as string] = {
           x: ((b.left - hb.left) / hb.width) * 100,
           y: ((b.top - hb.top) / hb.height) * 100,
           w: (b.width / hb.width) * 100,
           h: (b.height / hb.height) * 100,
+          cw: (chip.width / hb.width) * 100,
+          ch: (chip.height / hb.height) * 100,
         };
       });
     });
     if (unlaid && waitedRef.current < 90) {
       waitedRef.current += 1;
-      requestAnimationFrame(() => measureRef.current());
+      requestAnimationFrame(remeasure);
       return;
     }
     waitedRef.current = 0;
@@ -237,19 +256,16 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
         const b = next[k];
         if (!a || !b) return next;
         if (Math.abs(a.x - b.x) > 0.04 || Math.abs(a.y - b.y) > 0.04 ||
-            Math.abs(a.w - b.w) > 0.04 || Math.abs(a.h - b.h) > 0.04) return next;
+            Math.abs(a.w - b.w) > 0.04 || Math.abs(a.h - b.h) > 0.04 ||
+            Math.abs((a.cw ?? 0) - (b.cw ?? 0)) > 0.04 || Math.abs((a.ch ?? 0) - (b.ch ?? 0)) > 0.04) return next;
       }
       return prev;
     });
   }, []);
-  // The rAF retry above has to reach the CURRENT measure without making
-  // `measure` depend on itself.
-  const measureRef = useRef(measure);
-  measureRef.current = measure;
 
   // Re-measure on anything that can change a callout's box: content, which one
   // is open, the mode's extra buttons, and the shot's own size.
-  useMeasureEffect(() => { waitedRef.current = 0; measure(); }, [measure, board, openMark, drawing, stats]);
+  useMeasureEffect(() => { waitedRef.current = 0; measure(); }, [measure, board, openIds, drawing, stats]);
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -264,7 +280,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
       window.removeEventListener("resize", again);
       document.removeEventListener("visibilitychange", again);
     };
-  }, [measure, board, openMark, drawing]);
+  }, [measure, board, openIds, drawing]);
 
   // ── upload: downsize in the browser so a 27MB page capture never travels ──
   async function addShot(file: File, variationId: string, label: string) {
@@ -298,15 +314,56 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
 
   const markStyle = (mk: EvidenceMark) => ({ left: `${mk.x}%`, top: `${mk.y}%`, width: `${mk.w}%`, height: `${mk.h}%` });
 
-  /** WHERE THE CALLOUT SITS. Stored per mark once the reader drags it; until
-   *  then, parked clear of the box — to its right if there is room, otherwise
-   *  its left — never on top of it, and never off the edge of the shot. The
-   *  old placement hung off the box's own top edge, which is precisely where
-   *  the thing being pointed at usually is. */
-  const calloutAt = (mk: EvidenceMark) => {
-    if (mk.lx !== undefined && mk.ly !== undefined) return { x: mk.lx, y: mk.ly };
-    const right = mk.x + mk.w + 2;
-    return { x: right < 66 ? right : Math.max(1, mk.x - 30), y: Math.max(1, mk.y - 1) };
+  /** WHERE THE CALLOUTS SIT — resolved for a whole shot at once, because a
+   *  callout cannot avoid its neighbours if it is placed without seeing them.
+   *
+   *  A dragged callout is ABSOLUTE: the reader's position always wins, and is
+   *  never nudged to make room. The rest are parked beside their box — right
+   *  if there is room, else left, else below or above — and then stepped down
+   *  until they clear every callout already placed.
+   *
+   *  Sizes come from the measured CHIP, not the whole callout, so opening a
+   *  card never re-lays out the picture underneath it. An open card can
+   *  therefore overlap a chip below it; it sits on a higher layer and can be
+   *  dragged, which is the trade that keeps positions from jumping. */
+  const DEFAULT_CHIP = { w: 24, h: 4.8 };
+  const placeCallouts = (list: EvidenceMark[]) => {
+    const sizeOf = (mk: EvidenceMark) => ({
+      w: geo[mk.id]?.cw || DEFAULT_CHIP.w,
+      h: geo[mk.id]?.ch || DEFAULT_CHIP.h,
+    });
+    const dragged = (mk: EvidenceMark) => mk.lx !== undefined && mk.ly !== undefined;
+    const out: Record<string, { x: number; y: number }> = {};
+    // Every dragged position is claimed BEFORE anything is parked, or a chip
+    // parked early would happily sit where a later one has been pinned by hand.
+    const taken: Rect[] = list.filter(dragged).map((mk) => {
+      out[mk.id] = { x: mk.lx as number, y: mk.ly as number };
+      return { x: mk.lx as number, y: mk.ly as number, ...sizeOf(mk) };
+    });
+    for (const mk of list) {
+      if (dragged(mk)) continue;
+      const { w, h } = sizeOf(mk);
+      const cx = (v: number) => Math.min(Math.max(0, 100 - w), Math.max(0, v));
+      const cy = (v: number) => Math.min(Math.max(0, 100 - h), Math.max(0, v));
+      const seeds = [
+        { x: mk.x + mk.w + 2, y: mk.y },
+        { x: mk.x - w - 2, y: mk.y },
+        { x: mk.x, y: mk.y + mk.h + 1.5 },
+        { x: mk.x, y: mk.y - h - 1.5 },
+      ].filter((p) => p.x >= 0 && p.x + w <= 100);
+      let pick: Rect | null = null;
+      for (const seed of seeds.length ? seeds : [{ x: mk.x, y: mk.y }]) {
+        for (let step = 0; step < 12 && !pick; step++) {
+          const cand = { x: cx(seed.x), y: cy(seed.y + step * (h + 1)), w, h };
+          if (!taken.some((t) => hits(t, cand))) pick = cand;
+        }
+        if (pick) break;
+      }
+      const final = pick ?? { x: cx(seeds[0]?.x ?? mk.x), y: cy(mk.y), w, h };
+      out[mk.id] = { x: final.x, y: final.y };
+      taken.push(final);
+    }
+    return out;
   };
   const toneOf = (mk: EvidenceMark): Tone => (mk.tone as Tone) ?? byKey[mk.measureKey]?.tone ?? "flat";
 
@@ -315,8 +372,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
    *  callout's near edge — and when the callout expands, the landing point
    *  slides to the edge of the bigger card instead of staying pinned to a
    *  corner that is no longer the corner. */
-  const leader = (mk: EvidenceMark) => {
-    const c = calloutAt(mk);
+  const leader = (mk: EvidenceMark, c: { x: number; y: number }) => {
     const box: Rect = { x: mk.x, y: mk.y, w: mk.w, h: mk.h };
     const cal: Rect = geo[mk.id] ?? { x: c.x, y: c.y, w: 0, h: 0 };
     // Sitting on the thing it points at, a line would only add clutter.
@@ -363,14 +419,17 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
 
       {/* the boards */}
       <div className={`grid gap-5 ${shots.length > 1 ? "xl:grid-cols-2" : ""}`}>
-        {shots.map((shot) => (
+        {shots.map((shot) => {
+          const shotMarks = marks.filter((m) => m.shotId === shot.id);
+          const place = placeCallouts(shotMarks);
+          return (
           <section key={shot.id} className="rounded-xl border border-border bg-surface overflow-hidden break-inside-avoid">
             <div className="flex items-center gap-2 px-3.5 py-2 border-b border-border">
               <span className="text-[13.5px] font-semibold">{shot.label}</span>
               {shot.variationId === stats?.baselineVariationId && (
                 <span className="text-[11px] font-bold uppercase tracking-[0.07em] text-muted-2 border border-border rounded px-1.5">control</span>
               )}
-              <span className="ml-auto text-[12.5px] text-muted-2">{marks.filter((m) => m.shotId === shot.id).length} tracked</span>
+              <span className="ml-auto text-[12.5px] text-muted-2">{shotMarks.length} tracked</span>
               <button onClick={() => post("dropShot", { dropShot: shot.id })} disabled={busy !== null}
                 className="text-[12.5px] text-muted-2 hover:text-danger print:hidden">Remove</button>
             </div>
@@ -414,13 +473,13 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                   window.addEventListener("pointerup", up);
                 }}
               >
-                {marks.filter((m) => m.shotId === shot.id).map((mk) => {
+                {shotMarks.map((mk) => {
                   const meas = byKey[mk.measureKey];
                   const tone = toneOf(mk);
                   return (
                     <div key={mk.id} style={markStyle(mk)}
                       title={[meas?.label, mk.note, meas?.detail].filter(Boolean).join(" — ")}
-                      className={`absolute rounded-lg border-2 ${TONE_BOX[tone]} ${selected === mk.id ? "ring-2 ring-accent z-30" : "z-0 hover:z-30"}`}
+                      className={`group absolute rounded-lg border-2 ${TONE_BOX[tone]} ${selected === mk.id ? "ring-2 ring-accent" : ""}`}
                       onPointerDown={(e) => {
                         if ((e.target as HTMLElement).closest("[data-act]")) return;
                         setSelected(mk.id);
@@ -456,7 +515,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                       }}
                     >
                       {palette === mk.id && drawing && (
-                        <span className="absolute top-4 left-2 z-10 flex gap-1 p-1 rounded-lg border border-border-strong bg-surface shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
+                        <span className="absolute top-4 left-2 z-40 flex gap-1 p-1 rounded-lg border border-border-strong bg-surface shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
                           {([["", "A"], ["up", ""], ["down", ""], ["warn", ""], ["new", ""], ["flat", ""]] as const).map(([t, lbl]) => (
                             <button key={t || "auto"} data-act="tone"
                               onClick={(e) => { e.stopPropagation(); setPalette(null); void post("mark", { mark: { id: mk.id, tone: t || null } }); }}
@@ -468,12 +527,27 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                         </span>
                       )}
 
-                      {/* INSIDE the corner, deliberately. Hanging it outside put it
-                          under whichever callout was parked beside the box, so the
-                          grab read as a move and the box could never be resized. */}
+                      {/* THE RESIZE HANDLE.
+                          Inside the corner deliberately: hung outside, it sat under
+                          whichever callout parked beside the box, so every grab read
+                          as a move and the box could never be resized. z-40 with the
+                          box at z-auto keeps it above the callout layer — giving the
+                          box a z-index would trap it inside the box's own stacking
+                          context again.
+                          Revealed on the box being pointed at rather than painted on
+                          every box at once: as a permanent blue square it read as
+                          part of the screenshot. Hidden means non-interactive too, or
+                          an invisible handle would swallow clicks meant for a callout
+                          above it. */}
                       {drawing && (
                         <span data-grip="1" title="Drag to resize"
-                          className="absolute right-0 bottom-0 w-4 h-4 rounded-tl rounded-br-[0.3rem] bg-accent border-l-2 border-t-2 border-surface cursor-nwse-resize touch-none print:hidden" />
+                          className={`absolute right-0 bottom-0 z-40 w-[15px] h-[15px] rounded-br-[6px] overflow-hidden cursor-nwse-resize touch-none text-accent transition-opacity print:hidden ${
+                            selected === mk.id ? "opacity-100" : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"}`}>
+                          <svg viewBox="0 0 15 15" className="w-full h-full" aria-hidden="true">
+                            <path d="M15 0v15H0z" fill="currentColor" />
+                            <path d="M13.6 6.2 6.2 13.6M13.6 10.4l-3.2 3.2" className="text-surface" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+                          </svg>
+                        </span>
                       )}
                     </div>
                   );
@@ -483,8 +557,8 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                     crosses a label, and in one SVG so the geometry is computed
                     from the same percentages the boxes and callouts use. */}
                 <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
-                  {marks.filter((m) => m.shotId === shot.id).map((mk) => {
-                    const seg = leader(mk);
+                  {shotMarks.map((mk) => {
+                    const seg = leader(mk, place[mk.id]);
                     if (!seg) return null;
                     const line = TONE_LINE[toneOf(mk)];
                     // Stroke widths are SCREEN pixels here: non-scaling-stroke
@@ -515,24 +589,24 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                 {/* CALLOUTS. Siblings of the boxes, not children — a callout
                     can be dragged anywhere on the shot, including far from what
                     it points at, and the leader line carries the connection. */}
-                {marks.filter((m) => m.shotId === shot.id).map((mk) => {
+                {shotMarks.map((mk) => {
                   const meas = byKey[mk.measureKey];
                   const tone = toneOf(mk);
-                  const c = calloutAt(mk);
-                  const open = mk.pinned || openMark === mk.id;
+                  const c = place[mk.id];
+                  const open = mk.pinned || openIds.has(mk.id);
                   // Closing has to clear BOTH reasons a card is open. Clearing
                   // only the transient one left a pinned card open, which read
                   // as "the close button is broken" — and then as "it will
                   // never come back", because the only other X on the chip was
                   // the delete.
                   const closeCard = () => {
-                    setOpenMark((v) => (v === mk.id ? null : v));
+                    setOpen(mk.id, false);
                     if (mk.pinned) void post("mark", { mark: { id: mk.id, pinned: false } });
                   };
-                  const toggleCard = () => { if (open) closeCard(); else setOpenMark(mk.id); };
+                  const toggleCard = () => { if (open) closeCard(); else setOpen(mk.id, true); };
                   return (
                     <div key={`c-${mk.id}`} id={`cal-${mk.id}`} data-cal={mk.id}
-                      className={`absolute ${open ? "z-20" : "z-10"}`} style={{ left: `${c.x}%`, top: `${c.y}%` }}>
+                      className={`absolute hover:z-30 ${open ? "z-20" : "z-10"}`} style={{ left: `${c.x}%`, top: `${c.y}%` }}>
                       <span
                         onPointerDown={(e) => {
                           // DRAG THE LABEL, not the box. Window listeners, so the
@@ -576,29 +650,61 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                           window.addEventListener("pointermove", move);
                           window.addEventListener("pointerup", up);
                         }}
-                        className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-surface shadow-sm text-[13px] font-bold tabular-nums whitespace-nowrap cursor-move select-none touch-none ${TONE_CHIP[tone]}`}>
+                        className={`group/chip relative inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-surface shadow-sm text-[13px] font-bold tabular-nums whitespace-nowrap cursor-move select-none touch-none ${TONE_CHIP[tone]}`}>
                         <span className="font-semibold text-foreground max-w-[22rem] truncate">{meas?.label ?? mk.measureKey}</span>
                         {meas?.delta ?? ""}
-                        {/* The affordance for the numbers. A bare dot here read as
-                            decoration; the lightbox corners read as "open this". */}
-                        <button data-act="open" title={open ? "Collapse the numbers" : "Open the numbers"}
-                          onClick={(e) => { e.stopPropagation(); toggleCard(); }}
-                          className="ml-0.5 text-muted-2 hover:text-foreground">
-                          {open ? <IconCollapse /> : <IconExpand />}
-                        </button>
-                        {drawing && (
-                          <>
-                            <span className="w-px self-stretch bg-border" />
-                            <button data-act="tone" onClick={(e) => { e.stopPropagation(); setPalette(palette === mk.id ? null : mk.id); }} className="text-muted-2 hover:text-foreground" title="Box colour">&#9673;</button>
-                            <button data-act="note" onClick={(e) => { e.stopPropagation(); setNoteFor(mk.id); setNoteText(mk.note ?? ""); }} className="text-muted-2 hover:text-foreground" title="What is happening here?">&#9998;</button>
-                            <button data-act="swap" onClick={(e) => { e.stopPropagation(); setPicking({ shotId: shot.id, box: { x: mk.x, y: mk.y, w: mk.w, h: mk.h }, markId: mk.id }); }} className="text-muted-2 hover:text-foreground" title="Change which element this is">&#8635;</button>
-                            {/* A trash can, not an X. As an X it sat where a close
-                                button belongs and deleted the annotation instead. */}
-                            <button data-act="del" onClick={(e) => { e.stopPropagation(); void post("dropMark", { dropMark: mk.id }); }} className="text-muted-2 hover:text-danger" title="Delete this box">
-                              <IconTrash />
-                            </button>
-                          </>
+                        {/* THE TWO RATES, collapsed. A change on its own is not a
+                            reading — "+11.3%" says nothing about whether this is
+                            3.62% against 3.25% or 0.09% against 0.08%, and that is
+                            the difference between a finding and a rounding error.
+                            Order needs no label: the variation comes first, and the
+                            delta beside it carries the sign that proves which is
+                            which. */}
+                        {meas && (
+                          <span className="font-semibold text-muted-2"
+                            title={meas.featureOnly
+                              ? `${meas.focusRate} adoption in the variation — the control has no equivalent`
+                              : `${meas.focusRate} in the variation vs ${meas.baseRate} in the control`}>
+                            {meas.featureOnly ? meas.focusRate : (<><span className="text-foreground">{meas.focusRate}</span> vs {meas.baseRate}</>)}
+                          </span>
                         )}
+                        {/* THE CONTROL TRAY, slid out of the chip's right edge on
+                            hover. At rest a chip is nothing but its reading, which
+                            is what a board full of them has to look like while
+                            someone is presenting.
+
+                            ABSOLUTELY positioned, deliberately: the tray must not
+                            change the chip's own width, because placement is
+                            measured from that width — an inline tray would shove
+                            every un-dragged callout sideways on hover. It is still a
+                            DOM child, so pointing at it keeps the chip hovered even
+                            though it lies outside the chip's box. */}
+                        <span
+                          className={`absolute left-full -ml-2 top-0 bottom-0 z-10 flex items-center gap-1.5 pl-3.5 pr-2.5 rounded-r-lg border border-l-0 bg-surface shadow-sm
+                            opacity-0 pointer-events-none -translate-x-1.5 transition duration-150 ease-out
+                            group-hover/chip:opacity-100 group-hover/chip:pointer-events-auto group-hover/chip:translate-x-0
+                            motion-reduce:transition-none ${TONE_CHIP[tone]}`}>
+                          {/* The affordance for the numbers. A bare dot here read as
+                              decoration; the lightbox corners read as "open this". */}
+                          <button data-act="open" title={open ? "Collapse the numbers" : "Open the numbers"}
+                            onClick={(e) => { e.stopPropagation(); toggleCard(); }}
+                            className="text-muted-2 hover:text-foreground">
+                            {open ? <IconCollapse /> : <IconExpand />}
+                          </button>
+                          {drawing && (
+                            <>
+                              <span className="w-px self-stretch my-1.5 bg-border" />
+                              <button data-act="tone" onClick={(e) => { e.stopPropagation(); setPalette(palette === mk.id ? null : mk.id); }} className="text-muted-2 hover:text-foreground" title="Box colour">&#9673;</button>
+                              <button data-act="note" onClick={(e) => { e.stopPropagation(); setNoteFor(mk.id); setNoteText(mk.note ?? ""); }} className="text-muted-2 hover:text-foreground" title="What is happening here?">&#9998;</button>
+                              <button data-act="swap" onClick={(e) => { e.stopPropagation(); setPicking({ shotId: shot.id, box: { x: mk.x, y: mk.y, w: mk.w, h: mk.h }, markId: mk.id }); }} className="text-muted-2 hover:text-foreground" title="Change which element this is">&#8635;</button>
+                              {/* A trash can, not an X. As an X it sat where a close
+                                  button belongs and deleted the annotation instead. */}
+                              <button data-act="del" onClick={(e) => { e.stopPropagation(); void post("dropMark", { dropMark: mk.id }); }} className="text-muted-2 hover:text-danger" title="Delete this box">
+                                <IconTrash />
+                              </button>
+                            </>
+                          )}
+                        </span>
                       </span>
 
                       {open && meas && (
@@ -637,7 +743,8 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
               </div>
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
 
       {shots.length === 0 && (
