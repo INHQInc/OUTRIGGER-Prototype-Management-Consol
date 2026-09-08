@@ -41,6 +41,13 @@ interface Metric {
   delta: string;
   rates: string;
   detail: string;
+  /** Split out so the expanded card can lay them out as a table rather than
+   *  one run-on sentence. */
+  focusRate: string;
+  baseRate: string;
+  events: string;
+  settled: string;
+  featureOnly: boolean;
 }
 
 export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; bound: boolean }) {
@@ -56,6 +63,9 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
   const [drawing, setDrawing] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [palette, setPalette] = useState<string | null>(null);
+  /** Which mark has its numbers open. Collapsed shows the name and the change;
+   *  expanded shows the rates, the counts and whether it is settled. */
+  const [openMark, setOpenMark] = useState<string | null>(null);
   const [picking, setPicking] = useState<{ shotId: string; box: { x: number; y: number; w: number; h: number }; markId?: string } | null>(null);
   const [noteFor, setNoteFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -97,7 +107,15 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
 
   // ── the metrics, live from the same stats the readout adjudicates ──────
   const pct = (v?: number) => (v === undefined ? undefined : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
-  const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(1)}%`);
+  // Two decimals below 10%, as in the readout: at one decimal a 2.31% variation
+  // and a 2.28% control both print "2.3%" beside a change of +1.4%, and the box
+  // contradicts itself.
+  const rate = (v?: number) => {
+    if (v === undefined) return "—";
+    const p = v * 100;
+    return `${p.toFixed(Math.abs(p) >= 10 ? 1 : 2)}%`;
+  };
+  const count = (v?: number) => (v === undefined ? "—" : v.toLocaleString());
   const sigOf = (c?: CellStats) => Boolean(c?.liftCi && c.liftCi.lo * c.liftCi.hi > 0);
 
   const metrics: Metric[] = (stats?.metrics ?? []).map((m) => {
@@ -118,6 +136,13 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
         : sig
           ? "The gap is beyond what luck explains."
           : "Moved, but still inside the range luck could produce.",
+      focusRate: rate(focus?.rate),
+      baseRate: m.featureOnly ? "—" : rate(base?.rate),
+      events: m.featureOnly
+        ? count(focus?.count)
+        : `${count(focus?.count)} vs ${count(base?.count)}`,
+      settled: m.featureOnly ? "new surface" : sig ? "settled" : "not settled",
+      featureOnly: Boolean(m.featureOnly),
     };
   });
   const byKey = Object.fromEntries(metrics.map((m) => [m.key, m]));
@@ -282,9 +307,19 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                         window.addEventListener("pointerup", up);
                       }}
                     >
-                      <span className={`absolute -top-3 left-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border bg-surface text-[11.5px] font-bold tabular-nums whitespace-nowrap ${TONE_CHIP[tone]}`}>
-                        <span className="font-semibold text-muted max-w-40 truncate">{meas?.label ?? mk.measureKey}</span>
+                      {/* THE LABEL SITS OUTSIDE THE BOX, NOT ON ITS EDGE.
+                          At -top-3 the chip straddled the border and landed on
+                          whatever the box was highlighting — the one thing it
+                          must never cover. It now clears the box entirely, and
+                          flips below when the box is too near the top of the
+                          shot for there to be room above it. */}
+                      <span
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setOpenMark(openMark === mk.id ? null : mk.id); }}
+                        className={`absolute left-0 ${mk.y < 9 ? "top-full mt-2" : "bottom-full mb-2"} inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-surface shadow-sm text-[13px] font-bold tabular-nums whitespace-nowrap cursor-pointer hover:border-border-strong ${TONE_CHIP[tone]}`}>
+                        <span className="font-semibold text-foreground max-w-[22rem] truncate">{meas?.label ?? mk.measureKey}</span>
                         {meas?.delta ?? ""}
+                        <span className="text-muted-2 font-normal text-[12px]">{openMark === mk.id ? "\u2013" : "+"}</span>
                         {drawing && (
                           <>
                             <button data-act="tone" onClick={(e) => { e.stopPropagation(); setPalette(palette === mk.id ? null : mk.id); }} className="text-muted-2 hover:text-foreground" title="Box colour">&#9679;</button>
@@ -294,6 +329,31 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                           </>
                         )}
                       </span>
+
+                      {openMark === mk.id && meas && (
+                        <div
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className={`absolute left-0 ${mk.y < 9 ? "top-full mt-11" : "bottom-full mb-11"} z-20 w-72 rounded-xl border border-border-strong bg-surface shadow-lg p-3.5`}>
+                          <div className="text-[14px] font-bold leading-snug mb-2.5">{meas.label}</div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px] tabular-nums">
+                            <span className="text-muted-2">Change</span>
+                            <span className={`font-bold text-right ${tone === "up" ? "text-ok" : tone === "down" ? "text-danger" : "text-muted"}`}>{meas.delta}</span>
+                            <span className="text-muted-2">Variation</span>
+                            <span className="text-right font-semibold">{meas.focusRate}</span>
+                            {!meas.featureOnly && (
+                              <>
+                                <span className="text-muted-2">Control</span>
+                                <span className="text-right font-semibold">{meas.baseRate}</span>
+                              </>
+                            )}
+                            <span className="text-muted-2">Events</span>
+                            <span className="text-right">{meas.events}</span>
+                            <span className="text-muted-2">Reading</span>
+                            <span className="text-right">{meas.settled}</span>
+                          </div>
+                          <p className="text-[13px] text-muted leading-snug mt-2.5 pt-2.5 border-t border-border">{mk.note ?? meas.detail}</p>
+                        </div>
+                      )}
 
                       {palette === mk.id && drawing && (
                         <span className="absolute top-4 left-2 z-10 flex gap-1 p-1 rounded-lg border border-border-strong bg-surface shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
