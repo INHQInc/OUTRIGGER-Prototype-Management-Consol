@@ -40,6 +40,16 @@ export interface EvidenceMark {
   tone?: "up" | "down" | "warn" | "new" | "flat";
   /** A human line about THIS element on THIS screen. */
   note?: string;
+  /** WHERE THE CALLOUT SITS, independent of the box — percentages of the shot,
+   *  like the box itself. The label used to be pinned to the box's top edge,
+   *  which meant a box near other content had nowhere to put its name that was
+   *  not on top of something. Now it can be dragged clear and a leader line
+   *  keeps the connection. Absent = the default placement above the box. */
+  lx?: number;
+  ly?: number;
+  /** Held open. A pinned callout shows its numbers without a hover or a click,
+   *  and — the point of it — prints that way. */
+  pinned?: boolean;
 }
 
 export interface EvidenceBoard {

@@ -115,6 +115,7 @@ body {
   .print-report .text-danger { color: #b02a37 !important; }
   .print-report .text-warn { color: #997404 !important; }
   .print-report .text-muted-2, .print-report .text-muted { color: #5c6771 !important; }
+  .print-report .text-accent { color: #1D4ED8 !important; }
 }
 
 /* Print-safe data-viz: backgrounds are stripped in print, so tracks/fills
@@ -185,3 +186,32 @@ body {
   display: block; width: 100%; border: 0; padding: 0; margin: 0;
 }
 .print-frame > tfoot { display: none; }
+
+/* EVIDENCE BOARD IN PRINT.
+   A callout the reader pinned is part of the argument, not a hover affordance,
+   so it prints — at the position they dragged it to, since the position is a
+   percentage of the shot and the shot scales with the page. The editing chrome
+   (colour, note, swap, delete, expand, close, the pin itself, the resize grip)
+   is not part of the argument and goes. */
+@media print {
+  /* THE BOARD IS ITS OWN PRINT SCOPE. `body * { visibility: hidden }` above
+     reveals only `.print-report`, and that subtree belongs to ResultsPanel —
+     which returns an empty div while the Evidence tab is open. So the board's
+     own Print button had nothing visible to print. It gets its own scope
+     rather than borrowing the readout's, because `.print-report *` forces
+     every background transparent: correct for a document, fatal for a picture
+     made of tinted regions and a scrim. */
+  .print-board, .print-board * { visibility: visible; }
+  .print-board {
+    position: absolute; left: 0; top: 0; width: 100%;
+    padding: 12mm 10mm 18mm !important;
+  }
+  /* Backgrounds are dropped on paper by default — these ones ARE the content. */
+  .print-board [data-scrim], .print-board [data-shot] > div {
+    print-color-adjust: exact; -webkit-print-color-adjust: exact;
+  }
+  [data-act], [data-grip="1"] { display: none !important; }
+  /* Shadows print as grey mush; a hairline reads. */
+  [id^="cal-"] .shadow-lg, [id^="cal-"] .shadow-sm { box-shadow: none !important; }
+  [id^="cal-"] { break-inside: avoid; }
+}
