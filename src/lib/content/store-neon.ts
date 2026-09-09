@@ -9,6 +9,7 @@ import type { Environment, EnvironmentKind } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
 import type { Promotion, PromotionStatus, PromotionVehicle } from "../promotions/types";
 import type { AuditEvent } from "../audit/types";
+import { DB_OWNER_KEY, decideOwnership, wrongDatabase } from "./db-owner";
 
 /**
  * Neon-backed content store for hosted deployments. Tables auto-created on
@@ -22,11 +23,49 @@ export class NeonContentStore implements ContentStore {
 
   private constructor(private sql: NeonQueryFunction<false, false>) {}
 
+  /**
+   * The ownership gate. The decision itself lives in ./db-owner as a pure
+   * function so it can be tested; this is only the plumbing around it.
+   *
+   * Note the order: the refusal happens BEFORE `ensureSchema()`, so a
+   * deployment pointed at a database it does not own never reaches the nine
+   * `alter table` statements. That is the whole point — the DDL is the
+   * damage.
+   */
   static async create(): Promise<NeonContentStore> {
     const sql = neon(process.env.DATABASE_URL!);
     const store = new NeonContentStore(sql);
+    // Only ask the database who owns it when this deployment has an opinion.
+    // Unconfigured must cost nothing — not even a round trip.
+    const declared = (process.env.PRISM_DB_OWNER ?? "").trim();
+    const action = decideOwnership(declared, declared ? await store.readOwner() : null);
+
+    if (action.kind === "refuse") throw wrongDatabase(action.want, action.found);
+
     await store.ensureSchema();
+
+    if (action.kind === "claim") {
+      // Atomic: whoever loses the race re-reads and compares rather than
+      // assuming it won.
+      const won = await store.compareAndSetFlag(DB_OWNER_KEY, null, action.owner);
+      if (!won) {
+        const now = await store.readOwner();
+        if (now && now !== action.owner) throw wrongDatabase(action.owner, now);
+      }
+    }
     return store;
+  }
+
+  /** The claim, tolerating a database so fresh it has no tables yet. */
+  private async readOwner(): Promise<string | null> {
+    try {
+      const rows = await this.sql`select val from content_meta where key = ${DB_OWNER_KEY}`;
+      return rows[0] ? (rows[0].val as string) : null;
+    } catch (e) {
+      // 42P01 = undefined_table: nothing has ever been created here.
+      if ((e as { code?: string })?.code === "42P01") return null;
+      throw e;
+    }
   }
 
   /**
