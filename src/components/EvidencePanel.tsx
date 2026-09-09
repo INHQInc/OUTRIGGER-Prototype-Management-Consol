@@ -619,9 +619,30 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                     if (mk.pinned) void post("mark", { mark: { id: mk.id, pinned: false } });
                   };
                   const toggleCard = () => { if (open) closeCard(); else setOpen(mk.id, true); };
+
+                  // FLIP THE CARD WHEN IT WOULD FALL OFF THE BOTTOM. The shot
+                  // clips its own overflow, so a card opened low on the page
+                  // simply lost its numbers — including a pinned one, on paper.
+                  //
+                  // `c` is the CHIP's position, not the container's, which is
+                  // what makes this cheap: flipping moves the container up by
+                  // exactly the card's block so the chip stays put, and the
+                  // card still sits inside the measured rect, so the leader
+                  // line goes on landing on the expanded card rather than
+                  // reverting to the chip.
+                  //
+                  // The measurement lands before paint (useLayoutEffect), so
+                  // the unflipped frame is never shown.
+                  const g = geo[mk.id];
+                  const chipH = g?.ch ?? DEFAULT_CHIP.h;
+                  const cardBlock = Math.max(0, (g?.h ?? chipH) - chipH);
+                  const roomBelow = 100 - (c.y + chipH);
+                  const flip = cardBlock > roomBelow && c.y > roomBelow;
+                  const shift = flip ? cardBlock : 0;
                   return (
-                    <div key={`c-${mk.id}`} id={`cal-${mk.id}`} data-cal={mk.id}
-                      className={`absolute hover:z-30 ${open ? "z-20" : "z-10"}`} style={{ left: `${c.x}%`, top: `${c.y}%` }}>
+                    <div key={`c-${mk.id}`} id={`cal-${mk.id}`} data-cal={mk.id} data-flip={flip ? "1" : undefined}
+                      className={`absolute flex items-start gap-1.5 hover:z-30 ${flip ? "flex-col-reverse" : "flex-col"} ${open ? "z-20" : "z-10"}`}
+                      style={{ left: `${c.x}%`, top: `${c.y - shift}%` }}>
                       <span
                         onPointerDown={(e) => {
                           // DRAG THE LABEL, not the box. Window listeners, so the
@@ -633,12 +654,20 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                           if (!el || !host) return;
                           // Grab OFFSET, or the callout snaps its own corner to
                           // the cursor on the first pixel of every drag.
+                          const cb = e.currentTarget.getBoundingClientRect();
                           const eb = el.getBoundingClientRect();
-                          const off = { x: e.clientX - eb.left, y: e.clientY - eb.top };
+                          // Grab offset within the CHIP — lx/ly name where the
+                          // chip goes, so a flipped callout drags from the same
+                          // place a flat one does.
+                          const off = { x: e.clientX - cb.left, y: e.clientY - cb.top };
+                          // How far the container sits above the chip. Zero
+                          // unless the card is flipped; writing `top` without
+                          // it would drop the chip by a whole card.
+                          const lift = cb.top - eb.top;
                           const px = e.clientX;
                           const py = e.clientY;
-                          const maxX = Math.max(0, 100 - (eb.width / host.width) * 100);
-                          const maxY = Math.max(0, 100 - (eb.height / host.height) * 100);
+                          const maxX = Math.max(0, 100 - (cb.width / host.width) * 100);
+                          const maxY = Math.max(0, 100 - (cb.height / host.height) * 100);
                           const at = (ev: PointerEvent) => ({
                             x: Math.min(maxX, Math.max(0, ((ev.clientX - off.x - host.left) / host.width) * 100)),
                             y: Math.min(maxY, Math.max(0, ((ev.clientY - off.y - host.top) / host.height) * 100)),
@@ -650,7 +679,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                             if (!moved) return;
                             const p = at(ev);
                             el.style.left = `${p.x}%`;
-                            el.style.top = `${p.y}%`;
+                            el.style.top = `${p.y - (lift / host.height) * 100}%`;
                             // The line follows the hand, not the commit.
                             if (!frame) frame = requestAnimationFrame(() => { frame = 0; measure(); });
                           };
@@ -723,7 +752,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
                       </span>
 
                       {open && meas && (
-                        <div className="mt-1.5 w-72 rounded-xl border border-border-strong bg-surface shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
+                        <div className="w-72 rounded-xl border border-border-strong bg-surface shadow-lg" onPointerDown={(e) => e.stopPropagation()}>
                           <div className="flex items-start gap-2 px-3.5 pt-3 pb-2">
                             <div className="text-[14px] font-bold leading-snug flex-1 min-w-0">{meas.label}</div>
                             <button data-act="pin" title={mk.pinned ? "Unpin" : "Pin open — stays open, and prints"}
