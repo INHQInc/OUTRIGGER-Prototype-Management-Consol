@@ -4,6 +4,58 @@
 
 ---
 
+## BETA 2 — branch `beta-2` (state as of 2026-09-10)
+
+Beta 1 stays on `main`; everything below is the `beta-2` branch only. It is a
+**dev-only UX mock on fake data** at `/console` (gated by `DEV_ONLY_PATHS` in
+`src/middleware.ts`), built to settle the enterprise UX before any of it is
+wired to Beta 1's engine. Read, in this order:
+
+- `docs/architecture/DECISIONS.md` — D1–D10. D8 (customer creation is a
+  back-office act; the Owner connects their own tools), D9 (the site interview
+  is terminal, unknowns recorded not guessed) and **D10 (the customer is a
+  container; everything read/asked/approved is per site)** shape the current
+  screens.
+- `docs/architecture/CONTEXT-INGESTION.md` — observed / characterized / earned,
+  with the D10 correction applied to its hierarchy.
+- `docs/architecture/USE-CASES.md`, `FEATURE-GAP.md` — the inventory the mock
+  was built against. The five gaps FEATURE-GAP names first are closed on this
+  branch (typed verdict, measurement plan, brief author, evidence board, run
+  facts); its opening verdict describes the mock as it was in August.
+
+**Where things live.** `src/app/console/` — `page.tsx` (shell, nav, support
+session, fresh-customer emptiness), `operator.tsx` (back office),
+`customer-context.tsx` (Add a customer · Understand a site · site profile),
+`config.tsx` (Sites, Connections, People, Guardrails, Activity), `work.tsx` /
+`stages.tsx` (experiments through the five stages), `skills.tsx`, and the
+agent-built panels (`verdict`, `readout`, `brief-author`, `qa`, `build-panel`,
+`evidence-board`, `handoff`, `metric-builder`, `setup`). Fixtures:
+`src/lib/console/fake.ts` (experiments, sites, real Optimizely event keys) and
+`context.ts` (the real outrigger.com read — see its header for what is real
+and what is illustrative).
+
+**UI kit.** shadcn/ui components are COPIED and rewritten into Prism's token
+vocabulary in `src/components/ui/` (the mapping is documented in `button.tsx`).
+Always use them; a control shadcn lacks (the wizard stepper) is the exception,
+agreed with Bryan. A handler-less `<Button>` shows a "not built in this mock
+yet" toast — that is the honesty contract, not a bug. Dialogs and selects
+portal into the dark scope via `theme-scope.tsx`.
+
+**Mock-only session state.** `customer-context.tsx` keeps what a session read,
+asked and saved (`SESSION_CONTEXT`) and half-finished wizards (`DRAFTS`) in
+module maps. Next's hot reload resets them; a real session never sees that.
+
+**Run it.** `npm run dev -- --port 3100` → `http://localhost:3100/console`.
+Typecheck `npx tsc --noEmit -p .`; lint `npx eslint src/app/console
+src/components/ui src/lib/console` (two pre-existing warnings in `stages.tsx`).
+
+**Next on the list.** Remaining handler-less buttons (an inventory: `for f in
+src/app/console/*.tsx; do grep "<Button" "$f" | grep -vc "onClick"; done`),
+concentrated in `handoff.tsx`, `build-panel.tsx`, `work.tsx`, `stages.tsx`,
+`qa.tsx`; then wiring the mock to Beta 1's real engine behind the same screens.
+
+---
+
 ## ⚠ IN FLIGHT — READOUT MODEL EXTRACTION: email done, page mostly (2026-08-10)
 
 **Read [`docs/READOUT-MODEL.md`](READOUT-MODEL.md) first.** It holds the

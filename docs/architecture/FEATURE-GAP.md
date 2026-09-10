@@ -1,5 +1,7 @@
 # What the mock is missing
 
+*Status, 2026-09-10 (branch `beta-2`): the five gaps below are closed — see DECISIONS.md D1–D10 and HANDOFF.md § Beta 2. The verdict that follows describes the August mock and is kept as the record of why the rebuild happened.*
+
 *From a six-agent inventory of Beta 1: **223 user-facing capabilities**, 44 of them
 AI-assisted, 25 flagged as dead code. Every claim below was cited to file:line.*
 

@@ -1,5 +1,7 @@
 # Claude Context Guide — Prism (OUTRIGGER prototype management console)
 
+> **Branch `beta-2` is the Beta 2 rebuild** — a dev-only UX mock at `/console`. Its state and rules are in `docs/HANDOFF.md § Beta 2` and `docs/architecture/DECISIONS.md`. Everything else in this file describes Beta 1 on `main`.
+
 *Last updated: 2026-08-06 (analytics second pass: per-version composites, the metric builder, observations + deep reads, the analyst drawer, scoped reset, Evidence; 08-04: board-page readout, verdict engine, measurement plan)*
 
 > **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work — authoritative for "where are we"**). Touching ANY UI? [`docs/DESIGN-PRINCIPLES.md`](docs/DESIGN-PRINCIPLES.md) first — say-it-once, one card grammar, rooms-not-steps; every rule there is a past user correction.
