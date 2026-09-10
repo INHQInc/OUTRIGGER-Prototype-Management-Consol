@@ -13,7 +13,7 @@ const badgeVariants = cva(
       variant: {
         default: "bg-accent text-accent-fg [a&]:hover:bg-accent/90",
         secondary: "bg-surface-2 text-foreground [a&]:hover:bg-surface-2/90",
-        destructive: "bg-danger text-white [a&]:hover:bg-danger/90",
+        destructive: "bg-danger text-danger-fg [a&]:hover:bg-danger/90",
         outline: "border-border text-foreground [a&]:hover:bg-surface-2",
         ok: "bg-ok/10 text-ok",
         warn: "bg-warn/10 text-warn",

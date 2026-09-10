@@ -170,11 +170,16 @@ recorded decisions, which is why the profile shows that layer first.
 
 **What the real read found (10 Sep 2026, prep.outrigger.com, `deriveDesignTokens`).**
 Three self-hosted families (Duplicate Sans, Duplicate Ionic, Montserrat — 15
-faces); 60 CSS custom properties, **all** belonging to the SynXis booking
-widget and none to the brand; Bootstrap 5 underneath with its default blue
-(`#0d6efd`) used 38 times beside the brand's `#0078cd`; "Check availability"
-×9 against "Book Now" ×3 on the home page. Every one of those became an
-interview question, because a crawl can see them and cannot decide them.
+faces); 1,398 custom properties in main.css — 355 Bootstrap's, 46 the brand's
+own named palette (`--clr-deep-turquoise`, `--clr-black-rock`, `--clr-sand`,
+`--clr-coral`…), the rest per-component — plus 60 from the SynXis booking
+widget, whose stylesheet also owns the primary button's style; Bootstrap 5
+underneath with its default blue (`#0d6efd`) used 38 times beside the brand's
+`#0078cd` (43); "Check availability" ×9 against "Book Now" ×3 on the home
+page. Every one of those became an interview question, because a crawl can
+see them and cannot decide them. (A first derivation run reported zero brand
+variables: it resolved main.css against `www.`, which the WAF blocks for Node.
+The review caught it against the repo's own July capture.)
 
 ---
 

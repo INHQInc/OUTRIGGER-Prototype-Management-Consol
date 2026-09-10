@@ -18,8 +18,10 @@ function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive
  *  that scope and render a light dialog on a dark screen — so the portal targets
  *  the scope when one exists, and falls back to <body> when it doesn't. */
 function useThemeScope() {
-  const [el, setEl] = React.useState<HTMLElement | null>(null);
-  React.useEffect(() => { setEl(document.querySelector<HTMLElement>("[data-console],[data-backoffice]")); }, []);
+  // Read once on the client. Radix renders the portal only after mount, so the
+  // server's null never reaches the DOM and there is nothing to mismatch.
+  const [el] = React.useState<HTMLElement | null>(() =>
+    typeof document === "undefined" ? null : document.querySelector<HTMLElement>("[data-console],[data-backoffice]"));
   return el ?? undefined;
 }
 

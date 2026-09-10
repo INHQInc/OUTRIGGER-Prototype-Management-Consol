@@ -18,10 +18,10 @@ const scriptPill = (s: Site["envs"][number]) =>
 
 /* ── Sites ─────────────────────────────────────────────────────────── */
 
-export function SitesView({ open, onAdd }: { open: (id: string) => void; onAdd?: () => void }) {
+export function SitesView({ open, onAdd, rows = SITE_ROWS }: { open: (id: string) => void; onAdd?: () => void; rows?: Site[] }) {
   return (
     <>
-      <PageHeader title="Sites" count={`${SITE_ROWS.length} sites`} actions={<Button size="sm" onClick={onAdd}>Add a site</Button>} />
+      <PageHeader title="Sites" count={`${rows.length} site${rows.length === 1 ? "" : "s"}`} actions={<Button size="sm" onClick={onAdd}>Add a site</Button>} />
       <Toolbar>
         <span className="text-[13px] text-muted">
           A customer can have any number of sites, and each site has its own environments and its own source code.
@@ -33,7 +33,7 @@ export function SitesView({ open, onAdd }: { open: (id: string) => void; onAdd?:
             <tr><Th first>Site</Th><Th>Environments</Th><Th>Script</Th><Th>Source code</Th><Th>Understanding</Th><Th>Experiments</Th></tr>
           </thead>
           <tbody>
-            {SITE_ROWS.map((s) => {
+            {rows.map((s) => {
               const missing = s.envs.filter((e) => e.script === "missing").length;
               return (
                 <tr key={s.id} onClick={() => open(s.id)} className="cursor-pointer hover:bg-surface-2/60 border-b border-border">
@@ -50,7 +50,7 @@ export function SitesView({ open, onAdd }: { open: (id: string) => void; onAdd?:
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3">{missing ? <Pill tone="warn">{missing} missing</Pill> : <Pill tone="ok">All installed</Pill>}</td>
+                  <td className="px-4 py-3">{!s.envs.length ? <Pill tone="muted">No environments yet</Pill> : missing ? <Pill tone="warn">{missing} missing</Pill> : <Pill tone="ok">All installed</Pill>}</td>
                   <td className="px-4 py-3 text-[13px] text-muted">{s.repo ? <span className="font-mono text-[12px]">{s.repo}</span> : <Pill tone="warn">Not connected</Pill>}</td>
                   <td className="px-4 py-3"><UnderstandingPill id={s.id} /></td>
                   <td className="px-4 py-3 text-[13px] text-muted tabular-nums">{s.experiments}</td>
@@ -250,8 +250,8 @@ export function GuardrailsView() {
         <Section>
           {GUARDRAILS.map((g) => (
             <div key={g.name} className="flex items-center gap-4 px-5 py-3.5 border-b border-border last:border-0">
-              <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", g.on ? "bg-accent border-accent" : "border-border-strong")}>
-                {g.on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+              <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", g.on ? "bg-accent border-accent text-accent-fg" : "border-border-strong")}>
+                {g.on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
               </span>
               <div className="flex-1">
                 <div className="text-[14px] font-medium">{g.name}</div>

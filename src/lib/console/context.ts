@@ -14,17 +14,21 @@
  * Only the middle one becomes a skill. The observed layer is data the agent reads;
  * the earned layer is a query rendered as sentences.
  *
- * WHAT IS REAL AND WHAT IS NOT in the observed fixture. The fonts, the colour
- * variables and their owner, the top colours by use, the button labels, the
- * headlines, the stylesheet list and the media counts were derived from the
- * prep.outrigger.com HOME PAGE and its five stylesheets on 10 Sep 2026 with
- * `deriveDesignTokens()` plus a stylesheet pass. The page map (412 found, 38
- * read, the kinds chosen) and the component list are what a bounded crawl
- * WOULD produce and are illustrative — the crawl itself has not been built
- * (CONTEXT-INGESTION.md, "Missing · 1"). The single most useful real finding is
- * an awkward one: every colour variable the pages declare belongs to the
- * booking-widget vendor, not to the brand. The mock keeps it, because it is
- * exactly the kind of thing a person has to be asked about.
+ * WHAT IS REAL AND WHAT IS NOT in the observed fixture. The fonts, the custom
+ * properties and who owns them, the palette names, the top colours by use, the
+ * button labels, the headlines, the stylesheet list and the media counts were
+ * derived from the prep.outrigger.com HOME PAGE and its five stylesheets on
+ * 10 Sep 2026 with `deriveDesignTokens()` plus a stylesheet pass. (A first run
+ * resolved main.css against www., which the WAF blocks for Node, and reported
+ * zero brand variables — the corrected pass against prep. found 1,398.) The
+ * page map (412 found, 38 read, the kinds chosen) and the component list are
+ * what a bounded crawl WOULD produce and are illustrative — the crawl itself
+ * has not been built (CONTEXT-INGESTION.md, "Missing · 1"). The most useful
+ * real findings are the awkward ones: the primary button's style belongs to
+ * the booking-widget vendor's stylesheet, not the brand's; Bootstrap's own
+ * blue is used almost as often as the brand's; and three type families are
+ * loaded with nothing to say which is for headlines. Each became a question,
+ * because a crawl can see them and cannot decide them.
  *
  * The read fixture is outrigger.com's. In the mock, reading any other site
  * shows the same receipt under that site's name — there is one real crawl,
@@ -76,17 +80,18 @@ export const OBSERVED = {
     { family: "Duplicate Ionic", faces: ["Light", "Regular", "Medium", "Bold", "Bold Italic", "Black"], declarations: 76, loaded: "self-hosted" },
     { family: "Montserrat", faces: ["Light", "Regular", "Medium", "Bold"], declarations: 267, loaded: "self-hosted" },
   ] as ObservedFont[],
+  // Names are the site's own --clr-* variable names, not ours.
   colours: [
-    { hex: "#004561", uses: 73, origin: "brand", name: "deep water" },
-    { hex: "#0b2f47", uses: 31, origin: "brand", name: "night" },
-    { hex: "#0078cd", uses: 43, origin: "brand", name: "brand blue" },
-    { hex: "#00b9ff", uses: 30, origin: "brand", name: "sky" },
-    { hex: "#0099e6", uses: 14, origin: "brand" },
-    { hex: "#252525", uses: 77, origin: "brand", name: "ink" },
-    { hex: "#aaa096", uses: 21, origin: "brand", name: "sand" },
-    { hex: "#cdc3b3", uses: 13, origin: "brand", name: "shell" },
-    { hex: "#f1efed", uses: 18, origin: "brand", name: "linen" },
-    { hex: "#300b5c", uses: 21, origin: "brand", name: "unexplained purple" },
+    { hex: "#004561", uses: 73, origin: "brand", name: "--clr-deep-turquoise" },
+    { hex: "#0b2f47", uses: 31, origin: "brand", name: "--clr-turquoise" },
+    { hex: "#0078cd", uses: 43, origin: "brand", name: "--clr-light-blue" },
+    { hex: "#00b9ff", uses: 30, origin: "brand", name: "--clr-link-blue" },
+    { hex: "#0099e6", uses: 14, origin: "brand", name: "--clr-blog-post-hover" },
+    { hex: "#252525", uses: 77, origin: "brand", name: "--clr-black-rock" },
+    { hex: "#aaa096", uses: 21, origin: "brand", name: "unnamed — used, never declared" },
+    { hex: "#cdc3b3", uses: 13, origin: "brand", name: "--clr-light-brown1" },
+    { hex: "#f1efed", uses: 18, origin: "brand", name: "--clr-sand" },
+    { hex: "#300b5c", uses: 21, origin: "brand", name: "--clr-purple-gradient1" },
     { hex: "#0d6efd", uses: 38, origin: "framework", name: "Bootstrap blue" },
     { hex: "#6c757d", uses: 30, origin: "framework", name: "Bootstrap grey" },
     { hex: "#dc3545", uses: 26, origin: "framework", name: "Bootstrap red" },
@@ -94,7 +99,13 @@ export const OBSERVED = {
     { hex: "#309ab5", uses: 9, origin: "widget", name: "calendar selection" },
     { hex: "#007b94", uses: 7, origin: "widget", name: "widget teal" },
   ] as ObservedColour[],
-  variables: { total: 60, owner: "shs-widgets (SynXis booking widget)", brandOwn: 0 },
+  /** Custom properties, by who declares them. main.css alone declares 1,398. */
+  variables: {
+    palette: { prefix: "--clr-*", n: 46 },
+    framework: { prefix: "--bs-*", n: 355 },
+    components: { prefix: "--card-* --hero-* --property-* …", n: 997 },
+    widget: { prefix: "--shs-widgets-*", n: 60 },
+  },
   ctas: [
     { label: "Check availability", count: 9 },
     { label: "Book Now", count: 3 },
@@ -163,7 +174,7 @@ export const DRAFT_SECTIONS: Section[] = [
     key: "design",
     confidence: 68,
     from: ["main.css", "the three vendor stylesheets", "56 images and 3 videos on the home page alone"],
-    body: "Photography-led: full-bleed imagery and video carry the page, and the type stays out of the way. Three families are loaded — Duplicate Sans, Duplicate Ionic and Montserrat — with Montserrat Light doing most of the work. A deep-water navy (#004561) and a bright brand blue (#0078cd) sit on white and warm sand neutrals. Corners are soft (1rem on the booking widget). The primary action on the page is 'Check availability', set in uppercase with a heavy 3px border — but that button belongs to the booking-widget vendor, not the site's own stylesheet.",
+    body: "Photography-led: full-bleed imagery and video carry the page, and the type stays out of the way. Three families are loaded — Duplicate Sans, Duplicate Ionic and Montserrat — with Montserrat Light doing most of the work. The stylesheet names its own palette: a deep turquoise (#004561) and a light blue (#0078cd) on white and a warm sand (#f1efed), with coral and seafoam for accents. Corners are soft (1rem on the booking widget). The most common action on the page is 'Check availability', set in uppercase with a heavy 3px border — but that button belongs to the booking-widget vendor, not the site's own stylesheet.",
     unsure: "Which family is the headline face — counts can't tell roles. And whether Bootstrap's own blue (#0d6efd, used 38 times) is ever meant to be visible, or is a leak.",
   },
 ];

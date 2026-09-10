@@ -82,7 +82,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
             <button onClick={() => i < step && setStep(i)}
               className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors", i < step && "hover:bg-surface-2")}>
               <span className={cn("w-5 h-5 rounded-full grid place-items-center text-[11px] font-bold",
-                i < step ? "bg-ok text-white" : i === step ? "bg-accent text-accent-fg" : "border border-border-strong text-muted-2")}>
+                i < step ? "bg-ok text-ok-fg" : i === step ? "bg-accent text-accent-fg" : "border border-border-strong text-muted-2")}>
                 {i < step ? "✓" : i + 1}
               </span>
               <span className={cn("text-[13px] whitespace-nowrap", i === step ? "font-semibold" : i < step ? "text-muted" : "text-muted-2")}>{s}</span>
@@ -178,8 +178,8 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
                 return (
                   <button key={g} onClick={() => set("guardrails", on ? d.guardrails.filter((x) => x !== g) : [...d.guardrails, g])}
                     className="w-full flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 text-left hover:bg-surface-2/60">
-                    <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", on ? "bg-accent border-accent" : "border-border-strong")}>
-                      {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                    <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", on ? "bg-accent border-accent text-accent-fg" : "border-border-strong")}>
+                      {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                     </span>
                     <span className="text-[14px]">{g}</span>
                     {POLICY.includes(g) && <span className="ml-auto text-[12px] text-muted-2">from your policy</span>}

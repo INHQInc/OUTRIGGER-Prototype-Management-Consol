@@ -36,6 +36,8 @@ interface Cust {
   running: number; health: "ok" | "warn" | "down"; issue?: string; usage: string; since: string;
   /** Created this session: setup is unfinished and their console shows the checklist. */
   fresh?: boolean;
+  /** The sites the wizard created, none of them read yet. */
+  siteDomains?: string[];
 }
 
 export const CUSTOMERS: Cust[] = [
@@ -56,7 +58,7 @@ const CONSOLE_USERS: ConsoleUser[] = [
 interface Session { who: string; cust: string; reason: string; started: string; expires: string; live: boolean }
 
 const SESSIONS: Session[] = [
-  { who: "Rae Whitfield", cust: "Pacifica Resorts Group", reason: "Optimizely token expired — reconnecting on their behalf", started: "14:02", expires: "in 48 min", live: true },
+  { who: "Rae Whitfield", cust: "Pacifica Resorts Group", reason: "Their Optimizely token expired — checking what their console shows before they reconnect it themselves", started: "14:02", expires: "in 48 min", live: true },
   { who: "Bryan Hopkins", cust: "OUTRIGGER Hotels & Resorts", reason: "Investigating a readout that reported no winner", started: "Yesterday 09:20", expires: "ended 10:05", live: false },
   { who: "Jonas Ek", cust: "Island Collective", reason: "Walking them through their first approval", started: "8 Sep 11:00", expires: "ended 11:40", live: false },
 ];
@@ -86,7 +88,7 @@ type Room = (typeof NAV)[number];
 const healthPill = (h: Cust["health"]) =>
   h === "ok" ? <Pill tone="ok">Healthy</Pill> : h === "warn" ? <Pill tone="warn">Needs attention</Pill> : <Pill tone="danger">Blocked</Pill>;
 
-export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCustomer: (name: string, reason: string, fresh?: boolean) => void }) {
+export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCustomer: (name: string, reason: string, fresh?: boolean, sites?: string[]) => void }) {
   const [room, setRoom] = useState<Room>("Customers");
   const [list, setList] = useState<Cust[]>(CUSTOMERS);
   const [adding, setAdding] = useState(false);
@@ -132,8 +134,8 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
               className={cn("w-full text-left rounded-lg px-2.5 py-[7px] mb-0.5 text-[13.5px]",
                 room === n ? "bg-surface-2 font-semibold text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/60")}>
               {n}
-              {n === "Health" && open > 0 && <span className="float-right text-[11px] font-bold bg-warn text-foreground rounded-full px-1.5 tabular-nums">{open}</span>}
-              {n === "Support sessions" && live > 0 && <span className="float-right text-[11px] font-bold bg-ok text-foreground rounded-full px-1.5 tabular-nums">{live}</span>}
+              {n === "Health" && open > 0 && <span className="float-right text-[11px] font-bold bg-warn text-warn-fg rounded-full px-1.5 tabular-nums">{open}</span>}
+              {n === "Support sessions" && live > 0 && <span className="float-right text-[11px] font-bold bg-ok text-ok-fg rounded-full px-1.5 tabular-nums">{live}</span>}
             </button>
           ))}
         </div>
@@ -147,7 +149,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
           <CustomerWizard onClose={() => setAdding(false)} onDone={(name, sites) => {
             const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
             setList((l) => [{ id, name, sites: sites.length, experiments: 0, people: 1, running: 0, health: "warn",
-              issue: `Setup unfinished — ${sites.length} site${sites.length === 1 ? "" : "s"} not read yet, no A/B tool connected`, usage: "$0 / mo", since: "Sep 2026", fresh: true }, ...l]);
+              issue: `Setup unfinished — ${sites.length} site${sites.length === 1 ? "" : "s"} not read yet, no A/B tool connected`, usage: "$0 / mo", since: "Sep 2026", fresh: true, siteDomains: sites }, ...l]);
             setAdding(false); setRoom("Customers");
           }} />
         )}
@@ -305,10 +307,10 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
           <div>
             <Label htmlFor="reason" className="mb-1.5">Why do you need to go in?</Label>
             <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} autoFocus
-              placeholder="Their Optimizely token expired — reconnecting on their behalf" className="resize-none" />
+              placeholder="Their readout reported no winner — looking at what they see" className="resize-none" />
           </div>
           <DialogFooter className="sm:justify-start items-center">
-            <Button disabled={reason.trim().length < 8} onClick={() => { if (asking) enterCustomer(asking.name, reason, asking.fresh); setAsking(null); }}>
+            <Button disabled={reason.trim().length < 8} onClick={() => { if (asking) enterCustomer(asking.name, reason, asking.fresh, asking.siteDomains); setAsking(null); }}>
               Start a 1-hour session
             </Button>
             <Button variant="ghost" onClick={() => setAsking(null)}>Cancel</Button>
@@ -333,8 +335,8 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
               <Input id="invite-email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="colleague@brandgraphai.com" autoFocus />
             </div>
             <div>
-              <Label className="mb-2">Role</Label>
-              <RadioGroup value={inviteRole} onValueChange={(v) => setInviteRole(v as ConsoleUser["role"])}>
+              <Label id="invite-role" className="mb-2">Role</Label>
+              <RadioGroup aria-labelledby="invite-role" value={inviteRole} onValueChange={(v) => setInviteRole(v as ConsoleUser["role"])}>
                 {([
                   ["Support", "Can open a customer's console with a reason, and act on Health."],
                   ["Owner", "Everything Support can, plus inviting and removing back-office users and creating customers."],

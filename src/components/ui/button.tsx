@@ -29,7 +29,7 @@ const buttonVariants = cva(
         default: "bg-accent text-accent-fg hover:bg-accent-hover",
         outline: "border border-border bg-surface hover:border-border-strong",
         ghost: "text-muted hover:text-foreground hover:bg-surface-2",
-        danger: "bg-danger text-white hover:opacity-90",
+        danger: "bg-danger text-danger-fg hover:opacity-90",
         link: "text-accent underline-offset-4 hover:underline",
       },
       size: {

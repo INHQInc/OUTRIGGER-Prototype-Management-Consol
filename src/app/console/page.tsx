@@ -15,8 +15,10 @@
  */
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
-import { EXPERIMENTS, ME, SITE_ROWS, needsMe } from "@/lib/console/fake";
+import { EXPERIMENTS, ME, SITE_ROWS, needsMe, type Site } from "@/lib/console/fake";
+import { Empty, PageHeader } from "./ui";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
@@ -50,10 +52,14 @@ const NAV = [
   },
 ];
 
-const COUNT: Record<string, number | undefined> = {
-  Experiments: EXPERIMENTS.length,
-  Sites: SITE_ROWS.length,
-};
+/** A customer created this session has nothing but the sites its wizard named. */
+const FreshEmpty = ({ title, go }: { title: string; go: (s: string) => void }) => (
+  <>
+    <PageHeader title={title} />
+    <Empty title="Nothing here yet" body="This starts once a site has been read and understood — that's the first thing to do for a new customer."
+      action={<Button onClick={() => go("Sites")}>Go to Sites</Button>} />
+  </>
+);
 
 export default function Console() {
   const [nav, setNav] = useState("Overview");
@@ -68,6 +74,7 @@ export default function Console() {
   const [support, setSupport] = useState<{ customer: string; reason: string } | null>(null);
   /** A customer created in this session is the only one whose setup is unfinished. */
   const [fresh, setFresh] = useState(false);
+  const [freshSites, setFreshSites] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => {
     const on = (ev: Event) => { setToast((ev as CustomEvent<string>).detail); };
@@ -77,16 +84,18 @@ export default function Console() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
-  const site = SITE_ROWS.find((s) => s.id === siteId) ?? null;
-  const learning = SITE_ROWS.find((s) => s.id === understanding) ?? null;
-  const waiting = EXPERIMENTS.filter(needsMe).length;
+  const rows: Site[] = fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS;
+  const site = rows.find((s) => s.id === siteId) ?? null;
+  const learning = rows.find((s) => s.id === understanding) ?? null;
+  const waiting = fresh ? 0 : EXPERIMENTS.filter(needsMe).length;
+  const count: Record<string, number | undefined> = { Experiments: fresh ? 0 : EXPERIMENTS.length, Sites: rows.length };
 
   const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); };
   const openExp = (id: string) => { setNav("Experiments"); setExpId(id); };
 
   if (backOffice) {
     return <BackOffice exit={() => setBackOffice(false)}
-      enterCustomer={(customer, reason, fresh) => { setSupport({ customer, reason }); setFresh(Boolean(fresh)); setBackOffice(false); go("Overview"); }} />;
+      enterCustomer={(customer, reason, fresh, sites) => { setSupport({ customer, reason }); setFresh(Boolean(fresh)); setFreshSites(sites ?? []); setBackOffice(false); go("Overview"); }} />;
   }
 
   return (
@@ -116,7 +125,7 @@ export default function Console() {
           {switcher && (
             <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-border bg-surface shadow-lg py-1">
               {CUSTOMERS.map((c) => (
-                <button key={c.id} onClick={() => setSwitcher(false)}
+                <button key={c.id} onClick={() => { setSwitcher(false); if (c.id !== "outrigger") window.dispatchEvent(new CustomEvent("mock-not-built", { detail: `Switch to ${c.name}` })); }}
                   className={cn("w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-2 truncate", c.id === "outrigger" ? "font-semibold" : "text-muted")}>{c.name}</button>
               ))}
               <div className="border-t border-border mt-1 pt-1">
@@ -141,7 +150,7 @@ export default function Console() {
                     {label === "Overview" && waiting > 0 && (
                       <span className="ml-auto text-[11px] font-bold text-accent-fg bg-accent rounded-full px-1.5 tabular-nums">{waiting}</span>
                     )}
-                    {COUNT[label] !== undefined && <span className="ml-auto text-[11px] font-semibold text-muted-2 tabular-nums">{COUNT[label]}</span>}
+                    {count[label] !== undefined && <span className="ml-auto text-[11px] font-semibold text-muted-2 tabular-nums">{count[label]}</span>}
                   </button>
                 );
               })}
@@ -165,20 +174,23 @@ export default function Console() {
       <main className="flex-1 min-w-0 flex flex-col">
         {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={() => { setFlow(null); go("Sites"); }} />}
         {!flow && nav === "Overview" && <OverviewView open={openExp} fresh={fresh} />}
-        {!flow && nav === "Experiments" && (
+        {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" go={go} />}
+        {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" go={go} />}
+        {!flow && nav === "Readouts" && fresh && <FreshEmpty title="Readouts" go={go} />}
+        {!flow && nav === "Experiments" && !fresh && (
           creating ? <NewExperiment cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
           : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />
           : <ExperimentsView open={setExpId} onNew={() => setCreating(true)} />
         )}
-        {!flow && nav === "Ideas" && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
-        {!flow && nav === "Readouts" && <ReadoutsView />}
+        {!flow && nav === "Ideas" && !fresh && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
+        {!flow && nav === "Readouts" && !fresh && <ReadoutsView />}
         {!flow && nav === "Sites" && (
           learning ? (
-            <UnderstandSite key={learning.id} site={learning} others={SITE_ROWS.filter((s) => s.id !== learning.id)}
+            <UnderstandSite key={learning.id} site={learning} others={rows.filter((s) => s.id !== learning.id)}
               onClose={() => setUnderstanding(null)} onDone={() => { setSiteId(learning.id); setUnderstanding(null); }}
               onAnother={(id) => { if (id) { setSiteId(id); setUnderstanding(id); } else { setUnderstanding(null); setSiteId(null); setFlow("site"); } }} />
           ) : site ? <SiteDetail s={site} back={() => setSiteId(null)} understand={setUnderstanding} />
-          : <SitesView open={setSiteId} onAdd={() => setFlow("site")} />
+          : <SitesView rows={rows} open={setSiteId} onAdd={() => setFlow("site")} />
         )}
         {!flow && nav === "Connections" && <ConnectionsView />}
         {!flow && nav === "People & roles" && <PeopleView />}

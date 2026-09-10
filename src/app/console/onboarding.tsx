@@ -48,7 +48,7 @@ export function Wizard({
             <button onClick={() => i < step && setStep(i)}
               className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5", i < step && "hover:bg-surface-2")}>
               <span className={cn("w-5 h-5 rounded-full grid place-items-center text-[11px] font-bold",
-                i < step ? "bg-ok text-white" : i === step ? "bg-accent text-accent-fg" : "border border-border-strong text-muted-2")}>
+                i < step ? "bg-ok text-ok-fg" : i === step ? "bg-accent text-accent-fg" : "border border-border-strong text-muted-2")}>
                 {i < step ? "✓" : i + 1}
               </span>
               <span className={cn("text-[13px] whitespace-nowrap", i === step ? "font-semibold" : i < step ? "text-muted" : "text-muted-2")}>{s}</span>
@@ -125,8 +125,8 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
           ) : (
             <div className="mt-5 rounded-xl border border-border bg-surface p-5">
               <div className="flex items-center gap-2.5 pb-4 border-b border-border">
-                <span className="w-4 h-4 rounded-full bg-ok grid place-items-center shrink-0">
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                <span className="w-4 h-4 rounded-full bg-ok text-ok-fg grid place-items-center shrink-0">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                 </span>
                 <span className="text-[14px] font-medium">Read {domain}</span>
                 <span className="text-[12.5px] text-muted-2 ml-auto">6 seconds</span>
@@ -148,8 +148,8 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
             {FOUND_PAGES.map((p, i) => (
               <button key={p.path} onClick={() => setPages((ps) => ps.map((v, j) => (i === j ? !v : v)))}
                 className="w-full flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 text-left hover:bg-surface-2/60">
-                <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", pages[i] ? "bg-accent border-accent" : "border-border-strong")}>
-                  {pages[i] && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", pages[i] ? "bg-accent border-accent text-accent-fg" : "border-border-strong")}>
+                  {pages[i] && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-[14px] font-medium" dangerouslySetInnerHTML={{ __html: p.name }} />
@@ -158,7 +158,7 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
                 <span className="text-[12.5px] text-muted-2 shrink-0">{p.visits}</span>
               </button>
             ))}
-            <div className="px-4 py-2.5 bg-surface-2/40 text-[13px] text-accent">Show 19 more</div>
+            <Button variant="link" size="sm" className="w-full justify-start rounded-none px-4 h-9 bg-surface-2/40">Show 19 more</Button>
           </div>
           <p className="text-[12.5px] text-muted-2 mt-3">{chosen} selected</p>
         </Q>

@@ -23,6 +23,10 @@
   --danger: #C42B2B;         /* 5.5:1 */
   --warn: #B45309;
   --ok: #067A55;             /* 5.2:1 */
+  /* text that sits ON a status colour — white on a light status fill is ~2.6:1 */
+  --ok-fg: #FFFFFF;
+  --warn-fg: #FFFFFF;
+  --danger-fg: #FFFFFF;
 }
 
 html[data-theme="dark"] {
@@ -40,6 +44,9 @@ html[data-theme="dark"] {
   --danger: #FF7A70;
   --warn: #FFC554;
   --ok: #3FDE9C;
+  --ok-fg: #0D1117;
+  --warn-fg: #0D1117;
+  --danger-fg: #0D1117;
 }
 
 @theme inline {
@@ -57,6 +64,9 @@ html[data-theme="dark"] {
   --color-danger: var(--danger);
   --color-warn: var(--warn);
   --color-ok: var(--ok);
+  --color-ok-fg: var(--ok-fg);
+  --color-warn-fg: var(--warn-fg);
+  --color-danger-fg: var(--danger-fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -98,7 +108,7 @@ html[data-theme="dark"] {
   --accent-fg: oklch(0 0 0);
   --danger: oklch(0.69 0.20 23.91);
   --warn: oklch(0.81 0.17 75.35);
-  --ok: oklch(0.74 0.16 152);
+  --ok: oklch(0.74 0.16 152); --ok-fg: oklch(0 0 0); --warn-fg: oklch(0 0 0); --danger-fg: oklch(0 0 0);
 }
 
 html { color-scheme: light; }
@@ -114,7 +124,10 @@ body {
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 
 /* Visible focus, always — accessibility is a feature */
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* In @layer base so a utility's own focus ring (focus-visible:ring-*) wins over it. */
+@layer base {
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

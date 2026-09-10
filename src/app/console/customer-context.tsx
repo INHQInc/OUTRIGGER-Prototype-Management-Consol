@@ -46,7 +46,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
 import {
   BUILD_THRESHOLD, DRAFT_SECTIONS, OBSERVED, OUTPUT_FILES, QUESTIONS, ROUNDS, SECTION_LABEL, SITE_CONTEXT, bandFor,
-  type Answer, type Answers, type Earned, type Question, type Section, type SectionKey,
+  type Answer, type Answers, type Earned, type Question, type Section, type SectionKey, type SiteContext,
 } from "@/lib/console/context";
 import type { Site } from "@/lib/console/fake";
 import { Q, Wizard } from "./onboarding";
@@ -60,6 +60,8 @@ interface Live extends Section {
   status: Status;
   /** Notes handed to Prism, kept as provenance. */
   notes: string[];
+  /** A re-read found the measured layer changed under this section. Cleared by a person saying it still holds. */
+  flag?: string;
 }
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
@@ -83,9 +85,9 @@ function applyAnswers(base: Section[], answers: Answers): Live[] {
         confidence += o.delta[s.key] ?? 0;
         if (o.adds?.[s.key]) body += " " + o.adds[s.key];
         if (o.opens?.[s.key]) opened.push(o.opens[s.key] as string);
-      } else if (q.free && a.text && q.section === s.key) {
+      } else if (q.free && a.text?.trim() && q.section === s.key) {
         confidence += q.free.delta;
-        body += " " + q.free.adds(a.text);
+        body += " " + q.free.adds(a.text.trim());
       }
     }
     const unsure = [...opened, ...(!settled && s.unsure ? [s.unsure] : [])].join(" ") || undefined;
@@ -101,14 +103,16 @@ const interviewFinished = (answers: Answers) => QUESTIONS.every((q) => answered(
 const resumeRound = (answers: Answers): 1 | 2 | 3 =>
   (([1, 2, 3] as const).find((r) => QUESTIONS.some((q) => q.round === r && !answered(answers[q.id]))) ?? 3);
 
-/** Sites saved in this session. The fixture is static; the mock still has to remember what you just did. */
-const SAVED_THIS_SESSION = new Map<string, number>();
+/** What this session did that the static fixture cannot know: sites read, asked, corrected and saved. */
+const SESSION_CONTEXT = new Map<string, SiteContext & { sections: Live[] }>();
+const contextFor = (id: string): (SiteContext & { sections?: Live[] }) | null => SESSION_CONTEXT.get(id) ?? SITE_CONTEXT[id] ?? null;
+/** Half-finished wizards. "Save & close — nothing is lost" has to be true for the length of a session. */
+const DRAFTS = new Map<string, Record<string, unknown>>();
+const TODAY = "10 Sep 2026";
 
 /** A site's understanding, as the Sites list and the site page state it. */
-export function understandingOf(siteId: string): { label: string; tone: "ok" | "warn" | "muted"; ctx: (typeof SITE_CONTEXT)[string] | null } {
-  const ctx = SITE_CONTEXT[siteId] ?? null;
-  const saved = SAVED_THIS_SESSION.get(siteId);
-  if (saved) return { label: `Approved · r${saved}`, tone: "ok", ctx };
+export function understandingOf(siteId: string): { label: string; tone: "ok" | "warn" | "muted"; ctx: (SiteContext & { sections?: Live[] }) | null } {
+  const ctx = contextFor(siteId);
   if (!ctx) return { label: "Not read yet", tone: "muted", ctx: null };
   if (!interviewFinished(ctx.answers)) return { label: "Interview unfinished", tone: "warn", ctx };
   if (!ctx.approved) return { label: "Draft — nobody has checked it", tone: "warn", ctx };
@@ -205,9 +209,8 @@ function Measured() {
             </div>
           ))}
         </div>
-        <div className="px-5 py-3 border-t border-border text-[12.5px] leading-relaxed bg-warn/[0.06]">
-          <span className="font-semibold text-warn">The only colour variables on the site belong to the vendor.</span>{" "}
-          <span className="text-muted">{OBSERVED.variables.total} custom properties were found and all {OBSERVED.variables.total} are <span className="font-mono">--shs-widgets-*</span>. The site&rsquo;s own stylesheet declares none, so its palette was sampled from what the pages use — the counts above are how often, not how important.</span>
+        <div className="px-5 py-3 border-t border-border text-[12.5px] leading-relaxed bg-surface-2/40 text-muted">
+          The site names its own palette: <span className="text-foreground">{OBSERVED.variables.palette.n} <span className="font-mono">{OBSERVED.variables.palette.prefix}</span> variables</span> in main.css, beside {OBSERVED.variables.framework.n} of Bootstrap&rsquo;s and {OBSERVED.variables.components.n} per-component ones; the booking widget brings {OBSERVED.variables.widget.n} of its own. The counts above are how often each colour is used on the pages read — not how important it is.
         </div>
       </Card>
 
@@ -274,8 +277,8 @@ function Reading({ done }: { done: () => void }) {
       {PHASES.map((p, i) => (
         <div key={p.id} className="flex items-start gap-3.5 px-5 py-3.5 border-b border-border last:border-0">
           <span className={cn("mt-1 w-4 h-4 rounded-full grid place-items-center shrink-0",
-            i < phase ? "bg-ok" : i === phase ? "border-2 border-accent border-t-transparent animate-spin" : "border border-border-strong")}>
-            {i < phase && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+            i < phase ? "bg-ok text-ok-fg" : i === phase ? "border-2 border-accent border-t-transparent animate-spin" : "border border-border-strong")}>
+            {i < phase && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
           </span>
           <div className="flex-1 min-w-0">
             <div className={cn("text-[14px]", i <= phase ? "font-medium" : "text-muted-2")}>{p.label}</div>
@@ -384,11 +387,11 @@ function QuestionCard({ q, a, set }: { q: Question; a: Answer | undefined; set: 
           <Eyebrow>{SECTION_LABEL[q.section].toUpperCase()}</Eyebrow>
           {a?.skipped && <Badge variant="warn">Recorded as unknown</Badge>}
         </div>
-        <h3 className="text-[16px] font-semibold leading-snug mb-1.5">{q.ask}</h3>
+        <h3 id={`${q.id}-ask`} className="text-[16px] font-semibold leading-snug mb-1.5">{q.ask}</h3>
         <p className="text-[13px] text-muted leading-relaxed mb-4"><span className="font-medium text-muted">Why you&rsquo;re being asked:</span> {q.because}</p>
 
         {q.options && (
-          <RadioGroup value={a?.option ?? ""} onValueChange={(v) => set({ option: v })}>
+          <RadioGroup aria-labelledby={`${q.id}-ask`} value={a?.option ?? ""} onValueChange={(v) => set({ option: v })}>
             {q.options.map((o) => (
               <Label key={o.id} htmlFor={`${q.id}-${o.id}`}
                 className={cn("items-start gap-3 rounded-xl border px-4 py-3 cursor-pointer font-normal text-foreground",
@@ -405,7 +408,7 @@ function QuestionCard({ q, a, set }: { q: Question; a: Answer | undefined; set: 
 
         {q.free && (
           <div>
-            <Textarea value={a?.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder={q.free.placeholder} rows={2} aria-label={q.ask} />
+            <Textarea value={a?.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder={q.free.placeholder} rows={2} id={`${q.id}-free`} aria-labelledby={`${q.id}-ask`} />
             <div className="flex flex-wrap gap-1.5 mt-2.5">
               {q.free.suggestions.map((s) => (
                 <button key={s} type="button" onClick={() => set({ text: s })}
@@ -452,7 +455,7 @@ function Interview({ answers, setAnswers, sections, base, onFinish, startRound =
     for (const q of QUESTIONS) if (!answered(rest[q.id])) rest[q.id] = { skipped: true };
     setAnswers(rest);
     setPrev(sections);
-    setStoppedEarly(true);
+    setStoppedEarly(!(last && roundDone));
     setEnded(true);
   };
 
@@ -502,7 +505,7 @@ function Interview({ answers, setAnswers, sections, base, onFinish, startRound =
         )}
       </div>
 
-      <aside className="w-full lg:w-[264px] shrink-0 lg:sticky lg:top-0 space-y-4">
+      <aside className="w-full lg:w-[264px] shrink-0 lg:sticky lg:top-9 space-y-4">
         <Card>
           <div className="px-4 py-4">
             <Eyebrow>UNDERSTANDING</Eyebrow>
@@ -552,7 +555,7 @@ function DesignFacts() {
       </div>
       <Separator className="my-3.5" />
       <div className="text-[12px] text-muted-2 leading-relaxed">
-        Primary button: {OBSERVED.ctas[0].label}, {OBSERVED.widgetTokens.buttonCase}, {OBSERVED.widgetTokens.radius} corners · {OBSERVED.variables.total} colour variables, all the booking widget&rsquo;s · Bootstrap 5 underneath.
+        Most common button: {OBSERVED.ctas[0].label} ({OBSERVED.ctas[0].count}× on the home page) · widget buttons {OBSERVED.widgetTokens.buttonCase}, {OBSERVED.widgetTokens.radius} corners · {OBSERVED.variables.palette.n} named palette variables ({OBSERVED.variables.palette.prefix}) · Bootstrap 5 underneath.
         These live in <span className="font-mono">design-tokens.md</span>, re-derived on every read — they are not part of the prose above and cannot be edited here.
       </div>
     </div>
@@ -586,9 +589,10 @@ function ProfileEditor({ sections, setSections, who = "you" }: { sections: Live[
 
               {isEditing ? (
                 <>
+                  {s.unsure && <p className="text-[12.5px] text-warn mb-2 leading-relaxed"><span className="font-semibold">Still unknown:</span> {s.unsure} Rewriting the text doesn&rsquo;t settle it — the agent will still ask.</p>}
                   <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={5} autoFocus aria-label={`Edit ${SECTION_LABEL[s.key]}`} />
                   <div className="flex gap-2 mt-3">
-                    <Button size="sm" onClick={() => { update(s.key, { body: draft.trim(), status: "edited", confidence: 96, unsure: undefined }); setEditing(null); }}>Save</Button>
+                    <Button size="sm" onClick={() => { update(s.key, { body: draft.trim(), status: "edited", confidence: s.unsure ? s.confidence : 96 }); setEditing(null); }}>Save</Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
                   </div>
                 </>
@@ -611,6 +615,7 @@ function ProfileEditor({ sections, setSections, who = "you" }: { sections: Live[
               ) : (
                 <>
                   <p className="text-[14.5px] leading-relaxed">{s.body}</p>
+                  {s.flag && <p className="text-[12.5px] text-warn mt-2 leading-relaxed"><span className="font-semibold">Flagged:</span> {s.flag}</p>}
                   {s.unsure && <p className="text-[12.5px] text-warn mt-2 leading-relaxed"><span className="font-semibold">Least sure:</span> {s.unsure}</p>}
                   {s.key === "design" && <DesignFacts />}
                   {s.notes.length > 0 && (
@@ -635,7 +640,7 @@ function ProfileEditor({ sections, setSections, who = "you" }: { sections: Live[
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 mt-3.5">
-                      {s.status !== "approved" && s.status !== "edited" && <Button size="sm" onClick={() => update(s.key, { status: "approved" })}>That&rsquo;s right</Button>}
+                      {s.status !== "approved" && s.status !== "edited" && <Button size="sm" onClick={() => update(s.key, { status: "approved", flag: undefined })}>That&rsquo;s right</Button>}
                       <Button size="sm" variant="outline" onClick={() => { setEditing(s.key); setDraft(s.body); }}>Edit it myself</Button>
                       <Button size="sm" variant="ghost" onClick={() => { setAsking(s.key); setNote(""); }}>Tell Prism what&rsquo;s wrong</Button>
                     </div>
@@ -682,18 +687,20 @@ function Outputs({ domain, revision }: { domain: string; revision: number }) {
 const STEPS_C = ["Who", "Owner"];
 
 export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDone: (name: string, sites: string[]) => void }) {
-  const [step, setStep] = useState(0);
-  const [name, setName] = useState("");
-  const [domain, setDomain] = useState("");
-  const [others, setOthers] = useState("");
-  const [owner, setOwner] = useState("");
+  const d = (DRAFTS.get("customer") ?? {}) as Partial<{ step: number; name: string; domain: string; others: string; owner: string }>;
+  const [step, setStep] = useState(d.step ?? 0);
+  const [name, setName] = useState(d.name ?? "");
+  const [domain, setDomain] = useState(d.domain ?? "");
+  const [others, setOthers] = useState(d.others ?? "");
+  const [owner, setOwner] = useState(d.owner ?? "");
+  useEffect(() => { DRAFTS.set("customer", { step, name, domain, others, owner }); }, [step, name, domain, others, owner]);
   const sites = [domain, ...others.split(",")].map((s) => s.trim().replace(/^https?:\/\//, "")).filter(Boolean);
   const ok = [name.trim().length > 2 && domain.trim().length > 3, /.+@.+\..+/.test(owner)][step];
 
   return (
     <Wizard title="Add a customer" steps={STEPS_C} step={step} setStep={setStep} onClose={onClose}
       canContinue={ok} finishLabel={`Create ${name.trim() || "the customer"}`} saved={name.trim().length > 2}
-      onFinish={() => onDone(name.trim(), sites)}>
+      onFinish={() => { DRAFTS.delete("customer"); onDone(name.trim(), sites); }}>
       {step === 0 && (
         <Q n={1} of={2} title="Who are you setting up?" help="The company whose websites will be tested. It's a container: sites, people, connections and results hang off it and are never shared between customers. Everything Prism learns, it learns per site.">
           <div className="space-y-5">
@@ -751,14 +758,17 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
   /** Open another site's understanding (by id), or add a new site (no id). */
   onAnother: (siteId?: string) => void;
 }) {
-  const ctx = SITE_CONTEXT[site.id] ?? null;
+  const ctx = contextFor(site.id);
   const resuming = Boolean(ctx);
-  const [step, setStep] = useState(resuming ? 1 : 0);
-  const [reading, setReading] = useState<"idle" | "reading" | "done">(resuming ? "done" : "idle");
-  const [answers, setAnswers] = useState<Answers>(ctx?.answers ?? {});
-  const [interviewDone, setInterviewDone] = useState(false);
-  const [sections, setSections] = useState<Live[] | null>(null);
+  const key = `understand:${site.id}`;
+  const d = (DRAFTS.get(key) ?? {}) as Partial<{ step: number; reading: "idle" | "reading" | "done"; answers: Answers; interviewDone: boolean; sections: Live[] | null }>;
+  const [step, setStep] = useState(d.step ?? (resuming ? 1 : 0));
+  const [reading, setReading] = useState<"idle" | "reading" | "done">(d.reading === "reading" ? "idle" : (d.reading ?? (resuming ? "done" : "idle")));
+  const [answers, setAnswers] = useState<Answers>(d.answers ?? ctx?.answers ?? {});
+  const [interviewDone, setInterviewDone] = useState(d.interviewDone ?? false);
+  const [sections, setSections] = useState<Live[] | null>(d.sections ?? null);
   const [saved, setSaved] = useState(false);
+  useEffect(() => { if (!saved) DRAFTS.set(key, { step, reading, answers, interviewDone, sections }); }, [key, saved, step, reading, answers, interviewDone, sections]);
   const nextRevision = (ctx?.revisions[ctx.revisions.length - 1]?.r ?? 0) + 1;
 
   const base = applyAnswers(DRAFT_SECTIONS, {});
@@ -768,7 +778,7 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
   // "revised" is Prism's redraft — a person still has to say it is right.
   const approved = live.filter((s) => s.status === "approved" || s.status === "edited").length;
 
-  const ok = [reading === "done", interviewDone, approved === live.length][step];
+  const ok = [reading === "done", interviewDone && interviewFinished(answers), approved === live.length][step];
 
   if (saved) {
     const unread = others.filter((o) => understandingOf(o.id).tone === "muted");
@@ -823,7 +833,20 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
   return (
     <Wizard title={`Understand ${site.domain}`} steps={STEPS_U} step={step} setStep={setStep} onClose={onClose}
       canContinue={ok} finishLabel={`Save as revision ${nextRevision}`} saved={reading === "done"}
-      onFinish={() => { SAVED_THIS_SESSION.set(site.id, nextRevision); setSaved(true); }}>
+      onFinish={() => {
+        const answeredN = QUESTIONS.filter((q) => answered(answers[q.id]) && !answers[q.id].skipped).length;
+        SESSION_CONTEXT.set(site.id, {
+          answers, approved: true, voiceNote: ctx?.voiceNote, earned: ctx?.earned ?? [],
+          revisions: [...(ctx?.revisions ?? []), {
+            r: nextRevision, when: TODAY, who: "You · Prism",
+            what: ctx ? "Interview finished and every section checked." : `Read at onboarding. ${OBSERVED.read} pages, ${answeredN} questions answered.`,
+            pinnedBy: 0,
+          }],
+          sections: live.map((x) => ({ ...x, status: x.status === "revised" ? "approved" : x.status })),
+        });
+        DRAFTS.delete(key);
+        setSaved(true);
+      }}>
       {step === 0 && (
         <Q n={1} of={3} wide title={`Read ${site.domain}`}
           help={reading === "done"
@@ -866,42 +889,56 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
 export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
   const u = understandingOf(s.id);
   const ctx = u.ctx;
-  const [sections, setSections] = useState<Live[]>(() => {
+  const initial = (): Live[] => {
     if (!ctx) return [];
+    if (ctx.sections) return ctx.sections;
     return applyAnswers(DRAFT_SECTIONS, ctx.answers).map((sec) => ({
       ...sec,
       status: ctx.approved ? ("approved" as Status) : ("draft" as Status),
       confidence: ctx.approved ? clamp(sec.confidence + 4) : sec.confidence,
       ...(sec.key === "voice" && ctx.voiceNote ? { body: `${sec.body} ${ctx.voiceNote.charAt(0).toUpperCase()}${ctx.voiceNote.slice(1)}.`, notes: [ctx.voiceNote] } : {}),
     }));
-  });
+  };
+  const [sections, setSections] = useState<Live[]>(initial);
+  /** What the current revision contains. "Changed" is a diff against this, not a status label. */
+  const [pinned, setPinned] = useState<Live[]>(initial);
+  const [revisions, setRevisions] = useState(() => ctx?.revisions ?? []);
   const [reread, setReread] = useState(false);
   const [rereading, setRereading] = useState(false);
 
   if (!ctx) {
-    const savedRev = SAVED_THIS_SESSION.get(s.id);
     return (
       <Card title={`What Prism understands about ${s.domain}`}>
         <div className="px-5 py-8 text-center">
-          {savedRev ? (
-            <p className="text-[14px] text-muted leading-relaxed max-w-md mx-auto">Read and approved this session — saved as revision {savedRev}. Reload to see it as the fixture would show it.</p>
-          ) : (
-            <>
-              <p className="text-[14px] text-muted leading-relaxed max-w-md mx-auto mb-4">
-                Prism hasn&rsquo;t read this site yet. Reading it teaches every prototype its components, its type scale and the way it writes —
-                then Prism asks what the pages can&rsquo;t say, and you correct what it wrote.
-              </p>
-              <Button onClick={onRead}>Read {s.domain}</Button>
-            </>
-          )}
+          <p className="text-[14px] text-muted leading-relaxed max-w-md mx-auto mb-4">
+            Prism hasn&rsquo;t read this site yet. Reading it teaches every prototype its components, its type scale and the way it writes —
+            then Prism asks what the pages can&rsquo;t say, and you correct what it wrote.
+          </p>
+          <Button onClick={onRead}>Read {s.domain}</Button>
         </div>
       </Card>
     );
   }
 
-  const rev = ctx.revisions[ctx.revisions.length - 1];
-  const finished = interviewFinished(ctx.answers) || SAVED_THIS_SESSION.has(s.id);
-  const changed = sections.filter((x) => x.status === "edited" || x.status === "revised").length;
+  const rev = revisions[revisions.length - 1];
+  const finished = interviewFinished(ctx.answers);
+  // Anything that differs from what the current revision holds — a rewrite, a note, or a flag answered.
+  const changed = sections.filter((x) => { const p = pinned.find((y) => y.key === x.key); return !p || x.body !== p.body || x.notes.length !== p.notes.length || x.status !== p.status || Boolean(x.flag) !== Boolean(p.flag); }).length;
+  const pin = () => {
+    const next = sections.map((x) => ({ ...x, status: (x.status === "revised" || x.status === "draft") ? ("approved" as Status) : x.status, flag: undefined }));
+    setSections(next); setPinned(next);
+    setRevisions((r) => [...r, { r: rev.r + 1, when: TODAY, who: "You", what: `${changed} section${changed === 1 ? "" : "s"} checked or corrected by hand.`, pinnedBy: 0 }]);
+  };
+  const rereadDone = () => {
+    setRereading(false); setReread(false);
+    setRevisions((r) => [...r, { r: rev.r + 1, when: TODAY, who: "You · Prism", what: "Re-read. The measured layer was re-derived; Design language is flagged for a look. Nothing was rewritten.", pinnedBy: 0 }]);
+    const flagged = (ss: Live[]) => ss.map((x) => (x.key === "design"
+      ? { ...x, status: "draft" as Status, flag: `Re-read on ${TODAY}: the measured layer changed under this section. Nothing here was rewritten — say whether it still holds.` }
+      : x));
+    setSections(flagged);
+    // r{n+1} holds the flagged state, so answering the flag is itself a change worth pinning.
+    setPinned(flagged);
+  };
 
   return (
     <>
@@ -909,7 +946,7 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
         <h2 className="text-[15px] font-semibold">What Prism understands about {s.domain}</h2>
         <Pill tone={u.tone}>{u.label}</Pill>
         <div className="ml-auto flex items-center gap-2">
-          {changed > 0 && <Badge variant="accent">{changed} change{changed === 1 ? "" : "s"} → will become r{rev.r + 1}</Badge>}
+          {changed > 0 && <Button size="sm" onClick={pin}>Save {changed} change{changed === 1 ? "" : "s"} as revision {rev.r + 1}</Button>}
           {!finished && <Button size="sm" onClick={onRead}>Continue the interview</Button>}
           <Button size="sm" variant="outline" onClick={() => setReread(true)}>Re-read the site</Button>
         </div>
@@ -923,7 +960,7 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
       )}
 
       <Learned earned={ctx.earned} />
-      <ProfileEditor sections={sections} setSections={setSections} who="Dana Reyes" />
+      <ProfileEditor sections={sections} setSections={setSections} who={SESSION_CONTEXT.has(s.id) ? "you" : "Dana Reyes"} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title={`Context revision ${rev.r}`}>
@@ -934,7 +971,7 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
           </div>
         </Card>
         <Card title="Revisions">
-          {[...ctx.revisions].reverse().map((r) => (
+          {[...revisions].reverse().map((r) => (
             <div key={r.r} className="px-5 py-3 border-b border-border last:border-0">
               <div className="flex items-center gap-2 text-[12.5px]">
                 <span className="font-mono font-semibold">r{r.r}</span>
@@ -948,8 +985,8 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
         <Outputs domain={s.domain} revision={rev.r} />
       </div>
 
-      <Dialog open={reread} onOpenChange={setReread}>
-        <DialogContent>
+      <Dialog open={reread} onOpenChange={(o) => { setReread(o); if (!o) setRereading(false); }}>
+        <DialogContent showCloseButton={!rereading}>
           <DialogHeader>
             <DialogTitle>Re-read {s.domain}?</DialogTitle>
             <DialogDescription>
@@ -957,7 +994,7 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
               where the pages now disagree with a section, that section is flagged for you, not changed behind you. The {rev.pinnedBy} build{rev.pinnedBy === 1 ? "" : "s"} cut against r{rev.r} keep{rev.pinnedBy === 1 ? "s" : ""} r{rev.r}.
             </DialogDescription>
           </DialogHeader>
-          {rereading && <Reading done={() => { setRereading(false); setReread(false); }} />}
+          {rereading && <Reading done={rereadDone} />}
           {!rereading && (
             <DialogFooter>
               <Button variant="ghost" onClick={() => setReread(false)}>Not now</Button>
