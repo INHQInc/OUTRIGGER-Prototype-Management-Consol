@@ -20,8 +20,9 @@ import { EXPERIMENTS, ME, SITE_ROWS, needsMe } from "@/lib/console/fake";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
-import { CustomerOnboarding, SiteOnboarding } from "./onboarding";
-import { BackOffice, SupportBanner } from "./operator";
+import { ProfileRoom } from "./customer-context";
+import { SiteOnboarding } from "./onboarding";
+import { BackOffice, CUSTOMERS, SupportBanner } from "./operator";
 import { VerdictPicker } from "./verdict";
 
 const NAV = [
@@ -35,6 +36,7 @@ const NAV = [
   },
   {
     group: "CONFIGURE", items: [
+      ["Business profile", "M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h1M14 10h1M9 14h1M14 14h1"],
       ["Sites", "M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20"],
       ["Connections", "M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"],
       ["People & roles", "M16 20v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
@@ -59,7 +61,8 @@ export default function Console() {
   const [expId, setExpId] = useState<string | null>(null);
   const [siteId, setSiteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [flow, setFlow] = useState<null | "customer" | "site">(null);
+  const [flow, setFlow] = useState<null | "site">(null);
+  const [switcher, setSwitcher] = useState(false);
   const [backOffice, setBackOffice] = useState(false);
   const [support, setSupport] = useState<{ customer: string; reason: string } | null>(null);
   /** A customer created in this session is the only one whose setup is unfinished. */
@@ -81,7 +84,7 @@ export default function Console() {
 
   if (backOffice) {
     return <BackOffice exit={() => setBackOffice(false)}
-      enterCustomer={(customer, reason) => { setSupport({ customer, reason }); setBackOffice(false); }} />;
+      enterCustomer={(customer, reason, fresh) => { setSupport({ customer, reason }); setFresh(Boolean(fresh)); setBackOffice(false); go("Overview"); }} />;
   }
 
   return (
@@ -99,12 +102,27 @@ export default function Console() {
           <span className="text-[14px] font-semibold tracking-[-0.01em]">Prism</span>
         </div>
 
-        <button onClick={() => setFlow("customer")} title="Add a customer"
-          className="mx-3 mt-3 mb-1 flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 hover:border-border-strong text-left">
-          <div className="w-[18px] h-[18px] rounded bg-border-strong shrink-0" />
-          <span className="text-[13px] font-medium flex-1 truncate">OUTRIGGER Hotels</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="text-muted-2"><path d="m6 9 6 6 6-6" /></svg>
-        </button>
+        {/* The switcher switches. Creating a customer is a back-office act, so the
+            menu says where to go rather than pretending to do it here. */}
+        <div className="relative mx-3 mt-3 mb-1">
+          <button onClick={() => setSwitcher((v) => !v)} title="Switch customer"
+            className="w-full flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 hover:border-border-strong text-left">
+            <div className="w-[18px] h-[18px] rounded bg-border-strong shrink-0" />
+            <span className="text-[13px] font-medium flex-1 truncate">{support?.customer ?? "OUTRIGGER Hotels"}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="text-muted-2"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          {switcher && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-border bg-surface shadow-lg py-1">
+              {CUSTOMERS.map((c) => (
+                <button key={c.id} onClick={() => setSwitcher(false)}
+                  className={cn("w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-2 truncate", c.id === "outrigger" ? "font-semibold" : "text-muted")}>{c.name}</button>
+              ))}
+              <div className="border-t border-border mt-1 pt-1">
+                <button onClick={() => { setSwitcher(false); setBackOffice(true); }} className="w-full text-left px-3 py-1.5 text-[12.5px] text-muted hover:text-foreground hover:bg-surface-2">Add a customer → back office</button>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="flex-1 overflow-y-auto px-3 pt-2">
           {NAV.map((sec, si) => (
@@ -143,7 +161,6 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {flow === "customer" && <CustomerOnboarding onClose={() => setFlow(null)} onDone={() => { setFresh(true); setFlow("site"); }} />}
         {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={() => { setFlow(null); go("Sites"); }} />}
         {!flow && nav === "Overview" && <OverviewView open={openExp} fresh={fresh} />}
         {!flow && nav === "Experiments" && (
@@ -153,6 +170,7 @@ export default function Console() {
         )}
         {!flow && nav === "Ideas" && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
         {!flow && nav === "Readouts" && <ReadoutsView />}
+        {!flow && nav === "Business profile" && <ProfileRoom customer={support?.customer} />}
         {!flow && nav === "Sites" && (site ? <SiteDetail s={site} back={() => setSiteId(null)} /> : <SitesView open={setSiteId} onAdd={() => setFlow("site")} />)}
         {!flow && nav === "Connections" && <ConnectionsView />}
         {!flow && nav === "People & roles" && <PeopleView />}

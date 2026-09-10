@@ -1,9 +1,11 @@
 "use client";
 
 /**
- * ONBOARDING — customer, then site, then experiment.
+ * ONBOARDING — the wizard shell, and the site flow.
  *
- * One shell, three flows, so the shape is learned once. Each step is
+ * One shell for every flow, so the shape is learned once. Creating a CUSTOMER
+ * lives in the back office (customer-context.tsx) and uses this same shell;
+ * an experiment is created in new-experiment.tsx. Each step is
  * individually valid and saved, because these are long jobs done by busy people
  * who get interrupted — "Save & close" must leave a coherent record, never a
  * half-written blob.
@@ -21,12 +23,12 @@ import { Pill, Section } from "./ui";
 
 /* ── shared shell ──────────────────────────────────────────────────── */
 
-function Wizard({
-  title, steps, step, setStep, onClose, canContinue, finishLabel, children, saved = true,
+export function Wizard({
+  title, steps, step, setStep, onClose, canContinue, finishLabel, children, saved = true, onFinish,
 }: {
   title: string; steps: string[]; step: number; setStep: (n: number) => void;
   onClose: () => void; canContinue: boolean; finishLabel: string;
-  children: React.ReactNode; saved?: boolean;
+  children: React.ReactNode; saved?: boolean; onFinish?: () => void;
 }) {
   const last = step === steps.length - 1;
   return (
@@ -35,7 +37,7 @@ function Wizard({
         <h1 className="text-[15px] font-semibold">{title}</h1>
         {saved && <Pill tone="muted">Saved</Pill>}
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-[12.5px] text-muted-2">You can stop here and come back — nothing is lost.</span>
+          <span className="hidden lg:inline text-[12.5px] text-muted-2">You can stop here and come back — nothing is lost.</span>
           <Button variant="outline" size="sm" onClick={onClose}>Save &amp; close</Button>
         </div>
       </header>
@@ -60,7 +62,7 @@ function Wizard({
 
       <footer className="shrink-0 border-t border-border bg-surface px-6 py-3.5 flex items-center">
         <Button variant="ghost" onClick={() => (step === 0 ? onClose() : setStep(step - 1))}>{step === 0 ? "Cancel" : "Back"}</Button>
-        <Button disabled={!canContinue} className="ml-auto" onClick={() => !last && setStep(step + 1)}>
+        <Button disabled={!canContinue} className="ml-auto" onClick={() => (last ? onFinish?.() : setStep(step + 1))}>
           {last ? finishLabel : "Continue"}
         </Button>
       </footer>
@@ -68,8 +70,8 @@ function Wizard({
   );
 }
 
-const Q = ({ n, of, title, help, children }: { n: number; of: number; title: string; help?: string; children: React.ReactNode }) => (
-  <div className="w-[620px]">
+export const Q = ({ n, of, title, help, children, wide }: { n: number; of: number; title: string; help?: string; children: React.ReactNode; wide?: boolean }) => (
+  <div className={wide ? "w-[960px] max-w-full" : "w-[620px]"}>
     <div className="text-[11.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">STEP {n} OF {of}</div>
     <h2 className="text-[24px] font-semibold tracking-[-0.02em] mb-2">{title}</h2>
     {help && <p className="text-[14.5px] text-muted leading-relaxed mb-6">{help}</p>}
@@ -85,105 +87,8 @@ const Text = ({ value, onChange, placeholder, prefix }: { value: string; onChang
   </div>
 );
 
-const Choice = ({ on, onClick, title, sub, right }: { on: boolean; onClick: () => void; title: string; sub?: string; right?: React.ReactNode }) => (
-  <button onClick={onClick}
-    className={cn("w-full flex items-center gap-3 rounded-xl border px-4 py-3 mb-2 text-left",
-      on ? "border-accent bg-accent/5" : "border-border bg-surface hover:border-border-strong")}>
-    <span className={cn("w-4 h-4 rounded-full border-2 shrink-0", on ? "border-accent border-[5px]" : "border-border-strong")} />
-    <div className="flex-1 min-w-0">
-      <div className="text-[14.5px] font-medium">{title}</div>
-      {sub && <div className="text-[12.5px] text-muted-2 mt-0.5">{sub}</div>}
-    </div>
-    {right}
-  </button>
-);
 
-/* ── 1 · Customer onboarding ───────────────────────────────────────── */
-
-const AB_TOOLS = [
-  { id: "optimizely", name: "Optimizely Web", ok: true, sub: "Prism reads your events and pushes variations here" },
-  { id: "vwo", name: "VWO", ok: false, sub: "Not available yet" },
-  { id: "abtasty", name: "AB Tasty", ok: false, sub: "Not available yet" },
-  { id: "target", name: "Adobe Target", ok: false, sub: "Not available yet" },
-];
-
-const STEPS_C = ["Who", "A/B tool", "AI model", "People"];
-
-export function CustomerOnboarding({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [step, setStep] = useState(0);
-  const [name, setName] = useState("");
-  const [tool, setTool] = useState("optimizely");
-  const [project, setProject] = useState("");
-  const [model, setModel] = useState<"own" | "prism">("own");
-  const [invites, setInvites] = useState("");
-  const ok = [name.trim().length > 2, Boolean(project.trim()), true, true][step];
-
-  return (
-    <Wizard title="Add a customer" steps={STEPS_C} step={step} setStep={setStep} onClose={onClose}
-      canContinue={ok} finishLabel="Create the customer" saved={name.length > 2}>
-      {step === 0 && (
-        <Q n={1} of={4} title="Who are you testing for?" help="The company whose websites you'll be running experiments on. Everything else hangs off this — sites, people, connections and results are never shared between customers.">
-          <label className="block text-[13px] font-semibold text-muted mb-1.5">Customer name</label>
-          <Text value={name} onChange={setName} placeholder="OUTRIGGER Hotels &amp; Resorts" />
-        </Q>
-      )}
-
-      {step === 1 && (
-        <Q n={2} of={4} title="What do you use for A/B testing?" help="Prism doesn't run the traffic split itself. It reads what your tool already measures and pushes variations into it, so your data stays where your team already looks.">
-          {AB_TOOLS.map((t) => (
-            <Choice key={t.id} on={tool === t.id && t.ok} onClick={() => t.ok && setTool(t.id)} title={t.name} sub={t.sub}
-              right={t.ok ? undefined : <Pill tone="muted">Coming soon</Pill>} />
-          ))}
-          <div className="mt-5">
-            <label className="block text-[13px] font-semibold text-muted mb-1.5">Which project?</label>
-            <Text value={project} onChange={setProject} placeholder="24138040550" />
-            <p className="text-[12.5px] text-muted-2 mt-2">
-              Prism will read this project&rsquo;s events so it can offer real measurements later. It never creates or deletes anything you didn&rsquo;t ask for.
-            </p>
-          </div>
-        </Q>
-      )}
-
-      {step === 2 && (
-        <Q n={3} of={4} title="Whose AI builds the experiments?" help="An agent writes the code for each experiment. It can run on your own account, or on ours.">
-          <Choice on={model === "own"} onClick={() => setModel("own")} title="Use our own key"
-            sub="Your account, your usage, your data-handling agreement. Nothing goes through Prism's."
-            right={<Pill tone="ok">Recommended</Pill>} />
-          <Choice on={model === "prism"} onClick={() => setModel("prism")} title="Use Prism's"
-            sub="Nothing to set up. Usage is metered and shows on your invoice." />
-          {model === "own" && (
-            <div className="mt-4 rounded-xl border border-border bg-surface p-4">
-              <label className="block text-[13px] font-semibold text-muted mb-1.5">Anthropic API key</label>
-              <div className="h-11 rounded-lg border border-border bg-surface-2/50 px-3 flex items-center font-mono text-[13px] text-muted-2">sk-ant-••••••••••••••••••••</div>
-              <p className="text-[12.5px] text-muted-2 mt-2">Stored for this customer only. Never shared with another customer, never shown again after you save it.</p>
-            </div>
-          )}
-        </Q>
-      )}
-
-      {step === 3 && (
-        <Q n={4} of={4} title="Who else needs access?" help="You can do this later. Roles decide what someone can do — and whether they can approve an experiment they didn't write.">
-          <label className="block text-[13px] font-semibold text-muted mb-1.5">Email addresses</label>
-          <textarea value={invites} onChange={(e) => setInvites(e.target.value)} rows={3}
-            placeholder="dana@outrigger.com, malia@outrigger.com"
-            className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-[15px] resize-none placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-          <div className="mt-4 rounded-xl border border-border bg-surface p-4">
-            <div className="text-[13.5px] font-semibold mb-1">They&rsquo;ll start as Authors</div>
-            <p className="text-[13px] text-muted leading-relaxed">
-              An Author can write an experiment and get it built, but cannot approve it going live or record its result.
-              You can give anyone more later in People &amp; roles.
-            </p>
-          </div>
-          <div className="mt-4">
-            <Button onClick={onDone}>Create the customer</Button>
-          </div>
-        </Q>
-      )}
-    </Wizard>
-  );
-}
-
-/* ── 2 · Site onboarding ───────────────────────────────────────────── */
+/* ── Site onboarding ───────────────────────────────────────────── */
 
 const FOUND_PAGES = [
   { name: "Home", path: "/", visits: "48,210 / mo", on: true },
@@ -210,7 +115,7 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
 
   return (
     <Wizard title="Add a site" steps={STEPS_S} step={step} setStep={setStep} onClose={onClose}
-      canContinue={ok} finishLabel="Finish" saved={read}>
+      canContinue={ok} finishLabel="Finish" saved={read} onFinish={onDone}>
       {step === 0 && (
         <Q n={1} of={5} title="What&rsquo;s the website?" help="Prism reads it once to learn your pages, your components and the way you write. Nothing is changed and nothing is published.">
           <label className="block text-[13px] font-semibold text-muted mb-1.5">Address</label>

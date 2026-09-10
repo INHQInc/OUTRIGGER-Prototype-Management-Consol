@@ -130,3 +130,49 @@ decides the shape of the Managed lane.
 prototypes repo and authenticates as a *user*, not a machine account. Before any
 sandbox holds a credential it must be a fine-grained token or GitHub App scoped
 to one repo with `contents:write`.
+
+---
+
+## D8 · Creating a customer is a back-office act; the customer connects its own tools
+
+**Decision.** "Add a customer" lives in the back office, not behind the customer
+switcher. The operator's wizard creates the record and the *understanding*
+(read → ask → correct → compile); it then invites the first Owner. The Owner
+connects the A/B tool, the AI key and the site scripts from inside their own
+console, where the setup checklist already lives. Prism never asks an operator
+to paste a customer's credentials.
+
+**Why.** Two of the use cases (A/B tool BYO, LLM key BYO) are the customer's
+keys. An operator holding them is a liability we would have to explain in the
+first security review, and it makes the operator the bottleneck for setup.
+The switcher now switches; its menu says where creation happens instead of
+pretending to do it.
+
+---
+
+## D9 · The customer interview is terminal, and unknowns are recorded, not guessed
+
+**Decision.** After the site is read, Prism asks only questions whose answer
+changes what the agent would build — grounded in what the crawl could not
+settle (which of two button labels is primary; which of three loaded families
+is the headline face; whether the absence of urgency copy is a rule). Three
+rounds at most. After the third, or when the person says "that's enough",
+anything unanswered is written into the profile as **unknown** and the agent
+must ask before assuming. The understanding meter may fall: an answer can
+reveal Prism knew less than it thought, and the option says so before the click.
+
+**Why.** It is the brief's rule (`src/lib/ai/brief.ts`, `measurement.ts`:
+questions ⇔ readiness < 90, answers pass terminal, code force-empties the
+loop) applied one tier up. The failure it prevents is the same: an endless
+interview nobody finishes, or a profile that reads as confident where it is
+guessing. The ceiling of asking is around 85; the rest is *earned* from
+recorded decisions, which is why the profile shows that layer first.
+
+**What the real read found (10 Sep 2026, prep.outrigger.com, `deriveDesignTokens`).**
+Three self-hosted families (Duplicate Sans, Duplicate Ionic, Montserrat — 15
+faces); 60 CSS custom properties, **all** belonging to the SynXis booking
+widget and none to the brand; Bootstrap 5 underneath with its default blue
+(`#0d6efd`) used 38 times beside the brand's `#0078cd`; "Check availability"
+×9 against "Book Now" ×3 on the home page. Every one of those became an
+interview question, because a crawl can see them and cannot decide them.
+

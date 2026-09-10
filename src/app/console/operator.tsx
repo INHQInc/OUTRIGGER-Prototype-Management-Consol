@@ -18,14 +18,17 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
+import { CustomerWizard } from "./customer-context";
 import { Pill, Section, Th } from "./ui";
 
 interface Cust {
   id: string; name: string; sites: number; experiments: number; people: number;
   running: number; health: "ok" | "warn" | "down"; issue?: string; usage: string; since: string;
+  /** Created this session: setup is unfinished and their console shows the checklist. */
+  fresh?: boolean;
 }
 
-const CUSTOMERS: Cust[] = [
+export const CUSTOMERS: Cust[] = [
   { id: "outrigger", name: "OUTRIGGER Hotels & Resorts", sites: 3, experiments: 7, people: 5, running: 2, health: "warn", issue: "Script missing on outriggerkona.com production", usage: "$412 / mo", since: "Mar 2026" },
   { id: "kbh", name: "Kona Beach Hotels", sites: 1, experiments: 3, people: 2, running: 1, health: "ok", usage: "$96 / mo", since: "Jun 2026" },
   { id: "pacifica", name: "Pacifica Resorts Group", sites: 2, experiments: 0, people: 4, running: 0, health: "down", issue: "Optimizely token expired 3 days ago", usage: "$0 / mo", since: "Aug 2026" },
@@ -57,8 +60,10 @@ type Room = (typeof NAV)[number];
 const healthPill = (h: Cust["health"]) =>
   h === "ok" ? <Pill tone="ok">Healthy</Pill> : h === "warn" ? <Pill tone="warn">Needs attention</Pill> : <Pill tone="danger">Blocked</Pill>;
 
-export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCustomer: (name: string, reason: string) => void }) {
+export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCustomer: (name: string, reason: string, fresh?: boolean) => void }) {
   const [room, setRoom] = useState<Room>("Customers");
+  const [list, setList] = useState<Cust[]>(CUSTOMERS);
+  const [adding, setAdding] = useState(false);
   const [asking, setAsking] = useState<Cust | null>(null);
   const [reason, setReason] = useState("");
 
@@ -94,11 +99,20 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
+        {adding && (
+          <CustomerWizard onClose={() => setAdding(false)} onDone={(name) => {
+            const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+            setList((l) => [{ id, name, sites: 1, experiments: 0, people: 1, running: 0, health: "warn",
+              issue: "Setup unfinished — waiting on their Owner to connect an A/B tool", usage: "$0 / mo", since: "Sep 2026", fresh: true }, ...l]);
+            setAdding(false); setRoom("Customers");
+          }} />
+        )}
+        {!adding && (<>
         <header className="h-14 shrink-0 border-b border-border bg-surface flex items-center px-6 gap-3">
           <h1 className="text-[15px] font-semibold">{room}</h1>
-          {room === "Customers" && <span className="text-[13px] text-muted-2">{CUSTOMERS.length} customers</span>}
+          {room === "Customers" && <span className="text-[13px] text-muted-2">{list.length} customers</span>}
           <div className="ml-auto flex gap-2">
-            {room === "Customers" && <Button size="sm">Add a customer</Button>}
+            {room === "Customers" && <Button size="sm" onClick={() => setAdding(true)}>Add a customer</Button>}
             {room === "Console users" && <Button size="sm">Invite a colleague</Button>}
           </div>
         </header>
@@ -110,7 +124,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
                 <tr><Th first>Customer</Th><Th>Health</Th><Th>Sites</Th><Th>Experiments</Th><Th>People</Th><Th>AI usage</Th><Th>Since</Th><Th>Access</Th></tr>
               </thead>
               <tbody>
-                {CUSTOMERS.map((c) => (
+                {list.map((c) => (
                   <tr key={c.id} className="border-b border-border hover:bg-surface-2/50">
                     <td className="px-4 pl-6 py-3">
                       <div className="text-[14px] font-medium">{c.name}</div>
@@ -222,6 +236,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
             </div>
           )}
         </div>
+        </>)}
       </main>
 
       {/* Entering a customer is a support session, never a silent switch. */}
@@ -238,7 +253,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
               placeholder="Their Optimizely token expired — reconnecting on their behalf"
               className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-[14px] resize-none placeholder:text-muted-2 focus:border-accent focus:outline-none" />
             <div className="flex items-center gap-3 mt-4">
-              <Button disabled={reason.trim().length < 8} onClick={() => { enterCustomer(asking.name, reason); setAsking(null); }}>
+              <Button disabled={reason.trim().length < 8} onClick={() => { enterCustomer(asking.name, reason, asking.fresh); setAsking(null); }}>
                 Start a 1-hour session
               </Button>
               <Button variant="ghost" onClick={() => setAsking(null)}>Cancel</Button>
