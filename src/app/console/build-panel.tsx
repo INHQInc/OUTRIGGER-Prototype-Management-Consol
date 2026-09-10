@@ -22,9 +22,12 @@
  *    hypothesis or the metrics — where code contradicts either, it stops.
  */
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/ui/cn";
+import { ME } from "@/lib/console/fake";
+import { logActivity } from "./config";
 import { Chip, Empty, Meta, Pill, Section, Th } from "./ui";
 
 /* ── Fixtures ──────────────────────────────────────────────────────── */
@@ -34,8 +37,8 @@ const EXPERIMENT = {
   path: "/hawaii/oahu/outrigger-reef-waikiki-beach-resort",
   project: "24138040550",
   briefRev: "Brief revision 3 · frozen 26 Aug 2026, 09:14",
-  me: "Bryan Hopkins",
-  myRole: "Approver",
+  me: ME.name,
+  myRole: ME.role,
   today: "10 Sep 2026",
 };
 
@@ -119,6 +122,41 @@ const CHECKS: Check[] = [
   },
 ];
 
+/** The built file the checks point at. An excerpt: the lines the evidence cites, in context. `null` is an elision. */
+const FILE_EXCERPT: ([number, string] | null)[] = [
+  [1, "/* opmc_reef_rate_promise · cut d40b9f5 · built 9 Sep 2026 14:22 */"],
+  [2, "(function () {"],
+  [3, "  if (window.opmc_reef_rate_promise) return; window.opmc_reef_rate_promise = 1;"],
+  [4, "  var BADGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCI…';"],
+  [5, "  var COPY = 'Best price guaranteed — or we match it.';"],
+  [6, "  var URGENCY = 'Only 2 rooms left at this rate';"],
+  null,
+  [40, "  function init() {"],
+  [41, "    if (!document.querySelector('.rate-cal__grid')) return;   // no retry, no observer"],
+  [42, "    var cal = document.querySelector('.rate-cal__grid');"],
+  [43, "    var host = document.createElement('div');"],
+  [44, "    host.className = 'opmc-promise' + (window.innerWidth < 480 ? ' opmc-promise--sheet' : '');"],
+  null,
+  [116, "    cell.addEventListener('click', function () {"],
+  [117, "      host.hidden = false;"],
+  [118, "      window.dataLayer.push({ event: 'opmc_promise_shown' });"],
+  [119, "    }, { once: true });"],
+  [120, "  }"],
+  null,
+  [131, "  new MutationObserver(function (_, mo) { if (document.body) { mo.disconnect(); init(); } })"],
+  [132, "    .observe(document.documentElement, { childList: true });"],
+  [133, "})();"],
+];
+
+const FILE = {
+  repo: "outrigger-digital/outrigger-prototypes",
+  branch: "opmc/reef-rate-calendar-promise",
+  path: "dist/variation.js",
+  lines: 133,
+  /** Which check each cited line belongs to, so the file reads the way the evidence does. */
+  flagged: { 3: "pass", 41: "fail", 118: "warn" } as Record<number, CheckState | undefined>,
+};
+
 type PushState = "ok" | "bad" | "halted";
 interface PushStep { label: string; detail: string; state: PushState }
 interface PushAttempt { at: string; by: string; result: "verified" | "mismatch"; steps: PushStep[]; after?: string }
@@ -137,6 +175,8 @@ interface Cut {
   purpose: string;
   attempts: PushAttempt[];
   blocked?: string;
+  /** An override travels with the cut forever: which check it waved through, and why. */
+  override?: { check: string; why: string };
 }
 
 const CUTS: Cut[] = [
@@ -243,6 +283,36 @@ const CONTRADICTIONS: Drift[] = [
   },
 ];
 
+/* ── Session memory ────────────────────────────────────────────────── */
+
+/** The cuts list is read by two panels and appended to by one of them, and both
+ *  are mounted by the stage, not by each other — so it lives here, the way
+ *  Activity does in config.tsx. What someone did this session survives leaving
+ *  the stage; nothing here is ever edited or removed, only added to. */
+interface Store<T> { get: () => T; set: (next: T) => void; subscribe: (fn: () => void) => () => void }
+
+function createStore<T>(initial: T): Store<T> {
+  let value = initial;
+  const subs = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (next) => { value = next; subs.forEach((fn) => fn()); },
+    subscribe: (fn) => { subs.add(fn); return () => { subs.delete(fn); }; },
+  };
+}
+function useStore<T>(s: Store<T>): T { return useSyncExternalStore(s.subscribe, s.get, s.get); }
+
+const cutsStore = createStore<Cut[]>(CUTS);
+/** The audit line written when the build was taken back to the brief — null until it happens. */
+const reopenedStore = createStore<string | null>(null);
+
+/** Seven hex characters that look like git's and stay the same for the same input. */
+const shortSha = (seed: string) => {
+  let h = 0x811c9dc5;
+  for (const ch of seed) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, "0").slice(0, 7);
+};
+
 /* ── Local primitives ──────────────────────────────────────────────── */
 
 const Lock = () => (
@@ -281,11 +351,49 @@ const StateGlyph = ({ s }: { s: CheckState }) => (
   </span>
 );
 
+/** One numbered list for every sequence of moves — a push that already happened,
+ *  a push in flight, a cut coming through the gate. `running` and `pending` exist
+ *  so an in-flight sequence reads with the same grammar as a finished receipt. */
+type StepTone = "ok" | "danger" | "running" | "pending";
+
+const STEP_TONE: Record<StepTone, { circle: string; label: string; detail: string }> = {
+  ok: { circle: "bg-ok/10 text-ok", label: "text-foreground", detail: "text-muted-2" },
+  danger: { circle: "bg-danger/10 text-danger", label: "font-medium text-danger", detail: "text-danger" },
+  running: { circle: "bg-accent/10 text-accent animate-pulse", label: "font-medium text-foreground", detail: "text-muted-2" },
+  pending: { circle: "bg-surface-2 text-muted-2", label: "text-muted-2", detail: "text-muted-2" },
+};
+
+/** Which tone the i-th of a live sequence carries when step `at` is the one running. */
+const liveTone = (i: number, at: number): StepTone => (i < at ? "ok" : i === at ? "running" : "pending");
+
+function StepList({ steps }: { steps: { label: string; detail: string; tone: StepTone }[] }) {
+  return (
+    <ol className="space-y-2.5">
+      {steps.map((s, i) => (
+        <li key={s.label} className="flex items-start gap-2.5">
+          <span className={cn("w-[18px] h-[18px] rounded-full grid place-items-center shrink-0 mt-[1px] text-[10.5px] font-semibold tabular-nums", STEP_TONE[s.tone].circle)}>{i + 1}</span>
+          <div className="min-w-0">
+            <div className={cn("text-[13.5px]", STEP_TONE[s.tone].label)}>{s.label}</div>
+            <div className={cn("text-[12px] font-mono mt-0.5 leading-relaxed", STEP_TONE[s.tone].detail)}>{s.detail}</div>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /* ── Certification ─────────────────────────────────────────────────── */
+
+/** A cut coming through the gate. Steps 0–2 run in turn; step 4 means it exists. */
+interface GateRun { n: number; sha: string; step: number; override?: Cut["override"] }
+const GATE_DONE = 4;
 
 export function CertificationPanel() {
   const [override, setOverride] = useState(false);
   const [reason, setReason] = useState("");
+  const [gate, setGate] = useState<GateRun | null>(null);
+  const [fileOpen, setFileOpen] = useState(false);
+  const cuts = useStore(cutsStore);
 
   const passed = CHECKS.filter((c) => c.state === "pass").length;
   const warned = CHECKS.filter((c) => c.state === "warn").length;
@@ -293,6 +401,38 @@ export function CertificationPanel() {
   const worst: CheckState = failed ? "fail" : warned ? "warn" : "pass";
   const blocked = failed > 0 && !override;
   const failing = CHECKS.filter((c) => c.state === "fail");
+  const next = Math.max(...cuts.map((c) => c.cut)) + 1;
+  // Once a cut has been queued on this override, the override is on the record — it cannot be unticked.
+  const locked = gate !== null;
+  const done = gate !== null && gate.step >= GATE_DONE;
+
+  /** Queues cut n+1 from this one and re-runs all eight checks. About three seconds, then it is in Versions. */
+  const cutFromGate = () => {
+    const n = next;
+    const sha = shortSha(`cut-${n}`);
+    const run: GateRun = { n, sha, step: 0, override: override ? { check: failing.map((c) => c.id).join(", "), why: reason.trim() } : undefined };
+    setGate(run);
+    [700, 1800].forEach((ms, i) => setTimeout(() => setGate({ ...run, step: i + 1 }), ms));
+    setTimeout(() => {
+      setGate({ ...run, step: GATE_DONE });
+      cutsStore.set([{
+        sha, cut: n, at: "just now", by: "Prism Agent", briefRev: "rev 3", bytes: CANDIDATE_BYTES,
+        cert: run.override ? "warn" : "pass", certNote: run.override ? "certified · 1 override" : "certified",
+        purpose: `Cut from the certification gate on ${EXPERIMENT.today}. Same source as d40b9f5; all eight checks re-run from scratch.`,
+        override: run.override, attempts: [],
+      }, ...cutsStore.get()]);
+      logActivity(run.override
+        ? `Overrode the ${run.override.check} check on d40b9f5 (“${run.override.why}”) and cut ${n} (${sha}) came out certified.`
+        : `Cut ${n} (${sha}) from d40b9f5. It came out certified.`);
+    }, 3000);
+  };
+
+  const gateSteps = gate ? [
+    { label: "Queued the cut", detail: `cut ${gate.n} · from d40b9f5 · ${gate.override ? `override on ${gate.override.check}, on ${EXPERIMENT.me}` : "no override"}` },
+    { label: "Building", detail: "one self-contained file · same source as d40b9f5 · nothing minified" },
+    { label: "Certifying — all eight checks from scratch", detail: gate.override ? `${passed} pass · ${warned} warn · ${gate.override.check} fails again · the override carries it` : `${passed} pass · ${warned} warn · 0 fail` },
+    { label: "Done", detail: `cut ${gate.n} · ${gate.sha} · certified${gate.override ? " · the override travels with the cut" : ""}` },
+  ] : [];
 
   return (
     <Section
@@ -354,8 +494,8 @@ export function CertificationPanel() {
               sometimes a check is wrong about a specific page — it is not a way to hurry.
             </p>
 
-            <label className="flex items-start gap-2.5 mt-3.5 cursor-pointer select-none">
-              <input type="checkbox" className="sr-only" checked={override} onChange={(e) => setOverride(e.target.checked)} />
+            <label className={cn("flex items-start gap-2.5 mt-3.5 select-none", locked ? "cursor-default" : "cursor-pointer")}>
+              <input type="checkbox" className="sr-only" checked={override} disabled={locked} onChange={(e) => setOverride(e.target.checked)} />
               <span className={cn("mt-[1px] w-4 h-4 rounded border grid place-items-center shrink-0",
                 override ? "bg-danger border-danger text-accent-fg" : "bg-surface border-border-strong")}>
                 {override && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
@@ -372,9 +512,10 @@ export function CertificationPanel() {
                   <FieldLabel className="mb-1.5">WHY — GOES IN THE LOG AND ON THE READOUT</FieldLabel>
                   <input
                     value={reason}
+                    disabled={locked}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="e.g. the rate calendar is server-rendered on this page, so init cannot race it"
-                    className="w-full h-9 px-3 rounded-lg border border-border bg-surface text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none"
+                    className="w-full h-9 px-3 rounded-lg border border-border bg-surface text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none disabled:opacity-60"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -386,14 +527,34 @@ export function CertificationPanel() {
               </div>
             )}
 
-            <div className="flex items-center gap-3 mt-4">
-              <Button variant={override ? "danger" : "default"} disabled={blocked || (override && reason.trim().length === 0)}>
-                {override ? "Push anyway — on my name" : "Push to Optimizely"}
-              </Button>
-              {blocked && <span className="text-[13px] text-danger">Blocked by 1 of 8 checks.</span>}
-              {override && reason.trim().length === 0 && <span className="text-[13px] text-warn">An override with no reason is not a record. Say why.</span>}
-              {override && reason.trim().length > 0 && <span className="text-[12.5px] text-muted-2">Cut 5 will re-run all eight checks from scratch.</span>}
-              <Button variant="outline" className="ml-auto">Open the file</Button>
+            {/* The cut coming through, in the same grammar as a push receipt. */}
+            {gate && (
+              <div className={cn("mt-4 rounded-lg border p-4", done ? "border-border bg-surface-2/40" : "border-accent/40 bg-accent/[0.04]")}>
+                <div className="flex items-center gap-2.5 mb-3 flex-wrap">
+                  <Pill tone={done ? "ok" : "accent"}>{done ? `Cut ${gate.n} certified` : `Cutting ${gate.n}…`}</Pill>
+                  <span className="text-[12.5px] text-muted-2">{EXPERIMENT.today} · {gate.override ? `override on ${gate.override.check} · ` : ""}{EXPERIMENT.me} ({EXPERIMENT.myRole})</span>
+                </div>
+                <StepList steps={gateSteps.map((s, i) => ({ ...s, tone: liveTone(i, gate.step) }))} />
+                {done && (
+                  <p className="text-[13px] text-muted leading-relaxed mt-3 pt-3 border-t border-border">
+                    Cut {gate.n} is certified and sits in Versions below{gate.override ? ", with the override on your name" : ""}. Nothing reaches a guest until you push it from there.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 mt-4 flex-wrap">
+              {!gate && (
+                <>
+                  <Button variant={override ? "danger" : "default"} disabled={blocked || (override && reason.trim().length === 0)} onClick={cutFromGate}>
+                    {override ? "Push anyway — on my name" : "Push to Optimizely"}
+                  </Button>
+                  {blocked && <span className="text-[13px] text-danger">Blocked by 1 of 8 checks.</span>}
+                  {override && reason.trim().length === 0 && <span className="text-[13px] text-warn">An override with no reason is not a record. Say why.</span>}
+                  {override && reason.trim().length > 0 && <span className="text-[12.5px] text-muted-2">Cut {next} will re-run all eight checks from scratch.</span>}
+                </>
+              )}
+              <Button variant="outline" className="ml-auto" onClick={() => setFileOpen(true)}>Open the file</Button>
             </div>
           </>
         ) : (
@@ -403,13 +564,60 @@ export function CertificationPanel() {
           </div>
         )}
       </div>
+
+      <Dialog open={fileOpen} onOpenChange={setFileOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>The file behind cut d40b9f5</DialogTitle>
+            <DialogDescription>
+              <span className="font-mono text-[12px] text-foreground">{FILE.repo} · {FILE.branch} · {FILE.path}</span>
+              <span> — {FILE.lines} lines, {n(CANDIDATE_BYTES)} bytes. The lines the checks cite, in context; the badge artwork on line 4 is most of the weight.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="rounded-lg border border-border bg-surface-2/60 p-4 font-mono text-[12px] leading-relaxed overflow-x-auto max-h-[60vh] overflow-y-auto">
+            {FILE_EXCERPT.map((row, i) => {
+              if (!row) return <div key={`gap-${i}`} className="text-muted-2 select-none">      ⋯</div>;
+              const [line, text] = row;
+              const flag = FILE.flagged[line];
+              return (
+                <div key={line} className={cn("flex", flag && TONE[flag].bg)}>
+                  <span className={cn("w-9 shrink-0 text-right pr-3 select-none tabular-nums", flag ? TONE[flag].text : "text-muted-2")}>{line}</span>
+                  <span className="whitespace-pre">{text}</span>
+                </div>
+              );
+            })}
+          </pre>
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </Section>
   );
 }
 
 /* ── Versions ──────────────────────────────────────────────────────── */
 
-const PUSH_GLYPH: Record<PushState, string> = { ok: "text-ok", bad: "text-danger", halted: "text-danger" };
+type PushKind = "push" | "rollback";
+
+/** The five moves of a push, in the words the fixture records them. The last one says what the push was for. */
+function pushSteps(c: Cut, kind: PushKind, cuts: Cut[]): PushStep[] {
+  const prev = cuts.find((x) => x.live);
+  const attemptsSoFar = cuts.reduce((a, x) => a + x.attempts.length, 0);
+  const version = 1 + cuts.reduce((a, x) => a + x.attempts.filter((t) => t.result === "verified").length, 0);
+  const digest = `sha256 ${shortSha(`sha256-${c.sha}`).slice(0, 6)}…${shortSha(c.sha).slice(0, 4)}`;
+  return [
+    { label: "Sent the cut to Optimizely", detail: `project ${EXPERIMENT.project} · variation “Promise” · ${n(c.bytes)} bytes sent`, state: "ok" },
+    { label: "Optimizely accepted the write", detail: `variation ${EXPERIMENT.project}:v${version} · project revision ${45 + attemptsSoFar}`, state: "ok" },
+    { label: "Read the stored bytes back", detail: `${n(c.bytes)} bytes returned`, state: "ok" },
+    { label: "Compared SHA-256, ours against theirs", detail: `${digest}  =  ${digest}`, state: "ok" },
+    {
+      label: "Marked live",
+      detail: kind === "rollback"
+        ? `rolled back${prev ? ` from cut ${prev.cut} (${prev.sha})` : ""} · run 4 kept flowing`
+        : `run 4 continues against this cut${prev ? ` · cut ${prev.cut} (${prev.sha}) stays in the list` : ""}`,
+      state: "ok",
+    },
+  ];
+}
 
 function PushReceipt({ a }: { a: PushAttempt }) {
   return (
@@ -418,35 +626,48 @@ function PushReceipt({ a }: { a: PushAttempt }) {
         <Pill tone={a.result === "verified" ? "ok" : "danger"}>{a.result === "verified" ? "Read-back verified" : "Read-back MISMATCH"}</Pill>
         <span className="text-[12.5px] text-muted-2">{a.at} · pushed by {a.by}</span>
       </div>
-      <ol className="space-y-2.5">
-        {a.steps.map((s, i) => (
-          <li key={s.label} className="flex items-start gap-2.5">
-            <span className={cn("w-[18px] h-[18px] rounded-full grid place-items-center shrink-0 mt-[1px] text-[10.5px] font-semibold tabular-nums",
-              s.state === "ok" ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger")}>{i + 1}</span>
-            <div className="min-w-0">
-              <div className={cn("text-[13.5px]", s.state === "ok" ? "text-foreground" : cn("font-medium", PUSH_GLYPH[s.state]))}>{s.label}</div>
-              <div className={cn("text-[12px] font-mono mt-0.5 leading-relaxed", s.state === "ok" ? "text-muted-2" : "text-danger")}>{s.detail}</div>
-            </div>
-          </li>
-        ))}
-      </ol>
+      <StepList steps={a.steps.map((s) => ({ label: s.label, detail: s.detail, tone: s.state === "ok" ? "ok" : "danger" }))} />
       {a.after && <p className="text-[13px] text-muted leading-relaxed mt-3 pt-3 border-t border-border">{a.after}</p>}
     </div>
   );
 }
 
 export function VersionsPanel() {
+  const cuts = useStore(cutsStore);
   const [selected, setSelected] = useState("8c1d7e2");
-  const cut = CUTS.find((c) => c.sha === selected) ?? CUTS[0];
-  const live = CUTS.find((c) => c.live);
-  const livePush = live?.attempts.find((a) => a.result === "verified");
+  const [confirm, setConfirm] = useState<{ sha: string; kind: PushKind } | null>(null);
+  const [pushing, setPushing] = useState<{ sha: string; kind: PushKind; step: number } | null>(null);
+  const cut = cuts.find((c) => c.sha === selected) ?? cuts[0];
+  const live = cuts.find((c) => c.live);
+  const livePush = live?.attempts.filter((a) => a.result === "verified").pop();
   const verified = cut.attempts.some((a) => a.result === "verified");
   const canRollBack = verified && !cut.live;
+  const target = confirm ? cuts.find((c) => c.sha === confirm.sha) : undefined;
+  const busy = pushing !== null;
+  const inFlight = pushing !== null && pushing.sha === cut.sha;
+
+  /** Sends the cut, reads it back, and only then marks it live. About three seconds.
+   *  A rollback is the same push with a different last line — it never removes a cut. */
+  const push = (c: Cut, kind: PushKind) => {
+    setConfirm(null);
+    const steps = pushSteps(c, kind, cuts);
+    const prev = live;
+    setPushing({ sha: c.sha, kind, step: 0 });
+    [550, 1100, 1700, 2300].forEach((ms, i) => setTimeout(() => setPushing({ sha: c.sha, kind, step: i + 1 }), ms));
+    setTimeout(() => {
+      const attempt: PushAttempt = { at: "just now", by: EXPERIMENT.me, result: "verified", steps };
+      cutsStore.set(cutsStore.get().map((x) => x.sha === c.sha ? { ...x, live: true, attempts: [...x.attempts, attempt] } : x.live ? { ...x, live: false } : x));
+      setPushing(null);
+      logActivity(kind === "rollback"
+        ? `Rolled back to cut ${c.cut} (${c.sha}). It is live${prev ? `; cut ${prev.cut} (${prev.sha}) stays in the list` : ""}.`
+        : `Pushed cut ${c.cut} (${c.sha}) to Optimizely. It is live${prev ? `; cut ${prev.cut} (${prev.sha}) stays available` : ""}.`);
+    }, 2900);
+  };
 
   return (
     <Section
       title="Versions"
-      action={<span className="text-[12.5px] text-muted-2 tabular-nums">{CUTS.length} cuts · append-only</span>}
+      action={<span className="text-[12.5px] text-muted-2 tabular-nums">{cuts.length} cuts · append-only</span>}
     >
       <div className="px-5 py-3.5 border-b border-border flex items-center gap-3 flex-wrap">
         <Pill tone="ok">Live now</Pill>
@@ -462,7 +683,7 @@ export function VersionsPanel() {
             <tr><Th first>Cut</Th><Th>Brief</Th><Th>Certification</Th><Th>Size</Th><Th>Cut by</Th><Th>Cut at</Th><Th>State</Th></tr>
           </thead>
           <tbody>
-            {CUTS.map((c) => (
+            {cuts.map((c) => (
               <tr key={c.sha} onClick={() => setSelected(c.sha)}
                 className={cn("cursor-pointer border-b border-border last:border-0 hover:bg-surface-2/60", c.sha === selected && "bg-accent/[0.05]")}>
                 <td className="pl-6 pr-4 py-3">
@@ -503,6 +724,12 @@ export function VersionsPanel() {
           {cut.live && <Pill tone="ok">running for guests right now</Pill>}
         </div>
         <p className="text-[13.5px] text-muted leading-relaxed mb-4 max-w-[680px]">{cut.purpose}</p>
+        {cut.override && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Receipt tone="danger">opmc.audit · certification.override · cut {cut.sha} · check {cut.override.check} · {EXPERIMENT.me} ({EXPERIMENT.myRole}) · {EXPERIMENT.today}</Receipt>
+            <span className="text-[13px] text-muted">Override: {cut.override.why}</span>
+          </div>
+        )}
 
         <div className="grid gap-5 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
           <div>
@@ -513,22 +740,30 @@ export function VersionsPanel() {
           </div>
 
           <div className="space-y-3">
-            {cut.attempts.length > 0
-              ? cut.attempts.map((a) => <PushReceipt key={a.at} a={a} />)
-              : (
-                <div className="rounded-lg border border-border bg-surface-2/40 p-4">
-                  <div className="text-[13.5px] font-medium mb-1">This cut has never reached Optimizely.</div>
-                  <p className="text-[13px] text-muted leading-relaxed">{cut.blocked}</p>
+            {pushing && pushing.sha === cut.sha && (
+              <div className="rounded-lg border border-accent/40 bg-accent/[0.04] p-4">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <Pill tone="accent">{pushing.kind === "rollback" ? "Rolling back…" : "Pushing…"}</Pill>
+                  <span className="text-[12.5px] text-muted-2">{EXPERIMENT.today} · pushed by {EXPERIMENT.me}</span>
                 </div>
-              )}
+                <StepList steps={pushSteps(cut, pushing.kind, cuts).map((s, i) => ({ label: s.label, detail: s.detail, tone: liveTone(i, pushing.step) }))} />
+              </div>
+            )}
+            {cut.attempts.map((a, i) => <PushReceipt key={`${a.at}-${i}`} a={a} />)}
+            {cut.attempts.length === 0 && !inFlight && (
+              <div className="rounded-lg border border-border bg-surface-2/40 p-4">
+                <div className="text-[13.5px] font-medium mb-1">This cut has never reached Optimizely.</div>
+                <p className="text-[13px] text-muted leading-relaxed">{cut.blocked ?? "It is certified. Push it when you are ready — nothing reaches a guest until then."}</p>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-3 mt-5 pt-4 border-t border-border flex-wrap">
-          <Button disabled={Boolean(cut.blocked) || cut.live}>
+          <Button disabled={Boolean(cut.blocked) || cut.live || busy} onClick={() => setConfirm({ sha: cut.sha, kind: "push" })}>
             {cut.live ? "Already live" : "Push to Optimizely"}
           </Button>
-          <Button variant="outline" disabled={!canRollBack}>Roll back to this cut</Button>
+          <Button variant="outline" disabled={!canRollBack || busy} onClick={() => setConfirm({ sha: cut.sha, kind: "rollback" })}>Roll back to this cut</Button>
           {cut.blocked && <span className="text-[13px] text-danger">{cut.blocked}</span>}
           {canRollBack && cut.briefStale && (
             <span className="text-[13px] text-warn">
@@ -538,6 +773,35 @@ export function VersionsPanel() {
           <span className="text-[12.5px] text-muted-2 ml-auto">A rollback adds a push. It never removes a cut.</span>
         </div>
       </div>
+
+      <Dialog open={Boolean(confirm)} onOpenChange={(o) => !o && setConfirm(null)}>
+        <DialogContent>
+          {confirm && target && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{confirm.kind === "rollback" ? `Roll back to cut ${target.cut}?` : `Push cut ${target.cut} to Optimizely?`}</DialogTitle>
+                <DialogDescription>
+                  {confirm.kind === "rollback"
+                    ? `Traffic keeps flowing. The live cut becomes cut ${target.cut} (${target.sha})${live ? `; cut ${live.cut} (${live.sha}) stops serving and stays in the list` : ""}. Nothing is deleted — a rollback adds a push.`
+                    : `Cut ${target.cut} (${target.sha}) goes live for every guest in the experiment${live ? `, and cut ${live.cut} (${live.sha}) stops serving. It stays in the list, so you can roll back to it` : ""}. It is live only once the bytes read back match, byte for byte.`}
+                </DialogDescription>
+              </DialogHeader>
+              {target.override && (
+                <p className="text-[13px] text-warn leading-relaxed">The override on {target.override.check} travels with this cut and shows on the readout.</p>
+              )}
+              {confirm.kind === "rollback" && target.briefStale && (
+                <p className="text-[13px] text-warn leading-relaxed">This puts {target.briefRev} code on the page while run 4 is judged against brief revision 3. The readout will say so.</p>
+              )}
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
+                <Button onClick={() => push(target, confirm.kind)}>
+                  {confirm.kind === "rollback" ? `Roll back — push cut ${target.cut}` : `Push cut ${target.cut}`}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Section>
   );
 }
@@ -589,12 +853,22 @@ function DriftRow({ d, resolution, onApply, onDismiss }: {
 export function DriftPanel() {
   const [resolved, setResolved] = useState<Record<string, Resolution>>({});
   const [tab, setTab] = useState<"open" | "resolved">("open");
+  const [sendingBack, setSendingBack] = useState(false);
+  const reopened = useStore(reopenedStore);
 
   const resolve = (id: string, r: Resolution) => setResolved((s) => ({ ...s, [id]: r }));
   const open = DESIGN_DRIFT.filter((d) => !resolved[d.id]);
   const done = DESIGN_DRIFT.filter((d) => resolved[d.id]);
   const applied = done.filter((d) => resolved[d.id] === "applied").length;
   const shown = tab === "open" ? open : done;
+
+  /** Writes the contradictions down as drift, reopens the brief as revision 4, and takes you there. Revision 3 is not touched. */
+  const sendBack = () => {
+    reopenedStore.set(`opmc.audit · drift.contradiction · ${CONTRADICTIONS.map((d) => d.id).join(", ")} · brief reopened as rev 4 · rev 3 stays frozen · ${EXPERIMENT.me} · ${EXPERIMENT.today}`);
+    setSendingBack(false);
+    logActivity(`Took the build back to the brief: recorded ${CONTRADICTIONS.length} contradictions as drift and reopened the brief as revision 4.`);
+    window.dispatchEvent(new CustomEvent("console:go", { detail: { stage: "Brief" } }));
+  };
 
   return (
     <div className="space-y-4">
@@ -632,7 +906,7 @@ export function DriftPanel() {
 
       <Section
         title="Contradictions — not the audit's to resolve"
-        action={<Pill tone="danger">{CONTRADICTIONS.length} need a person</Pill>}
+        action={reopened ? <Pill tone="muted">Back with the brief</Pill> : <Pill tone="danger">{CONTRADICTIONS.length} need a person</Pill>}
       >
         {CONTRADICTIONS.map((d) => <DriftRow key={d.id} d={d} />)}
         <div className="px-5 py-4 border-t border-border bg-danger/[0.04] flex items-center gap-3 flex-wrap">
@@ -640,9 +914,35 @@ export function DriftPanel() {
             There is no Apply on these. Rewriting a hypothesis or a metric to match the code is how an experiment ends up proving
             whatever it happened to do — so the audit stops here on purpose.
           </span>
-          <Button variant="outline">Take it back to the brief</Button>
+          {reopened
+            ? <Receipt>{reopened}</Receipt>
+            : <Button variant="outline" onClick={() => setSendingBack(true)}>Take it back to the brief</Button>}
         </div>
       </Section>
+
+      <Dialog open={sendingBack} onOpenChange={setSendingBack}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Take it back to the brief?</DialogTitle>
+            <DialogDescription>
+              Records that the page moved under the brief — drift on {CONTRADICTIONS.length} fields the audit is not allowed to rewrite — and reopens the brief as revision 4.
+              The frozen revision 3 stays exactly as it was, and run 4 is still judged against it.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="space-y-1.5">
+            {CONTRADICTIONS.map((d) => (
+              <li key={d.id} className="flex items-center gap-2 text-[13px]">
+                <Pill tone="danger">{d.layer}</Pill>
+                <span>{d.field}</span>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSendingBack(false)}>Cancel</Button>
+            <Button onClick={sendBack}>Reopen the brief as revision 4</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
