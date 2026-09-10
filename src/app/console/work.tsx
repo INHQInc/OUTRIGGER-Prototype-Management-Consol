@@ -9,6 +9,7 @@ import { EXPERIMENTS, ME, SITES, needsMe, type Experiment } from "@/lib/console/
 import { Badge, Chip, Meta, PageHeader, Pill, Section, StageRail, Th, Toolbar } from "./ui";
 import { StagePanel } from "./stages";
 import { SetupChecklist } from "./setup";
+import { Readout } from "./readout";
 import { STAGES, type Stage } from "@/lib/console/fake";
 
 /* ── Overview ──────────────────────────────────────────────────────── */
@@ -282,6 +283,17 @@ const SENT = [
 ];
 
 export function ReadoutsView() {
+  const [open, setOpen] = useState(false);
+  if (open) {
+    return (
+      <>
+        <div className="shrink-0 border-b border-border bg-surface px-6 py-2">
+          <button onClick={() => setOpen(false)} className="text-[12.5px] text-muted-2 hover:text-foreground">← Readouts</button>
+        </div>
+        <div className="flex-1 overflow-auto"><Readout /></div>
+      </>
+    );
+  }
   return (
     <>
       <PageHeader title="Readouts" actions={<Button size="sm">New readout</Button>} />
@@ -299,7 +311,7 @@ export function ReadoutsView() {
         <Section title="Recently sent">
           {SENT.map((s, i) => (
             <div key={i} className="flex items-center gap-4 px-5 py-3 border-b border-border last:border-0">
-              <div className="flex-1 text-[13.5px] text-muted">{s.t}</div>
+              <button onClick={() => setOpen(true)} className="flex-1 text-left text-[13.5px] text-muted hover:text-foreground">{s.t}</button>
               <Pill tone="ok">Delivered</Pill>
               <span className="text-[12.5px] text-muted-2 w-28 text-right">{s.opened}</span>
               <span className="text-[13px] text-muted-2 w-24 text-right">{s.when}</span>

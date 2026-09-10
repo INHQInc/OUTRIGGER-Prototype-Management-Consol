@@ -22,6 +22,7 @@ import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsVie
 import { NewExperiment } from "./new-experiment";
 import { CustomerOnboarding, SiteOnboarding } from "./onboarding";
 import { BackOffice, SupportBanner } from "./operator";
+import { VerdictPicker } from "./verdict";
 
 const NAV = [
   {
@@ -39,6 +40,11 @@ const NAV = [
       ["People & roles", "M16 20v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
       ["Guardrails", "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6z"],
       ["Activity", "M3 12h4l3 8 4-16 3 8h4"],
+    ] as const,
+  },
+  {
+    group: "DEMO", items: [
+      ["All verdict states", "M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20M12 8v4l3 2"],
     ] as const,
   },
 ];
@@ -138,6 +144,7 @@ export default function Console() {
         {!flow && nav === "People & roles" && <PeopleView />}
         {!flow && nav === "Guardrails" && <GuardrailsView />}
         {!flow && nav === "Activity" && <ActivityView />}
+        {!flow && nav === "All verdict states" && <VerdictPicker />}
       </main>
       </div>
     </div>

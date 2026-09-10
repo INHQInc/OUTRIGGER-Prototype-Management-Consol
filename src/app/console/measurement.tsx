@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { METRIC_INDEX, PROJECT_EVENTS, type IndexRow, type MetricRole } from "@/lib/console/fake";
 import { Pill, Section } from "./ui";
+import { MetricBuilder } from "./metric-builder";
 
 const Mono = ({ children }: { children: React.ReactNode }) => (
   <span className="font-mono text-[11px] text-muted-2 bg-surface-2 rounded px-1.5 py-0.5">{children}</span>
@@ -172,6 +173,7 @@ const Glyph = ({ on, title, onClick, children }: { on?: boolean; title: string; 
 export function MetricIndex() {
   const [rows, setRows] = useState<IndexRow[]>(METRIC_INDEX);
   const [showHidden, setShowHidden] = useState(false);
+  const [building, setBuilding] = useState(false);
   const visible = rows.filter((r) => !r.hidden);
   const hidden = rows.filter((r) => r.hidden);
   const patch = (k: string, p: Partial<IndexRow>) => setRows((rs) => rs.map((r) => (r.key === k ? { ...r, ...p } : r)));
@@ -230,8 +232,11 @@ export function MetricIndex() {
     <Section title="Every number this experiment reports"
       action={<div className="flex items-center gap-3">
         <span className="text-[12.5px] text-muted-2">This order is the order the readout tells it in</span>
-        <Button size="sm" variant="outline">+ Build a metric</Button>
+        <Button size="sm" variant="outline" onClick={() => setBuilding(true)}>+ Build a metric</Button>
       </div>}>
+      {building && (
+        <div className="border-b border-border"><MetricBuilder onClose={() => setBuilding(false)} /></div>
+      )}
       {visible.map((r) => <Row key={r.key} r={r} />)}
 
       {hidden.length > 0 && (
