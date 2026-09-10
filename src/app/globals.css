@@ -61,35 +61,43 @@ html[data-theme="dark"] {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   CONSOLE MOCK — shadcn's default neutral palette, scoped.
-   Every console surface is written against the SEMANTIC tokens
-   (surface / foreground / muted / accent / ok / warn / danger), never a
-   literal colour — so re-skinning the whole thing is this block and
-   nothing else. Scoped to the mock so Beta 1's screens keep their palette.
-   In this theme `accent` is white-on-black: shadcn's primary is a white
-   button with black text, not a brand hue.
+   CONSOLE MOCK — shadcn's neutral theme, the actual values.
+   Pulled from the shadcn registry ("vercel": Geist, achromatic OKLCH),
+   not typed from memory. Scoped to the mock so Beta 1 keeps its palette.
+
+   shadcn token        → ours
+   background          → --background
+   card                → --surface
+   muted / secondary   → --surface-2
+   border              → --border
+   input               → --border-strong
+   foreground          → --foreground
+   muted-foreground    → --muted
+   (no second tier)    → --muted-2, one step dimmer
+   primary             → --accent  (white button, black text)
+   destructive         → --danger
+   shadcn has no ok/warn; ours are restrained and low-chroma.
    ──────────────────────────────────────────────────────────────── */
 [data-console], [data-backoffice] {
   color-scheme: dark;
   /* `body { color: var(--foreground) }` computes at BODY, where the token is
-     still the light value — so text that sets no colour of its own inherits
-     dark ink onto a dark ground. The scope has to restate both. */
+     still the light value — a scoped theme must restate colour and ground. */
   color: var(--foreground);
   background: var(--background);
-  --background: #0a0a0a;      /* neutral-950 */
-  --surface: #171717;         /* neutral-900 — cards */
-  --surface-2: #262626;       /* neutral-800 — insets, chips */
-  --border: #262626;
-  --border-strong: #404040;   /* neutral-700 */
-  --foreground: #fafafa;      /* neutral-50 */
-  --muted: #a1a1a1;           /* neutral-400 — body */
-  --muted-2: #737373;         /* neutral-500 — captions */
-  --accent: #fafafa;          /* primary = white */
-  --accent-hover: #e5e5e5;
-  --accent-fg: #0a0a0a;       /* black text on the white button */
-  --danger: #f87171;
-  --warn: #fbbf24;
-  --ok: #4ade80;
+  --background: oklch(0 0 0);
+  --surface: oklch(0.14 0 0);
+  --surface-2: oklch(0.23 0 0);
+  --border: oklch(0.26 0 0);
+  --border-strong: oklch(0.32 0 0);
+  --foreground: oklch(1 0 0);
+  --muted: oklch(0.72 0 0);
+  --muted-2: oklch(0.56 0 0);
+  --accent: oklch(1 0 0);
+  --accent-hover: oklch(0.92 0 0);
+  --accent-fg: oklch(0 0 0);
+  --danger: oklch(0.69 0.20 23.91);
+  --warn: oklch(0.81 0.17 75.35);
+  --ok: oklch(0.74 0.16 152);
 }
 
 html { color-scheme: light; }
