@@ -22,16 +22,31 @@
  *
  * Every device x scenario cell that has no case renders as "never tried"
  * rather than blank: an untested combination is a finding, not whitespace.
+ *
+ * Three things a person can do here, all inside the session: export the cases
+ * and verdicts for the readout, script a new case (bound to a scenario, at a
+ * width), and record a verdict — the only way a case ever gets a receipt.
  */
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label as FieldLabel } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
+import { ME } from "@/lib/console/fake";
+import { logActivity } from "./config";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
 
 /* ── Fixtures ──────────────────────────────────────────────────────── */
 
+const TODAY = "10 Sep 2026";
+
 const RUN = {
+  id: "reef-rate-promise",
   experiment: "Rate-calendar best-price promise",
   page: "outrigger.com/hawaii/oahu/outrigger-reef-waikiki-beach-resort",
   build: "8c1d7e2",
@@ -43,6 +58,16 @@ const RUN = {
 
 const DEVICES = ["Desktop 1440", "iPhone 15", "iPad", "Android"] as const;
 type Device = (typeof DEVICES)[number];
+
+/** The widths a person can script a case at, and the bench device that runs
+ *  each one — the same pairing the fixture cases already use. */
+const BREAKPOINTS = [
+  { px: "375", device: "iPhone 15" },
+  { px: "768", device: "iPad" },
+  { px: "1280", device: "Desktop 1440" },
+] as const satisfies readonly { px: string; device: Device }[];
+type Breakpoint = (typeof BREAKPOINTS)[number]["px"];
+const isBreakpoint = (v: string): v is Breakpoint => BREAKPOINTS.some((b) => b.px === v);
 
 type Scenario = {
   id: string;
@@ -147,6 +172,8 @@ type TestCase = {
   id: string;
   scenario: string;
   device: Device;
+  /** Set when a person scripted the case at a width rather than at a device. */
+  breakpoint?: Breakpoint;
   title: string;
   steps: string[];
   expected: string;
@@ -328,8 +355,11 @@ const Label = ({ children }: { children: React.ReactNode }) => (
   <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-1.5">{children}</div>
 );
 
+/** Your own name reads as "you" — a receipt is addressed to the person looking at it. */
+const whoLabel = (who: string) => (who === ME.name ? "you" : who);
+
 function verdictLabel(v: Verdict): string {
-  if (v.outcome === "not run") return "Not run";
+  if (v.outcome === "not run") return "Not run yet";
   if (v.outcome === "fail") return v.by === "human" ? "Failed — human" : "Failed — agent";
   return v.by === "human" ? "Passed — human" : "Passed — agent";
 }
@@ -348,7 +378,16 @@ export function QaPanel() {
   const [device, setDevice] = useState<Device | "All">("All");
   const [outcome, setOutcome] = useState<"all" | "fail" | "not run">("all");
   const [openCase, setOpenCase] = useState<string | null>("TC-01");
-  const [agentRun, setAgentRun] = useState<{ wrote: number; preserved: number } | null>(null);
+  const [agentRun, setAgentRun] = useState<{ wrote: number; preserved: number; before: Record<string, Verdict> } | null>(null);
+  const [exported, setExported] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [what, setWhat] = useState("");
+  const [expected, setExpected] = useState("");
+  const [scenario, setScenario] = useState("");
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>("375");
+  const [recording, setRecording] = useState<string | null>(null);
+  const [verdictPick, setVerdictPick] = useState<"pass" | "fail" | "">("");
+  const [note, setNote] = useState("");
 
   const gaps = SCENARIOS.filter((s) => !s.covered);
   const covered = SCENARIOS.filter((s) => s.covered);
@@ -356,7 +395,8 @@ export function QaPanel() {
 
   const combos = SCENARIOS.length * DEVICES.length;
   const cellFor = (sc: string, d: Device) => cases.find((c) => c.scenario === sc && c.device === d);
-  const untried = combos - cases.length;
+  const tried = new Set(cases.map((c) => `${c.scenario} ${c.device}`)).size;
+  const untried = combos - tried;
 
   const failing = cases.filter((c) => c.verdict.outcome === "fail").length;
   const notRun = cases.filter((c) => c.verdict.outcome === "not run").length;
@@ -369,20 +409,84 @@ export function QaPanel() {
    *  a human verdict is copied through untouched, and the count of the ones
    *  left alone is reported instead of being invisible. */
   const runAgent = () => {
-    const next = cases.map<TestCase>((c) => c.verdict.by === "human" ? c : {
-      ...c,
-      verdict: {
-        outcome: c.agentFinding, by: "agent", who: "Prism agent", at: "10 Sep 09:41",
-        note: c.agentFinding === "fail"
-          ? `Re-run against build ${RUN.build} — same defect, reproduced.`
-          : `Re-run against build ${RUN.build} — behaves as scripted.`,
-      },
+    const before: Record<string, Verdict> = {};
+    const next = cases.map<TestCase>((c) => {
+      if (c.verdict.by === "human") return c;
+      before[c.id] = c.verdict;
+      return {
+        ...c,
+        verdict: {
+          outcome: c.agentFinding, by: "agent", who: "Prism agent", at: "10 Sep 09:41",
+          note: c.agentFinding === "fail"
+            ? `Re-run against build ${RUN.build} — same defect, reproduced.`
+            : c.agentFinding === "pass"
+              ? `Re-run against build ${RUN.build} — behaves as scripted.`
+              : `Re-run against build ${RUN.build} — a case a person scripted by hand has no agent result yet. Still not run.`,
+        },
+      };
     });
     setCases(next);
-    setAgentRun({ wrote: cases.length - humanVerdicts, preserved: humanVerdicts });
+    setAgentRun({ wrote: cases.length - humanVerdicts, preserved: humanVerdicts, before });
   };
 
-  const resetRun = () => { setCases(CASES); setAgentRun(null); };
+  /** Undo puts back only what the run wrote. A verdict a person recorded since,
+   *  or a case added since, was never the agent's to take away. */
+  const resetRun = () => {
+    if (!agentRun) return;
+    setCases((cs) => cs.map((c) => {
+      const prev = agentRun.before[c.id];
+      return c.verdict.by === "agent" && prev ? { ...c, verdict: prev } : c;
+    }));
+    setAgentRun(null);
+  };
+
+  /** The cases and their verdicts as they stand. The build and the brief are
+   *  the frozen part; this is the evidence gathered against them. */
+  const exportForReadout = () => {
+    const body = {
+      experiment: RUN.experiment, id: RUN.id, page: RUN.page, build: RUN.build, brief: RUN.brief,
+      run: RUN.closed, result: RUN.lift, generated: RUN.generated, exported: TODAY,
+      coverage: SCENARIOS.map(({ id, title, covered, evidence }) => ({ id, title, covered, evidence })),
+      cases: cases.map((c) => ({
+        id: c.id, scenario: c.scenario, device: c.device, breakpoint: c.breakpoint,
+        title: c.title, steps: c.steps, expected: c.expected, verdict: c.verdict,
+      })),
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], { type: "application/json" }));
+    const link = Object.assign(document.createElement("a"), { href: url, download: `qa-${RUN.id}.json` });
+    link.click(); URL.revokeObjectURL(url);
+    logActivity(`Exported the QA cases and verdicts for the ${RUN.experiment} readout.`);
+    setExported(true);
+    window.setTimeout(() => setExported(false), 1500);
+  };
+
+  /** A new case is bound to a scenario and a width, and starts with no verdict
+   *  at all — nobody has tried it, so nothing here may say otherwise. */
+  const addCase = () => {
+    const bp = BREAKPOINTS.find((b) => b.px === breakpoint) ?? BREAKPOINTS[0];
+    const id = `TC-${String(Math.max(...cases.map((c) => Number(c.id.slice(3)))) + 1).padStart(2, "0")}`;
+    const title = what.trim();
+    const next: TestCase = {
+      id, scenario, device: bp.device, breakpoint: bp.px, title,
+      steps: [`Open ${RUN.page} at ${bp.px}px wide with build ${RUN.build} forced.`, title],
+      expected: expected.trim(),
+      verdict: { outcome: "not run", by: "none", who: "—", at: "—", note: `Not run yet — added by you on ${TODAY}. Nobody has tried it.` },
+      agentFinding: "not run",
+    };
+    setCases((cs) => [...cs, next]);
+    setDevice("All"); setOutcome("all"); setOpenCase(id);
+    logActivity(`Added QA case ${id} at ${bp.px} wide — ${title}.`);
+    setAdding(false); setWhat(""); setExpected(""); setScenario(""); setBreakpoint("375");
+  };
+
+  const target = cases.find((c) => c.id === recording) ?? null;
+  const recordVerdict = () => {
+    if (!target || verdictPick === "") return;
+    const verdict: Verdict = { outcome: verdictPick, by: "human", who: ME.name, at: TODAY, note: note.trim() };
+    setCases((cs) => cs.map((c) => (c.id === target.id ? { ...c, verdict } : c)));
+    logActivity(`Recorded a ${verdictPick} on QA case ${target.id} — ${target.title}.`);
+    setRecording(null); setVerdictPick(""); setNote("");
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -390,8 +494,8 @@ export function QaPanel() {
         title="QA"
         count={`${SCENARIOS.length} scenarios · ${cases.length} cases · ${gaps.length} gaps`}
         actions={<>
-          <Button variant="outline" size="sm">Export for the readout</Button>
-          <Button size="sm">Add a case</Button>
+          <Button variant="outline" size="sm" onClick={exportForReadout}>{exported ? "Exported" : "Export for the readout"}</Button>
+          <Button size="sm" onClick={() => setAdding(true)}>Add a case</Button>
         </>}
       />
 
@@ -493,7 +597,7 @@ export function QaPanel() {
         <Section
           title="Device × scenario"
           action={<span className="text-[12.5px] text-muted-2 tabular-nums">
-            {cases.length} of {combos} combinations covered · {untried} never tried
+            {tried} of {combos} combinations covered · {untried} never tried
           </span>}>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
@@ -606,9 +710,9 @@ export function QaPanel() {
                       {c.scenario} · {sc?.title}
                     </div>
                   </div>
-                  <Pill tone="muted">{c.device}</Pill>
+                  <Pill tone="muted">{c.device}{c.breakpoint && ` · ${c.breakpoint} wide`}</Pill>
                   {locked
-                    ? <Frozen>{verdictLabel(c.verdict)} · {c.verdict.who} · {c.verdict.at}</Frozen>
+                    ? <Frozen>{verdictLabel(c.verdict)} · {whoLabel(c.verdict.who)} · {c.verdict.at}</Frozen>
                     : <span className={cn("text-[13px] whitespace-nowrap",
                         c.verdict.outcome === "fail" ? "text-danger" : c.verdict.outcome === "not run" ? "text-muted-2" : "text-muted")}>
                         {verdictLabel(c.verdict)} · {c.verdict.who}
@@ -637,7 +741,11 @@ export function QaPanel() {
                       <div className="flex items-center gap-3 mt-4 pt-3.5 border-t border-border">
                         {locked ? (
                           <>
-                            <Frozen>recorded by {c.verdict.who} · {c.verdict.at} · agent runs skip this</Frozen>
+                            <Frozen>
+                              {c.verdict.who === ME.name
+                                ? `Human verdict: ${c.verdict.outcome} · by you · ${c.verdict.at} · ${c.verdict.note}`
+                                : `recorded by ${c.verdict.who} · ${c.verdict.at} · agent runs skip this`}
+                            </Frozen>
                             <span className="text-[12.5px] text-muted-2">Only a person can change a person&rsquo;s verdict.</span>
                           </>
                         ) : (
@@ -647,7 +755,7 @@ export function QaPanel() {
                                 ? `Agent verdict from ${c.verdict.at}. The next run overwrites it.`
                                 : "No verdict yet. The next agent run will write one."}
                             </span>
-                            <Button size="sm" variant="outline" className="ml-auto">Record a human verdict</Button>
+                            <Button size="sm" variant="outline" className="ml-auto" onClick={() => setRecording(c.id)}>Record a human verdict</Button>
                           </>
                         )}
                       </div>
@@ -659,6 +767,86 @@ export function QaPanel() {
           })}
         </Section>
       </div>
+
+      <Dialog open={adding} onOpenChange={setAdding}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a case</DialogTitle>
+            <DialogDescription>A case is evidence about this build only when it proves a scenario the brief implies. It starts as not run yet and stays that way until someone records what they saw.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <FieldLabel htmlFor="case-what" className="mb-1.5">What to check</FieldLabel>
+              <Input id="case-what" value={what} onChange={(e) => setWhat(e.target.value)} placeholder="Esc closes the overlay with the calendar scrolled to November" autoFocus />
+            </div>
+            <div>
+              <FieldLabel htmlFor="case-expected" className="mb-1.5">Expected</FieldLabel>
+              <Input id="case-expected" value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="The overlay closes and the page behind is where it was" />
+            </div>
+            <div>
+              <FieldLabel htmlFor="case-scenario" className="mb-1.5">Scenario it proves</FieldLabel>
+              <Select value={scenario} onValueChange={setScenario}>
+                <SelectTrigger id="case-scenario" className="w-full"><SelectValue placeholder="Pick the scenario this case is evidence for" /></SelectTrigger>
+                <SelectContent>
+                  {SCENARIOS.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.id} · {s.title}{s.covered ? "" : " — gap"}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <FieldLabel htmlFor="case-breakpoint" className="mb-1.5">Breakpoint</FieldLabel>
+              <Select value={breakpoint} onValueChange={(v) => { if (isBreakpoint(v)) setBreakpoint(v); }}>
+                <SelectTrigger id="case-breakpoint" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {BREAKPOINTS.map((b) => (
+                    <SelectItem key={b.px} value={b.px}>{b.px} wide · runs on {b.device}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+            <Button disabled={what.trim().length < 3 || expected.trim().length < 3 || !scenario} onClick={addCase}>Add it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(target)} onOpenChange={(o) => !o && setRecording(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record a human verdict</DialogTitle>
+            <DialogDescription>What you record is a locked receipt with your name and today&rsquo;s date on it. No agent run can overwrite it; only a person can.</DialogDescription>
+          </DialogHeader>
+          {target && (
+            <div className="rounded-lg border border-border bg-surface-2/40 px-4 py-3">
+              <div className="text-[13.5px]"><span className="font-mono text-[11px] text-muted-2 mr-2">{target.id}</span>{target.title}</div>
+              <div className="text-[12.5px] text-muted mt-1">Expected: {target.expected}</div>
+            </div>
+          )}
+          <div className="space-y-4">
+            <div>
+              <FieldLabel className="mb-2" id="verdict-outcome">Verdict</FieldLabel>
+              <RadioGroup aria-labelledby="verdict-outcome" value={verdictPick} onValueChange={(v) => setVerdictPick(v === "pass" ? "pass" : "fail")} className="grid-cols-2">
+                {([["pass", "Pass"], ["fail", "Fail"]] as const).map(([v, l]) => (
+                  <FieldLabel key={v} htmlFor={`verdict-${v}`} className={cn("gap-3 rounded-xl border px-4 py-3 cursor-pointer font-normal text-foreground", verdictPick === v ? "border-accent bg-accent/5" : "border-border")}>
+                    <RadioGroupItem id={`verdict-${v}`} value={v} /><span className="text-[14px] font-medium">{l}</span>
+                  </FieldLabel>
+                ))}
+              </RadioGroup>
+            </div>
+            <div>
+              <FieldLabel htmlFor="verdict-note" className="mb-1.5">Note</FieldLabel>
+              <Textarea id="verdict-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="What you saw. If it failed, where it went wrong." rows={3} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRecording(null)}>Cancel</Button>
+            <Button disabled={verdictPick === "" || note.trim().length < 3} onClick={recordVerdict}>Record it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
