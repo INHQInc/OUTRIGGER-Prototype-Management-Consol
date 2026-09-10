@@ -48,7 +48,7 @@ export default async function RootLayout({
         {/* Theme boots before paint — stored choice wins; default is Clinical Light. */}
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("opmc-theme");if(t==="dark")document.documentElement.dataset.theme="dark"}catch(e){}` }} />
       </head>
-      <body className="min-h-full flex">
+      <body className="min-h-full flex" suppressHydrationWarning>
         <AppFrame build={buildInfo()} user={user} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
       </body>
     </html>
