@@ -2,7 +2,7 @@
 
 /** The work surfaces: Overview, Experiments (list + one), Ideas, Readouts. */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITES, TROUBLE, needsMe, type Experiment } from "@/lib/console/fake";
@@ -126,6 +126,12 @@ export function ExperimentsView({ open, onNew }: { open: (id: string) => void; o
 
 export function ExperimentDetail({ e, back }: { e: Experiment; back: () => void }) {
   const [tab, setTab] = useState<Stage>(e.stage);
+  // A panel deep in one stage can send you to another: window.dispatchEvent(new CustomEvent("console:go", { detail: { stage: "Brief" } })).
+  useEffect(() => {
+    const on = (ev: Event) => { const d = (ev as CustomEvent<{ stage?: Stage }>).detail; if (d?.stage) setTab(d.stage); };
+    window.addEventListener("console:go", on);
+    return () => window.removeEventListener("console:go", on);
+  }, []);
   return (
     <>
       <header className="shrink-0 border-b border-border bg-surface px-6 pt-3 pb-4">
