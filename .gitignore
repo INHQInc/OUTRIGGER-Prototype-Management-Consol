@@ -14,3 +14,6 @@ snapshots/
 
 # TS incremental build cache — generated, not source
 tsconfig.tsbuildinfo
+
+# workflow agents run in isolated worktrees here
+.claude/worktrees/

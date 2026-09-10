@@ -306,7 +306,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
       <Dialog open={Boolean(asking)} onOpenChange={(o) => !o && setAsking(null)}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Open {asking?.name}&rsquo;s console</DialogTitle>
+            <DialogTitle>Open the {asking?.name} console</DialogTitle>
             <DialogDescription>
               You&rsquo;ll be acting inside their account. They will see that you were there, why, and for how long —
               it appears in their own Activity, not only in ours.
@@ -316,9 +316,12 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
             <Label htmlFor="reason" className="mb-1.5">Why do you need to go in?</Label>
             <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} rows={2} autoFocus
               placeholder="Their readout reported no winner — looking at what they see" className="resize-none" />
+            <p className={cn("text-[12.5px] mt-2", reason.trim().length > 0 && reason.trim().length < 4 ? "text-warn" : "text-muted-2")}>
+              The account&rsquo;s Owner reads this in their Activity — a plain sentence, not a word.
+            </p>
           </div>
           <DialogFooter className="sm:justify-start items-center">
-            <Button disabled={reason.trim().length < 8} onClick={() => { if (asking) enterCustomer(asking.name, reason, asking.fresh, asking.siteDomains); setAsking(null); }}>
+            <Button disabled={reason.trim().length < 4} onClick={() => { if (asking) enterCustomer(asking.name, reason, asking.fresh, asking.siteDomains); setAsking(null); }}>
               Start a 1-hour session
             </Button>
             <Button variant="ghost" onClick={() => setAsking(null)}>Cancel</Button>
