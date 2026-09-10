@@ -123,7 +123,7 @@ const pass = (saw: string): Outcome => ({ result: "pass", saw });
 const fail = (saw: string, pct?: number): Outcome => ({ result: "fail", saw, pct });
 const unev = (blockedBy: string): Outcome => ({ result: "unevaluated", saw: "—", blockedBy });
 
-const SPLIT_OK = "9,206 / 9,206 — 50.0 / 50.0 against a declared 50 / 50, χ² p 0.98";
+const SPLIT_OK = "9,206 / 9,206 — 50.0 / 50.0 against a declared 50 / 50, χ² p 1.00";
 const FLOOR_OK = `${SESSIONS.toLocaleString()} sessions against a floor of ${FLOOR.toLocaleString()}`;
 const METRIC_BOTH = "24138040550_book_now_button_clicks fires in both versions";
 const PREREG_OK = `Revision 3 frozen 26 Aug 09:14 HST — ${TO_TRAFFIC} before the first guest saw it`;

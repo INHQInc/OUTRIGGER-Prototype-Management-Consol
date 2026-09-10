@@ -357,7 +357,7 @@ export function CertificationPanel() {
             <label className="flex items-start gap-2.5 mt-3.5 cursor-pointer select-none">
               <input type="checkbox" className="sr-only" checked={override} onChange={(e) => setOverride(e.target.checked)} />
               <span className={cn("mt-[1px] w-4 h-4 rounded border grid place-items-center shrink-0",
-                override ? "bg-danger border-danger text-surface" : "bg-surface border-border-strong")}>
+                override ? "bg-danger border-danger text-accent-fg" : "bg-surface border-border-strong")}>
                 {override && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
               </span>
               <span className="text-[13.5px] leading-snug">

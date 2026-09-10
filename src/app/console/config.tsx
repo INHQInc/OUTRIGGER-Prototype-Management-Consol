@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { AB_TOOLS, OTHER_CONNECTIONS, SITE_ROWS, type Connection, type Site } from "@/lib/console/fake";
 import { Empty, Meta, PageHeader, Pill, Section, Th, Toolbar } from "./ui";
+import { SkillsPanel } from "./skills";
 
 const scriptPill = (s: Site["envs"][number]) =>
   s.script === "verified" ? <Pill tone="ok">Installed</Pill>
@@ -206,6 +207,7 @@ export function ConnectionsView() {
         <p className="text-[12.5px] text-muted-2 px-1">
           Keys are yours. Prism stores them for this customer only and never shares them between customers.
         </p>
+        <SkillsPanel />
       </div>
     </>
   );

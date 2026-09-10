@@ -9,6 +9,14 @@ import { cn } from "@/lib/ui/cn";
 import { STAGES, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
 import { Meta, Pill, Section } from "./ui";
 import { MeasurementPlan, MetricIndex } from "./measurement";
+import { BriefAuthor } from "./brief-author";
+import { CertificationPanel, DriftPanel, VersionsPanel } from "./build-panel";
+import { AgentHandshake, InjectionProof } from "./setup";
+import { QaPanel } from "./qa";
+import { VerdictPanel, type Verdict } from "./verdict";
+import { Readout } from "./readout";
+import { EvidenceBoard } from "./evidence-board";
+import { HandoffPanel } from "./handoff";
 
 const Lock = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
@@ -36,6 +44,15 @@ const NotYet = ({ what, needs }: { what: string; needs: string }) => (
 
 export function BriefPanel({ e }: { e: Experiment }) {
   const frozen = Boolean(e.frozen);
+  if (!frozen) {
+    return (
+      <div className="space-y-4">
+        <BriefAuthor />
+        <MeasurementPlan confirmed={false} />
+        {e.build && <DriftPanel />}
+      </div>
+    );
+  }
   // ONE definition, not a second one living here. Beta 1's isBriefComplete is
   // imported by every gate; a private copy is how the bug it prevents returns.
   const incomplete = !isBriefComplete(e);
@@ -71,6 +88,7 @@ export function BriefPanel({ e }: { e: Experiment }) {
       </Section>
 
       <MeasurementPlan confirmed={Boolean(e.frozen)} />
+      <DriftPanel />
 
       <Section title="Revisions">
         {["Brief 3 — current", "Brief 2", "Brief 1"].slice(0, frozen ? 3 : 1).map((r, i) => (
@@ -97,49 +115,12 @@ const BUILD_STEPS = [
 ] as const;
 
 export function BuildPanel({ e }: { e: Experiment }) {
-  if (e.stage === "Brief") return <NotYet what="Nothing has been built yet" needs="The brief needs a decision metric and a direction first. Once it is complete, Prism's agent starts building on its own." />;
-  const building = e.status === "building";
+  if (e.stage === "Brief") return <NotYet what="Nothing has been built yet" needs="The brief needs a decision metric and a direction first. Once it is complete, the agent starts building." />;
   return (
     <div className="space-y-4">
-      <Section title="Build" action={<Pill tone={building ? "accent" : "ok"}>{building ? "Building now" : "Built"}</Pill>}>
-        <div className="p-5">
-          <div className="flex items-center gap-3 pb-4 border-b border-border">
-            <div className="w-9 h-9 rounded-lg bg-accent/10 grid place-items-center shrink-0">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-accent"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3" /></svg>
-            </div>
-            <div className="flex-1">
-              <div className="text-[14.5px] font-medium">Prism&rsquo;s agent built this</div>
-              <div className="text-[13px] text-muted-2 mt-0.5">Nothing to install. You can also build it yourself — that&rsquo;s in Connections.</div>
-            </div>
-          </div>
-
-          <ol className="py-4 space-y-2.5">
-            {BUILD_STEPS.map(([label]) => (
-              <li key={label} className="flex items-center gap-2.5">
-                <span className="w-4 h-4 rounded-full bg-ok grid place-items-center shrink-0">
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-                </span>
-                <span className="text-[14px] text-muted">{label}</span>
-              </li>
-            ))}
-          </ol>
-
-          <div className="flex items-center gap-3 pt-4 border-t border-border">
-            <Frozen>{e.build} · this exact code is what runs</Frozen>
-            <span className="text-[13px] text-muted-2">2.4 KB</span>
-            <Button size="sm" variant="outline" className="ml-auto">See it on the page</Button>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="What it knew while building">
-        <div className="p-5 flex gap-8">
-          {[["24", "pages of your site read"], ["11", "of your components reused"], ["6", "past results considered"]].map(([n, l]) => (
-            <div key={l}><div className="text-[19px] font-semibold tabular-nums tracking-[-0.02em]">{n}</div><div className="text-[12.5px] text-muted-2 mt-0.5">{l}</div></div>
-          ))}
-          <p className="text-[13px] text-muted-2 self-center ml-auto max-w-[220px] leading-relaxed">Pinned to this build, so what the agent knew is part of the record.</p>
-        </div>
-      </Section>
+      <AgentHandshake />
+      <CertificationPanel />
+      <VersionsPanel />
     </div>
   );
 }
@@ -150,6 +131,8 @@ export function ReviewPanel({ e }: { e: Experiment }) {
   if (e.stage === "Brief" || e.stage === "Build") return <NotYet what="Not ready for review" needs="Someone reviews this once there is a build to look at on the real page." />;
   return (
     <div className="space-y-4">
+      <InjectionProof />
+      <QaPanel />
       <Section title="Does this do what the brief asked?" action={<span className="text-[12.5px] text-muted-2">Reviewer · owns the site</span>}>
         <div className="p-5">
           <div className="rounded-lg border border-border bg-surface-2/40 h-[190px] grid place-items-center mb-4">
@@ -215,25 +198,28 @@ export function RunPanel({ e }: { e: Experiment }) {
 
 /* ── Decision ──────────────────────────────────────────────────────── */
 
+/** status → the verdict engine's state. Seven are possible; this mock's data
+ *  reaches four. A closed run with nothing recorded is still adjudicable. */
+const verdictFor = (e: Experiment): Verdict | null => {
+  if (e.status === "shipped") return "confirmed";
+  if (e.status === "decide") return e.result?.tone === "ok" ? "confirmed" : "refuted";
+  if (e.status === "running") return "keep_running";
+  return null;
+};
+
 export function DecisionPanel({ e, action }: { e: Experiment; action: React.ReactNode }) {
-  if (e.status === "shipped") {
-    return (
-      <Section title="Decision" action={<Frozen>stamped 2 Aug 2026 · results and statistics frozen</Frozen>}>
-        <div className="p-5">
-          <div className="flex items-baseline gap-3 mb-3">
-            <span className="text-[22px] font-semibold text-ok tabular-nums">{e.result?.value}</span>
-            <span className="text-[14px] text-muted">{e.metric} · it won</span>
-          </div>
-          <Meta k="Decided by" v="Marcus R. · Approver" />
-          <Meta k="Author" v={e.owner} />
-          <Meta k="Pre-registered" v="Brief 2, frozen 25 days before the numbers existed" />
-          <Button size="sm" variant="outline" className="mt-4">Open the readout</Button>
-        </div>
-      </Section>
-    );
-  }
-  if (!e.result) return <NotYet what="No decision yet" needs="A decision is recorded once the run closes. It freezes the result and the statistics together, and it cannot be the person who wrote or built it." />;
-  return <div className="space-y-4">{action}<MetricIndex /></div>;
+  const v = verdictFor(e);
+  if (!v) return <NotYet what="No decision yet" needs="A decision is recorded once the run closes. It freezes the result and the statistics together, and it cannot be the person who wrote or built it." />;
+  return (
+    <div className="space-y-4">
+      {e.status === "decide" && action}
+      <VerdictPanel state={v} />
+      <Readout compact />
+      <EvidenceBoard />
+      <MetricIndex />
+      {e.status === "shipped" && <HandoffPanel />}
+    </div>
+  );
 }
 
 export function StagePanel({ e, stage, action }: { e: Experiment; stage: Stage; action: React.ReactNode }) {

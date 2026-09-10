@@ -8,6 +8,7 @@ import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITES, needsMe, type Experiment } from "@/lib/console/fake";
 import { Badge, Chip, Meta, PageHeader, Pill, Section, StageRail, Th, Toolbar } from "./ui";
 import { StagePanel } from "./stages";
+import { SetupChecklist } from "./setup";
 import { STAGES, type Stage } from "@/lib/console/fake";
 
 /* ── Overview ──────────────────────────────────────────────────────── */
@@ -19,6 +20,7 @@ export function OverviewView({ open }: { open: (id: string) => void }) {
     <>
       <PageHeader title="Overview" />
       <div className="flex-1 overflow-auto p-6 space-y-4">
+        <SetupChecklist />
         <Section title={`Waiting on you — ${mine.length}`}>
           {mine.length === 0 ? (
             <p className="px-5 py-6 text-[14px] text-muted text-center">Nothing needs you right now.</p>
