@@ -150,12 +150,12 @@ export default function Console() {
                 className={cn("w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-2", siteFilter === null ? "font-semibold" : "text-muted")}>All sites</button>
               {rows.map((r) => (
                 <button key={r.id} role="option" aria-selected={siteFilter === r.id} onClick={() => pickSite(r.id)}
-                  className={cn("w-full text-left px-3 py-1.5 hover:bg-surface-2 flex items-center gap-2", siteFilter === r.id ? "font-semibold" : "text-muted")}>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] truncate">{r.domain}</span>
-                    <span className="block text-[11.5px] text-muted-2 truncate font-normal">{r.label}</span>
+                  className={cn("w-full text-left px-3 py-1.5 hover:bg-surface-2", siteFilter === r.id ? "font-semibold" : "text-muted")}>
+                  <span className="block text-[13px] truncate">{r.domain}</span>
+                  <span className="flex items-center gap-2 mt-0.5 font-normal">
+                    <span className="text-[11.5px] text-muted-2 truncate min-w-0 flex-1">{r.label}</span>
+                    <UnderstandingPill id={r.id} />
                   </span>
-                  <UnderstandingPill id={r.id} />
                 </button>
               ))}
               <div className="border-t border-border mt-1 pt-1">
