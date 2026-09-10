@@ -547,7 +547,7 @@ function Disclosures({ items }: { items: Disclosure[] }) {
 
 /* ── The panel ─────────────────────────────────────────────────────── */
 
-export function VerdictPanel({ state }: { state: Verdict }) {
+export function VerdictPanel({ state, title = EXPERIMENT }: { state: Verdict; title?: string }) {
   const [target, setTarget] = useState<TargetId>("refrozen");
   const cfg = CONFIG[state];
   const tone = TONE[cfg.tone];
@@ -570,7 +570,7 @@ export function VerdictPanel({ state }: { state: Verdict }) {
     <div className="space-y-4">
       <Section title="Verdict" action={<Pill tone={tone.pill}>{cfg.closed ? "run 4 closed 8 Sep 2026" : `run 4 open · day ${OPEN_DAYS} of 14`}</Pill>}>
         <div className="px-5 py-5 border-b border-border">
-          <Label>{EXPERIMENT.toUpperCase()}</Label>
+          <Label>{title.toUpperCase()}</Label>
           <div className={cn("text-[30px] font-semibold tracking-[-0.02em] leading-none mt-2.5", tone.word)}>{cfg.word}</div>
           <p className="text-[14.5px] text-muted mt-2.5 leading-relaxed max-w-2xl">{cfg.means}</p>
 

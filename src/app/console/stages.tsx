@@ -341,7 +341,7 @@ export function DecisionPanel({ e, action }: { e: Experiment; action: React.Reac
   return (
     <div className="space-y-4">
       {(e.status === "decide" || e.trouble) && action}
-      <VerdictPanel state={v} />
+      <VerdictPanel state={v} title={e.name} />
       <Readout compact />
       <EvidenceBoard />
       <MetricIndex />
