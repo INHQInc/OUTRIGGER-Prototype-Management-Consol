@@ -20,10 +20,10 @@ import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITE_ROWS, needsMe, type Site } from "@/lib/console/fake";
 import { ThemeScope } from "@/components/ui/theme-scope";
 import { Empty, PageHeader } from "./ui";
-import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
+import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
-import { UnderstandSite, markRead } from "./customer-context";
+import { UnderstandSite, UnderstandingPill, markRead } from "./customer-context";
 import { SiteOnboarding } from "./onboarding";
 import { BackOffice, CUSTOMERS, SupportBanner } from "./operator";
 import { VerdictPicker } from "./verdict";
@@ -39,7 +39,6 @@ const NAV = [
   },
   {
     group: "CONFIGURE", items: [
-      ["Sites", "M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20"],
       ["Connections", "M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"],
       ["People & roles", "M16 20v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
       ["Guardrails", "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6z"],
@@ -54,11 +53,11 @@ const NAV = [
 ];
 
 /** A customer created this session has nothing but the sites its wizard named. */
-const FreshEmpty = ({ title, go }: { title: string; go: (s: string) => void }) => (
+const FreshEmpty = ({ title, pick }: { title: string; pick: () => void }) => (
   <>
     <PageHeader title={title} />
-    <Empty title="Nothing here yet" body="This starts once a site has been read and understood — that's the first thing to do for a new account."
-      action={<Button onClick={() => go("Sites")}>Go to Sites</Button>} />
+    <Empty title="Nothing here yet" body="This starts once a site has been read and understood — that's the first thing to do for a new account. Pick a site at the top of the sidebar."
+      action={<Button onClick={pick}>Pick a site</Button>} />
   </>
 );
 
@@ -66,7 +65,6 @@ export default function Console() {
   const scope = useRef<HTMLDivElement>(null);
   const [nav, setNav] = useState("Overview");
   const [expId, setExpId] = useState<string | null>(null);
-  const [siteId, setSiteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [flow, setFlow] = useState<null | "site">(null);
   const [switcher, setSwitcher] = useState(false);
@@ -92,8 +90,8 @@ export default function Console() {
   useEffect(() => {
     const on = (ev: Event) => {
       const d = (ev as CustomEvent<{ nav?: string; expId?: string }>).detail;
-      if (d?.expId) { setNav("Experiments"); setExpId(d.expId); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); }
-      else if (d?.nav) { setNav(d.nav); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); }
+      if (d?.expId) { setNav("Experiments"); setExpId(d.expId); setCreating(false); setFlow(null); setUnderstanding(null); }
+      else if (d?.nav) { setNav(d.nav); setExpId(null); setCreating(false); setFlow(null); setUnderstanding(null); }
     };
     window.addEventListener("console:go", on);
     return () => window.removeEventListener("console:go", on);
@@ -101,15 +99,17 @@ export default function Console() {
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
   const rows: Site[] = [...(fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS), ...sessionSites];
-  const site = rows.find((s) => s.id === siteId) ?? null;
   const learning = rows.find((s) => s.id === understanding) ?? null;
   /** Whose console this is — the support session's account, or the signed-in account. */
   const account = support?.customer ?? CUSTOMERS[0].name;
   const scoped = fresh ? [] : EXPERIMENTS.filter((e) => !siteFilter || e.site === (rows.find((r) => r.id === siteFilter)?.domain ?? siteFilter));
   const waiting = scoped.filter(needsMe).length;
-  const count: Record<string, number | undefined> = { Experiments: scoped.length, Sites: rows.length };
+  const count: Record<string, number | undefined> = { Experiments: scoped.length };
+  const picked = siteFilter ? rows.find((r) => r.id === siteFilter) ?? null : null;
 
-  const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); };
+  const go = (s: string) => { setNav(s); setExpId(null); setCreating(false); setFlow(null); setUnderstanding(null); };
+  /** Choosing a site scopes the console; the site's own setup lives under CONFIGURE while it is chosen. */
+  const pickSite = (id: string | null) => { setSiteFilter(id); setSwitcher(false); setUnderstanding(null); if (!id && nav === "Site setup") go("Overview"); };
   const openExp = (id: string) => { setNav("Experiments"); setExpId(id); };
 
   if (backOffice) {
@@ -146,17 +146,20 @@ export default function Console() {
           </button>
           {switcher && (
             <div role="listbox" className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-border bg-surface shadow-lg py-1">
-              <button role="option" aria-selected={siteFilter === null} onClick={() => { setSiteFilter(null); setSwitcher(false); }}
+              <button role="option" aria-selected={siteFilter === null} onClick={() => pickSite(null)}
                 className={cn("w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-2", siteFilter === null ? "font-semibold" : "text-muted")}>All sites</button>
               {rows.map((r) => (
-                <button key={r.id} role="option" aria-selected={siteFilter === r.id} onClick={() => { setSiteFilter(r.id); setSwitcher(false); }}
-                  className={cn("w-full text-left px-3 py-1.5 hover:bg-surface-2", siteFilter === r.id ? "font-semibold" : "text-muted")}>
-                  <span className="block text-[13px] truncate">{r.domain}</span>
-                  <span className="block text-[11.5px] text-muted-2 truncate">{r.label}</span>
+                <button key={r.id} role="option" aria-selected={siteFilter === r.id} onClick={() => pickSite(r.id)}
+                  className={cn("w-full text-left px-3 py-1.5 hover:bg-surface-2 flex items-center gap-2", siteFilter === r.id ? "font-semibold" : "text-muted")}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] truncate">{r.domain}</span>
+                    <span className="block text-[11.5px] text-muted-2 truncate font-normal">{r.label}</span>
+                  </span>
+                  <UnderstandingPill id={r.id} />
                 </button>
               ))}
               <div className="border-t border-border mt-1 pt-1">
-                <button onClick={() => { setSwitcher(false); setSiteFilter(null); go("Sites"); setFlow("site"); }} className="w-full text-left px-3 py-1.5 text-[12.5px] text-muted hover:text-foreground hover:bg-surface-2">+ Add a site</button>
+                <button onClick={() => { setSwitcher(false); go("Overview"); setFlow("site"); }} className="w-full text-left px-3 py-1.5 text-[12.5px] text-muted hover:text-foreground hover:bg-surface-2">+ Add a site</button>
               </div>
             </div>
           )}
@@ -166,6 +169,17 @@ export default function Console() {
           {NAV.map((sec, si) => (
             <div key={si} className={sec.group ? "mt-5" : ""}>
               {sec.group && <div className="px-2.5 pb-1.5 text-[10.5px] font-semibold tracking-[0.08em] text-muted-2">{sec.group}</div>}
+              {sec.group === "CONFIGURE" && picked && (
+                <button onClick={() => go("Site setup")}
+                  className={cn("w-full flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] mb-0.5 text-left transition-colors",
+                    nav === "Site setup" ? "bg-accent/10 text-accent" : "text-muted hover:bg-surface-2 hover:text-foreground")}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20" /></svg>
+                  <span className="min-w-0">
+                    <span className={cn("block text-[13.5px] truncate", nav === "Site setup" ? "font-semibold" : "font-normal")}>{picked.domain}</span>
+                    <span className="block text-[11px] text-muted-2 truncate">environments · source · understanding</span>
+                  </span>
+                </button>
+              )}
               {sec.items.map(([label, d]) => {
                 const on = label === nav;
                 return (
@@ -199,11 +213,11 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); setSessionSites((ss) => [...ss.filter((x) => x.id !== site.id), site]); setFlow(null); setNav("Sites"); setSiteId(site.id); }} />}
+        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); setSessionSites((ss) => [...ss.filter((x) => x.id !== site.id), site]); setFlow(null); setSiteFilter(site.id); setNav("Site setup"); }} />}
         {!flow && nav === "Overview" && <OverviewView open={openExp} fresh={fresh} />}
-        {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" go={go} />}
-        {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" go={go} />}
-        {!flow && nav === "Readouts" && fresh && <FreshEmpty title="Readouts" go={go} />}
+        {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" pick={() => setSwitcher(true)} />}
+        {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" pick={() => setSwitcher(true)} />}
+        {!flow && nav === "Readouts" && fresh && <FreshEmpty title="Readouts" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Experiments" && !fresh && (
           creating ? <NewExperiment cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
           : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />
@@ -211,13 +225,13 @@ export default function Console() {
         )}
         {!flow && nav === "Ideas" && !fresh && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
         {!flow && nav === "Readouts" && !fresh && <ReadoutsView />}
-        {!flow && nav === "Sites" && (
+        {!flow && nav === "Site setup" && (
           learning ? (
             <UnderstandSite key={learning.id} site={learning} others={rows.filter((s) => s.id !== learning.id)}
-              onClose={() => setUnderstanding(null)} onDone={() => { setSiteId(learning.id); setUnderstanding(null); }}
-              onAnother={(id) => { if (id) { setSiteId(id); setUnderstanding(id); } else { setUnderstanding(null); setSiteId(null); setFlow("site"); } }} />
-          ) : site ? <SiteDetail s={site} back={() => setSiteId(null)} understand={setUnderstanding} />
-          : <SitesView rows={rows} open={setSiteId} onAdd={() => setFlow("site")} />
+              onClose={() => setUnderstanding(null)} onDone={() => { setSiteFilter(learning.id); setUnderstanding(null); }}
+              onAnother={(id) => { if (id) { setSiteFilter(id); setUnderstanding(id); } else { setUnderstanding(null); setFlow("site"); } }} />
+          ) : picked ? <SiteDetail s={picked} back={() => go("Overview")} understand={setUnderstanding} />
+          : <FreshEmpty title="Site setup" pick={() => setSwitcher(true)} />
         )}
         {!flow && nav === "Connections" && <ConnectionsView />}
         {!flow && nav === "People & roles" && <PeopleView />}

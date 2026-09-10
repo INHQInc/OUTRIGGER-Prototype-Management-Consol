@@ -762,7 +762,7 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
               ))}
               <div className="px-5 py-3 bg-surface-2/40 text-[12.5px] text-muted-2 leading-relaxed">
                 Prism reads each site itself. What it can&rsquo;t read — who the guests are, where bookings are lost, which button is primary — it asks,
-                from <span className="text-foreground">Sites</span>, one site at a time, of whoever knows that site.
+                from the site selector at the top of the console, one site at a time, of whoever knows that site.
               </div>
             </Card>
           </div>
