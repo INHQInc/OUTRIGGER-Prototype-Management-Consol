@@ -29,7 +29,6 @@ const PAGES = [
   { name: "Destinations", path: "/destinations", visits: "6,140 / mo" },
 ];
 
-const MEASURABLE = ["Check availability clicks", "Completed bookings", "Offer clicks", "Room detail views", "Return visits"];
 const POLICY = ["Bookings", "Revenue per visit", "Page errors"];
 
 interface Draft {
@@ -62,7 +61,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
   /** Every step is individually valid — leaving after any of them is coherent.
    *  Only question 5 is a hard gate, because a direction that was never stated
    *  propagates all the way to the verdict as an assumption. */
-  const ok = [Boolean(d.page), d.change.trim().length > 8, true, d.expect.trim().length > 5, Boolean(d.metric && d.direction), true][step];
+  const ok = [Boolean(d.page), d.change.trim().length > 8, true, d.expect.trim().length > 5, Boolean(d.metric.trim().length > 5 && d.direction), true][step];
 
   const last = step === STEPS.length - 1;
 
@@ -150,17 +149,13 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
         )}
 
         {step === 4 && (
-          <Q n={5} title="How will we know?" help="One number decides this experiment. Pick it now, before there are any numbers to look at — that's what makes the result trustworthy.">
-            <label className="block text-[13px] font-semibold text-muted mb-1.5">The number that decides it</label>
-            <div className="rounded-xl border border-border bg-surface overflow-hidden mb-4">
-              {MEASURABLE.map((m) => (
-                <button key={m} onClick={() => set("metric", m)}
-                  className={cn("w-full flex items-center gap-3 px-4 py-2.5 border-b border-border last:border-0 text-left hover:bg-surface-2/60", d.metric === m && "bg-accent/5")}>
-                  <span className={cn("w-4 h-4 rounded-full border-2 shrink-0", d.metric === m ? "border-accent border-[5px]" : "border-border-strong")} />
-                  <span className="text-[14px]">{m}</span>
-                </button>
-              ))}
-            </div>
+          <Q n={5} title="How will we know it worked?" help="Say it the way you'd say it to a colleague. Prism works out which of your site's measurements that means once the experiment is set up — and asks you if it isn't sure.">
+            <label className="block text-[13px] font-semibold text-muted mb-1.5">The outcome that decides it</label>
+            <Field value={d.metric} onChange={(v) => set("metric", v)} rows={2}
+              placeholder="More guests get all the way through to a completed booking — not just more people starting one." />
+            <p className="text-[12.5px] text-muted-2 mt-2 mb-4">
+              Prism never invents a measurement. It can only use what your A/B tool already records on this site, and it will show you the match before anything runs.
+            </p>
             <label className="block text-[13px] font-semibold text-muted mb-1.5">Which way should it move?</label>
             <div className="flex gap-2.5">
               {(["up", "down"] as const).map((dir) => (

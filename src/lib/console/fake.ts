@@ -245,3 +245,10 @@ export const OTHER_CONNECTIONS: Connection[] = [
   { id: "openai", name: "OpenAI", kind: "AI model", state: "available", detail: "Not connected" },
   { id: "firecrawl", name: "Firecrawl", kind: "Site reading", state: "connected", detail: "Your own key" },
 ];
+
+/** THE brief-completeness gate. One function, imported by every surface that
+ *  gates on it — Beta 1 has exactly one `isBriefComplete` for the same reason.
+ *  Stricter than Beta 1 on purpose: a guardrail is required, because a brief
+ *  with nothing that can veto a win cannot be adjudicated honestly. */
+export const isBriefComplete = (e: Experiment) =>
+  e.metric !== "—" && e.metric.trim().length > 0 && e.guardrails.length > 0;
