@@ -20,6 +20,7 @@ import { EXPERIMENTS, ME, SITE_ROWS, needsMe } from "@/lib/console/fake";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
+import { CustomerOnboarding, SiteOnboarding } from "./onboarding";
 
 const NAV = [
   {
@@ -51,12 +52,13 @@ export default function Console() {
   const [expId, setExpId] = useState<string | null>(null);
   const [siteId, setSiteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [flow, setFlow] = useState<null | "customer" | "site">(null);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
   const site = SITE_ROWS.find((s) => s.id === siteId) ?? null;
   const waiting = EXPERIMENTS.filter(needsMe).length;
 
-  const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); };
+  const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); };
   const openExp = (id: string) => { setNav("Experiments"); setExpId(id); };
 
   return (
@@ -67,7 +69,8 @@ export default function Console() {
           <span className="text-[14px] font-semibold tracking-[-0.01em]">Prism</span>
         </div>
 
-        <button className="mx-3 mt-3 mb-1 flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 hover:border-border-strong text-left">
+        <button onClick={() => setFlow("customer")} title="Add a customer"
+          className="mx-3 mt-3 mb-1 flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 hover:border-border-strong text-left">
           <div className="w-[18px] h-[18px] rounded bg-border-strong shrink-0" />
           <span className="text-[13px] font-medium flex-1 truncate">OUTRIGGER Hotels</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="text-muted-2"><path d="m6 9 6 6 6-6" /></svg>
@@ -106,19 +109,21 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {nav === "Overview" && <OverviewView open={openExp} />}
-        {nav === "Experiments" && (
+        {flow === "customer" && <CustomerOnboarding onClose={() => setFlow(null)} onDone={() => { setFlow("site"); }} />}
+        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={() => { setFlow(null); go("Sites"); }} />}
+        {!flow && nav === "Overview" && <OverviewView open={openExp} />}
+        {!flow && nav === "Experiments" && (
           creating ? <NewExperiment cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
           : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />
           : <ExperimentsView open={setExpId} onNew={() => setCreating(true)} />
         )}
-        {nav === "Ideas" && <IdeasView />}
-        {nav === "Readouts" && <ReadoutsView />}
-        {nav === "Sites" && (site ? <SiteDetail s={site} back={() => setSiteId(null)} /> : <SitesView open={setSiteId} />)}
-        {nav === "Connections" && <ConnectionsView />}
-        {nav === "People & roles" && <PeopleView />}
-        {nav === "Guardrails" && <GuardrailsView />}
-        {nav === "Activity" && <ActivityView />}
+        {!flow && nav === "Ideas" && <IdeasView />}
+        {!flow && nav === "Readouts" && <ReadoutsView />}
+        {!flow && nav === "Sites" && (site ? <SiteDetail s={site} back={() => setSiteId(null)} /> : <SitesView open={setSiteId} onAdd={() => setFlow("site")} />)}
+        {!flow && nav === "Connections" && <ConnectionsView />}
+        {!flow && nav === "People & roles" && <PeopleView />}
+        {!flow && nav === "Guardrails" && <GuardrailsView />}
+        {!flow && nav === "Activity" && <ActivityView />}
       </main>
     </div>
   );

@@ -17,10 +17,10 @@ const scriptPill = (s: Site["envs"][number]) =>
 
 /* ── Sites ─────────────────────────────────────────────────────────── */
 
-export function SitesView({ open }: { open: (id: string) => void }) {
+export function SitesView({ open, onAdd }: { open: (id: string) => void; onAdd?: () => void }) {
   return (
     <>
-      <PageHeader title="Sites" count={`${SITE_ROWS.length} sites`} actions={<Button size="sm">Add a site</Button>} />
+      <PageHeader title="Sites" count={`${SITE_ROWS.length} sites`} actions={<Button size="sm" onClick={onAdd}>Add a site</Button>} />
       <Toolbar>
         <span className="text-[13px] text-muted">
           A customer can have any number of sites, and each site has its own environments and its own source code.
