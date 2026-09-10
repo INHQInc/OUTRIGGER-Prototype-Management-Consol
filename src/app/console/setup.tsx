@@ -187,7 +187,8 @@ function StepRow({ n, state, title, why, reason, children }: {
   );
 }
 
-export function SetupChecklist() {
+/** `environments` is the fixture for OUTRIGGER; a customer created this session passes none. */
+export function SetupChecklist({ environments = ENVIRONMENTS }: { environments?: typeof ENVIRONMENTS } = {}) {
   // Nothing here is a stored "step 3 complete" flag. Each of these is the state
   // some other surface reads too, and completion falls out of it.
   const [hostConnected, setHostConnected] = useState(false);
@@ -200,10 +201,10 @@ export function SetupChecklist() {
 
   const tokenValid = token.trim().length >= 8;
   const project = OPTI_PROJECTS.find((p) => p.id === projectId) ?? null;
-  const prod = ENVIRONMENTS.find((e) => e.isProduction);
+  const prod = environments.find((e) => e.isProduction);
 
   const state: Record<string, StepState> = {
-    env: ENVIRONMENTS.length > 0 ? "done" : "ready",
+    env: environments.length > 0 ? "done" : "ready",
     host: hostConnected ? "done" : "ready",
     repo: repo ? "done" : hostConnected ? "ready" : "blocked",
     opti: tokenValid && project ? "done" : "ready",
@@ -252,8 +253,11 @@ export function SetupChecklist() {
       <StepRow n={1} state={state.env}
         title="An environment to work against"
         why="An environment is an address Prism can look at, plus one bit: whether real guests can reach it.">
+        {environments.length === 0 && (
+          <p className="text-[13px] text-muted">None yet. Each site gets its own — add them from <span className="text-foreground">Sites</span> → the site, and mark the one real guests reach as production.</p>
+        )}
         <div className="flex flex-wrap gap-1.5">
-          {ENVIRONMENTS.map((e) => (
+          {environments.map((e) => (
             <span key={e.label} className={cn("inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[12.5px]",
               e.isProduction ? "border-border-strong" : "border-border")}>
               <span className="font-medium">{e.label}</span>
