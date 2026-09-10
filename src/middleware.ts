@@ -40,10 +40,17 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // the guard moved from the edge into the route rather than disappearing.
 const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron", "/r", "/api/version"];
 
+/** UX mocks on invented data. Reachable without a session ON A DEV MACHINE ONLY —
+ *  gated on NODE_ENV so it cannot follow the code into a deployment. */
+const DEV_ONLY_PATHS = ["/console"];
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isPublic =
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
+    (process.env.NODE_ENV !== "production" &&
+      DEV_ONLY_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")));
   if (isPublic) {
     const res = NextResponse.next();
     // A readout carries a customer's experiment results. The page sets a robots
