@@ -166,7 +166,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
           <h1 className="text-[15px] font-semibold">{room}</h1>
           {room === "Customers" && <span className="text-[13px] text-muted-2">{list.length} customers</span>}
           <div className="ml-auto flex gap-2">
-            {room === "Customers" && <Button size="sm" onClick={() => setAdding(true)}>Add a customer</Button>}
+            {room === "Customers" && <Button size="sm" onClick={() => setAdding(true)}>New account</Button>}
             {room === "Console users" && <Button size="sm" onClick={() => setInviting(true)}>Invite a colleague</Button>}
           </div>
         </header>

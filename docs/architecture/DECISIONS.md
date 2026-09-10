@@ -210,3 +210,22 @@ skill resolution rule is unchanged in shape — global + customer + site +
 prototype, later tiers win — but the customer tier holds only hand-written
 skills (brand-voice, accessibility floor), never a derived profile.
 
+---
+
+## D11 · Signed in, you belong to one account; the sidebar picks a site
+
+**Decision.** The console never offers another account in a picker. The
+control at the top of the sidebar is a **site selector** — *All sites* or one
+of the account's — and it scopes Overview, Experiments and Readouts. The
+account's name sits above it as a label, not a control. The only way into a
+different account is the back office, which loads you into that account with
+its sites as a support session the account can see (D8).
+
+**Why.** Bryan, 10 Sep 2026: "should this be a site selector after you have
+logged in as a customer? if I wanted to modify anything as the app owner I
+could go from the back office and open that customer and then I have that
+customer loaded and their sites." An account switcher in a signed-in console
+implies the person can see other people's data; a site selector implies only
+what is true. It also keeps the copy generic — the same screen reads right
+for an account that signed itself up (no operator anywhere in the sentence).
+
