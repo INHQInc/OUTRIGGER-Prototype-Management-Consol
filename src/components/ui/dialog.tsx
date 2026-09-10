@@ -6,6 +6,7 @@ import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { cn } from "@/lib/ui/cn";
 import { Button } from "@/components/ui/button";
+import { useThemeScope } from "@/components/ui/theme-scope";
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -13,18 +14,8 @@ function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>)
 function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
 }
-/** The console's dark palette is SCOPED to `[data-console]` / `[data-backoffice]`
- *  while the rest of the app stays light. A portal into <body> would land outside
- *  that scope and render a light dialog on a dark screen — so the portal targets
- *  the scope when one exists, and falls back to <body> when it doesn't. */
-function useThemeScope() {
-  // Read once on the client. Radix renders the portal only after mount, so the
-  // server's null never reaches the DOM and there is nothing to mismatch.
-  const [el] = React.useState<HTMLElement | null>(() =>
-    typeof document === "undefined" ? null : document.querySelector<HTMLElement>("[data-console],[data-backoffice]"));
-  return el ?? undefined;
-}
-
+/** A portal lands inside the scoped theme when one is in force (see theme-scope.tsx),
+ *  and in <body> otherwise — so a console dialog is dark like the console. */
 function DialogPortal({ container, ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
   const scope = useThemeScope();
   return <DialogPrimitive.Portal data-slot="dialog-portal" container={container ?? scope} {...props} />;

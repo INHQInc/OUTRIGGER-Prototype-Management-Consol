@@ -190,7 +190,7 @@ function Measured() {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card title={`Type · ${OBSERVED.fonts.length} families, ${OBSERVED.fonts.reduce((n, f) => n + f.faces.length, 0)} faces`} className="lg:col-span-2">
         {OBSERVED.fonts.map((f) => (
-          <div key={f.family} className="flex items-center gap-4 px-5 py-3 border-b border-border last:border-0">
+          <div key={f.family} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-border last:border-0">
             <div className="w-40 text-[14px] font-medium">{f.family}</div>
             <div className="flex-1 text-[12.5px] text-muted-2">{f.faces.join(" · ")}</div>
             <div className="text-[12.5px] text-muted tabular-nums">{f.declarations} declarations</div>
@@ -348,7 +348,7 @@ function ReadReport({ sections, earned = [] }: { sections: Live[]; earned?: Earn
   return (
     <>
       <Card>
-        <div className="px-5 py-4 flex items-center gap-8">
+        <div className="px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-3">
           <Stat n={OBSERVED.mapped} l="addresses found" />
           <Stat n={OBSERVED.read} l="pages read" />
           <Stat n={`${OBSERVED.seconds}s`} l="to read and derive" />
@@ -924,20 +924,22 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
   const finished = interviewFinished(ctx.answers);
   // Anything that differs from what the current revision holds — a rewrite, a note, or a flag answered.
   const changed = sections.filter((x) => { const p = pinned.find((y) => y.key === x.key); return !p || x.body !== p.body || x.notes.length !== p.notes.length || x.status !== p.status || Boolean(x.flag) !== Boolean(p.flag); }).length;
+  const persist = (revs: typeof revisions, secs: Live[]) => {
+    if (ctx) SESSION_CONTEXT.set(s.id, { ...ctx, approved: true, revisions: revs, sections: secs });
+  };
   const pin = () => {
     const next = sections.map((x) => ({ ...x, status: (x.status === "revised" || x.status === "draft") ? ("approved" as Status) : x.status, flag: undefined }));
-    setSections(next); setPinned(next);
-    setRevisions((r) => [...r, { r: rev.r + 1, when: TODAY, who: "You", what: `${changed} section${changed === 1 ? "" : "s"} checked or corrected by hand.`, pinnedBy: 0 }]);
+    const revs = [...revisions, { r: rev.r + 1, when: TODAY, who: "You", what: `${changed} section${changed === 1 ? "" : "s"} checked or corrected by hand.`, pinnedBy: 0 }];
+    setSections(next); setPinned(next); setRevisions(revs); persist(revs, next);
   };
   const rereadDone = () => {
     setRereading(false); setReread(false);
-    setRevisions((r) => [...r, { r: rev.r + 1, when: TODAY, who: "You · Prism", what: "Re-read. The measured layer was re-derived; Design language is flagged for a look. Nothing was rewritten.", pinnedBy: 0 }]);
-    const flagged = (ss: Live[]) => ss.map((x) => (x.key === "design"
+    const revs = [...revisions, { r: rev.r + 1, when: TODAY, who: "You · Prism", what: "Re-read. The measured layer was re-derived; Design language is flagged for a look. Nothing was rewritten.", pinnedBy: 0 }];
+    const flagged = sections.map((x) => (x.key === "design"
       ? { ...x, status: "draft" as Status, flag: `Re-read on ${TODAY}: the measured layer changed under this section. Nothing here was rewritten — say whether it still holds.` }
       : x));
-    setSections(flagged);
     // r{n+1} holds the flagged state, so answering the flag is itself a change worth pinning.
-    setPinned(flagged);
+    setRevisions(revs); setSections(flagged); setPinned(flagged); persist(revs, flagged);
   };
 
   return (

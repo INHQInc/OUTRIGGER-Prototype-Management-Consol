@@ -14,10 +14,11 @@
  *    hypothesis sits in the same card as the buttons that adjudicate it.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITE_ROWS, needsMe, type Site } from "@/lib/console/fake";
+import { ThemeScope } from "@/components/ui/theme-scope";
 import { Empty, PageHeader } from "./ui";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
@@ -62,6 +63,7 @@ const FreshEmpty = ({ title, go }: { title: string; go: (s: string) => void }) =
 );
 
 export default function Console() {
+  const scope = useRef<HTMLDivElement>(null);
   const [nav, setNav] = useState("Overview");
   const [expId, setExpId] = useState<string | null>(null);
   const [siteId, setSiteId] = useState<string | null>(null);
@@ -99,7 +101,8 @@ export default function Console() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-background flex flex-col" data-console>
+    <ThemeScope.Provider value={scope}>
+    <div ref={scope} className="fixed inset-0 z-50 bg-background flex flex-col" data-console>
       {support && <SupportBanner customer={support.customer} reason={support.reason} end={() => { setSupport(null); setBackOffice(true); }} />}
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] rounded-lg border border-border bg-surface px-4 py-2.5 text-[13px] shadow-lg">
@@ -200,5 +203,6 @@ export default function Console() {
       </main>
       </div>
     </div>
+    </ThemeScope.Provider>
   );
 }

@@ -20,13 +20,14 @@
  * thing they need to do. Prism tells us when it's done; nobody reports back.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { ThemeScope } from "@/components/ui/theme-scope";
 import { cn } from "@/lib/ui/cn";
 import { CustomerWizard } from "./customer-context";
 import { Pill, Section, Th } from "./ui";
@@ -89,6 +90,7 @@ const healthPill = (h: Cust["health"]) =>
   h === "ok" ? <Pill tone="ok">Healthy</Pill> : h === "warn" ? <Pill tone="warn">Needs attention</Pill> : <Pill tone="danger">Blocked</Pill>;
 
 export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCustomer: (name: string, reason: string, fresh?: boolean, sites?: string[]) => void }) {
+  const scope = useRef<HTMLDivElement>(null);
   const [room, setRoom] = useState<Room>("Customers");
   const [list, setList] = useState<Cust[]>(CUSTOMERS);
   const [adding, setAdding] = useState(false);
@@ -115,7 +117,8 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-background" data-backoffice>
+    <ThemeScope.Provider value={scope}>
+    <div ref={scope} className="fixed inset-0 z-50 flex bg-background" data-backoffice>
       {/* Same ground as a customer console, but an amber rail down the left and
           an amber label: the tone the support banner uses, so "privileged place"
           is one colour everywhere. Inverting the whole sidebar was distinct but
@@ -378,6 +381,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
         )}
       </Dialog>
     </div>
+    </ThemeScope.Provider>
   );
 }
 
