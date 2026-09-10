@@ -65,26 +65,30 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
   return (
     <div className="fixed inset-0 z-50 flex bg-background" data-backoffice>
       {/* Dark chrome: you can never mistake this for a customer's console. */}
-      <nav className="w-[236px] shrink-0 flex flex-col bg-foreground text-background">
-        <div className="h-14 flex items-center gap-2.5 px-4 border-b border-white/10">
-          <div className="w-[22px] h-[22px] rounded-md bg-background/90" />
+      {/* Same ground as a customer console, but an amber rail down the left and
+          an amber label: the tone the support banner uses, so "privileged place"
+          is one colour everywhere. Inverting the whole sidebar was distinct but
+          blinding against a true-black theme. */}
+      <nav className="w-[236px] shrink-0 flex flex-col bg-surface border-r border-border border-l-[3px] border-l-warn">
+        <div className="h-14 flex items-center gap-2.5 px-4 border-b border-border">
+          <div className="w-[22px] h-[22px] rounded-md bg-warn" />
           <div>
             <div className="text-[14px] font-semibold leading-none">Prism</div>
-            <div className="text-[10.5px] opacity-60 mt-0.5 tracking-[0.06em]">BACK OFFICE</div>
+            <div className="text-[10.5px] text-warn font-semibold mt-0.5 tracking-[0.08em]">BACK OFFICE</div>
           </div>
         </div>
         <div className="flex-1 px-3 pt-3">
           {NAV.map((n) => (
             <button key={n} onClick={() => setRoom(n)}
               className={cn("w-full text-left rounded-lg px-2.5 py-[7px] mb-0.5 text-[13.5px]",
-                room === n ? "bg-white/15 font-semibold" : "opacity-70 hover:opacity-100 hover:bg-white/5")}>
+                room === n ? "bg-surface-2 font-semibold text-foreground" : "text-muted hover:text-foreground hover:bg-surface-2/60")}>
               {n}
               {n === "Health" && <span className="float-right text-[11px] font-bold bg-warn text-foreground rounded-full px-1.5">{HEALTH.length}</span>}
               {n === "Support sessions" && <span className="float-right text-[11px] font-bold bg-ok text-foreground rounded-full px-1.5">1</span>}
             </button>
           ))}
         </div>
-        <button onClick={exit} className="m-3 rounded-lg border border-white/20 px-3 py-2 text-[13px] hover:bg-white/10">
+        <button onClick={exit} className="m-3 rounded-lg border border-border px-3 py-2 text-[13px] text-muted hover:text-foreground hover:border-border-strong">
           ← Back to a customer console
         </button>
       </nav>

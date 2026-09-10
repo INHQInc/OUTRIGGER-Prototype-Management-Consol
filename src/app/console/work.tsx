@@ -243,10 +243,31 @@ const IDEAS = [
   { t: "Show the cancellation policy earlier", src: "Dana Kealoha · two weeks ago", why: "Support says it's the most common question before booking.", tag: "Written down", tone: "muted" as const },
 ];
 
-export function IdeasView() {
+export function IdeasView({ promote, write }: { promote: () => void; write: () => void }) {
+  const [asking, setAsking] = useState<string | null>(null);
   return (
     <>
-      <PageHeader title="Ideas" count={`${IDEAS.length} ideas`} actions={<Button size="sm">Write down an idea</Button>} />
+      <PageHeader title="Ideas" count={`${IDEAS.length} ideas`} actions={<Button size="sm" onClick={write}>Write down an idea</Button>} />
+      {asking && (
+        <div className="fixed inset-0 z-[60] bg-foreground/40 grid place-items-center p-6" onClick={() => setAsking(null)}>
+          <div className="w-[540px] rounded-xl border border-border bg-surface p-6" onClick={(ev) => ev.stopPropagation()}>
+            <h2 className="text-[17px] font-semibold mb-1.5">Turn this into a test</h2>
+            <p className="text-[14px] text-muted leading-relaxed mb-4">
+              A new experiment starts at Brief, threaded to the result that suggested it, so this reads as a line of enquiry rather than a pile of tests.
+            </p>
+            <div className="rounded-lg border border-border bg-surface-2/40 p-4 space-y-2 text-[13.5px]">
+              <div className="flex gap-2"><span className="text-ok">carries</span><span className="text-muted">the decision metric and guardrails — copied at the moment they were computed, before anyone looked at a result</span></div>
+              <div className="flex gap-2"><span className="text-ok">carries</span><span className="text-muted">the pages, and a link back to the result that suggested it</span></div>
+              <div className="flex gap-2"><span className="text-danger">does not</span><span className="text-muted">carry any proof about the old build — this one has no build yet, and every gate applies as if it were typed by hand</span></div>
+            </div>
+            <div className="flex items-center gap-3 mt-4">
+              <Button onClick={() => { setAsking(null); promote(); }}>Create it at Brief</Button>
+              <Button variant="ghost" onClick={() => setAsking(null)}>Not now</Button>
+              <span className="text-[12.5px] text-muted-2 ml-auto">Refused if the source result was never stamped</span>
+            </div>
+          </div>
+        </div>
+      )}
       <Toolbar><span className="text-[13px] text-muted">Things worth testing that nobody has written up yet. Anything here becomes an experiment in one click.</span></Toolbar>
       <div className="flex-1 overflow-auto p-6">
         <Section>
@@ -260,7 +281,7 @@ export function IdeasView() {
                 <p className="text-[13.5px] text-muted leading-snug">{i.why}</p>
                 <div className="text-[12.5px] text-muted-2 mt-1.5">{i.src}</div>
               </div>
-              <Button size="sm" variant="outline" className="shrink-0">Turn into a test</Button>
+              <Button size="sm" variant="outline" className="shrink-0" onClick={() => (i.tone === "muted" ? write() : setAsking(i.t))}>Turn into a test</Button>
             </div>
           ))}
         </Section>

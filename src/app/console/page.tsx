@@ -137,7 +137,7 @@ export default function Console() {
           : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />
           : <ExperimentsView open={setExpId} onNew={() => setCreating(true)} />
         )}
-        {!flow && nav === "Ideas" && <IdeasView />}
+        {!flow && nav === "Ideas" && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
         {!flow && nav === "Readouts" && <ReadoutsView />}
         {!flow && nav === "Sites" && (site ? <SiteDetail s={site} back={() => setSiteId(null)} /> : <SitesView open={setSiteId} onAdd={() => setFlow("site")} />)}
         {!flow && nav === "Connections" && <ConnectionsView />}
