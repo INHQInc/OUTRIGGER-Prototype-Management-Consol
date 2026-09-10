@@ -29,6 +29,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
+import { logActivity } from "./config";
 
 /* ── Fixtures ───────────────────────────────────────────────────────────
    Run 4 of "Rate-calendar best-price promise", closed 8 Sep 2026. Real event
@@ -156,6 +157,8 @@ const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((k) => b.includes(k));
 const without = (list: string[], key: string) => list.filter((k) => k !== key);
 const plus = (list: string[], key: string) => (list.includes(key) ? list : [...list, key]);
+/** A definition, spelled the way the preview spells it: catalogue order, joined with plus. */
+const spell = (parts: Part[]) => parts.map((p) => p.key).join(" + ");
 
 /* ── Small parts ────────────────────────────────────────────────────── */
 
@@ -214,6 +217,7 @@ export function MetricBuilder({ onClose }: { onClose?: () => void }) {
   const [hideUnreported, setHideUnreported] = useState(false);
   const [pairedTo, setPairedTo] = useState<string>(BOOK_NOW);
   const [def, setDef] = useState<Definition>({ control: [...FROZEN_DEFINITION], variation: [...FROZEN_DEFINITION] });
+  const [saved, setSaved] = useState(false);
 
   /* Reading — the one the readout will run. */
   const r = readDefinition(def);
@@ -284,6 +288,24 @@ export function MetricBuilder({ onClose }: { onClose?: () => void }) {
         : r.control.parts.length === 0 ? "The old version counts nothing, so there is no comparison to read."
           : !directionDeclared ? "Say which way a win goes. A direction nobody stated becomes an assumption inside the verdict."
             : null;
+
+  /* Save — announce the metric exactly as built, say so on the button, then
+     close. The index listens for one name, one definition and one direction;
+     the direction it gets is declared, never assumed, because the button does
+     not enable until you have said it. */
+  const save = () => {
+    if (blocked || saved) return;
+    const name = label.trim();
+    const event = sameSet(def.control, def.variation)
+      ? spell(r.variation.parts)
+      : `new: ${spell(r.variation.parts)} · old: ${spell(r.control.parts)}`;
+    const type = Array.from(new Set([...r.control.parts, ...r.variation.parts].map((p) => byKey.get(p.key)?.type ?? "click"))).join(" + ");
+    window.dispatchEvent(new CustomEvent("console:metric-saved", { detail: { name, event, direction, type } }));
+    logActivity(`Saved the "${name}" metric — ${ROLE_LABEL[effectiveRole].toLowerCase()}, a win is it going ${direction}${
+      leaks.length ? `, ${leaks.length} event${leaks.length === 1 ? "" : "s"} counted on one side only` : ""}.`);
+    setSaved(true);
+    setTimeout(() => { setSaved(false); onClose?.(); }, 800);
+  };
 
   return (
     <div className="fixed inset-0 z-[60] bg-background/80 backdrop-blur-[2px] grid place-items-center p-6" role="dialog" aria-modal="true">
@@ -654,7 +676,7 @@ export function MetricBuilder({ onClose }: { onClose?: () => void }) {
           <div className="ml-auto flex items-center gap-3 shrink-0">
             {blocked && <span className="text-[12.5px] text-warn max-w-[260px] text-right leading-relaxed">{blocked}</span>}
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button disabled={Boolean(blocked)}>Save this metric</Button>
+            <Button disabled={Boolean(blocked)} onClick={save}>{saved ? "Saved" : "Save this metric"}</Button>
           </div>
         </footer>
       </div>
