@@ -19,6 +19,7 @@ import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITE_ROWS, needsMe } from "@/lib/console/fake";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
+import { NewExperiment } from "./new-experiment";
 
 const NAV = [
   {
@@ -49,12 +50,13 @@ export default function Console() {
   const [nav, setNav] = useState("Overview");
   const [expId, setExpId] = useState<string | null>(null);
   const [siteId, setSiteId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
   const site = SITE_ROWS.find((s) => s.id === siteId) ?? null;
   const waiting = EXPERIMENTS.filter(needsMe).length;
 
-  const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); };
+  const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); };
   const openExp = (id: string) => { setNav("Experiments"); setExpId(id); };
 
   return (
@@ -105,7 +107,11 @@ export default function Console() {
 
       <main className="flex-1 min-w-0 flex flex-col">
         {nav === "Overview" && <OverviewView open={openExp} />}
-        {nav === "Experiments" && (exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} /> : <ExperimentsView open={setExpId} />)}
+        {nav === "Experiments" && (
+          creating ? <NewExperiment cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
+          : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />
+          : <ExperimentsView open={setExpId} onNew={() => setCreating(true)} />
+        )}
         {nav === "Ideas" && <IdeasView />}
         {nav === "Readouts" && <ReadoutsView />}
         {nav === "Sites" && (site ? <SiteDetail s={site} back={() => setSiteId(null)} /> : <SitesView open={setSiteId} />)}

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITES, needsMe, type Experiment } from "@/lib/console/fake";
 import { Badge, Chip, Meta, PageHeader, Pill, Section, StageRail, Th, Toolbar } from "./ui";
+import { StagePanel } from "./stages";
+import { STAGES, type Stage } from "@/lib/console/fake";
 
 /* ── Overview ──────────────────────────────────────────────────────── */
 
@@ -53,7 +55,7 @@ export function OverviewView({ open }: { open: (id: string) => void }) {
 
 /* ── Experiments ───────────────────────────────────────────────────── */
 
-export function ExperimentsView({ open }: { open: (id: string) => void }) {
+export function ExperimentsView({ open, onNew }: { open: (id: string) => void; onNew: () => void }) {
   const [filter, setFilter] = useState<"all" | "mine" | "running" | "decided">("all");
   const [site, setSite] = useState("All sites");
   const rows = useMemo(() => EXPERIMENTS.filter((e) => {
@@ -71,7 +73,7 @@ export function ExperimentsView({ open }: { open: (id: string) => void }) {
   return (
     <>
       <PageHeader title="Experiments" count={`${rows.length} of ${EXPERIMENTS.length}`}
-        actions={<><Button variant="outline" size="sm">Export</Button><Button size="sm">New experiment</Button></>} />
+        actions={<><Button variant="outline" size="sm">Export</Button><Button size="sm" onClick={onNew}>New experiment</Button></>} />
       <Toolbar>
         {([["all", "All"], ["mine", "Needs me"], ["running", "Running"], ["decided", "Decided"]] as const).map(([k, label]) => (
           <Chip key={k} on={filter === k} onClick={() => setFilter(k)}>{label} <span className="tabular-nums opacity-60">{counts[k]}</span></Chip>
@@ -116,6 +118,7 @@ export function ExperimentsView({ open }: { open: (id: string) => void }) {
 }
 
 export function ExperimentDetail({ e, back }: { e: Experiment; back: () => void }) {
+  const [tab, setTab] = useState<Stage>(e.stage);
   return (
     <>
       <header className="shrink-0 border-b border-border bg-surface px-6 pt-3 pb-4">
@@ -133,13 +136,32 @@ export function ExperimentDetail({ e, back }: { e: Experiment; back: () => void 
             <Button variant="outline" size="sm">Share a readout</Button>
           </div>
         </div>
-        <div className="mt-3.5"><StageRail stage={e.stage} /></div>
+        {/* Navigable: read the brief while a run is live. Only the CURRENT
+            stage carries an action; the rest are the record. */}
+        <div className="mt-3.5 flex items-center gap-1.5">
+          {STAGES.map((s, i) => {
+            const at = STAGES.indexOf(e.stage);
+            const on = s === tab;
+            return (
+              <div key={s} className="flex items-center gap-1.5">
+                <button onClick={() => setTab(s)}
+                  className={cn("flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-colors",
+                    on ? "bg-surface-2" : "hover:bg-surface-2/60")}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full", i < at ? "bg-ok" : i === at ? "bg-accent" : "bg-border-strong")} />
+                  <span className={cn("text-[12.5px]", on ? "font-semibold text-foreground" : i <= at ? "text-muted" : "text-muted-2")}>{s}</span>
+                  {i === at && <span className="text-[10px] font-bold text-accent">NOW</span>}
+                </button>
+                {i < STAGES.length - 1 && <span className="w-4 h-px bg-border" />}
+              </div>
+            );
+          })}
+        </div>
       </header>
 
       <div className="flex-1 overflow-auto">
         <div className="flex gap-6 p-6 items-start">
           <div className="flex-1 min-w-0 space-y-4">
-            {e.action && (
+            <StagePanel e={e} stage={tab} action={e.action ? (
               <section className="rounded-xl border-[1.5px] border-accent bg-surface p-5 shadow-[0_4px_16px_rgba(29,78,216,0.07)]">
                 <div className="flex items-center gap-2 mb-1.5">
                   <h2 className="text-[16px] font-semibold">{e.action.title}</h2>
@@ -165,7 +187,7 @@ export function ExperimentDetail({ e, back }: { e: Experiment; back: () => void 
                   {e.action.secondary && <Button variant="outline">{e.action.secondary}</Button>}
                 </div>
               </section>
-            )}
+            ) : null} />
 
             <Section title="History">
               <ol>
