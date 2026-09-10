@@ -39,6 +39,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
+import { logActivity } from "./config";
 
 /* ── Fixtures ──────────────────────────────────────────────────────── */
 
@@ -79,6 +80,12 @@ const LOADER_BEACON = {
   loader: "loader 1.6.2",
   client: "Chrome 141 · macOS",
 };
+
+/** The tag as it is pasted, for one environment's own id. Said once: the checklist shows it, Injection proof copies it. */
+const TAG_LINES = (tag: string) => [
+  `<script src="https://tag.prism.build/opmc.js"`,
+  `        data-tag="${tag}" async></script>`,
+];
 
 /* ── Small parts ───────────────────────────────────────────────────── */
 
@@ -376,10 +383,7 @@ export function SetupChecklist({ environments = ENVIRONMENTS }: { environments?:
           </div>
         ) : (
           <div className="space-y-2.5">
-            <CodeBlock label="THE TAG — LAST THING IN <HEAD>" lines={[
-              `<script src="https://tag.prism.build/opmc.js"`,
-              `        data-tag="${prod?.tag ?? ""}" async></script>`,
-            ]} />
+            <CodeBlock label="THE TAG — LAST THING IN <HEAD>" lines={TAG_LINES(prod?.tag ?? "")} />
             <Button size="sm" variant="outline" onClick={() => { setChecks((c) => c + 1); if (checks >= 1) setBeaconSeen(true); }}>
               Check again
             </Button>
@@ -769,10 +773,16 @@ const PROOF: Record<ProofState, { label: string; tone: "ok" | "warn" | "danger" 
 
 interface Vouch { by: string; role: string; at: string; client: string; digest: string }
 
+/** A re-check is a moment on the row, not a result. While it runs the row says so; when it lands the row goes back
+ *  to whatever the fetch derives, and only the "checked" time has moved. */
+type Recheck = "checking" | "just now";
+
 export function InjectionProof() {
   const [filter, setFilter] = useState<"all" | ProofState>("all");
   const [openId, setOpenId] = useState<string>(TARGETS[0].id);
   const [vouched, setVouched] = useState<Record<string, Vouch>>({});
+  const [recheck, setRecheck] = useState<Record<string, Recheck>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   /** Derived, never stored: what the fetch saw decides the state. */
   const stateOf = (t: Target): ProofState =>
@@ -800,12 +810,35 @@ export function InjectionProof() {
     [t.id]: { by: ME.name, role: ME.role, at: "10 Sep 2026 11:47:22 HST", client: "Chrome 141 · macOS", digest: "html sha256:b2e7…4c19" },
   }));
 
+  const checking = (t: Target) => recheck[t.id] === "checking";
+  const checkedText = (t: Target) => (recheck[t.id] === "just now" ? "just now" : t.checked);
+  const anyChecking = TARGETS.some(checking);
+  const allJustChecked = TARGETS.every((t) => recheck[t.id] === "just now");
+
+  /** Fetch again, one page after another. Nothing underneath changes — the result is derived from what came back. */
+  const checkAgain = (targets: Target[]) => {
+    setRecheck((r) => ({ ...r, ...Object.fromEntries(targets.map((t) => [t.id, "checking" as const])) }));
+    targets.forEach((t, i) => setTimeout(() => setRecheck((r) => ({ ...r, [t.id]: "just now" })), 900 + i * 180));
+    logActivity(targets.length === 1 ? `Checked ${targets[0].url} again.` : `Checked all ${targets.length} target pages again.`);
+  };
+
+  const copyTag = (t: Target) => {
+    void navigator.clipboard?.writeText(TAG_LINES(t.expect).join("\n"));
+    setCopiedId(t.id);
+    setTimeout(() => setCopiedId((id) => (id === t.id ? null : id)), 1500);
+    logActivity(`Copied the ${t.env} tag.`);
+  };
+
   return (
     <>
       <PageHeader
         title="Injection proof"
-        count={`${TARGETS.length} target pages · ${attention} need someone`}
-        actions={<Button size="sm" variant="outline">Check all again</Button>}
+        count={`${TARGETS.length} target pages · ${attention} need someone${allJustChecked ? " · Checked just now" : ""}`}
+        actions={
+          <Button size="sm" variant="outline" disabled={anyChecking} onClick={() => checkAgain(TARGETS)}>
+            {anyChecking ? "Checking…" : "Check all again"}
+          </Button>
+        }
       />
 
       <Toolbar>
@@ -855,9 +888,11 @@ export function InjectionProof() {
                           {t.found ?? "—"}
                         </td>
                         <td className="px-4 py-3">
-                          <Pill tone={toneOf(t)}>{PROOF[s].label}</Pill>
+                          {checking(t) ? <Pill tone="muted">Checking…</Pill> : <Pill tone={toneOf(t)}>{PROOF[s].label}</Pill>}
                         </td>
-                        <td className="px-4 py-3 text-[12.5px] text-muted-2 whitespace-nowrap tabular-nums">{t.checked}</td>
+                        <td className="px-4 py-3 text-[12.5px] text-muted-2 whitespace-nowrap tabular-nums">
+                          {checking(t) ? "checking…" : checkedText(t)}
+                        </td>
                       </tr>
                     );
                   })}
@@ -869,7 +904,7 @@ export function InjectionProof() {
 
         {/* The evidence for one page. Reading it should settle the question. */}
         <Section title="What the check actually saw"
-          action={<Pill tone={toneOf(open)}>{PROOF[openState].label}</Pill>}>
+          action={checking(open) ? <Pill tone="muted">Checking…</Pill> : <Pill tone={toneOf(open)}>{PROOF[openState].label}</Pill>}>
           <div className="px-5 py-4 border-b border-border flex flex-wrap gap-6 items-start">
             <div className="min-w-[320px] flex-1">
               <Meta k="Page" v={open.url} mono />
@@ -949,9 +984,15 @@ export function InjectionProof() {
           </div>
 
           <div className="px-5 py-3.5 flex flex-wrap items-center gap-3">
-            <Button size="sm" variant="outline">Check this page again</Button>
-            <Button size="sm" variant="outline">Copy the tag for {open.env}</Button>
-            <span className="text-[12.5px] text-muted-2 tabular-nums">Last checked {open.checked}</span>
+            <Button size="sm" variant="outline" disabled={checking(open)} onClick={() => checkAgain([open])}>
+              {checking(open) ? "Checking…" : "Check this page again"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => copyTag(open)}>
+              {copiedId === open.id ? "Copied" : `Copy the tag for ${open.env}`}
+            </Button>
+            <span className="text-[12.5px] text-muted-2 tabular-nums">
+              {checking(open) ? "Checking…" : `Last checked ${checkedText(open)}`}
+            </span>
           </div>
         </Section>
       </div>
