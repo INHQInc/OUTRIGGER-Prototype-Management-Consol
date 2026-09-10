@@ -4,10 +4,16 @@
  *  can read the brief while a run is live — but only the CURRENT stage carries
  *  an action, and stages ahead say plainly what has to happen first. */
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { STAGES, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
+import { ME, STAGES, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
 import { Meta, Pill, Section } from "./ui";
+import { logActivity } from "./config";
 import { MeasurementPlan, MetricIndex } from "./measurement";
 import { BriefAuthor } from "./brief-author";
 import { CertificationPanel, DriftPanel, VersionsPanel } from "./build-panel";
@@ -17,6 +23,21 @@ import { VerdictPanel, type Verdict } from "./verdict";
 import { Readout } from "./readout";
 import { EvidenceBoard } from "./evidence-board";
 import { HandoffPanel } from "./handoff";
+
+const TODAY = "10 Sep 2026";
+
+/** The fixture writes owners short — "Bryan H." — and ME in full. Both are you,
+ *  and the second-person rule has to see that. */
+const ME_SHORT = ME.name.replace(/^(\S+) .*?(\S)\S*$/, "$1 $2.");
+const isMine = (e: Experiment) => e.owner === ME.name || e.owner === ME_SHORT;
+
+/* ── Session memory ────────────────────────────────────────────────── */
+
+/** What you did to a review or a run this session, so leaving the page doesn't undo it. */
+type Split = "50 / 50" | "90 / 10";
+type SignOff = { kind: "approved" } | { kind: "running"; split: Split } | { kind: "sent_back"; note: string };
+const SIGNOFFS = new Map<string, SignOff>();
+const STOPPED = new Set<string>();
 
 const Lock = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
@@ -42,7 +63,44 @@ const NotYet = ({ what, needs }: { what: string; needs: string }) => (
 
 /* ── Brief ─────────────────────────────────────────────────────────── */
 
+/** What Compare shows for a brief revision, read against the current one. The
+ *  cuts are the Build stage's ledger: cuts 1 and 2 were built against Brief 2,
+ *  cuts 3 and 4 against Brief 3, and nothing was ever built against Brief 1. */
+interface Comparison { title: string; changed: string; cuts: string; files: { path: string; add: number; del: number; note: string }[] }
+
+const REVISIONS = ["Brief 3 — current", "Brief 2", "Brief 1"] as const;
+
+const COMPARISONS: Record<(typeof REVISIONS)[number], Comparison> = {
+  "Brief 3 — current": {
+    title: "Cut 3 vs cut 4",
+    changed: "Cut 4 inlines the badge artwork so the promise paints without waiting on a fetch. The copy and the rate-calendar hook are untouched.",
+    cuts: "Both cuts were built against Brief 3 — the revision this run is judged against.",
+    files: [
+      { path: "src/promise/badge.ts", add: 41, del: 9, note: "The SVG lives in the file, not behind a request" },
+      { path: "src/promise/index.ts", add: 3, del: 12, note: "Drops the fetch and its retry" },
+      { path: "src/promise/promise.css", add: 4, del: 0, note: "Sizes the inlined badge at 375" },
+    ],
+  },
+  "Brief 2": {
+    title: "Cut 1 vs cut 3",
+    changed: "Cut 3 fixes the mobile sheet clipping at 375px that Dana R. caught in review. Nothing else in the change moved.",
+    cuts: "Cut 1 was built against Brief 2 and cut 3 against Brief 3. Two briefs, so run 3 and run 4 are not one series of numbers.",
+    files: [
+      { path: "src/promise/sheet.ts", add: 18, del: 7, note: "The sheet measures the viewport before it opens" },
+      { path: "src/promise/promise.css", add: 9, del: 3, note: "A 375px breakpoint for the sheet" },
+      { path: "src/promise/index.ts", add: 2, del: 2, note: "Waits for the calendar before mounting" },
+    ],
+  },
+  "Brief 1": {
+    title: "Brief 1 vs Brief 2",
+    changed: "Brief 2 changed the success metric from booking starts to completed bookings. Nothing else moved.",
+    cuts: "No cut was built against Brief 1 — it was revised on 15 August, before the first cut that afternoon.",
+    files: [],
+  },
+};
+
 export function BriefPanel({ e }: { e: Experiment }) {
+  const [comparing, setComparing] = useState<Comparison | null>(null);
   const frozen = Boolean(e.frozen);
   if (!frozen) {
     return (
@@ -91,15 +149,39 @@ export function BriefPanel({ e }: { e: Experiment }) {
       <DriftPanel />
 
       <Section title="Revisions">
-        {["Brief 3 — current", "Brief 2", "Brief 1"].slice(0, frozen ? 3 : 1).map((r, i) => (
+        {REVISIONS.slice(0, frozen ? 3 : 1).map((r, i) => (
           <div key={r} className="flex items-center gap-4 px-5 py-3 border-b border-border last:border-0">
             <div className="flex-1 text-[13.5px]">{r}</div>
             {i === 0 && frozen && <Frozen>judged against this</Frozen>}
             {i > 0 && <span className="text-[12.5px] text-muted-2 line-through">superseded</span>}
-            <button className="text-[13px] text-accent w-16 text-right">Compare</button>
+            <button className="text-[13px] text-accent w-16 text-right" onClick={() => setComparing(COMPARISONS[r])}>Compare</button>
           </div>
         ))}
       </Section>
+
+      <Dialog open={Boolean(comparing)} onOpenChange={(o) => !o && setComparing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{comparing?.title}</DialogTitle>
+            <DialogDescription>{comparing?.changed}</DialogDescription>
+          </DialogHeader>
+          {comparing && comparing.files.length > 0 && (
+            <div className="rounded-lg border border-border divide-y divide-border">
+              {comparing.files.map((f) => (
+                <div key={f.path} className="px-3.5 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-[12px] min-w-0 flex-1 truncate">{f.path}</span>
+                    <span className="font-mono text-[12px] tabular-nums shrink-0"><span className="text-ok">+{f.add}</span> <span className="text-danger">−{f.del}</span></span>
+                  </div>
+                  <div className="text-[12.5px] text-muted-2 mt-0.5">{f.note}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[13px] text-muted leading-relaxed">{comparing?.cuts}</p>
+          <DialogFooter showCloseButton />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -127,8 +209,26 @@ export function BuildPanel({ e }: { e: Experiment }) {
 
 /* ── Review ────────────────────────────────────────────────────────── */
 
+const SPLITS: { value: Split; means: string }[] = [
+  { value: "50 / 50", means: "Half of guests see the change. The fastest honest read." },
+  { value: "90 / 10", means: "One guest in ten sees the change. Slower, and safer on a page that pays." },
+];
+
 export function ReviewPanel({ e }: { e: Experiment }) {
+  const [signOff, setSignOffState] = useState<SignOff | undefined>(() => SIGNOFFS.get(e.id));
+  const [sendingBack, setSendingBack] = useState(false);
+  const [note, setNote] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [split, setSplit] = useState<Split>("50 / 50");
   if (e.stage === "Brief" || e.stage === "Build") return <NotYet what="Not ready for review" needs="Someone reviews this once there is a build to look at on the real page." />;
+
+  const mine = isMine(e);
+  const record = (s: SignOff) => { SIGNOFFS.set(e.id, s); setSignOffState(s); };
+  const approve = () => { record({ kind: "approved" }); logActivity(`Approved the build of “${e.name}” on the real page — it does what the brief asked.`); };
+  const sendBack = () => { const n = note.trim(); record({ kind: "sent_back", note: n }); setSendingBack(false); logActivity(`Sent “${e.name}” back with a note — “${n}”.`); };
+  const start = () => { record({ kind: "running", split }); setStarting(false); logActivity(`Started the run of “${e.name}” at ${split} on Production.`); };
+  const open = () => window.open(`https://${e.site}${e.path}?opmc=${e.id}`, "_blank", "noopener");
+
   return (
     <div className="space-y-4">
       <InjectionProof />
@@ -138,22 +238,104 @@ export function ReviewPanel({ e }: { e: Experiment }) {
           <div className="rounded-lg border border-border bg-surface-2/40 h-[190px] grid place-items-center mb-4">
             <div className="text-center">
               <div className="text-[13px] text-muted-2 mb-2">The change, on the real page</div>
-              <Button size="sm" variant="outline">Open {e.site}{e.path}</Button>
+              <Button size="sm" variant="outline" onClick={open}>Open {e.site}{e.path}</Button>
             </div>
           </div>
           <div className="rounded-lg border border-border p-4 mb-4">
             <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">WHAT THE BRIEF ASKED FOR</div>
             <p className="text-[14px] leading-relaxed">{e.hypothesis}</p>
           </div>
-          <p className="text-[13.5px] text-muted mb-4">
-            You&rsquo;re signing off that it matches the brief and is safe on your site — not that it will win. Nothing reaches a real guest until someone approves the run.
-          </p>
-          <div className="flex gap-2.5">
-            <Button>Looks right</Button>
-            <Button variant="outline">Send back with a note</Button>
-          </div>
+
+          {!signOff && (
+            <>
+              <p className="text-[13.5px] text-muted mb-4">
+                You&rsquo;re signing off that it matches the brief and is safe on your site — not that it will win. Nothing reaches a real guest until someone approves the run.
+              </p>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <Button disabled={mine} aria-describedby={mine ? "why-not-you" : undefined} onClick={approve}>Looks right</Button>
+                <Button variant="outline" onClick={() => setSendingBack(true)}>Send back with a note</Button>
+                {mine && <span id="why-not-you" className="text-[12.5px] text-warn">You wrote this — someone else has to approve it</span>}
+              </div>
+            </>
+          )}
+
+          {signOff?.kind === "sent_back" && (
+            <div className="rounded-lg border border-warn/40 bg-warn/5 p-4">
+              <div className="flex items-center gap-3">
+                <Pill tone="warn">Sent back</Pill>
+                <span className="text-[13.5px]">Sent back · {signOff.note}</span>
+              </div>
+              <p className="text-[12.5px] text-muted-2 mt-2">{e.owner} sees the note on this experiment and in Activity. Nothing reaches a guest until a new build is approved.</p>
+            </div>
+          )}
+
+          {(signOff?.kind === "approved" || signOff?.kind === "running") && (
+            <div className="rounded-lg border border-ok/40 bg-ok/5 p-4">
+              <div className="flex items-center gap-3">
+                <Pill tone="ok">Approved</Pill>
+                <span className="text-[13.5px]">Approved by you · {TODAY}</span>
+              </div>
+              {signOff.kind === "running" ? (
+                <p className="text-[13.5px] mt-3">Running since {TODAY} · {signOff.split} on Production.</p>
+              ) : (
+                <div className="flex items-center gap-3 mt-3 flex-wrap">
+                  <Button size="sm" onClick={() => setStarting(true)}>Start the run</Button>
+                  <span className="text-[12.5px] text-muted-2">Starting names the build, the brief and the environment — and freezes all three.</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Section>
+
+      <Dialog open={sendingBack} onOpenChange={setSendingBack}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send this back</DialogTitle>
+            <DialogDescription>Say what is wrong and where you saw it. {e.owner} gets the note with your name on it, and nothing moves until a new build is approved.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="send-back-note">Your note</Label>
+            <Textarea id="send-back-note" value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="What doesn't match the brief, and at what width." required />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSendingBack(false)}>Cancel</Button>
+            <Button disabled={note.trim().length === 0} onClick={sendBack}>Send it back</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={starting} onOpenChange={setStarting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start the run?</DialogTitle>
+            <DialogDescription>Opens “{e.name}” on Production — this reaches real guests. The brief and the build freeze the moment it opens.</DialogDescription>
+          </DialogHeader>
+          <div>
+            <div id="split-label" className="text-[13px] font-semibold text-muted mb-2.5">Split</div>
+            <RadioGroup value={split} onValueChange={(v) => setSplit(v === "90 / 10" ? "90 / 10" : "50 / 50")} aria-labelledby="split-label">
+              {SPLITS.map((s) => (
+                <div key={s.value} className="flex items-start gap-2.5">
+                  <RadioGroupItem value={s.value} id={`split-${s.value.slice(0, 2)}`} className="mt-0.5" />
+                  <div>
+                    <Label htmlFor={`split-${s.value.slice(0, 2)}`} className="text-foreground tabular-nums">{s.value}</Label>
+                    <div className="text-[12.5px] text-muted-2 mt-0.5">{s.means}</div>
+                  </div>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+          <div>
+            <Meta k="Environment" v={<span>Production <span className="text-warn">— this reaches real guests</span></span>} />
+            <Meta k="Build" v={e.build ?? "—"} mono />
+            <Meta k="Brief" v="The current revision, frozen when the run opens" />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setStarting(false)}>Not yet</Button>
+            <Button onClick={start}>Start the run</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -239,12 +421,18 @@ const GR: Record<RunFacts["guardrails"][number]["state"], { tone: "ok" | "warn" 
 
 export function RunPanel({ e }: { e: Experiment }) {
   const f = RUN_FACTS[e.id];
-  const live = e.status === "running";
+  const [stopped, setStoppedState] = useState(() => STOPPED.has(e.id));
+  const [stopping, setStopping] = useState(false);
+  const live = e.status === "running" && !stopped;
   if (!f) return <NotYet what="Not running" needs="A run starts once someone with permission approves it. Approving names the build, the brief and the environment — and freezes all three." />;
   const total = f.sessions[0] + f.sessions[1];
+  const stop = () => { STOPPED.add(e.id); setStoppedState(true); setStopping(false); logActivity(`Stopped “${e.name}” on day ${f.day} of ${f.days}.`); };
   return (
     <div className="space-y-4">
-      <Section title={live ? "Running now" : "The run"} action={live ? <Pill tone="ok">Live on {e.env} · day {f.day} of {f.days}</Pill> : <Pill tone="muted">Closed after {f.days} days</Pill>}>
+      <Section title={live ? "Running now" : "The run"} action={
+        live ? <Pill tone="ok">Live on {e.env} · day {f.day} of {f.days}</Pill>
+        : stopped ? <Pill tone="muted">Stopped on day {f.day} of {f.days}</Pill>
+        : <Pill tone="muted">Closed after {f.days} days</Pill>}>
         <div className="p-5">
           <div className="flex gap-10 pb-4 border-b border-border">
             {[
@@ -313,11 +501,25 @@ export function RunPanel({ e }: { e: Experiment }) {
 
           <div className="pt-4 flex items-center gap-3">
             {e.frozen && <Frozen>{e.frozen}</Frozen>}
-            {live && <Button variant="danger" size="sm" className="ml-auto">Stop this run</Button>}
+            {stopped && <span className="ml-auto text-[13px]">Stopped by you · {TODAY}</span>}
+            {live && <Button variant="danger" size="sm" className="ml-auto" onClick={() => setStopping(true)}>Stop this run</Button>}
           </div>
           {live && <p className="text-[12.5px] text-muted-2 mt-2.5">Stopping never needs a second person. Safety actions are never gated.</p>}
         </div>
       </Section>
+
+      <Dialog open={stopping} onOpenChange={setStopping}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Stop this run?</DialogTitle>
+            <DialogDescription>Stopping ends the run on day {f.day} of {f.days}. The verdict will be whatever the data supports today.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setStopping(false)}>Keep it running</Button>
+            <Button variant="danger" onClick={stop}>Stop the run</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
