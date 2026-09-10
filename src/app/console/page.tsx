@@ -20,7 +20,7 @@ import { EXPERIMENTS, ME, SITE_ROWS, needsMe } from "@/lib/console/fake";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
-import { ProfileRoom } from "./customer-context";
+import { UnderstandSite } from "./customer-context";
 import { SiteOnboarding } from "./onboarding";
 import { BackOffice, CUSTOMERS, SupportBanner } from "./operator";
 import { VerdictPicker } from "./verdict";
@@ -36,7 +36,6 @@ const NAV = [
   },
   {
     group: "CONFIGURE", items: [
-      ["Business profile", "M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h1M14 10h1M9 14h1M14 14h1"],
       ["Sites", "M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20"],
       ["Connections", "M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"],
       ["People & roles", "M16 20v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
@@ -63,6 +62,8 @@ export default function Console() {
   const [creating, setCreating] = useState(false);
   const [flow, setFlow] = useState<null | "site">(null);
   const [switcher, setSwitcher] = useState(false);
+  /** The site being read / asked / corrected right now, if any. */
+  const [understanding, setUnderstanding] = useState<string | null>(null);
   const [backOffice, setBackOffice] = useState(false);
   const [support, setSupport] = useState<{ customer: string; reason: string } | null>(null);
   /** A customer created in this session is the only one whose setup is unfinished. */
@@ -77,9 +78,10 @@ export default function Console() {
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
   const site = SITE_ROWS.find((s) => s.id === siteId) ?? null;
+  const learning = SITE_ROWS.find((s) => s.id === understanding) ?? null;
   const waiting = EXPERIMENTS.filter(needsMe).length;
 
-  const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); };
+  const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); };
   const openExp = (id: string) => { setNav("Experiments"); setExpId(id); };
 
   if (backOffice) {
@@ -170,8 +172,14 @@ export default function Console() {
         )}
         {!flow && nav === "Ideas" && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
         {!flow && nav === "Readouts" && <ReadoutsView />}
-        {!flow && nav === "Business profile" && <ProfileRoom customer={support?.customer} />}
-        {!flow && nav === "Sites" && (site ? <SiteDetail s={site} back={() => setSiteId(null)} /> : <SitesView open={setSiteId} onAdd={() => setFlow("site")} />)}
+        {!flow && nav === "Sites" && (
+          learning ? (
+            <UnderstandSite key={learning.id} site={learning} others={SITE_ROWS.filter((s) => s.id !== learning.id)}
+              onClose={() => setUnderstanding(null)} onDone={() => { setSiteId(learning.id); setUnderstanding(null); }}
+              onAnother={(id) => { if (id) { setSiteId(id); setUnderstanding(id); } else { setUnderstanding(null); setSiteId(null); setFlow("site"); } }} />
+          ) : site ? <SiteDetail s={site} back={() => setSiteId(null)} understand={setUnderstanding} />
+          : <SitesView open={setSiteId} onAdd={() => setFlow("site")} />
+        )}
         {!flow && nav === "Connections" && <ConnectionsView />}
         {!flow && nav === "People & roles" && <PeopleView />}
         {!flow && nav === "Guardrails" && <GuardrailsView />}

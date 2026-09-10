@@ -1,29 +1,41 @@
 /**
- * CUSTOMER CONTEXT — what the builder agent knows about a customer, and where
- * each piece of it came from.
+ * SITE CONTEXT — what the builder agent knows about a SITE, and where each
+ * piece of it came from. The customer is a container: a name, its sites, its
+ * people and its connections. Nothing is characterized at the customer level,
+ * because a crawl is of a site and a hotel group's properties do not share a
+ * voice.
  *
  * Three kinds of knowledge, never one blob (docs/architecture/CONTEXT-INGESTION.md):
  *
  *   OBSERVED       fact, re-derivable        the crawl: fonts, colours, pages, CTAs
  *   CHARACTERIZED  inference, needs a human  prose drafted from the observed; the interview corrects it
- *   EARNED         measured, immutable       a digest of this customer's own recorded decisions
+ *   EARNED         measured, immutable       a digest of this site's own recorded decisions
  *
  * Only the middle one becomes a skill. The observed layer is data the agent reads;
  * the earned layer is a query rendered as sentences.
  *
- * The observed fixture below is REAL — derived from prep.outrigger.com on
- * 10 Sep 2026 with `deriveDesignTokens()` plus a stylesheet pass. The single
- * most useful fact it produced is an awkward one: every colour variable the
- * brand's pages declare belongs to the booking-widget vendor, not to the brand.
- * The mock keeps that, because it is exactly the kind of thing a person has to
- * be asked about.
+ * WHAT IS REAL AND WHAT IS NOT in the observed fixture. The fonts, the colour
+ * variables and their owner, the top colours by use, the button labels, the
+ * headlines, the stylesheet list and the media counts were derived from the
+ * prep.outrigger.com HOME PAGE and its five stylesheets on 10 Sep 2026 with
+ * `deriveDesignTokens()` plus a stylesheet pass. The page map (412 found, 38
+ * read, the kinds chosen) and the component list are what a bounded crawl
+ * WOULD produce and are illustrative — the crawl itself has not been built
+ * (CONTEXT-INGESTION.md, "Missing · 1"). The single most useful real finding is
+ * an awkward one: every colour variable the pages declare belongs to the
+ * booking-widget vendor, not to the brand. The mock keeps it, because it is
+ * exactly the kind of thing a person has to be asked about.
+ *
+ * The read fixture is outrigger.com's. In the mock, reading any other site
+ * shows the same receipt under that site's name — there is one real crawl,
+ * not three.
  */
 
 export type SectionKey = "business" | "guests" | "market" | "voice" | "design";
 
 export const SECTION_LABEL: Record<SectionKey, string> = {
-  business: "The business",
-  guests: "Who they serve",
+  business: "What this site sells",
+  guests: "Who it serves",
   market: "Market & competitors",
   voice: "Voice & tone",
   design: "Design language",
@@ -53,7 +65,7 @@ export const OBSERVED = {
   ],
   skipped: "374 pages skipped: press releases, legal, individual blog stories, paginated listings — one of each template is enough to learn the template.",
   stylesheets: [
-    { url: "/dist/css/main.css", own: true, note: "the brand's stylesheet — Bootstrap 5 with the brand layered on top" },
+    { url: "/dist/css/main.css", own: true, note: "the site's stylesheet — Bootstrap 5 with the brand layered on top" },
     { url: "/dist/css/modal-video.min.css", own: true, note: "video lightbox" },
     { url: "be.synxis.com/…/shs-widgets-best-price", own: false, note: "booking widget (vendor)" },
     { url: "be.synxis.com/…/shs-widgets-calendar", own: false, note: "rate calendar (vendor)" },
@@ -123,8 +135,8 @@ export const DRAFT_SECTIONS: Section[] = [
     key: "business",
     confidence: 62,
     from: ["38 pages", "the page titles and descriptions", "the DISCOVERY loyalty pages"],
-    body: "OUTRIGGER is a beachfront resort operator — Hawaii first (Oʻahu, Maui, Kauaʻi, the Big Island), then Fiji, Thailand and Mauritius — with a second, quieter business in Hawaiian vacation condos. The site sells stays, not rooms: place before price, the beach before the building. A loyalty programme, DISCOVERY, runs across the properties and has its own rate tier.",
-    unsure: "Whether the vacation condos are the same brand with the same voice, or a separate business that happens to share the site. The pages don't say.",
+    body: "outrigger.com sells stays at a beachfront resort operator's properties — Hawaii first (Oʻahu, Maui, Kauaʻi, the Big Island), then Fiji, Thailand and Mauritius — with a second, quieter business in Hawaiian vacation condos on the same site. It sells stays, not rooms: place before price, the beach before the building. A loyalty programme, DISCOVERY, runs across the properties and has its own rate tier.",
+    unsure: "Whether the vacation condos share this site's voice, or are a separate business that happens to share its header. The pages don't say.",
   },
   {
     key: "guests",
@@ -151,7 +163,7 @@ export const DRAFT_SECTIONS: Section[] = [
     key: "design",
     confidence: 68,
     from: ["main.css", "the three vendor stylesheets", "56 images and 3 videos on the home page alone"],
-    body: "Photography-led: full-bleed imagery and video carry the page, and the type stays out of the way. Three families are loaded — Duplicate Sans, Duplicate Ionic and Montserrat — with Montserrat Light doing most of the work. A deep-water navy (#004561) and a bright brand blue (#0078cd) sit on white and warm sand neutrals. Corners are soft (1rem on the booking widget). The primary action on the page is 'Check availability', set in uppercase with a heavy 3px border — but that button belongs to the booking-widget vendor, not the brand's own stylesheet.",
+    body: "Photography-led: full-bleed imagery and video carry the page, and the type stays out of the way. Three families are loaded — Duplicate Sans, Duplicate Ionic and Montserrat — with Montserrat Light doing most of the work. A deep-water navy (#004561) and a bright brand blue (#0078cd) sit on white and warm sand neutrals. Corners are soft (1rem on the booking widget). The primary action on the page is 'Check availability', set in uppercase with a heavy 3px border — but that button belongs to the booking-widget vendor, not the site's own stylesheet.",
     unsure: "Which family is the headline face — counts can't tell roles. And whether Bootstrap's own blue (#0d6efd, used 38 times) is ever meant to be visible, or is a leak.",
   },
 ];
@@ -186,12 +198,12 @@ export interface Question {
 
 export const QUESTIONS: Question[] = [
   {
-    id: "scope", round: 1, section: "business", short: "one brand or two",
-    ask: "The home page sells two things: beachfront resorts in Hawaii, Fiji, Thailand and Mauritius — and vacation condos in Hawaii. One brand with one voice, or two businesses that should read differently?",
+    id: "scope", round: 1, section: "business", short: "one voice or two",
+    ask: "The home page sells two things: beachfront resorts in Hawaii, Fiji, Thailand and Mauritius — and vacation condos in Hawaii. One site with one voice, or two businesses that should read differently?",
     because: "The pages share a header and a stylesheet, so the crawl can't tell a sub-brand from a page template.",
     options: [
-      { id: "one", label: "One brand, one voice", hint: "Everything Prism drafted applies to every page.", tone: "ok", delta: { business: 14, voice: 6 },
-        adds: { business: "The vacation condos are the same brand and speak in the same voice." } },
+      { id: "one", label: "One site, one voice", hint: "Everything Prism drafted applies to every page.", tone: "ok", delta: { business: 14, voice: 6 },
+        adds: { business: "The vacation condos are the same business and speak in the same voice." } },
       { id: "two", label: "Resorts and condos should read differently", hint: "Understanding falls: the agent now needs to know which pages are which.", tone: "warn", delta: { business: 6, voice: -8 },
         opens: { voice: "Two voices on one site. Prism has one draft. Which pages are condos has to be marked before a condo page is ever built against." } },
       { id: "resorts", label: "Only the resorts are in scope for testing", hint: "Condo pages are left alone. Nothing about them is needed.", tone: "ok", delta: { business: 16, voice: 4 },
@@ -213,13 +225,13 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "guest", round: 1, section: "guests", short: "the guest you want more of",
-    ask: "Who is the guest you most want more of?",
+    ask: "Who is the guest you most want more of on this site?",
     because: "The pages speak to families, couples and returning members in equal measure, so the site itself doesn't say. Only you do.",
     free: {
       placeholder: "Direct bookers who would otherwise go through Expedia…",
       suggestions: ["Direct bookers who'd otherwise use an OTA", "Returning DISCOVERY members", "First-time Hawaii visitors from the US mainland"],
       delta: 34,
-      adds: (a) => `The guest OUTRIGGER most wants more of, in their words: “${a}”. Experiments are aimed here first.`,
+      adds: (a) => `The guest this site most wants more of, in the customer's words: “${a}”. Experiments are aimed here first.`,
     },
   },
   {
@@ -237,7 +249,7 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "competitors", round: 2, section: "market", short: "who you lose bookings to",
-    ask: "Who do you lose bookings to?",
+    ask: "Who does this site lose bookings to?",
     because: "No page names a competitor — nobody's does. This is the one section a crawl can't write.",
     free: {
       placeholder: "Expedia and Booking.com for the same room; Marriott and Hilton in Waikiki…",
@@ -286,16 +298,56 @@ export const BANDS = [
 
 export const bandFor = (n: number) => BANDS.find((b) => n >= b.min) ?? BANDS[BANDS.length - 1];
 
-/* ── Revisions and outputs ────────────────────────────────────────── */
+/* ── Per-site state: answers, revisions, what has been earned ─────── */
+
+export type Answer = { option?: string; text?: string; skipped?: boolean };
+export type Answers = Record<string, Answer>;
 
 export interface Revision { r: number; when: string; who: string; what: string; pinnedBy: number }
+export interface Earned { claim: string; range: string; decisions: string[] }
 
-/** The existing customer's history — what a mature profile looks like. */
-export const OUTRIGGER_REVISIONS: Revision[] = [
-  { r: 1, when: "12 Mar 2026", who: "Bryan Hopkins · Prism", what: "Created at onboarding. 38 pages read, 7 questions answered.", pinnedBy: 2 },
-  { r: 2, when: "14 Mar 2026", who: "Dana Reyes", what: "Corrected Voice & tone — “we never say luxury”.", pinnedBy: 3 },
-  { r: 3, when: "3 Sep 2026", who: "Malia K. · Prism", what: "Re-read after the new header shipped. Design language updated; nothing else moved.", pinnedBy: 2 },
-];
+export interface SiteContext {
+  /** The interview as it stands. A site with unanswered rounds is "not finished". */
+  answers: Answers;
+  /** Whether every section has been checked by a person. */
+  approved: boolean;
+  /** A note a person handed Prism, kept as provenance on the voice section. */
+  voiceNote?: string;
+  revisions: Revision[];
+  earned: Earned[];
+}
+
+/** Keyed by site id (see SITE_ROWS in fake.ts). A site with no entry has never been read. */
+export const SITE_CONTEXT: Record<string, SiteContext> = {
+  outrigger: {
+    answers: {
+      scope: { option: "one" }, cta: { option: "check" }, guest: { text: "Direct bookers who would otherwise book the same room through Expedia" },
+      type: { option: "ionic" }, competitors: { text: "Expedia and Booking.com for our own rooms; Marriott and Hilton in Waikīkī" },
+      urgency: { option: "rule" }, bootstrap: { option: "never" },
+    },
+    approved: true,
+    voiceNote: "we never say luxury",
+    revisions: [
+      { r: 1, when: "12 Mar 2026", who: "Bryan Hopkins · Prism", what: "Read at onboarding. 38 pages, 7 questions answered.", pinnedBy: 2 },
+      { r: 2, when: "14 Mar 2026", who: "Dana Reyes", what: "Corrected Voice & tone — “we never say luxury”.", pinnedBy: 3 },
+      { r: 3, when: "3 Sep 2026", who: "Malia K. · Prism", what: "Re-read after the new header shipped. Design language updated; nothing else moved.", pinnedBy: 2 },
+    ],
+    earned: [
+      { claim: "Removing a call to action that competes with the primary booking action has won 2 of 3 attempts.", range: "+2.4% to +4.1%", decisions: ["Rate-calendar best-price promise", "Room compare"] },
+      { claim: "Offer badges in the hero have never won.", range: "3 runs, none confirmed", decisions: ["Header best-price badge", "Hero offer ribbon", "Kaanapali urgency banner"] },
+      { claim: "Guests on mobile do not scroll past the third property tile.", range: "seen in 5 of 5 runs", decisions: ["Destination reorder", "Property card compare"] },
+    ],
+  },
+  kona: {
+    // Read, first round answered, then whoever was doing it got pulled away.
+    answers: { scope: { option: "one" }, cta: { option: "check" }, guest: { skipped: true } },
+    approved: false,
+    revisions: [
+      { r: 1, when: "8 Sep 2026", who: "Malia K. · Prism", what: "Read at onboarding. Interview stopped after round 1 — nothing approved yet.", pinnedBy: 0 },
+    ],
+    earned: [],
+  },
+};
 
 export interface OutputFile { name: string; layer: "observed" | "characterized" | "earned"; detail: string }
 
@@ -304,11 +356,4 @@ export const OUTPUT_FILES: OutputFile[] = [
   { name: "design-tokens.md", layer: "observed", detail: "15 font faces · 10 brand colours · 60 widget variables · the z-index ladder" },
   { name: "pages.json", layer: "observed", detail: "38 pages · 11 repeated components · selectors for each" },
   { name: "evidence.md", layer: "earned", detail: "empty until the first decision is recorded — then it never stops growing" },
-];
-
-/** Earned context — the digest a mature customer's decisions produce. */
-export const OUTRIGGER_EARNED = [
-  { claim: "Removing a call to action that competes with the primary booking action has won 2 of 3 attempts.", range: "+2.4% to +4.1%", decisions: ["Rate-calendar best-price promise", "Room compare"] },
-  { claim: "Offer badges in the hero have never won.", range: "3 runs, none confirmed", decisions: ["Header best-price badge", "Hero offer ribbon", "Kaanapali urgency banner"] },
-  { claim: "Guests on mobile do not scroll past the third property tile.", range: "seen in 5 of 5 runs", decisions: ["Destination reorder", "Property card compare"] },
 ];

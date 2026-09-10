@@ -45,7 +45,7 @@ const RUN = {
 
 const NOW = "10 Sep 2026 09:58";
 
-type Tier = "global" | "customer" | "experiment";
+type Tier = "global" | "customer" | "site" | "experiment";
 type Delivery = "branch" | "console";
 type Origin = "built-in" | "forked" | "yours";
 type Capability = "write-brief" | "plan-measurement" | "write-readout" | "write-qa" | "build";
@@ -339,22 +339,22 @@ const SKILLS: Skill[] = [
     ],
   },
   {
-    id: "outrigger/context",
-    tier: "customer", delivery: "branch", origin: "yours", capability: "build",
+    id: "outrigger.com/context",
+    tier: "site", delivery: "branch", origin: "yours", capability: "build",
     version: "3.0.0", bytes: 4860, enabled: true, updated: "revision 3 · re-read 3 Sep 2026 by Malia K.",
     receipt: "context r3 · approved by Dana Reyes · pinned by 2 builds",
-    summary: "Who OUTRIGGER is, who it serves, who it loses bookings to, how it talks and how it looks — read from 38 pages, corrected by people. Edited in Business profile, never here.",
+    summary: "What outrigger.com sells, who it serves, who it loses bookings to, how it talks and how it looks — read from 38 pages, corrected by people. Edited in Sites → outrigger.com, never here.",
     body: [
       "---",
-      "name: outrigger/context",
-      "tier: customer",
+      "name: outrigger.com/context",
+      "tier: site",
       "delivery: branch",
       "revision: 3",
       "read: 38 pages of outrigger.com · 3 Sep 2026",
       "beside: design-tokens.md · pages.json · evidence.md",
       "---",
       "",
-      "# OUTRIGGER — what the builder should know",
+      "# outrigger.com — what the builder should know",
       "",
       "## The business",
       "",
@@ -600,22 +600,24 @@ const Label = ({ children }: { children: React.ReactNode }) => (
 
 const TIER_NAME: Record<Tier, string> = {
   experiment: "This experiment",
+  site: "outrigger.com",
   customer: "Outrigger",
   global: "Prism",
 };
 
 const TIER_LONG: Record<Tier, string> = {
   experiment: `This experiment only — ${RUN.experiment}`,
+  site: "outrigger.com — every experiment on this site",
   customer: "Outrigger — every site on the account",
   global: "Prism — every customer",
 };
 
-const TIER_RANK: Record<Tier, number> = { experiment: 0, customer: 1, global: 2 };
+const TIER_RANK: Record<Tier, number> = { experiment: 0, site: 1, customer: 2, global: 3 };
 
 const TierTag = ({ t }: { t: Tier }) => (
   <span className={cn("text-[11.5px] rounded px-1.5 py-0.5 border whitespace-nowrap",
     t === "experiment" ? "border-border-strong text-foreground font-semibold"
-      : t === "customer" ? "border-border text-muted" : "border-border text-muted-2")}>
+      : t === "customer" || t === "site" ? "border-border text-muted" : "border-border text-muted-2")}>
     {TIER_NAME[t]}
   </span>
 );
@@ -741,7 +743,7 @@ export function SkillsPanel() {
         <Chip on={tier === "all"} onClick={() => setTier("all")}>
           All tiers <span className="tabular-nums opacity-60">{skills.length}</span>
         </Chip>
-        {(["experiment", "customer", "global"] as Tier[]).map((t) => (
+        {(["experiment", "site", "customer", "global"] as Tier[]).map((t) => (
           <Chip key={t} on={tier === t} onClick={() => setTier(t)}>
             {TIER_NAME[t]} <span className="tabular-nums opacity-60">{skills.filter((s) => s.tier === t).length}</span>
           </Chip>
@@ -909,6 +911,7 @@ export function SkillsPanel() {
                   ? "Every build on this account"
                   : CALL_SITES.filter((c) => c.capability === sel.capability).map((c) => c.surface).join(" · ")} />
                 {sel.tier === "experiment" && <Meta k="Scoped to" v={RUN.page} mono />}
+                {sel.tier === "site" && <Meta k="Scoped to" v="outrigger.com" mono />}
                 <Meta k="Version" v={`v${sel.version}`} mono />
                 <Meta k="Size" v={<span className="tabular-nums">{selBody.length} lines · {kb(sel.bytes)}</span>} />
               </div>

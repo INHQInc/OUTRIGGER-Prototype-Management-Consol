@@ -144,10 +144,10 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
 
       <main className="flex-1 min-w-0 flex flex-col">
         {adding && (
-          <CustomerWizard onClose={() => setAdding(false)} onDone={(name) => {
+          <CustomerWizard onClose={() => setAdding(false)} onDone={(name, sites) => {
             const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-            setList((l) => [{ id, name, sites: 1, experiments: 0, people: 1, running: 0, health: "warn",
-              issue: "Setup unfinished — waiting on their Owner to connect an A/B tool", usage: "$0 / mo", since: "Sep 2026", fresh: true }, ...l]);
+            setList((l) => [{ id, name, sites: sites.length, experiments: 0, people: 1, running: 0, health: "warn",
+              issue: `Setup unfinished — ${sites.length} site${sites.length === 1 ? "" : "s"} not read yet, no A/B tool connected`, usage: "$0 / mo", since: "Sep 2026", fresh: true }, ...l]);
             setAdding(false); setRoom("Customers");
           }} />
         )}

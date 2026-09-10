@@ -1,8 +1,13 @@
 "use client";
 
 /**
- * UNDERSTANDING A CUSTOMER — the back-office wizard that creates one, and the
- * room inside their console where what Prism understands is kept and corrected.
+ * UNDERSTANDING A SITE — and the two-step wizard that creates the customer
+ * it belongs to.
+ *
+ * THE CUSTOMER IS A CONTAINER. A name, its sites, its people, its connections.
+ * Nothing is read, asked or characterized at that level, because a crawl is of
+ * a site and a hotel group's properties do not share a voice. Everything below
+ * happens per site, from Sites → the site → "What Prism understands".
  *
  * The shape is READ → ASK → CORRECT → COMPILE, and each step is honest about
  * what kind of knowledge it is producing:
@@ -21,6 +26,9 @@
  *    kept, because the corrections are the most valuable content in the system.
  *  · COMPILE turns the approved sections into the files the builder receives,
  *    pinned as a context revision. Re-reading later makes r2; it never rewrites r1.
+ *
+ * When a site is saved, the next thing offered is the next site — a customer
+ * with three sites is not onboarded until all three are understood.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -37,16 +45,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
 import {
-  BUILD_THRESHOLD, DRAFT_SECTIONS, OBSERVED, OUTPUT_FILES, OUTRIGGER_EARNED, OUTRIGGER_REVISIONS, QUESTIONS, ROUNDS,
-  SECTION_LABEL, bandFor, type Question, type Section, type SectionKey,
+  BUILD_THRESHOLD, DRAFT_SECTIONS, OBSERVED, OUTPUT_FILES, QUESTIONS, ROUNDS, SECTION_LABEL, SITE_CONTEXT, bandFor,
+  type Answer, type Answers, type Earned, type Question, type Section, type SectionKey,
 } from "@/lib/console/context";
+import type { Site } from "@/lib/console/fake";
 import { Q, Wizard } from "./onboarding";
-import { PageHeader, Section as Card } from "./ui";
+import { Pill, Section as Card } from "./ui";
 
 /* ── The profile as state ──────────────────────────────────────────── */
 
-type Answer = { option?: string; text?: string; skipped?: boolean };
-type Answers = Record<string, Answer>;
 type Status = "draft" | "approved" | "edited" | "revised";
 
 interface Live extends Section {
@@ -57,6 +64,8 @@ interface Live extends Section {
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
+const answered = (a: Answer | undefined) => Boolean(a && (a.option || (a.text && a.text.trim()) || a.skipped));
+
 /** The interview applied to the drafts. Pure: the same answers always give the same profile. */
 function applyAnswers(base: Section[], answers: Answers): Live[] {
   return base.map((s) => {
@@ -64,28 +73,20 @@ function applyAnswers(base: Section[], answers: Answers): Live[] {
     let confidence = s.confidence;
     const opened: string[] = [];
     let settled = true;
-    for (const q of QUESTIONS.filter((q) => q.section === s.key)) {
+    for (const q of QUESTIONS) {
       const a = answers[q.id];
-      if (!a || a.skipped) { settled = false; continue; }
+      if (q.section === s.key && (!a || a.skipped)) { settled = false; continue; }
+      if (!a) continue;
       if (q.options && a.option) {
         const o = q.options.find((o) => o.id === a.option);
         if (!o) continue;
         confidence += o.delta[s.key] ?? 0;
         if (o.adds?.[s.key]) body += " " + o.adds[s.key];
         if (o.opens?.[s.key]) opened.push(o.opens[s.key] as string);
-      } else if (q.free && a.text) {
+      } else if (q.free && a.text && q.section === s.key) {
         confidence += q.free.delta;
         body += " " + q.free.adds(a.text);
       }
-    }
-    // Cross-section effects (an answer in one section can move another).
-    for (const q of QUESTIONS.filter((q) => q.section !== s.key && q.options)) {
-      const a = answers[q.id];
-      const o = a?.option ? q.options?.find((o) => o.id === a.option) : undefined;
-      if (!o) continue;
-      confidence += o.delta[s.key] ?? 0;
-      if (o.adds?.[s.key]) body += " " + o.adds[s.key];
-      if (o.opens?.[s.key]) opened.push(o.opens[s.key] as string);
     }
     const unsure = [...opened, ...(!settled && s.unsure ? [s.unsure] : [])].join(" ") || undefined;
     return { ...s, body, confidence: clamp(confidence), unsure, status: "draft", notes: [] };
@@ -94,11 +95,29 @@ function applyAnswers(base: Section[], answers: Answers): Live[] {
 
 const overall = (ss: Live[]) => clamp(ss.reduce((n, s) => n + s.confidence, 0) / ss.length);
 
-/** The answers a mature customer gave — what the OUTRIGGER profile is built from. */
-const OUTRIGGER_ANSWERS: Answers = {
-  scope: { option: "one" }, cta: { option: "check" }, guest: { text: "Direct bookers who would otherwise book the same room through Expedia" },
-  type: { option: "ionic" }, competitors: { text: "Expedia and Booking.com for our own rooms; Marriott and Hilton in Waikīkī" },
-  urgency: { option: "rule" }, bootstrap: { option: "never" },
+const interviewFinished = (answers: Answers) => QUESTIONS.every((q) => answered(answers[q.id]));
+
+/** The round to resume at: the first with something unanswered. */
+const resumeRound = (answers: Answers): 1 | 2 | 3 =>
+  (([1, 2, 3] as const).find((r) => QUESTIONS.some((q) => q.round === r && !answered(answers[q.id]))) ?? 3);
+
+/** Sites saved in this session. The fixture is static; the mock still has to remember what you just did. */
+const SAVED_THIS_SESSION = new Map<string, number>();
+
+/** A site's understanding, as the Sites list and the site page state it. */
+export function understandingOf(siteId: string): { label: string; tone: "ok" | "warn" | "muted"; ctx: (typeof SITE_CONTEXT)[string] | null } {
+  const ctx = SITE_CONTEXT[siteId] ?? null;
+  const saved = SAVED_THIS_SESSION.get(siteId);
+  if (saved) return { label: `Approved · r${saved}`, tone: "ok", ctx };
+  if (!ctx) return { label: "Not read yet", tone: "muted", ctx: null };
+  if (!interviewFinished(ctx.answers)) return { label: "Interview unfinished", tone: "warn", ctx };
+  if (!ctx.approved) return { label: "Draft — nobody has checked it", tone: "warn", ctx };
+  return { label: `Approved · r${ctx.revisions[ctx.revisions.length - 1].r}`, tone: "ok", ctx };
+}
+
+export const UnderstandingPill = ({ id }: { id: string }) => {
+  const u = understandingOf(id);
+  return <Pill tone={u.tone}>{u.label}</Pill>;
 };
 
 /* ── Small pieces ─────────────────────────────────────────────────── */
@@ -181,14 +200,14 @@ function Measured() {
         <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-6">
           {(["brand", "framework", "widget"] as const).map((o) => (
             <div key={o}>
-              <Eyebrow>{o === "brand" ? "THE BRAND'S OWN" : o === "framework" ? "BOOTSTRAP'S DEFAULTS" : "THE BOOKING WIDGET'S"}</Eyebrow>
+              <Eyebrow>{o === "brand" ? "THE SITE'S OWN" : o === "framework" ? "BOOTSTRAP'S DEFAULTS" : "THE BOOKING WIDGET'S"}</Eyebrow>
               <div className="mt-2.5 space-y-2.5">{by(o).map((c) => <Swatch key={c.hex} {...c} />)}</div>
             </div>
           ))}
         </div>
         <div className="px-5 py-3 border-t border-border text-[12.5px] leading-relaxed bg-warn/[0.06]">
           <span className="font-semibold text-warn">The only colour variables on the site belong to the vendor.</span>{" "}
-          <span className="text-muted">{OBSERVED.variables.total} custom properties were found and all {OBSERVED.variables.total} are <span className="font-mono">--shs-widgets-*</span>. The brand&rsquo;s own stylesheet declares none, so its palette was sampled from what the pages use — the counts above are how often, not how important.</span>
+          <span className="text-muted">{OBSERVED.variables.total} custom properties were found and all {OBSERVED.variables.total} are <span className="font-mono">--shs-widgets-*</span>. The site&rsquo;s own stylesheet declares none, so its palette was sampled from what the pages use — the counts above are how often, not how important.</span>
         </div>
       </Card>
 
@@ -234,7 +253,7 @@ function Measured() {
 const PHASES = [
   { id: "map", label: "Mapping the site", detail: `${OBSERVED.mapped} addresses found` },
   { id: "choose", label: "Choosing what to read", detail: `${OBSERVED.read} pages — one of every kind, within a budget of ${OBSERVED.budget}` },
-  { id: "read", label: "Reading", detail: "through Firecrawl — outrigger.com refuses plain crawlers (HTTP 403)" },
+  { id: "read", label: "Reading", detail: "through Firecrawl — the site refuses plain crawlers (HTTP 403)" },
   { id: "derive", label: "Deriving", detail: "fonts, colours, components, selectors; then drafting what they mean" },
 ];
 
@@ -295,14 +314,14 @@ function Drafts({ sections }: { sections: Live[] }) {
   );
 }
 
-function Learned({ earned }: { earned: typeof OUTRIGGER_EARNED }) {
+function Learned({ earned }: { earned: Earned[] }) {
   if (!earned.length) {
     return (
       <Card>
         <div className="px-5 py-8 text-center">
           <div className="text-[15px] font-semibold mb-1.5">Nothing yet — and nothing could be.</div>
           <p className="text-[13.5px] text-muted leading-relaxed max-w-md mx-auto">
-            This layer can&rsquo;t be read off a website. It is written by decisions this customer records, one line per
+            This layer can&rsquo;t be read off a website. It is written by decisions recorded on this site, one line per
             verdict, and it is the part of the context no competitor with a crawler can copy. The first entry arrives with the first readout.
           </p>
         </div>
@@ -310,7 +329,7 @@ function Learned({ earned }: { earned: typeof OUTRIGGER_EARNED }) {
     );
   }
   return (
-    <Card title={`${earned.length} things measured on this customer's own visitors`}>
+    <Card title={`${earned.length} things measured on this site's own visitors`}>
       {earned.map((e) => (
         <div key={e.claim} className="px-5 py-3.5 border-b border-border last:border-0">
           <div className="text-[14px] leading-relaxed">{e.claim} <span className="text-muted-2">— {e.range}</span></div>
@@ -322,7 +341,7 @@ function Learned({ earned }: { earned: typeof OUTRIGGER_EARNED }) {
   );
 }
 
-function ReadReport({ sections, earned = [] }: { sections: Live[]; earned?: typeof OUTRIGGER_EARNED }) {
+function ReadReport({ sections, earned = [] }: { sections: Live[]; earned?: Earned[] }) {
   return (
     <>
       <Card>
@@ -357,9 +376,9 @@ function ReadReport({ sections, earned = [] }: { sections: Live[]; earned?: type
 /* ── ASK: the interview ────────────────────────────────────────────── */
 
 function QuestionCard({ q, a, set }: { q: Question; a: Answer | undefined; set: (a: Answer) => void }) {
-  const answered = Boolean(a && (a.option || a.text || a.skipped));
+  const done = answered(a);
   return (
-    <Card className={cn(answered && "border-border-strong")}>
+    <Card className={cn(done && "border-border-strong")}>
       <div className="px-5 py-4">
         <div className="flex items-center gap-2 mb-2">
           <Eyebrow>{SECTION_LABEL[q.section].toUpperCase()}</Eyebrow>
@@ -386,7 +405,7 @@ function QuestionCard({ q, a, set }: { q: Question; a: Answer | undefined; set: 
 
         {q.free && (
           <div>
-            <Textarea value={a?.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder={q.free.placeholder} rows={2} />
+            <Textarea value={a?.text ?? ""} onChange={(e) => set({ text: e.target.value })} placeholder={q.free.placeholder} rows={2} aria-label={q.ask} />
             <div className="flex flex-wrap gap-1.5 mt-2.5">
               {q.free.suggestions.map((s) => (
                 <button key={s} type="button" onClick={() => set({ text: s })}
@@ -406,17 +425,18 @@ function QuestionCard({ q, a, set }: { q: Question; a: Answer | undefined; set: 
   );
 }
 
-function Interview({ answers, setAnswers, sections, base, onFinish }: {
-  answers: Answers; setAnswers: (a: Answers) => void; sections: Live[]; base: Live[]; onFinish: () => void;
+function Interview({ answers, setAnswers, sections, base, onFinish, startRound = 1 }: {
+  answers: Answers; setAnswers: (a: Answers) => void; sections: Live[]; base: Live[]; onFinish: () => void; startRound?: 1 | 2 | 3;
 }) {
-  const [round, setRound] = useState<1 | 2 | 3>(1);
+  const [round, setRound] = useState<1 | 2 | 3>(startRound);
   const [prev, setPrev] = useState<Live[]>(base);
   const [ended, setEnded] = useState(false);
+  const [stoppedEarly, setStoppedEarly] = useState(false);
   const top = useRef<HTMLDivElement>(null);
   // A new round starts at the top of the page, not wherever the last answer left you.
   useEffect(() => { top.current?.closest(".overflow-auto")?.scrollTo({ top: 0 }); }, [round, ended]);
   const inRound = QUESTIONS.filter((q) => q.round === round);
-  const roundDone = inRound.every((q) => { const a = answers[q.id]; return a && (a.option || (a.text && a.text.trim()) || a.skipped); });
+  const roundDone = inRound.every((q) => answered(answers[q.id]));
   const score = overall(sections);
   const enough = score >= 90;
   const last = round === ROUNDS;
@@ -429,9 +449,10 @@ function Interview({ answers, setAnswers, sections, base, onFinish }: {
   };
   const stopHere = () => {
     const rest: Answers = { ...answers };
-    for (const q of QUESTIONS) if (!rest[q.id] || (!rest[q.id].option && !rest[q.id].text)) rest[q.id] = { skipped: true };
+    for (const q of QUESTIONS) if (!answered(rest[q.id])) rest[q.id] = { skipped: true };
     setAnswers(rest);
     setPrev(sections);
+    setStoppedEarly(true);
     setEnded(true);
   };
 
@@ -459,10 +480,10 @@ function Interview({ answers, setAnswers, sections, base, onFinish }: {
           <Card>
             <div className="px-5 py-5">
               <div className="text-[16px] font-semibold mb-1.5">
-                {score >= BUILD_THRESHOLD ? "That's everything asking can settle." : "Stopped early — that's fine."}
+                {stoppedEarly ? "Stopped early — that's fine." : "That's everything asking can settle."}
               </div>
               <p className="text-[13.5px] text-muted leading-relaxed">
-                Prism understands this customer at <span className="text-foreground font-semibold tabular-nums">{score}</span>.
+                Prism understands this site at <span className="text-foreground font-semibold tabular-nums">{score}</span>.
                 {score >= BUILD_THRESHOLD
                   ? " The rest isn't asked for — it's earned, one recorded decision at a time."
                   : ` Building is possible above ${BUILD_THRESHOLD}; below it the agent will lean on the reviewer more.`}
@@ -475,7 +496,7 @@ function Interview({ answers, setAnswers, sections, base, onFinish }: {
                   </ul>
                 </div>
               )}
-              <div className="mt-4"><Button onClick={onFinish}>Review the profile</Button></div>
+              <div className="mt-4"><Button onClick={onFinish}>Review what Prism wrote</Button></div>
             </div>
           </Card>
         )}
@@ -538,7 +559,7 @@ function DesignFacts() {
   );
 }
 
-export function ProfileEditor({ sections, setSections, who = "you" }: { sections: Live[]; setSections: (s: Live[]) => void; who?: string }) {
+function ProfileEditor({ sections, setSections, who = "you" }: { sections: Live[]; setSections: (s: Live[]) => void; who?: string }) {
   const [editing, setEditing] = useState<SectionKey | null>(null);
   const [draft, setDraft] = useState("");
   const [asking, setAsking] = useState<SectionKey | null>(null);
@@ -565,7 +586,7 @@ export function ProfileEditor({ sections, setSections, who = "you" }: { sections
 
               {isEditing ? (
                 <>
-                  <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={5} autoFocus />
+                  <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={5} autoFocus aria-label={`Edit ${SECTION_LABEL[s.key]}`} />
                   <div className="flex gap-2 mt-3">
                     <Button size="sm" onClick={() => { update(s.key, { body: draft.trim(), status: "edited", confidence: 96, unsure: undefined }); setEditing(null); }}>Save</Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
@@ -637,9 +658,9 @@ const LAYER: Record<"observed" | "characterized" | "earned", { label: string; to
   earned: { label: "earned", tone: "ok" },
 };
 
-function Outputs({ slug, revision }: { slug: string; revision: number }) {
+function Outputs({ domain, revision }: { domain: string; revision: number }) {
   return (
-    <Card title={`What the builder receives · customers/${slug}/`}>
+    <Card title={`What the builder receives · sites/${domain}/`}>
       {OUTPUT_FILES.map((f) => (
         <div key={f.name} className="px-5 py-3 border-b border-border last:border-0">
           <div className="flex items-center gap-3">
@@ -656,43 +677,25 @@ function Outputs({ slug, revision }: { slug: string; revision: number }) {
   );
 }
 
-/* ── The wizard (back office) ──────────────────────────────────────── */
+/* ── The customer wizard (back office): a container, then its Owner ── */
 
-const STEPS = ["Who", "Read", "Ask", "Correct", "Owner"];
+const STEPS_C = ["Who", "Owner"];
 
-export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDone: (name: string) => void }) {
+export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDone: (name: string, sites: string[]) => void }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [others, setOthers] = useState("");
-  const [reading, setReading] = useState<"idle" | "reading" | "done">("idle");
-  const [answers, setAnswers] = useState<Answers>({});
-  const [interviewDone, setInterviewDone] = useState(false);
-  const [sections, setSections] = useState<Live[] | null>(null);
   const [owner, setOwner] = useState("");
-
-  const base = applyAnswers(DRAFT_SECTIONS, {});
-  const asked = applyAnswers(DRAFT_SECTIONS, answers);
-  // Correction starts from the interviewed profile; edits after that are the human's and are kept.
-  const live = sections ?? asked;
-  // "revised" is Prism's redraft — a person still has to say it is right.
-  const approved = live.filter((s) => s.status === "approved" || s.status === "edited").length;
-  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "customer";
-
-  const ok = [
-    name.trim().length > 2 && domain.trim().length > 3,
-    reading === "done",
-    interviewDone,
-    approved === live.length,
-    /.+@.+\..+/.test(owner),
-  ][step];
+  const sites = [domain, ...others.split(",")].map((s) => s.trim().replace(/^https?:\/\//, "")).filter(Boolean);
+  const ok = [name.trim().length > 2 && domain.trim().length > 3, /.+@.+\..+/.test(owner)][step];
 
   return (
-    <Wizard title="Add a customer" steps={STEPS} step={step} setStep={setStep} onClose={onClose}
+    <Wizard title="Add a customer" steps={STEPS_C} step={step} setStep={setStep} onClose={onClose}
       canContinue={ok} finishLabel={`Create ${name.trim() || "the customer"}`} saved={name.trim().length > 2}
-      onFinish={() => onDone(name.trim())}>
+      onFinish={() => onDone(name.trim(), sites)}>
       {step === 0 && (
-        <Q n={1} of={5} title="Who are you setting up?" help="The company whose websites will be tested. Everything else hangs off this — sites, people, connections and results are never shared between customers.">
+        <Q n={1} of={2} title="Who are you setting up?" help="The company whose websites will be tested. It's a container: sites, people, connections and results hang off it and are never shared between customers. Everything Prism learns, it learns per site.">
           <div className="space-y-5">
             <div>
               <Label htmlFor="cname" className="mb-1.5">Customer</Label>
@@ -701,122 +704,257 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
             <div>
               <Label htmlFor="cdomain" className="mb-1.5">Their main website</Label>
               <Input id="cdomain" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="outrigger.com" spellCheck={false} />
-              <p className="text-[12.5px] text-muted-2 mt-2">Prism reads this next. Nothing is changed and nothing is published — it only reads.</p>
             </div>
             <div>
               <Label htmlFor="cothers" className="mb-1.5">Other sites they run <span className="font-normal text-muted-2">— optional</span></Label>
               <Input id="cothers" value={others} onChange={(e) => setOthers(e.target.value)} placeholder="outriggerkona.com, waikikibeachcomber.com" spellCheck={false} />
-              <p className="text-[12.5px] text-muted-2 mt-2">Each site gets its own read and its own environments later. This just tells Prism they exist.</p>
+              <p className="text-[12.5px] text-muted-2 mt-2">Each becomes a site with its own environments, its own source and its own understanding. Nothing is read yet — that happens per site, by whoever knows it best.</p>
             </div>
           </div>
         </Q>
       )}
 
       {step === 1 && (
-        <Q n={2} of={5} wide title={reading === "done" ? `Read ${domain}` : `Read ${domain || "the site"}`}
-          help={reading === "done"
-            ? "Two kinds of thing came out of this and they must not be confused: facts the pages contain, and Prism's guesses about what they mean."
-            : "Prism maps the whole site, reads one of every kind of page within a budget, and derives the design system and the page inventory. It writes nothing anywhere."}>
-          {reading === "idle" && (
-            <div className="flex items-center gap-3">
-              <Button onClick={() => setReading("reading")}>Read {domain}</Button>
-              <span className="text-[12.5px] text-muted-2">Budget: {OBSERVED.budget} pages. A hospitality site is hundreds; most teach nothing new.</span>
+        <Q n={2} of={2} title="Who runs it on their side?" help="The first Owner. They connect their own A/B tool, their own AI key and their sites' scripts — Prism never holds a customer's credentials on their behalf, and neither do we.">
+          <div className="space-y-5">
+            <div>
+              <Label htmlFor="owner" className="mb-1.5">Owner&rsquo;s email</Label>
+              <Input id="owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="dana@outrigger.com" type="email" autoFocus />
+              <p className="text-[12.5px] text-muted-2 mt-2">They get an invitation and a setup checklist that only disappears when everything on it is actually connected.</p>
             </div>
-          )}
-          {reading === "reading" && <Reading done={() => setReading("done")} />}
-          {reading === "done" && <ReadReport sections={base} />}
-        </Q>
-      )}
-
-      {step === 2 && (
-        <Q n={3} of={5} wide title="What the pages couldn't say" help="Every question below is one the crawl could not settle and whose answer changes what the agent would build. There are no others.">
-          <Interview answers={answers} setAnswers={(a) => { setAnswers(a); setSections(null); }} sections={asked} base={base}
-            onFinish={() => { setInterviewDone(true); setStep(3); }} />
-        </Q>
-      )}
-
-      {step === 3 && (
-        <Q n={4} of={5} wide title="Make it true" help="Everything here was written by Prism and is a draft until a person says otherwise. Approve what's right, rewrite what isn't — or hand it back with a note and let Prism redraft it. Your notes are kept: they're the most valuable thing in the file.">
-          <div className="flex items-center gap-3 mb-4">
-            <Badge variant={approved === live.length ? "ok" : "warn"}>{approved} of {live.length} approved</Badge>
-            <span className="text-[12.5px] text-muted-2">All five have to be checked before the customer is created. Understanding: {overall(live)}.</span>
+            <Card title={`What gets created · ${sites.length} site${sites.length === 1 ? "" : "s"}`}>
+              {sites.map((s) => (
+                <div key={s} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
+                  <span className="font-mono text-[13px]">{s}</span>
+                  <Pill tone="muted">Not read yet</Pill>
+                  <span className="ml-auto text-[12.5px] text-muted-2">environments · source · script · understanding — all per site</span>
+                </div>
+              ))}
+              <div className="px-5 py-3 bg-surface-2/40 text-[12.5px] text-muted-2 leading-relaxed">
+                Reading a site is where Prism learns it — its pages, its design system, the way it writes — and asks what the pages can&rsquo;t say.
+                It&rsquo;s done from <span className="text-foreground">Sites</span>, one site at a time, by the person who knows that site. You can do it for them inside a support session.
+              </div>
+            </Card>
           </div>
-          <ProfileEditor sections={live} setSections={setSections} />
-        </Q>
-      )}
-
-      {step === 4 && (
-        <Q n={5} of={5} wide title="Who runs it on their side?" help="The first Owner. They connect their own A/B tool, their own AI key and their sites' scripts — Prism never holds a customer's credentials on their behalf, and neither do we.">
-          <div className="max-w-[620px] mb-5">
-            <Label htmlFor="owner" className="mb-1.5">Owner&rsquo;s email</Label>
-            <Input id="owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="dana@outrigger.com" type="email" autoFocus />
-            <p className="text-[12.5px] text-muted-2 mt-2">They get an invitation and a setup checklist that only disappears when everything on it is actually connected.</p>
-          </div>
-          <Outputs slug={slug} revision={1} />
         </Q>
       )}
     </Wizard>
   );
 }
 
-/* ── The room (customer console · CONFIGURE) ───────────────────────── */
+/* ── Understand a site: Read · Ask · Correct — then the next site ──── */
 
-export function ProfileRoom({ customer = "OUTRIGGER Hotels & Resorts" }: { customer?: string }) {
-  const [sections, setSections] = useState<Live[]>(() =>
-    applyAnswers(DRAFT_SECTIONS, OUTRIGGER_ANSWERS).map((s) => ({
-      ...s, status: "approved" as Status, confidence: clamp(s.confidence + 4),
-      ...(s.key === "voice" ? { body: s.body + " We never say luxury.", status: "revised" as Status, notes: ["we never say luxury"] } : {}),
-    })));
+const STEPS_U = ["Read", "Ask", "Correct"];
+
+export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
+  site: Site; others: Site[]; onClose: () => void; onDone: () => void;
+  /** Open another site's understanding (by id), or add a new site (no id). */
+  onAnother: (siteId?: string) => void;
+}) {
+  const ctx = SITE_CONTEXT[site.id] ?? null;
+  const resuming = Boolean(ctx);
+  const [step, setStep] = useState(resuming ? 1 : 0);
+  const [reading, setReading] = useState<"idle" | "reading" | "done">(resuming ? "done" : "idle");
+  const [answers, setAnswers] = useState<Answers>(ctx?.answers ?? {});
+  const [interviewDone, setInterviewDone] = useState(false);
+  const [sections, setSections] = useState<Live[] | null>(null);
+  const [saved, setSaved] = useState(false);
+  const nextRevision = (ctx?.revisions[ctx.revisions.length - 1]?.r ?? 0) + 1;
+
+  const base = applyAnswers(DRAFT_SECTIONS, {});
+  const asked = applyAnswers(DRAFT_SECTIONS, answers);
+  // Correction starts from the interviewed profile; edits after that are the human's and are kept.
+  const live = sections ?? asked;
+  // "revised" is Prism's redraft — a person still has to say it is right.
+  const approved = live.filter((s) => s.status === "approved" || s.status === "edited").length;
+
+  const ok = [reading === "done", interviewDone, approved === live.length][step];
+
+  if (saved) {
+    const unread = others.filter((o) => understandingOf(o.id).tone === "muted");
+    const unfinished = others.filter((o) => understandingOf(o.id).tone === "warn");
+    const remaining = unread.length + unfinished.length;
+    return (
+      <>
+        <header className="h-14 shrink-0 border-b border-border bg-surface flex items-center px-6 gap-3">
+          <h1 className="text-[15px] font-semibold">Understand {site.domain}</h1>
+          <Pill tone="ok">Saved as revision {nextRevision}</Pill>
+        </header>
+        <div className="flex-1 overflow-auto flex justify-center px-6 py-9">
+          <div className="w-[620px] max-w-full">
+            <div className="text-[11.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">DONE</div>
+            <h2 className="text-[24px] font-semibold tracking-[-0.02em] mb-2">{site.domain} is understood at {overall(live)}.</h2>
+            <p className="text-[14.5px] text-muted leading-relaxed mb-6">
+              Saved as context revision {nextRevision}. Every build on this site from now on pins it. Re-reading later makes r{nextRevision + 1}; it never rewrites r{nextRevision}.
+            </p>
+            <Card title={remaining ? `Scan another site · ${remaining} still to do` : "Every site is understood"}>
+              {unread.map((o) => (
+                <div key={o.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-medium">{o.domain}</div>
+                    <div className="text-[12.5px] text-muted-2">{o.label}</div>
+                  </div>
+                  <Pill tone="muted">Not read yet</Pill>
+                  <Button size="sm" onClick={() => onAnother(o.id)}>Read {o.domain}</Button>
+                </div>
+              ))}
+              {unfinished.map((o) => (
+                <div key={o.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-medium">{o.domain}</div>
+                    <div className="text-[12.5px] text-muted-2">{o.label}</div>
+                  </div>
+                  <Pill tone="warn">Interview unfinished</Pill>
+                  <Button size="sm" variant="outline" onClick={() => onAnother(o.id)}>Continue</Button>
+                </div>
+              ))}
+              <div className="px-5 py-3.5 flex items-center gap-2 bg-surface-2/40">
+                <Button size="sm" variant="outline" onClick={() => onAnother()}>Add a new site</Button>
+                <Button size="sm" variant="ghost" onClick={onDone}>Back to {site.domain}</Button>
+                {remaining === 0 && <span className="ml-auto text-[12.5px] text-muted-2">Nothing else is waiting on you.</span>}
+              </div>
+            </Card>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <Wizard title={`Understand ${site.domain}`} steps={STEPS_U} step={step} setStep={setStep} onClose={onClose}
+      canContinue={ok} finishLabel={`Save as revision ${nextRevision}`} saved={reading === "done"}
+      onFinish={() => { SAVED_THIS_SESSION.set(site.id, nextRevision); setSaved(true); }}>
+      {step === 0 && (
+        <Q n={1} of={3} wide title={`Read ${site.domain}`}
+          help={reading === "done"
+            ? "Two kinds of thing came out of this and they must not be confused: facts the pages contain, and Prism's guesses about what they mean."
+            : "Prism maps the whole site, reads one of every kind of page within a budget, and derives the design system and the page inventory. It writes nothing anywhere."}>
+          {reading === "idle" && (
+            <div className="flex items-center gap-3">
+              <Button onClick={() => setReading("reading")}>Read {site.domain}</Button>
+              <span className="text-[12.5px] text-muted-2">Budget: {OBSERVED.budget} pages. A hospitality site is hundreds; most teach nothing new.</span>
+            </div>
+          )}
+          {reading === "reading" && <Reading done={() => setReading("done")} />}
+          {reading === "done" && <ReadReport sections={base} earned={ctx?.earned} />}
+        </Q>
+      )}
+
+      {step === 1 && (
+        <Q n={2} of={3} wide title="What the pages couldn't say" help="Every question below is one the crawl could not settle and whose answer changes what the agent would build. There are no others.">
+          <Interview answers={answers} setAnswers={(a) => { setAnswers(a); setSections(null); }} sections={asked} base={base}
+            startRound={resumeRound(answers)} onFinish={() => { setInterviewDone(true); setStep(2); }} />
+        </Q>
+      )}
+
+      {step === 2 && (
+        <Q n={3} of={3} wide title="Make it true" help="Everything here was written by Prism and is a draft until a person says otherwise. Approve what's right, rewrite what isn't — or hand it back with a note and let Prism redraft it. Your notes are kept: they're the most valuable thing in the file.">
+          <div className="flex items-center gap-3 mb-4">
+            <Badge variant={approved === live.length ? "ok" : "warn"}>{approved} of {live.length} approved</Badge>
+            <span className="text-[12.5px] text-muted-2">All five have to be checked before this becomes revision {nextRevision}. Understanding: {overall(live)}.</span>
+          </div>
+          <ProfileEditor sections={live} setSections={setSections} />
+          <div className="mt-4"><Outputs domain={site.domain} revision={nextRevision} /></div>
+        </Q>
+      )}
+    </Wizard>
+  );
+}
+
+/* ── What Prism understands about this site (Sites → site) ─────────── */
+
+export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
+  const u = understandingOf(s.id);
+  const ctx = u.ctx;
+  const [sections, setSections] = useState<Live[]>(() => {
+    if (!ctx) return [];
+    return applyAnswers(DRAFT_SECTIONS, ctx.answers).map((sec) => ({
+      ...sec,
+      status: ctx.approved ? ("approved" as Status) : ("draft" as Status),
+      confidence: ctx.approved ? clamp(sec.confidence + 4) : sec.confidence,
+      ...(sec.key === "voice" && ctx.voiceNote ? { body: `${sec.body} ${ctx.voiceNote.charAt(0).toUpperCase()}${ctx.voiceNote.slice(1)}.`, notes: [ctx.voiceNote] } : {}),
+    }));
+  });
   const [reread, setReread] = useState(false);
   const [rereading, setRereading] = useState(false);
-  const rev = OUTRIGGER_REVISIONS[OUTRIGGER_REVISIONS.length - 1];
-  const changed = sections.filter((s) => s.status === "edited").length;
+
+  if (!ctx) {
+    const savedRev = SAVED_THIS_SESSION.get(s.id);
+    return (
+      <Card title={`What Prism understands about ${s.domain}`}>
+        <div className="px-5 py-8 text-center">
+          {savedRev ? (
+            <p className="text-[14px] text-muted leading-relaxed max-w-md mx-auto">Read and approved this session — saved as revision {savedRev}. Reload to see it as the fixture would show it.</p>
+          ) : (
+            <>
+              <p className="text-[14px] text-muted leading-relaxed max-w-md mx-auto mb-4">
+                Prism hasn&rsquo;t read this site yet. Reading it teaches every prototype its components, its type scale and the way it writes —
+                then Prism asks what the pages can&rsquo;t say, and you correct what it wrote.
+              </p>
+              <Button onClick={onRead}>Read {s.domain}</Button>
+            </>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  const rev = ctx.revisions[ctx.revisions.length - 1];
+  const finished = interviewFinished(ctx.answers) || SAVED_THIS_SESSION.has(s.id);
+  const changed = sections.filter((x) => x.status === "edited" || x.status === "revised").length;
 
   return (
     <>
-      <PageHeader title="Business profile" count={`what Prism understands about ${customer}`}
-        actions={<>
+      <div className="flex items-center gap-3 pt-2">
+        <h2 className="text-[15px] font-semibold">What Prism understands about {s.domain}</h2>
+        <Pill tone={u.tone}>{u.label}</Pill>
+        <div className="ml-auto flex items-center gap-2">
           {changed > 0 && <Badge variant="accent">{changed} change{changed === 1 ? "" : "s"} → will become r{rev.r + 1}</Badge>}
+          {!finished && <Button size="sm" onClick={onRead}>Continue the interview</Button>}
           <Button size="sm" variant="outline" onClick={() => setReread(true)}>Re-read the site</Button>
-        </>} />
-      <div className="flex-1 overflow-auto p-6">
-        <div className="flex flex-col xl:flex-row gap-6 items-start max-w-[1180px]">
-          <div className="flex-1 min-w-0 space-y-4 w-full">
-            <Learned earned={OUTRIGGER_EARNED} />
-            <ProfileEditor sections={sections} setSections={setSections} who="Dana Reyes" />
-          </div>
-          <aside className="w-full xl:w-[300px] shrink-0 space-y-4">
-            <Card title={`Context revision ${rev.r}`}>
-              <div className="px-5 py-3.5 space-y-2.5">
-                <div className="text-[13px]"><span className="text-muted-2">Read</span> {OBSERVED.readAt.split(" ").slice(0, 3).join(" ")} · {OBSERVED.read} pages</div>
-                <div className="text-[13px]"><span className="text-muted-2">Understanding</span> <span className="tabular-nums font-medium">{overall(sections)}</span></div>
-                <div className="text-[13px]"><span className="text-muted-2">Pinned by</span> {rev.pinnedBy} builds</div>
-              </div>
-            </Card>
-            <Card title="Revisions">
-              {[...OUTRIGGER_REVISIONS].reverse().map((r) => (
-                <div key={r.r} className="px-5 py-3 border-b border-border last:border-0">
-                  <div className="flex items-center gap-2 text-[12.5px]">
-                    <span className="font-mono font-semibold">r{r.r}</span>
-                    <span className="text-muted-2">{r.when} · {r.who}</span>
-                  </div>
-                  <div className="text-[13px] text-muted mt-1 leading-relaxed">{r.what}</div>
-                  <div className="text-[11.5px] text-muted-2 mt-1">pinned by {r.pinnedBy} build{r.pinnedBy === 1 ? "" : "s"}</div>
-                </div>
-              ))}
-            </Card>
-            <Outputs slug="outrigger" revision={rev.r} />
-          </aside>
         </div>
+      </div>
+
+      {!finished && (
+        <div className="rounded-xl border border-warn/40 bg-warn/[0.06] px-4 py-3 text-[13px] leading-relaxed">
+          <span className="font-semibold text-warn">The interview stopped after round {resumeRound(ctx.answers) - 1}.</span>{" "}
+          <span className="text-muted">{QUESTIONS.filter((q) => !answered(ctx.answers[q.id])).length} questions are still open. Until they&rsquo;re answered or recorded as unknown, nothing below is approved and the agent will lean on the reviewer.</span>
+        </div>
+      )}
+
+      <Learned earned={ctx.earned} />
+      <ProfileEditor sections={sections} setSections={setSections} who="Dana Reyes" />
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <Card title={`Context revision ${rev.r}`}>
+          <div className="px-5 py-3.5 space-y-2.5">
+            <div className="text-[13px]"><span className="text-muted-2">Read</span> {s.profile?.readAt ?? rev.when} · {s.profile?.pages ?? OBSERVED.read} pages</div>
+            <div className="text-[13px]"><span className="text-muted-2">Understanding</span> <span className="tabular-nums font-medium">{overall(sections)}</span></div>
+            <div className="text-[13px]"><span className="text-muted-2">Pinned by</span> {rev.pinnedBy} build{rev.pinnedBy === 1 ? "" : "s"}</div>
+          </div>
+        </Card>
+        <Card title="Revisions">
+          {[...ctx.revisions].reverse().map((r) => (
+            <div key={r.r} className="px-5 py-3 border-b border-border last:border-0">
+              <div className="flex items-center gap-2 text-[12.5px]">
+                <span className="font-mono font-semibold">r{r.r}</span>
+                <span className="text-muted-2">{r.when} · {r.who}</span>
+              </div>
+              <div className="text-[13px] text-muted mt-1 leading-relaxed">{r.what}</div>
+              <div className="text-[11.5px] text-muted-2 mt-1">pinned by {r.pinnedBy} build{r.pinnedBy === 1 ? "" : "s"}</div>
+            </div>
+          ))}
+        </Card>
+        <Outputs domain={s.domain} revision={rev.r} />
       </div>
 
       <Dialog open={reread} onOpenChange={setReread}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Re-read {OBSERVED.domain}?</DialogTitle>
+            <DialogTitle>Re-read {s.domain}?</DialogTitle>
             <DialogDescription>
               Reads up to {OBSERVED.budget} pages again and re-derives the measured layer. It makes revision {rev.r + 1}. Nothing you approved is rewritten —
-              where the pages now disagree with a section, that section is flagged for you, not changed behind you. The {rev.pinnedBy} builds cut against r{rev.r} keep r{rev.r}.
+              where the pages now disagree with a section, that section is flagged for you, not changed behind you. The {rev.pinnedBy} build{rev.pinnedBy === 1 ? "" : "s"} cut against r{rev.r} keep{rev.pinnedBy === 1 ? "s" : ""} r{rev.r}.
             </DialogDescription>
           </DialogHeader>
           {rereading && <Reading done={() => { setRereading(false); setReread(false); }} />}

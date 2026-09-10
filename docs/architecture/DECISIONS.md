@@ -176,3 +176,32 @@ widget and none to the brand; Bootstrap 5 underneath with its default blue
 ×9 against "Book Now" ×3 on the home page. Every one of those became an
 interview question, because a crawl can see them and cannot decide them.
 
+---
+
+## D10 · The customer is a container; everything read, asked and approved is per site
+
+**Decision.** Nothing is crawled, characterized or approved at the customer
+level. A customer is a name, its sites, its people and its connections. Each
+SITE has the observed / characterized / earned layers, its own interview, its
+own context revisions and its own compiled skill (`sites/<domain>/context.md`,
+skill tier `site`). The back-office wizard creates the container and its
+Owner; reading a site happens from Sites, one site at a time, by whoever knows
+that site — or by an operator inside a support session. When a site is saved,
+the next thing offered is the next site: a customer with three sites is not
+onboarded until all three are understood.
+
+**Why.** A crawl is of a site, and a hotel group's properties do not share a
+voice: outriggerkona.com reads "quieter and more residential than the main
+brand" while outrigger.com sells the beach before the building. A customer-
+level profile would have averaged them into something true of neither, and
+the agent would have cited it. (Bryan, 10 Sep 2026: "everything from the scan
+and evaluation should be site specific, not the brand — the brand is just a
+container"; "once a site is fully onboarded the option should be to scan
+another site".)
+
+**Consequence for CONTEXT-INGESTION.md.** The hierarchy there gave the Customer
+its own profile / skill / evidence. Corrected: those live on Site only. The
+skill resolution rule is unchanged in shape — global + customer + site +
+prototype, later tiers win — but the customer tier holds only hand-written
+skills (brand-voice, accessibility floor), never a derived profile.
+

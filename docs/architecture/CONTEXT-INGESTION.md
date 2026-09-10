@@ -72,7 +72,7 @@ concepts to explain.
 Requires the Site entity that USE-CASES.md already reinstates:
 
 ```
-Customer ── profile (observed) · skill (characterized) · evidence (earned)
+Customer ── a container: sites, people, connections (see DECISIONS.md D10 — nothing derived lives here)
    └── Site ── profile (observed) · skill (characterized) · evidence (earned)
          └── Environment (dev / prep / prod — customer's own words)
                └── Experiment

@@ -4,12 +4,12 @@
  *  setup, so these are not an afterthought behind a Settings gear — they are
  *  first-class rooms with the same grammar as the work surfaces. */
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { AB_TOOLS, OTHER_CONNECTIONS, SITE_ROWS, type Connection, type Site } from "@/lib/console/fake";
 import { Empty, Meta, PageHeader, Pill, Section, Th, Toolbar } from "./ui";
 import { SkillsPanel } from "./skills";
+import { SiteProfile, UnderstandingPill } from "./customer-context";
 
 const scriptPill = (s: Site["envs"][number]) =>
   s.script === "verified" ? <Pill tone="ok">Installed</Pill>
@@ -52,11 +52,7 @@ export function SitesView({ open, onAdd }: { open: (id: string) => void; onAdd?:
                   </td>
                   <td className="px-4 py-3">{missing ? <Pill tone="warn">{missing} missing</Pill> : <Pill tone="ok">All installed</Pill>}</td>
                   <td className="px-4 py-3 text-[13px] text-muted">{s.repo ? <span className="font-mono text-[12px]">{s.repo}</span> : <Pill tone="warn">Not connected</Pill>}</td>
-                  <td className="px-4 py-3 text-[13px]">
-                    {s.profile
-                      ? <span className="text-muted">{s.profile.pages} pages{!s.profile.voice.approved && <span className="text-warn"> · needs review</span>}</span>
-                      : <Pill tone="muted">Not read yet</Pill>}
-                  </td>
+                  <td className="px-4 py-3"><UnderstandingPill id={s.id} /></td>
                   <td className="px-4 py-3 text-[13px] text-muted tabular-nums">{s.experiments}</td>
                 </tr>
               );
@@ -68,8 +64,7 @@ export function SitesView({ open, onAdd }: { open: (id: string) => void; onAdd?:
   );
 }
 
-export function SiteDetail({ s, back }: { s: Site; back: () => void }) {
-  const [approved, setApproved] = useState(s.profile?.voice.approved ?? false);
+export function SiteDetail({ s, back, understand }: { s: Site; back: () => void; understand: (id: string) => void }) {
   return (
     <>
       <header className="shrink-0 border-b border-border bg-surface px-6 pt-3 pb-4">
@@ -80,7 +75,6 @@ export function SiteDetail({ s, back }: { s: Site; back: () => void }) {
             <div className="text-[13px] text-muted-2 mt-1">{s.label} · {s.experiments} experiments</div>
           </div>
           <div className="ml-auto flex gap-2">
-            <Button variant="outline" size="sm">Read the site again</Button>
             <Button size="sm">Add an environment</Button>
           </div>
         </div>
@@ -129,46 +123,9 @@ export function SiteDetail({ s, back }: { s: Site; back: () => void }) {
             </div>
           </Section>
 
-          <Section title="What Prism understands about this site" className="flex-[1.4]">
-            <div className="p-5">
-              {s.profile ? (
-                <>
-                  <div className="flex gap-8 pb-4 border-b border-border">
-                    {[[s.profile.pages, "pages read"], [s.profile.components, "repeated components"], [s.profile.events, "things measurable"]].map(([n, l]) => (
-                      <div key={String(l)}>
-                        <div className="text-[20px] font-semibold tracking-[-0.02em] tabular-nums">{n}</div>
-                        <div className="text-[12.5px] text-muted-2 mt-0.5">{l}</div>
-                      </div>
-                    ))}
-                    <div className="ml-auto text-[12.5px] text-muted-2 self-end">read {s.profile.readAt}</div>
-                  </div>
-
-                  <div className="pt-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2">HOW THIS BRAND TALKS</div>
-                      {approved ? <Pill tone="ok">Approved</Pill> : <Pill tone="warn">Draft — nobody has checked this</Pill>}
-                    </div>
-                    <p className="text-[14px] leading-relaxed text-muted">{s.profile.voice.draft}</p>
-                    <p className="text-[12.5px] text-muted-2 mt-2.5">
-                      Written by Prism from the pages it read. Everything above this line is measured; this part is a guess, so it needs a human.
-                    </p>
-                    {!approved && (
-                      <div className="flex gap-2 mt-3.5">
-                        <Button size="sm" onClick={() => setApproved(true)}>That&rsquo;s right</Button>
-                        <Button size="sm" variant="outline">Edit it</Button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-6">
-                  <p className="text-[14px] text-muted mb-3">Prism hasn&rsquo;t read this site yet. Reading it teaches every prototype your components, your type scale and the way you write.</p>
-                  <Button size="sm">Read this site</Button>
-                </div>
-              )}
-            </div>
-          </Section>
         </div>
+
+        <SiteProfile s={s} onRead={() => understand(s.id)} />
       </div>
     </>
   );
