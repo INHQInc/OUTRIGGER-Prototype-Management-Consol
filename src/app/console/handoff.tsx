@@ -28,11 +28,23 @@
  * Frozen facts render as a bordered mono receipt with a lock. Mutable things —
  * who owns it next, the branch, the README — are plain text. Editing a receipt
  * is not a thing you can do; editing a README is.
+ *
+ * Every click here does what it says, inside the session. Where the product
+ * would open a pull request or read a branch, the mock changes the state the
+ * screen reads and writes a line to Activity — who handed what to whom is the
+ * part of a handoff that has to be true from day one.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label as FieldLabel } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
+import { logActivity } from "./config";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
 
 /* ── Fixtures ──────────────────────────────────────────────────────── */
@@ -40,6 +52,10 @@ import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui"
 const EXPERIMENT = "Rate-calendar best-price promise";
 const PAGE = "outrigger.com/hawaii/oahu/outrigger-reef-waikiki-beach-resort";
 const PROPERTY = "OUTRIGGER Reef Waikiki Beach Resort";
+const REPO = "INHQInc/outrigger-web-prototypes";
+const BRANCH = "handoff/rate-calendar-best-price-8c1d7e2";
+const PR_NUMBER = 418;
+const TODAY = "10 Sep 2026";
 
 const RUN = {
   label: "run 4",
@@ -117,7 +133,7 @@ const CUTS: Cut[] = [
     closed: "closed 8 Sep 2026",
     outcome: "won · +2.4% on Reached the booking step",
     stamped: true,
-    pkg: { state: "ready", branch: "handoff/rate-calendar-best-price-8c1d7e2", written: "8 Sep 2026 16:22", author: "Prism agent" },
+    pkg: { state: "ready", branch: BRANCH, written: "8 Sep 2026 16:22", author: "Prism agent" },
     tree: [
       { path: "src", name: "src/", depth: 0, dir: true, lines: [] },
       {
@@ -253,10 +269,10 @@ const CUTS: Cut[] = [
     outcome: "stopped on a guardrail · offers-page reach fell 3.1%",
     pkg: {
       state: "unreadable",
-      connection: "GitHub · INHQInc/outrigger-web-prototypes",
+      connection: `GitHub · ${REPO}`,
       lastRead: "2 Sep 2026 11:40",
       trace: [
-        "GET /repos/INHQInc/outrigger-web-prototypes/contents/handoff?ref=a17c003",
+        `GET /repos/${REPO}/contents/handoff?ref=a17c003`,
         "403 { \"message\": \"Resource not accessible by integration\" }",
       ],
     },
@@ -333,12 +349,60 @@ const CUTS: Cut[] = [
   },
 ];
 
+/** What the agent writes when asked for a package on a cut that never won:
+ *  a record of what ran, and it says so in the first line. */
+const AGENT_NOTE = [
+  "# Rate-calendar best-price promise — cut 5b90f44 (run 3, flat)",
+  "",
+  "Written on request. Run 3 closed flat (+0.4%, interval crosses zero), so this",
+  "cut carries no verdict and this is not a handoff — it is a record of what ran.",
+  "",
+  "What changed: the promise mounted on .rate-calendar, above the month header.",
+  "Why it likely failed: half of mobile never scrolled far enough to see it.",
+  "Do not install this. Nothing in it was proven on outrigger.com.",
+];
+
+/** The invalid package as it sits on the branch — shown only to someone who
+ *  chooses to read it, under a banner that says what it is. */
+const INVALID_PKG = {
+  readme: [
+    "# Rate-calendar urgency banner — native implementation",
+    "",
+    "Puts the “booked N times today” banner inside RateCalendar.tsx so it can",
+    "be themed and cached with the rest of the calendar. No new tracking.",
+  ],
+  manifest: [
+    "{",
+    "  \"cut\": \"b41e9aa\",",
+    "  \"brief\": \"revision 1\",",
+    "  \"files\": [\"README.md\", \"patches/RateCalendar.tsx.patch\"],",
+    "  \"written\": \"18 Jul 2026 09:05\"",
+    "}",
+  ],
+};
+
+/** What rides along with the branch when it is handed over. The verdict receipt
+ *  and the manifest always go — they are the package — so this is what else. */
+type TravelKey = "readout" | "cut" | "qa" | "plan";
+const travelsFor = (sha: string): { key: TravelKey; label: string; detail: string }[] => [
+  { key: "readout", label: "The readout link", detail: "the frozen result and the verdict receipt, as a page" },
+  { key: "cut", label: "The cut SHA", detail: `${sha} — the exact bytes ${RUN.sessions.toLocaleString("en-US")} sessions loaded` },
+  { key: "qa", label: "The QA record", detail: "the sign-off on the real page, 16 Aug 2026" },
+  { key: "plan", label: "The measurement plan", detail: `${RUN.boundTo} and the two events it reads` },
+];
+
 /* ── Small parts ───────────────────────────────────────────────────── */
 
 const Lock = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
     <rect x="4" y="11" width="16" height="10" rx="2" />
     <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </svg>
+);
+
+const Spinner = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="animate-spin" aria-hidden>
+    <path d="M12 3a9 9 0 1 0 9 9" />
   </svg>
 );
 
@@ -381,6 +445,105 @@ const Code = ({ lines, gutter }: { lines: string[]; gutter?: boolean }) => (
   </div>
 );
 
+/** The handover, asked once. The title and the reviewers are yours; the
+ *  repository is not — the package lives on one branch of one repo, and a
+ *  pull request anywhere else would be a copy with no digest behind it. */
+function HandOverDialog({ open, onOpenChange, sha, onSubmit }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sha: string;
+  onSubmit: (pr: { title: string; reviewers: string; travels: string[] }) => void;
+}) {
+  const [title, setTitle] = useState(`${EXPERIMENT} — native implementation`);
+  const [reviewers, setReviewers] = useState("");
+  const [travels, setTravels] = useState<Record<TravelKey, boolean>>({ readout: true, cut: true, qa: true, plan: true });
+  const items = travelsFor(sha);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Hand it to engineering</DialogTitle>
+          <DialogDescription>
+            Opens a pull request from <span className="font-mono">{BRANCH}</span>. The verdict receipt and the manifest go
+            with it whatever you tick below — they are what makes this a decision and not just code.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <FieldLabel htmlFor="pr-title" className="mb-1.5">Pull request title</FieldLabel>
+            <Input id="pr-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+          </div>
+          <div>
+            <FieldLabel id="pr-repo" className="mb-1.5">Target repository</FieldLabel>
+            <div aria-labelledby="pr-repo" className="h-11 flex items-center rounded-xl border border-border bg-surface-2/40 px-3.5 font-mono text-[12.5px] text-muted">{REPO}</div>
+          </div>
+          <div>
+            <FieldLabel htmlFor="pr-reviewers" className="mb-1.5">Reviewers</FieldLabel>
+            <Input id="pr-reviewers" value={reviewers} onChange={(e) => setReviewers(e.target.value)} placeholder="GitHub handles, separated by commas" spellCheck={false} />
+          </div>
+          <div>
+            <FieldLabel id="pr-travels" className="mb-2">What travels with it</FieldLabel>
+            <div role="group" aria-labelledby="pr-travels" className="space-y-2">
+              {items.map((t) => (
+                <FieldLabel key={t.key} htmlFor={`travel-${t.key}`} className="items-start gap-3 rounded-xl border border-border px-4 py-2.5 cursor-pointer font-normal text-foreground">
+                  <Checkbox id={`travel-${t.key}`} checked={travels[t.key]} onCheckedChange={(v) => setTravels((s) => ({ ...s, [t.key]: v === true }))} className="mt-0.5" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[14px] font-medium">{t.label}</span>
+                    <span className="block text-[12.5px] text-muted-2 mt-0.5 break-words">{t.detail}</span>
+                  </span>
+                </FieldLabel>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Not now</Button>
+          <Button
+            disabled={title.trim().length === 0}
+            onClick={() => onSubmit({ title: title.trim(), reviewers: reviewers.trim(), travels: items.filter((t) => travels[t.key]).map((t) => t.label) })}>
+            Open the pull request
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Rejecting a package needs a reason, because the reason is what the agent
+ *  rewrites against. An empty note would be a rewrite of the same mistake. */
+function RejectDialog({ open, onOpenChange, sha, manifestCut, onSubmit }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sha: string;
+  manifestCut: string;
+  onSubmit: (note: string) => void;
+}) {
+  const [note, setNote] = useState("");
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reject it and ask for a rewrite</DialogTitle>
+          <DialogDescription>
+            The agent discards what is on <span className="font-mono">handoff/</span> for cut {sha} and writes it again
+            against this cut only. Your note goes with the request, so the next attempt does not repeat this one.
+          </DialogDescription>
+        </DialogHeader>
+        <div>
+          <FieldLabel htmlFor="reject-note" className="mb-1.5">What&rsquo;s wrong with it</FieldLabel>
+          <Textarea
+            id="reject-note" value={note} onChange={(e) => setNote(e.target.value)} required autoFocus
+            placeholder={`The manifest stamps ${manifestCut}, which is not a cut of this prototype.`} />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Keep it</Button>
+          <Button variant="danger" disabled={note.trim().length === 0} onClick={() => onSubmit(note.trim())}>Reject and re-write</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── The surface ───────────────────────────────────────────────────── */
 
 export function HandoffPanel() {
@@ -388,12 +551,67 @@ export function HandoffPanel() {
   const [filePath, setFilePath] = useState<string | null>(null);
   const [refInput, setRefInput] = useState("");
 
+  // What happened this session, one home each: the PR on the ready cut, the
+  // note on the absent one, the retry on the unreadable one, the rewrite and
+  // the read on the invalid one.
+  const [copied, setCopied] = useState(false);
+  const [handing, setHanding] = useState(false);
+  const [pr, setPr] = useState<{ state: "none" } | { state: "opening" } | { state: "opened"; title: string; reviewers: string; travels: string[] }>({ state: "none" });
+  const [note, setNote] = useState<{ state: "idle" } | { state: "writing"; pct: number } | { state: "written" }>({ state: "idle" });
+  const [retry, setRetry] = useState<"idle" | "reading" | "failed">("idle");
+  const [rejecting, setRejecting] = useState(false);
+  const [rewrite, setRewrite] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+
+  // Timers this panel started, cleared on unmount — a click that sends you to
+  // another stage mid-write leaves nothing ticking behind it.
+  const timers = useRef<number[]>([]);
+  useEffect(() => { const t = timers.current; return () => t.forEach(window.clearTimeout); }, []);
+  const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
+
   const cut = CUTS.find((c) => c.sha === sha) ?? CUTS[0];
   const stampedCut = CUTS.find((c) => c.stamped) ?? CUTS[0];
   const files = cut.tree.filter((f) => !f.dir);
   const open = files.find((f) => f.path === filePath) ?? files[0];
 
   const pickCut = (next: string) => { setSha(next); setFilePath(null); };
+  const go = (detail: { nav: "Connections" } | { stage: "Decision" }) => window.dispatchEvent(new CustomEvent("console:go", { detail }));
+  // The readout sits at the top of the Decision stage and this panel at the
+  // bottom of it, so opening it is a stage change and a scroll — not a no-op.
+  const openReadout = (from: HTMLElement) => {
+    go({ stage: "Decision" });
+    let el: HTMLElement | null = from.parentElement;
+    while (el && !/(auto|scroll)/.test(getComputedStyle(el).overflowY)) el = el.parentElement;
+    el?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const copyBranch = () => { void navigator.clipboard?.writeText(BRANCH); setCopied(true); later(() => setCopied(false), 1500); };
+  const openBranch = () => { if (cut.pkg.state === "ready") window.open(`https://github.com/${REPO}/tree/${cut.pkg.branch}`, "_blank", "noopener"); };
+  const openPr = (d: { title: string; reviewers: string; travels: string[] }) => {
+    setHanding(false);
+    setPr({ state: "opening" });
+    later(() => {
+      setPr({ state: "opened", ...d });
+      logActivity(`Opened PR #${PR_NUMBER} — handed cut ${stampedCut.sha} to engineering.`);
+    }, 900);
+  };
+  const writeNote = () => {
+    setNote({ state: "writing", pct: 12 });
+    logActivity(`Asked the agent to write a handoff note for cut ${cut.sha} anyway.`);
+    later(() => setNote({ state: "writing", pct: 48 }), 450);
+    later(() => setNote({ state: "writing", pct: 84 }), 950);
+    later(() => setNote({ state: "written" }), 1500);
+  };
+  const retryRead = () => {
+    setRetry("reading");
+    later(() => { setRetry("failed"); logActivity(`Retried reading handoff/ on cut ${cut.sha} — still 403.`); }, 1200);
+  };
+  const requestRewrite = (why: string) => {
+    setRejecting(false);
+    setRewrite(why);
+    logActivity(`Rejected the package on cut ${cut.sha} and asked for a rewrite — “${why}”`);
+  };
+  const readAnyway = () => { setReading(true); logActivity(`Read the unverified package on cut ${cut.sha}.`); };
 
   // The ref guard. Only this prototype's own cuts resolve; everything else is
   // refused by name, so "why won't it open main" is answered before it's asked.
@@ -420,8 +638,8 @@ export function HandoffPanel() {
         count={EXPERIMENT}
         actions={
           <>
-            <Button variant="outline" size="sm">Open the readout</Button>
-            <Button variant="outline" size="sm">Copy branch name</Button>
+            <Button variant="outline" size="sm" onClick={(ev) => openReadout(ev.currentTarget)}>Open the readout</Button>
+            <Button variant="outline" size="sm" onClick={copyBranch}>{copied ? "Copied" : "Copy branch name"}</Button>
           </>
         }
       />
@@ -516,7 +734,7 @@ export function HandoffPanel() {
             <Meta k="Decided by" v="Marcus R. · Approver — not the author, and not the reviewer" />
             <Meta k="Author" v="Malia K." />
             <Meta k="Handed to" v={<span>Web platform · Kai T. <span className="text-muted-2">— reassign freely, it does not touch the verdict</span></span>} />
-            <Meta k="Branch" v="handoff/rate-calendar-best-price-8c1d7e2" mono />
+            <Meta k="Branch" v={BRANCH} mono />
           </div>
         </Section>
 
@@ -680,13 +898,31 @@ export function HandoffPanel() {
               </div>
 
               <div className="px-5 py-4 flex flex-wrap items-center gap-3">
-                <Button disabled={!cut.stamped}>Hand it to engineering</Button>
-                <Button variant="outline">Open the branch</Button>
-                <span className="text-[12.5px] text-muted-2 max-w-[440px] leading-relaxed">
-                  Handing it over sends the branch, the verdict receipt and the manifest as one thing. Edit any file in the
-                  package and the digest stops matching the verdict — then it goes back to being code, not a decision.
-                </span>
+                {pr.state === "none" && <Button disabled={!cut.stamped} onClick={() => setHanding(true)}>Hand it to engineering</Button>}
+                {pr.state === "opening" && (
+                  <span className="inline-flex items-center gap-2 text-[13px] text-muted"><Spinner />Opening the pull request…</span>
+                )}
+                {pr.state === "opened" && (
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[13px]">
+                      <Pill tone="ok">Handed over</Pill>
+                      <span>PR #{PR_NUMBER} opened · {TODAY} · waiting on engineering</span>
+                    </div>
+                    <div className="text-[12.5px] text-muted-2 mt-1 truncate">
+                      {pr.title}{pr.reviewers && ` · reviewers ${pr.reviewers}`} · with {pr.travels.length > 0 ? pr.travels.join(", ") : "nothing else attached"}
+                    </div>
+                  </div>
+                )}
+                <Button variant="outline" onClick={openBranch}>Open the branch</Button>
+                {pr.state !== "opened" && (
+                  <span className="text-[12.5px] text-muted-2 max-w-[440px] leading-relaxed">
+                    Handing it over sends the branch, the verdict receipt and the manifest as one thing. Edit any file in the
+                    package and the digest stops matching the verdict — then it goes back to being code, not a decision.
+                  </span>
+                )}
               </div>
+
+              <HandOverDialog open={handing} onOpenChange={setHanding} sha={stampedCut.sha} onSubmit={openPr} />
             </>
           )}
 
@@ -696,8 +932,28 @@ export function HandoffPanel() {
               <Empty
                 title={`Nothing was written to handoff/ on cut ${cut.sha}`}
                 body={cut.pkg.why}
-                action={<Button variant="outline" size="sm">Ask the agent to write one anyway</Button>}
+                action={
+                  note.state === "idle" ? <Button variant="outline" size="sm" onClick={writeNote}>Ask the agent to write one anyway</Button>
+                  : note.state === "writing" ? (
+                    <div className="space-y-2.5">
+                      <Button variant="outline" size="sm" disabled>Writing…</Button>
+                      <Progress value={note.pct} className="w-48 mx-auto" />
+                    </div>
+                  ) : undefined
+                }
               />
+              {note.state === "written" && (
+                <div className="px-5 py-4 border-t border-border">
+                  <Label>handoff/README.md — written just now</Label>
+                  <div className="rounded-lg border border-warn/40 bg-warn/5 overflow-hidden">
+                    <div className="px-4 py-2 border-b border-warn/30"><Pill tone="warn">Written by the agent · unreviewed</Pill></div>
+                    <div className="px-4 py-3"><Code lines={AGENT_NOTE} /></div>
+                  </div>
+                  <p className="text-[12.5px] text-muted-2 mt-2">
+                    A note, not a package. It carries no verdict and cannot be handed over — cut {cut.sha} never won one.
+                  </p>
+                </div>
+              )}
               <div className="px-5 py-3 border-t border-border">
                 <p className="text-[12.5px] text-muted-2 leading-relaxed">
                   Absent is not an error. The branch is readable, <span className="font-mono">handoff/</span> simply does
@@ -727,13 +983,19 @@ export function HandoffPanel() {
               <div className="px-5 py-4 border-b border-border">
                 <Label>WHAT THE SERVER SAID</Label>
                 <div className="rounded-lg border border-danger/40 bg-danger/5 px-4 py-3">
-                  <Code lines={cut.pkg.trace} />
+                  <Code lines={retry === "failed" ? [...cut.pkg.trace, "", `# retried ${TODAY} — same answer`, ...cut.pkg.trace] : cut.pkg.trace} />
                 </div>
               </div>
               <div className="px-5 py-4 flex flex-wrap items-center gap-3">
-                <Button variant="outline">Reconnect GitHub</Button>
-                <Button variant="ghost">Retry read</Button>
-                <span className="text-[12.5px] text-muted-2">Nothing here is hidden from you on purpose. Restore the scope and this section fills in.</span>
+                <Button variant="outline" onClick={() => go({ nav: "Connections" })}>Reconnect GitHub</Button>
+                <Button variant="ghost" disabled={retry === "reading"} onClick={retryRead}>
+                  {retry === "reading" ? <><Spinner />Reading…</> : "Retry read"}
+                </Button>
+                {retry === "failed" ? (
+                  <span className="text-[12.5px] text-danger">Still can&rsquo;t read it · tried {TODAY}</span>
+                ) : (
+                  <span className="text-[12.5px] text-muted-2">Nothing here is hidden from you on purpose. Restore the scope and this section fills in.</span>
+                )}
               </div>
             </>
           )}
@@ -785,14 +1047,50 @@ export function HandoffPanel() {
                 ))}
               </div>
 
-              <div className="px-5 py-4 flex flex-wrap items-center gap-3">
-                <Button variant="danger">Reject and re-write</Button>
-                <Button variant="outline">Read it anyway</Button>
-                <span className="text-[12.5px] text-muted-2 max-w-[440px] leading-relaxed">
-                  Reading it is fine. Handing it over is not — a package that stamps the wrong cut installs the wrong
-                  change and carries a real verdict while doing it.
-                </span>
+              <div className={cn("px-5 py-4 flex flex-wrap items-center gap-3", reading && "border-b border-border")}>
+                {rewrite === null ? (
+                  <>
+                    <Button variant="danger" onClick={() => setRejecting(true)}>Reject and re-write</Button>
+                    {!reading && <Button variant="outline" onClick={readAnyway}>Read it anyway</Button>}
+                    <span className="text-[12.5px] text-muted-2 max-w-[440px] leading-relaxed">
+                      Reading it is fine. Handing it over is not — a package that stamps the wrong cut installs the wrong
+                      change and carries a real verdict while doing it.
+                    </span>
+                  </>
+                ) : (
+                  <div className="flex items-start gap-2.5 text-[13px]">
+                    <Pill tone="warn">Rewrite requested</Pill>
+                    <span className="text-muted leading-relaxed">· {rewrite}</span>
+                  </div>
+                )}
               </div>
+
+              {reading && (
+                <>
+                  <div className="px-5 py-3 border-b border-border bg-warn/5 flex items-start gap-2.5">
+                    <Pill tone="warn">Reading an unverified handoff</Pill>
+                    <p className="text-[13px] text-muted leading-relaxed">
+                      What is on the branch, as written. Nothing below has been checked against this prototype&rsquo;s cuts.
+                    </p>
+                  </div>
+                  <div className="px-5 py-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+                    <div className="min-w-0">
+                      <Label>handoff/README.md — first 4 lines</Label>
+                      <div className="rounded-lg border border-border bg-surface-2/40 px-4 py-3">
+                        <Code lines={INVALID_PKG.readme} />
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <Label>handoff/manifest.json — stamps {cut.pkg.manifestCut}</Label>
+                      <div className="rounded-lg border border-danger/40 bg-danger/5 px-4 py-3">
+                        <Code lines={INVALID_PKG.manifest} />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <RejectDialog open={rejecting} onOpenChange={setRejecting} sha={cut.sha} manifestCut={cut.pkg.manifestCut} onSubmit={requestRewrite} />
             </>
           )}
         </Section>
