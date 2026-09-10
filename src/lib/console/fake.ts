@@ -252,3 +252,45 @@ export const OTHER_CONNECTIONS: Connection[] = [
  *  with nothing that can veto a win cannot be adjudicated honestly. */
 export const isBriefComplete = (e: Experiment) =>
   e.metric !== "—" && e.metric.trim().length > 0 && e.guardrails.length > 0;
+
+/* ── Measurement ────────────────────────────────────────────────────────
+   Real event keys from Optimizely project 24138040550, including the real
+   duplicate display names — which are the reason the planner has to ask. */
+
+export interface PlanEvent { key: string; name: string; type: "click" | "pageview"; attached: boolean; rate?: string }
+
+export const PROJECT_EVENTS: PlanEvent[] = [
+  { key: "24138040550_book_now_button_clicks", name: "Offer Detail Book Now Button Clicks", type: "click", attached: true, rate: "3.62% / 2.93%" },
+  { key: "24138040550_offer_detail_book_now_button_clicks", name: "Offer Detail Book Now Button Clicks", type: "click", attached: false },
+  { key: "24138040550_hero_cta_click", name: "Hero CTA Click", type: "click", attached: true, rate: "8.10% / 7.94%" },
+  { key: "24138040550_hero_cta_click_1", name: "Hero CTA Click", type: "click", attached: false },
+  { key: "24138040550_animated_cta_book_now_clicks", name: "Animated Book Now CTA Clicks", type: "click", attached: true, rate: "1.04% / 0.98%" },
+  { key: "24138040550_all_offers_page", name: "All Offers Page", type: "pageview", attached: true, rate: "22.4% / 20.2%" },
+  { key: "24138040550_home", name: "All Outrigger", type: "pageview", attached: true, rate: "—" },
+  { key: "24138040550_all_resort_accommodations_pages", name: "All Resort Accommodations Pages", type: "pageview", attached: false },
+];
+
+export type MetricRole = "decision" | "supporting" | "guardrail" | "exploratory";
+
+export interface IndexRow {
+  key: string;
+  label: string;
+  role: MetricRole;
+  source: "plan" | "custom" | "optimizely";
+  direction: "up" | "down";
+  directionDeclared: boolean;
+  observed: boolean;
+  hidden: boolean;
+  oneArm?: boolean;
+  value?: string;
+  tone?: "ok" | "danger" | "flat";
+  events: string[];
+}
+
+export const METRIC_INDEX: IndexRow[] = [
+  { key: "composite:reach-booking", label: "Reached the booking step", role: "decision", source: "plan", direction: "up", directionDeclared: true, observed: true, hidden: false, value: "+2.4%", tone: "ok", events: ["24138040550_book_now_button_clicks", "24138040550_animated_cta_book_now_clicks"] },
+  { key: "composite:hero-engagement", label: "Hero engagement", role: "supporting", source: "plan", direction: "up", directionDeclared: true, observed: true, hidden: false, value: "+1.9%", tone: "ok", events: ["24138040550_hero_cta_click"] },
+  { key: "composite:offers-reach", label: "Reached the offers page", role: "guardrail", source: "plan", direction: "up", directionDeclared: false, observed: false, hidden: false, value: "-0.4%", tone: "flat", events: ["24138040550_all_offers_page"] },
+  { key: "composite:quiz-start", label: "Trip planner opened", role: "supporting", source: "custom", direction: "up", directionDeclared: true, observed: false, hidden: false, oneArm: true, value: "5.51%", tone: "flat", events: ["24138040550_opmc__trip_planner_cta_target"] },
+  { key: "metric:Visit Page: All Outrigger", label: "Visit Page: All Outrigger", role: "exploratory", source: "optimizely", direction: "up", directionDeclared: false, observed: false, hidden: true, value: "+0.1%", tone: "flat", events: ["24138040550_home"] },
+];

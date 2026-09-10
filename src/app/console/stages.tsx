@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { STAGES, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
 import { Meta, Pill, Section } from "./ui";
+import { MeasurementPlan, MetricIndex } from "./measurement";
 
 const Lock = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
@@ -85,116 +86,6 @@ export function BriefPanel({ e }: { e: Experiment }) {
   );
 }
 
-
-/* ── The measurement plan ───────────────────────────────────────────────
-   The answer to "how does the system know what these mean, customer by
-   customer": it doesn't invent them. measurement.ts constrains the model to
-   the event names Optimizely actually reports for THIS experiment, asks when
-   it cannot tell (with candidates, because the answer is a choice not an
-   essay), and lists what nobody instrumented as a gap rather than binding the
-   outcome to a lookalike. It runs after bind and before traffic, which is what
-   makes pre-registration hold. */
-
-const PLAN = {
-  outcome: "More guests get all the way through to a completed booking — not just more people starting one.",
-  understanding: 0.82,
-  primary: { label: "Completed bookings", events: ["booking_complete"], bothArms: true },
-  supporting: [
-    { label: "Reached the booking step", events: ["click_check_availability_hero", "click_book_now_room_card"], bothArms: true },
-  ],
-  guardrails: [
-    { label: "Revenue per visit", events: ["booking_complete_revenue"], bothArms: true },
-    { label: "Page errors", events: ["js_error"], bothArms: true },
-  ],
-  question: {
-    q: "Which of these means a completed booking on this site?",
-    options: [
-      { key: "booking_complete", hint: "fires on the confirmation page · 1,204 last 30 days" },
-      { key: "pageview_booking_confirmation", hint: "page view · 1,331 last 30 days" },
-      { key: "booking_complete_revenue", hint: "revenue event · 1,198 last 30 days" },
-    ],
-  },
-  gaps: ["Hesitation at the rate calendar — nothing on this site records it. Prism will not stand in a lookalike event for it."],
-};
-
-function EventChips({ events }: { events: string[] }) {
-  return (
-    <span className="inline-flex flex-wrap gap-1">
-      {events.map((ev) => <span key={ev} className="font-mono text-[11px] text-muted-2 bg-surface-2 rounded px-1.5 py-0.5">{ev}</span>)}
-    </span>
-  );
-}
-
-function PlanRow({ role, label, events }: { role: string; label: string; events: string[] }) {
-  return (
-    <div className="flex items-start gap-3 px-5 py-3 border-b border-border last:border-0">
-      <span className="text-[10.5px] font-semibold tracking-[0.06em] text-muted-2 w-[76px] shrink-0 pt-0.5">{role}</span>
-      <div className="flex-1 min-w-0">
-        <div className="text-[14px] font-medium">{label}</div>
-        <div className="mt-1"><EventChips events={events} /></div>
-      </div>
-      <Pill tone="ok">both arms</Pill>
-    </div>
-  );
-}
-
-export function MeasurementPlan({ confirmed }: { confirmed: boolean }) {
-  return (
-    <Section title="How we'll know — the plan"
-      action={confirmed ? <Frozen>confirmed before traffic</Frozen> : <Pill tone="warn">Needs your confirmation</Pill>}>
-      <div className="px-5 py-4 border-b border-border">
-        <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-1.5">WHAT YOU ASKED FOR, IN YOUR WORDS</div>
-        <p className="text-[14.5px] leading-relaxed">{PLAN.outcome}</p>
-        <p className="text-[12.5px] text-muted-2 mt-2.5">
-          Prism matched this against the {" "}
-          <span className="text-foreground">48 measurements your Optimizely project already records</span>. It can only use
-          those — it cannot invent one, and it will not substitute a similarly-named event.
-        </p>
-        {/* Computed, so it is SHOWN. Beta 1's signature failure is computing a
-            number and rendering it nowhere; this mock had already repeated it. */}
-        <div className="flex items-center gap-2.5 mt-3">
-          <div className="h-1.5 w-28 rounded-full bg-surface-2 overflow-hidden">
-            <div className="h-full bg-accent" style={{ width: `${Math.round(PLAN.understanding * 100)}%` }} />
-          </div>
-          <span className="text-[12.5px] text-muted">
-            Prism is {Math.round(PLAN.understanding * 100)}% confident it understood you — one thing it still needs to ask.
-          </span>
-        </div>
-      </div>
-
-      <PlanRow role="DECIDES IT" label={PLAN.primary.label} events={PLAN.primary.events} />
-      {PLAN.supporting.map((r) => <PlanRow key={r.label} role="SUPPORTING" label={r.label} events={r.events} />)}
-      {PLAN.guardrails.map((r) => <PlanRow key={r.label} role="GUARDRAIL" label={r.label} events={r.events} />)}
-
-      {!confirmed && (
-        <div className="px-5 py-4 border-b border-border bg-warn/5">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[10.5px] font-semibold tracking-[0.06em] text-warn">ONE THING PRISM CAN&rsquo;T TELL</span>
-          </div>
-          <p className="text-[14px] mb-3">{PLAN.question.q}</p>
-          {PLAN.question.options.map((o) => (
-            <button key={o.key} className="w-full flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 mb-1.5 text-left hover:border-border-strong">
-              <span className="w-4 h-4 rounded-full border-2 border-border-strong shrink-0" />
-              <span className="font-mono text-[12.5px]">{o.key}</span>
-              <span className="text-[12.5px] text-muted-2 ml-auto">{o.hint}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="px-5 py-4">
-        <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-1.5">WHAT NOBODY MEASURES YET</div>
-        {PLAN.gaps.map((g) => <p key={g} className="text-[13.5px] text-muted leading-relaxed">{g}</p>)}
-        {!confirmed && (
-          <div className="flex items-center gap-3 mt-4 pt-4 border-t border-border">
-            <Button>Confirm the plan</Button>
-            <span className="text-[12.5px] text-muted-2">Once confirmed this freezes with the run. It can&rsquo;t be changed after numbers exist.</span>
-          </div>
-        )}
-      </div>
-    </Section>
-  );
-}
 
 /* ── Build ─────────────────────────────────────────────────────────── */
 
@@ -342,7 +233,7 @@ export function DecisionPanel({ e, action }: { e: Experiment; action: React.Reac
     );
   }
   if (!e.result) return <NotYet what="No decision yet" needs="A decision is recorded once the run closes. It freezes the result and the statistics together, and it cannot be the person who wrote or built it." />;
-  return <>{action}</>;
+  return <div className="space-y-4">{action}<MetricIndex /></div>;
 }
 
 export function StagePanel({ e, stage, action }: { e: Experiment; stage: Stage; action: React.ReactNode }) {
