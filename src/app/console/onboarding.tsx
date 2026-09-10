@@ -19,6 +19,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
+import type { Site } from "@/lib/console/fake";
 import { Pill, Section } from "./ui";
 
 /* ── shared shell ──────────────────────────────────────────────────── */
@@ -100,7 +101,7 @@ const FOUND_PAGES = [
 
 const STEPS_S = ["Address", "Pages", "Environments", "Source code", "The script"];
 
-export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDone: (site: Site) => void }) {
   const [step, setStep] = useState(0);
   const [domain, setDomain] = useState("");
   const [read, setRead] = useState(false);
@@ -112,10 +113,16 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
   const [repo, setRepo] = useState("");
   const chosen = pages.filter(Boolean).length;
   const ok = [domain.trim().length > 3 && read, chosen > 0, envs.length > 0, true, true][step];
+  const host = domain.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const finish = () => onDone({
+    id: host, domain: host, label: "Added just now", experiments: 0,
+    repo: repo.trim() || undefined, branchPrefix: repo.trim() ? "prototype/" : undefined,
+    envs: envs.map((e) => ({ label: e.label, url: `https://${e.url.replace(/^https?:\/\//, "")}`, isProduction: e.prod, script: "checking" as const })),
+  });
 
   return (
     <Wizard title="Add a site" steps={STEPS_S} step={step} setStep={setStep} onClose={onClose}
-      canContinue={ok} finishLabel="Finish" saved={read} onFinish={onDone}>
+      canContinue={ok} finishLabel="Finish" saved={read} onFinish={finish}>
       {step === 0 && (
         <Q n={1} of={5} title="What&rsquo;s the website?" help="Prism reads it once to learn your pages, your components and the way you write. Nothing is changed and nothing is published.">
           <label className="block text-[13px] font-semibold text-muted mb-1.5">Address</label>
@@ -221,8 +228,8 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
               It tells us the moment it&rsquo;s live, so nobody has to report back.
             </p>
             <div className="flex gap-2.5">
-              <Button onClick={onDone}>Send to a developer</Button>
-              <Button variant="outline" onClick={onDone}>I&rsquo;ll add it myself</Button>
+              <Button onClick={finish}>Send to a developer</Button>
+              <Button variant="outline" onClick={finish}>I&rsquo;ll add it myself</Button>
             </div>
           </div>
         </Q>

@@ -77,6 +77,8 @@ export default function Console() {
   /** A customer created in this session is the only one whose setup is unfinished. */
   const [fresh, setFresh] = useState(false);
   const [freshSites, setFreshSites] = useState<string[]>([]);
+  /** Sites added this session through Add a site. */
+  const [sessionSites, setSessionSites] = useState<Site[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   useEffect(() => {
     const on = (ev: Event) => { setToast((ev as CustomEvent<string>).detail); };
@@ -86,7 +88,7 @@ export default function Console() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
-  const rows: Site[] = fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS;
+  const rows: Site[] = [...(fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS), ...sessionSites];
   const site = rows.find((s) => s.id === siteId) ?? null;
   const learning = rows.find((s) => s.id === understanding) ?? null;
   const waiting = fresh ? 0 : EXPERIMENTS.filter(needsMe).length;
@@ -175,7 +177,7 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={() => { setFlow(null); go("Sites"); }} />}
+        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { setSessionSites((ss) => [...ss.filter((x) => x.id !== site.id), site]); setFlow(null); setNav("Sites"); setSiteId(site.id); }} />}
         {!flow && nav === "Overview" && <OverviewView open={openExp} fresh={fresh} />}
         {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" go={go} />}
         {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" go={go} />}

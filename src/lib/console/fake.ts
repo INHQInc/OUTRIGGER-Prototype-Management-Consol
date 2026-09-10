@@ -223,6 +223,8 @@ EXPERIMENTS.push(
    customer's own word; the only bit that gates anything is `isProduction`. */
 
 export interface EnvRow {
+  /** Who the install instructions went to, while Prism listens for the first beacon. */
+  sentTo?: string;
   label: string;
   url: string;
   isProduction: boolean;
