@@ -23,7 +23,7 @@ import { Empty, PageHeader } from "./ui";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
-import { UnderstandSite } from "./customer-context";
+import { UnderstandSite, markRead } from "./customer-context";
 import { SiteOnboarding } from "./onboarding";
 import { BackOffice, CUSTOMERS, SupportBanner } from "./operator";
 import { VerdictPicker } from "./verdict";
@@ -177,7 +177,7 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { setSessionSites((ss) => [...ss.filter((x) => x.id !== site.id), site]); setFlow(null); setNav("Sites"); setSiteId(site.id); }} />}
+        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); setSessionSites((ss) => [...ss.filter((x) => x.id !== site.id), site]); setFlow(null); setNav("Sites"); setSiteId(site.id); }} />}
         {!flow && nav === "Overview" && <OverviewView open={openExp} fresh={fresh} />}
         {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" go={go} />}
         {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" go={go} />}

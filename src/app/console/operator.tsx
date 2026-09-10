@@ -151,8 +151,13 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
         {adding && (
           <CustomerWizard onClose={() => setAdding(false)} onDone={(name, sites) => {
             const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-            setList((l) => [{ id, name, sites: sites.length, experiments: 0, people: 1, running: 0, health: "warn",
-              issue: `Setup unfinished — ${sites.length} site${sites.length === 1 ? "" : "s"} not read yet, no A/B tool connected`, usage: "$0 / mo", since: "Sep 2026", fresh: true, siteDomains: sites }, ...l]);
+            const n = sites.length;
+            setList((l) => [{ id, name, sites: n, experiments: 0, people: 1, running: 0, health: "warn",
+              issue: `Reading ${sites.join(", ")}…`, usage: "$0 / mo", since: "Sep 2026", fresh: true, siteDomains: sites }, ...l]);
+            // The read is Prism's; the questions wait for a person.
+            setTimeout(() => setList((l) => l.map((c) => (c.id === id
+              ? { ...c, issue: `Setup unfinished — ${n} site${n === 1 ? "" : "s"} read, questions waiting for their Owner; no A/B tool connected` }
+              : c))), 4500);
             setAdding(false); setRoom("Customers");
           }} />
         )}

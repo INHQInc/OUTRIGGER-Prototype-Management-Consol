@@ -110,10 +110,24 @@ const contextFor = (id: string): (SiteContext & { sections?: Live[] }) | null =>
 const DRAFTS = new Map<string, Record<string, unknown>>();
 const TODAY = "10 Sep 2026";
 
+/** Prism reads a site the moment it exists — when the customer is created, or when a site is added.
+ *  The questions and the corrections wait for a person. */
+export function markRead(siteId: string) {
+  if (contextFor(siteId)) return;
+  SESSION_CONTEXT.set(siteId, {
+    answers: {}, approved: false, earned: [],
+    revisions: [{ r: 1, when: TODAY, who: "Prism", what: `Read automatically — ${OBSERVED.read} pages. Nobody has been asked anything yet.`, pinnedBy: 0 }],
+    sections: applyAnswers(DRAFT_SECTIONS, {}),
+  });
+}
+
+const askedNothing = (answers: Answers) => Object.keys(answers).length === 0;
+
 /** A site's understanding, as the Sites list and the site page state it. */
 export function understandingOf(siteId: string): { label: string; tone: "ok" | "warn" | "muted"; ctx: (SiteContext & { sections?: Live[] }) | null } {
   const ctx = contextFor(siteId);
   if (!ctx) return { label: "Not read yet", tone: "muted", ctx: null };
+  if (askedNothing(ctx.answers)) return { label: "Read — questions waiting", tone: "warn", ctx };
   if (!interviewFinished(ctx.answers)) return { label: "Interview unfinished", tone: "warn", ctx };
   if (!ctx.approved) return { label: "Draft — nobody has checked it", tone: "warn", ctx };
   return { label: `Approved · r${ctx.revisions[ctx.revisions.length - 1].r}`, tone: "ok", ctx };
@@ -687,20 +701,19 @@ function Outputs({ domain, revision }: { domain: string; revision: number }) {
 const STEPS_C = ["Who", "Owner"];
 
 export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDone: (name: string, sites: string[]) => void }) {
-  const d = (DRAFTS.get("customer") ?? {}) as Partial<{ step: number; name: string; domain: string; others: string; owner: string }>;
+  const d = (DRAFTS.get("customer") ?? {}) as Partial<{ step: number; name: string; siteInputs: string[]; owner: string }>;
   const [step, setStep] = useState(d.step ?? 0);
   const [name, setName] = useState(d.name ?? "");
-  const [domain, setDomain] = useState(d.domain ?? "");
-  const [others, setOthers] = useState(d.others ?? "");
+  const [siteInputs, setSiteInputs] = useState<string[]>(d.siteInputs ?? [""]);
   const [owner, setOwner] = useState(d.owner ?? "");
-  useEffect(() => { DRAFTS.set("customer", { step, name, domain, others, owner }); }, [step, name, domain, others, owner]);
-  const sites = [domain, ...others.split(",")].map((s) => s.trim().replace(/^https?:\/\//, "")).filter(Boolean);
-  const ok = [name.trim().length > 2 && domain.trim().length > 3, /.+@.+\..+/.test(owner)][step];
+  useEffect(() => { DRAFTS.set("customer", { step, name, siteInputs, owner }); }, [step, name, siteInputs, owner]);
+  const sites = siteInputs.map((s) => s.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "")).filter((s) => s.length > 3);
+  const ok = [name.trim().length > 2 && sites.length > 0, /.+@.+\..+/.test(owner)][step];
 
   return (
     <Wizard title="Add a customer" steps={STEPS_C} step={step} setStep={setStep} onClose={onClose}
       canContinue={ok} finishLabel={`Create ${name.trim() || "the customer"}`} saved={name.trim().length > 2}
-      onFinish={() => { DRAFTS.delete("customer"); onDone(name.trim(), sites); }}>
+      onFinish={() => { DRAFTS.delete("customer"); sites.forEach(markRead); onDone(name.trim(), sites); }}>
       {step === 0 && (
         <Q n={1} of={2} title="Who are you setting up?" help="The company whose websites will be tested. It's a container: sites, people, connections and results hang off it and are never shared between customers. Everything Prism learns, it learns per site.">
           <div className="space-y-5">
@@ -709,13 +722,23 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
               <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} placeholder="OUTRIGGER Hotels & Resorts" autoFocus />
             </div>
             <div>
-              <Label htmlFor="cdomain" className="mb-1.5">Their main website</Label>
-              <Input id="cdomain" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="outrigger.com" spellCheck={false} />
-            </div>
-            <div>
-              <Label htmlFor="cothers" className="mb-1.5">Other sites they run <span className="font-normal text-muted-2">— optional</span></Label>
-              <Input id="cothers" value={others} onChange={(e) => setOthers(e.target.value)} placeholder="outriggerkona.com, waikikibeachcomber.com" spellCheck={false} />
-              <p className="text-[12.5px] text-muted-2 mt-2">Each becomes a site with its own environments, its own source and its own understanding. Nothing is read yet — that happens per site, by whoever knows it best.</p>
+              <Label htmlFor="site-0" className="mb-1.5">Their sites</Label>
+              <div className="space-y-2">
+                {siteInputs.map((v, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input id={`site-${i}`} value={v} onChange={(e) => setSiteInputs((ss) => ss.map((x, j) => (i === j ? e.target.value : x)))}
+                      placeholder={["outrigger.com", "outriggerkona.com", "waikikibeachcomber.com"][i] ?? "another-site.com"} spellCheck={false}
+                      onKeyDown={(e) => { if (e.key === "Enter" && v.trim()) { e.preventDefault(); setSiteInputs((ss) => [...ss, ""]); } }} />
+                    {siteInputs.length > 1 && (
+                      <Button variant="ghost" size="icon" aria-label={`Remove ${v || "this site"}`} onClick={() => setSiteInputs((ss) => ss.filter((_, j) => j !== i))}>×</Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <Button variant="link" size="sm" className="px-0 mt-1" onClick={() => setSiteInputs((ss) => [...ss, ""])}>+ Add another site</Button>
+              <p className="text-[12.5px] text-muted-2 mt-1">
+                Prism reads every one of these the moment the customer is created — up to {OBSERVED.budget} pages each, through Firecrawl. Each gets its own environments, source and understanding.
+              </p>
             </div>
           </div>
         </Q>
@@ -729,17 +752,17 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
               <Input id="owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="dana@outrigger.com" type="email" autoFocus />
               <p className="text-[12.5px] text-muted-2 mt-2">They get an invitation and a setup checklist that only disappears when everything on it is actually connected.</p>
             </div>
-            <Card title={`What gets created · ${sites.length} site${sites.length === 1 ? "" : "s"}`}>
+            <Card title={`What happens on create · ${sites.length} site${sites.length === 1 ? "" : "s"}`}>
               {sites.map((s) => (
                 <div key={s} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
                   <span className="font-mono text-[13px]">{s}</span>
-                  <Pill tone="muted">Not read yet</Pill>
-                  <span className="ml-auto text-[12.5px] text-muted-2">environments · source · script · understanding — all per site</span>
+                  <Pill tone="accent">Read on create</Pill>
+                  <span className="ml-auto text-[12.5px] text-muted-2">pages · design system · components · first drafts</span>
                 </div>
               ))}
               <div className="px-5 py-3 bg-surface-2/40 text-[12.5px] text-muted-2 leading-relaxed">
-                Reading a site is where Prism learns it — its pages, its design system, the way it writes — and asks what the pages can&rsquo;t say.
-                It&rsquo;s done from <span className="text-foreground">Sites</span>, one site at a time, by the person who knows that site. You can do it for them inside a support session.
+                Prism reads each site itself. What it can&rsquo;t read — who the guests are, who they lose bookings to, which button is primary — it asks,
+                from <span className="text-foreground">Sites</span>, one site at a time, of the person who knows that site. You can answer for them inside a support session.
               </div>
             </Card>
           </div>
@@ -949,15 +972,18 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
         <Pill tone={u.tone}>{u.label}</Pill>
         <div className="ml-auto flex items-center gap-2">
           {changed > 0 && <Button size="sm" onClick={pin}>Save {changed} change{changed === 1 ? "" : "s"} as revision {rev.r + 1}</Button>}
-          {!finished && <Button size="sm" onClick={onRead}>Continue the interview</Button>}
+          {!finished && <Button size="sm" onClick={onRead}>{askedNothing(ctx.answers) ? "Answer its questions" : "Continue the interview"}</Button>}
           <Button size="sm" variant="outline" onClick={() => setReread(true)}>Re-read the site</Button>
         </div>
       </div>
 
       {!finished && (
         <div className="rounded-xl border border-warn/40 bg-warn/[0.06] px-4 py-3 text-[13px] leading-relaxed">
-          <span className="font-semibold text-warn">The interview stopped after round {resumeRound(ctx.answers) - 1}.</span>{" "}
-          <span className="text-muted">{QUESTIONS.filter((q) => !answered(ctx.answers[q.id])).length} questions are still open. Until they&rsquo;re answered or recorded as unknown, nothing below is approved and the agent will lean on the reviewer.</span>
+          {askedNothing(ctx.answers)
+            ? <><span className="font-semibold text-warn">Prism read this site; nobody has been asked anything yet.</span>{" "}
+                <span className="text-muted">{QUESTIONS.length} questions are waiting — the ones the pages can&rsquo;t answer. Until they&rsquo;re answered or recorded as unknown, nothing below is approved and the agent will lean on the reviewer.</span></>
+            : <><span className="font-semibold text-warn">The interview stopped after round {resumeRound(ctx.answers) - 1}.</span>{" "}
+                <span className="text-muted">{QUESTIONS.filter((q) => !answered(ctx.answers[q.id])).length} questions are still open. Until they&rsquo;re answered or recorded as unknown, nothing below is approved and the agent will lean on the reviewer.</span></>}
         </div>
       )}
 
