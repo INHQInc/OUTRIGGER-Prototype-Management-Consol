@@ -229,3 +229,35 @@ implies the person can see other people's data; a site selector implies only
 what is true. It also keeps the copy generic — the same screen reads right
 for an account that signed itself up (no operator anywhere in the sentence).
 
+---
+
+## D12 · One way to a site, and copy that reads right for an account that signed itself up
+
+**Decision — one way in.** There is no Sites room. The site selector at the top
+of the sidebar is the only site control: picking a site scopes Overview,
+Experiments and Readouts to it, and puts a CONFIGURE item **named for that
+site** below — environments, script, source code, and what Prism understands.
+Each row of the selector carries that site's understanding state (*Not read
+yet* · *Read — questions waiting* · *Interview unfinished* · *Approved · r3*),
+so nothing the list view showed is lost. *All sites* means no site item.
+*+ Add a site* lives in the selector and lands on the site it created.
+
+**Why.** Two doors to the same place (a dropdown and a nav item) means neither
+is the way, and the nav item carried a list that only existed to re-choose what
+the dropdown already chooses. (Bryan, 10 Sep 2026: "the drop down to pick sites
+is the only one but it must also load all the site info from the other tab.")
+
+**Decision — generic copy.** No screen says *the customer*, *their sites*, or
+*on their behalf*. The person on the screen owns the account; an operator only
+ever reaches it through a support session the account can see. The wizard is
+**New account** → Company · Sites · Owner.
+
+**Why.** The same screens have to read correctly when an account signs itself
+up, with no operator in the sentence at all. (Bryan: "a customer might actually
+just sign up — keep it generic.")
+
+**Also settled in passing.** The support-session reason gate says what it wants
+("The account's Owner reads this in their Activity — a plain sentence, not a
+word") and opens at four characters; an eight-character gate that explained
+nothing read as a broken button.
+

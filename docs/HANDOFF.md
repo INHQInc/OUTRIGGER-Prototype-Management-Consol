@@ -11,48 +11,91 @@ Beta 1 stays on `main`; everything below is the `beta-2` branch only. It is a
 `src/middleware.ts`), built to settle the enterprise UX before any of it is
 wired to Beta 1's engine. Read, in this order:
 
-- `docs/architecture/DECISIONS.md` — D1–D10. D8 (customer creation is a
-  back-office act; the Owner connects their own tools), D9 (the site interview
-  is terminal, unknowns recorded not guessed) and **D10 (the customer is a
-  container; everything read/asked/approved is per site)** shape the current
-  screens.
+- `docs/architecture/DECISIONS.md` — D1–D12. The ones that shape what is on
+  screen now: **D8** (creating an account is a back-office act; the Owner
+  connects their own tools), **D9** (the site interview is terminal, unknowns
+  recorded not guessed), **D10** (the account is a container — everything read,
+  asked and approved is per SITE), **D11** (signed in you belong to one account;
+  the sidebar picks a site), **D12** (one way to a site; generic copy).
 - `docs/architecture/CONTEXT-INGESTION.md` — observed / characterized / earned,
   with the D10 correction applied to its hierarchy.
 - `docs/architecture/USE-CASES.md`, `FEATURE-GAP.md` — the inventory the mock
   was built against. The five gaps FEATURE-GAP names first are closed on this
-  branch (typed verdict, measurement plan, brief author, evidence board, run
-  facts); its opening verdict describes the mock as it was in August.
+  branch; its opening verdict describes the mock as it was in August.
 
-**Where things live.** `src/app/console/` — `page.tsx` (shell, nav, support
-session, fresh-customer emptiness), `operator.tsx` (back office),
-`customer-context.tsx` (Add a customer · Understand a site · site profile),
-`config.tsx` (Sites, Connections, People, Guardrails, Activity), `work.tsx` /
-`stages.tsx` (experiments through the five stages), `skills.tsx`, and the
-agent-built panels (`verdict`, `readout`, `brief-author`, `qa`, `build-panel`,
-`evidence-board`, `handoff`, `metric-builder`, `setup`). Fixtures:
-`src/lib/console/fake.ts` (experiments, sites, real Optimizely event keys) and
-`context.ts` (the real outrigger.com read — see its header for what is real
-and what is illustrative).
+### The shape of it
 
-**UI kit.** shadcn/ui components are COPIED and rewritten into Prism's token
-vocabulary in `src/components/ui/` (the mapping is documented in `button.tsx`).
-Always use them; a control shadcn lacks (the wizard stepper) is the exception,
-agreed with Bryan. A handler-less `<Button>` shows a "not built in this mock
-yet" toast — that is the honesty contract, not a bug. Dialogs and selects
-portal into the dark scope via `theme-scope.tsx`.
+**Navigation.** One sidebar. The account's name is a label; under it the **site
+selector** (All sites, or one of the account's sites with its understanding
+state). Work rooms: Overview · Experiments · Ideas · Readouts — scoped to the
+chosen site. CONFIGURE: *<the chosen site>* (only while one is chosen) ·
+Connections · People & roles · Guardrails · Activity. DEMO: All verdict states.
+`Back office →` at the foot.
 
-**Mock-only session state.** `customer-context.tsx` keeps what a session read,
-asked and saved (`SESSION_CONTEXT`) and half-finished wizards (`DRAFTS`) in
-module maps. Next's hot reload resets them; a real session never sees that.
+**Two shells.** The account console (`data-console`) and the back office
+(`data-backoffice`, amber rail). Entering an account from the back office is a
+support session — a reason, a clock, a banner that never leaves, a line in that
+account's own Activity.
+
+**The three onboarding flows.**
+1. *New account* (back office): Company · Sites (one field per site, **+ Add
+   another site**) · Owner. On create every site is read automatically; the
+   questions wait for a person.
+2. *Add a site* (site selector): address · pages · environments · source · the
+   script. Lands on the new site, already read.
+3. *Understand this site* (from the site's CONFIGURE page): **Read · Ask ·
+   Correct**, ending on *Scan another site*.
+
+### Where things live
+
+`src/app/console/` — `page.tsx` (shell, nav, site selector, support session,
+fresh-account emptiness), `operator.tsx` (back office), `customer-context.tsx`
+(New account · Understand a site · the site profile), `config.tsx` (SiteDetail,
+Connections, People, Guardrails, Activity), `work.tsx` / `stages.tsx`
+(experiments through the five stages), `skills.tsx`, and the agent-built panels
+(`verdict`, `readout`, `brief-author`, `qa`, `build-panel`, `evidence-board`,
+`handoff`, `metric-builder`, `setup`). Fixtures: `src/lib/console/fake.ts`
+(experiments, sites, real Optimizely event keys) and `context.ts` (the real
+outrigger.com read — its header says what is real and what is illustrative).
+
+### Contracts to honour
+
+- **UI kit.** shadcn/ui components are COPIED and rewritten into Prism's token
+  vocabulary in `src/components/ui/` (the mapping is documented in
+  `button.tsx`): button · input · textarea · label · radio-group · checkbox ·
+  switch · select · progress · badge · tabs · separator · skeleton · dialog.
+  Always use them; a control shadcn lacks (the wizard stepper) is the exception,
+  agreed with Bryan. Never hardcode a colour — including text on a status fill,
+  which has its own tokens (`--ok-fg` / `--warn-fg` / `--danger-fg`).
+- **Portals.** Dialogs and selects mount inside the scoped dark theme via
+  `theme-scope.tsx` (a context, not a document query). Anything new that
+  portals must do the same.
+- **Honesty.** A handler-less `<Button>` shows a "isn't built in this mock yet"
+  toast. That is the contract, not a bug — but every click on a finished screen
+  should do what its label says.
+- **Navigation is one event.** `window.dispatchEvent(new CustomEvent("console:go",
+  { detail: { nav } | { expId } | { stage } }))`. No prop chains.
+- **Activity is the record.** `logActivity("…")` from `./config` for anything a
+  person did — past tense, plain words. It renders above the fixture rows.
+- **Copy.** Second person, present tense. The person on the screen owns the
+  account: never *the customer*, *their site*, *on their behalf*. Site visitors
+  are *guests*. Never present a guess as a fact. Prism never does anything that
+  needs someone else's credentials — that is a message to the one person who can.
+
+**Mock-only session state.** Module maps, reset by Next's hot reload, never seen
+by a real session: `SESSION_CONTEXT` + `DRAFTS` (customer-context.tsx — what a
+session read, asked, saved, and any half-finished wizard), `SESSION_ACTIVITY` +
+`SITE_EDITS` (config.tsx).
 
 **Run it.** `npm run dev -- --port 3100` → `http://localhost:3100/console`.
 Typecheck `npx tsc --noEmit -p .`; lint `npx eslint src/app/console
 src/components/ui src/lib/console` (two pre-existing warnings in `stages.tsx`).
 
-**Next on the list.** Remaining handler-less buttons (an inventory: `for f in
-src/app/console/*.tsx; do grep "<Button" "$f" | grep -vc "onClick"; done`),
-concentrated in `handoff.tsx`, `build-panel.tsx`, `work.tsx`, `stages.tsx`,
-`qa.tsx`; then wiring the mock to Beta 1's real engine behind the same screens.
+**Next on the list.** Finish the dead-click sweep on the experiment side
+(inventory: `for f in src/app/console/*.tsx; do grep "<Button" "$f" | grep -vc
+"onClick"; done`), then scope the work rooms' contents to the chosen site
+(`page.tsx` computes `scoped`; the views still read the full fixture), then wire
+the mock to Beta 1's engine behind the same screens.
 
 ---
 
