@@ -609,7 +609,7 @@ const TIER_LONG: Record<Tier, string> = {
   experiment: `This experiment only — ${RUN.experiment}`,
   site: "outrigger.com — every experiment on this site",
   customer: "Outrigger — every site on the account",
-  global: "Prism — every customer",
+  global: "Prism — every account",
 };
 
 const TIER_RANK: Record<Tier, number> = { experiment: 0, site: 1, customer: 2, global: 3 };

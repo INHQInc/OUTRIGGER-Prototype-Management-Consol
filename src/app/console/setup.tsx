@@ -478,7 +478,7 @@ export function AgentHandshake() {
         </div>
         {[
           { id: "you" as const, title: `${ME.name} runs it`, sub: `On this machine, in your own terminal. Prism hands over a line to paste and then watches the branch — it never reaches into your session.`, ok: true },
-          { id: "hosted" as const, title: "Prism runs it on a hosted runner", sub: "Not available for this customer: the runner would need write access to outrigger-digital, and only the GitHub app&rsquo;s read scope is granted.", ok: false },
+          { id: "hosted" as const, title: "Prism runs it on a hosted runner", sub: "Not available here: the runner would need write access to outrigger-digital, and only the GitHub app&rsquo;s read scope is granted.", ok: false },
         ].map((o) => (
           <button key={o.id} onClick={() => o.ok && setRunner(o.id)} disabled={!o.ok}
             className={cn("w-full flex items-start gap-3 px-5 py-3.5 border-b border-border last:border-0 text-left",

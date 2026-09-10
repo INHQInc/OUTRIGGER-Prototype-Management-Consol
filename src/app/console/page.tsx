@@ -57,7 +57,7 @@ const NAV = [
 const FreshEmpty = ({ title, go }: { title: string; go: (s: string) => void }) => (
   <>
     <PageHeader title={title} />
-    <Empty title="Nothing here yet" body="This starts once a site has been read and understood — that's the first thing to do for a new customer."
+    <Empty title="Nothing here yet" body="This starts once a site has been read and understood — that's the first thing to do for a new account."
       action={<Button onClick={() => go("Sites")}>Go to Sites</Button>} />
   </>
 );
@@ -86,6 +86,16 @@ export default function Console() {
     return () => window.removeEventListener("mock-not-built", on);
   }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
+  // `console:go` — any panel can ask for a room or an experiment: {nav} or {expId}. Stages are handled by ExperimentDetail.
+  useEffect(() => {
+    const on = (ev: Event) => {
+      const d = (ev as CustomEvent<{ nav?: string; expId?: string }>).detail;
+      if (d?.expId) { setNav("Experiments"); setExpId(d.expId); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); }
+      else if (d?.nav) { setNav(d.nav); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); }
+    };
+    window.addEventListener("console:go", on);
+    return () => window.removeEventListener("console:go", on);
+  }, []);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
   const rows: Site[] = [...(fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS), ...sessionSites];

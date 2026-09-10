@@ -46,7 +46,7 @@ export function SitesView({ open, onAdd, rows = SITE_ROWS }: { open: (id: string
       <PageHeader title="Sites" count={`${rows.length} site${rows.length === 1 ? "" : "s"}`} actions={<Button size="sm" onClick={onAdd}>Add a site</Button>} />
       <Toolbar>
         <span className="text-[13px] text-muted">
-          A customer can have any number of sites, and each site has its own environments, its own source code and its own understanding.
+          An account can have any number of sites, and each site has its own environments, its own source code and its own understanding.
         </span>
       </Toolbar>
       <div className="flex-1 overflow-auto">
@@ -335,7 +335,7 @@ export function ConnectionsView() {
   const connect = () => {
     if (!connectingConn) return;
     setOthers((os) => os.map((c) => (c.id === connectingId ? { ...c, state: "connected", detail: "Your own key", note: "Bring your own" } : c)));
-    logActivity(`Connected ${connectingConn.name} with the customer's own key.`);
+    logActivity(`Connected ${connectingConn.name} with your own key.`);
     setConnectingId(null); setKey("");
   };
 
@@ -343,14 +343,14 @@ export function ConnectionsView() {
     <>
       <PageHeader title="Connections" actions={<Button size="sm" variant="outline" onClick={testAll} disabled={checking}>{checking ? "Testing…" : "Test all"}</Button>} />
       <div className="flex-1 overflow-auto p-6 space-y-4">
-        <Section title="A/B testing tool" action={<span className="text-[12.5px] text-muted-2">Bring your own. One per customer.</span>}>
+        <Section title="A/B testing tool" action={<span className="text-[12.5px] text-muted-2">Bring your own. One per account.</span>}>
           {AB_TOOLS.map((c) => <ConnRow key={c.id} c={c} checking={checking && !results[c.id]} result={results[c.id]} onConnect={() => setConnectingId(c.id)} />)}
         </Section>
         <Section title="Everything else">
           {others.map((c) => <ConnRow key={c.id} c={c} checking={checking && !results[c.id]} result={results[c.id]} onConnect={() => setConnectingId(c.id)} />)}
         </Section>
         <p className="text-[12.5px] text-muted-2 px-1">
-          Keys are yours. Prism stores them for this customer only, never shows them again after you save them, and never shares them between customers.
+          Keys are yours. Prism stores them for this account only, never shows them again after you save them, and never shares them between accounts.
         </p>
         <SkillsPanel />
       </div>
@@ -359,7 +359,7 @@ export function ConnectionsView() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Connect {connectingConn?.name}</DialogTitle>
-            <DialogDescription>Your account, your usage, your data-handling agreement. The key is stored for this customer only and is not shown again after you save it.</DialogDescription>
+            <DialogDescription>Your account, your usage, your data-handling agreement. The key is stored for this account only and is not shown again after you save it.</DialogDescription>
           </DialogHeader>
           <div>
             <Label htmlFor="conn-key" className="mb-1.5">{connectingConn?.name} API key</Label>
@@ -524,7 +524,7 @@ export function PeopleView() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Turn off the second-person rule?</DialogTitle>
-            <DialogDescription>From now on the person who wrote an experiment can approve it going live and record its result. This is written to Activity with your name and the time, and the customer&rsquo;s Owner is told.</DialogDescription>
+            <DialogDescription>From now on the person who wrote an experiment can approve it going live and record its result. This is written to Activity with your name and the time, and the account&rsquo;s Owner is told.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmOff(false)}>Keep it on</Button>

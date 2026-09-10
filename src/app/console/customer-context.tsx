@@ -711,18 +711,18 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
   const ok = [name.trim().length > 2 && sites.length > 0, /.+@.+\..+/.test(owner)][step];
 
   return (
-    <Wizard title="Add a customer" steps={STEPS_C} step={step} setStep={setStep} onClose={onClose}
+    <Wizard title="New account" steps={STEPS_C} step={step} setStep={setStep} onClose={onClose}
       canContinue={ok} finishLabel={`Create ${name.trim() || "the customer"}`} saved={name.trim().length > 2}
       onFinish={() => { DRAFTS.delete("customer"); sites.forEach(markRead); onDone(name.trim(), sites); }}>
       {step === 0 && (
-        <Q n={1} of={2} title="Who are you setting up?" help="The company whose websites will be tested. It's a container: sites, people, connections and results hang off it and are never shared between customers. Everything Prism learns, it learns per site.">
+        <Q n={1} of={2} title="Who is this for?" help="The company whose websites will be tested. Everything hangs off it — sites, people, connections, results — and nothing is shared between accounts. Everything Prism learns, it learns per site.">
           <div className="space-y-5">
             <div>
-              <Label htmlFor="cname" className="mb-1.5">Customer</Label>
+              <Label htmlFor="cname" className="mb-1.5">Company</Label>
               <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} placeholder="OUTRIGGER Hotels & Resorts" autoFocus />
             </div>
             <div>
-              <Label htmlFor="site-0" className="mb-1.5">Their sites</Label>
+              <Label htmlFor="site-0" className="mb-1.5">Sites</Label>
               <div className="space-y-2">
                 {siteInputs.map((v, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -745,12 +745,12 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
       )}
 
       {step === 1 && (
-        <Q n={2} of={2} title="Who runs it on their side?" help="The first Owner. They connect their own A/B tool, their own AI key and their sites' scripts — Prism never holds a customer's credentials on their behalf, and neither do we.">
+        <Q n={2} of={2} title="Who owns the account?" help="The first Owner connects the A/B tool, the AI key and each site's script. Prism never holds credentials on anyone's behalf.">
           <div className="space-y-5">
             <div>
               <Label htmlFor="owner" className="mb-1.5">Owner&rsquo;s email</Label>
               <Input id="owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="dana@outrigger.com" type="email" autoFocus />
-              <p className="text-[12.5px] text-muted-2 mt-2">They get an invitation and a setup checklist that only disappears when everything on it is actually connected.</p>
+              <p className="text-[12.5px] text-muted-2 mt-2">The Owner gets an invitation and a setup checklist that only disappears when everything on it is actually connected.</p>
             </div>
             <Card title={`What happens on create · ${sites.length} site${sites.length === 1 ? "" : "s"}`}>
               {sites.map((s) => (
@@ -761,8 +761,8 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
                 </div>
               ))}
               <div className="px-5 py-3 bg-surface-2/40 text-[12.5px] text-muted-2 leading-relaxed">
-                Prism reads each site itself. What it can&rsquo;t read — who the guests are, who they lose bookings to, which button is primary — it asks,
-                from <span className="text-foreground">Sites</span>, one site at a time, of the person who knows that site. You can answer for them inside a support session.
+                Prism reads each site itself. What it can&rsquo;t read — who the guests are, where bookings are lost, which button is primary — it asks,
+                from <span className="text-foreground">Sites</span>, one site at a time, of whoever knows that site.
               </div>
             </Card>
           </div>

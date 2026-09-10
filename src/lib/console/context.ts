@@ -242,7 +242,7 @@ export const QUESTIONS: Question[] = [
       placeholder: "Direct bookers who would otherwise go through Expedia…",
       suggestions: ["Direct bookers who'd otherwise use an OTA", "Returning DISCOVERY members", "First-time Hawaii visitors from the US mainland"],
       delta: 34,
-      adds: (a) => `The guest this site most wants more of, in the customer's words: “${a}”. Experiments are aimed here first.`,
+      adds: (a) => `The guest this site most wants more of, in your words: “${a}”. Experiments are aimed here first.`,
     },
   },
   {

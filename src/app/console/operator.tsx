@@ -156,7 +156,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
               issue: `Reading ${sites.join(", ")}…`, usage: "$0 / mo", since: "Sep 2026", fresh: true, siteDomains: sites }, ...l]);
             // The read is Prism's; the questions wait for a person.
             setTimeout(() => setList((l) => l.map((c) => (c.id === id
-              ? { ...c, issue: `Setup unfinished — ${n} site${n === 1 ? "" : "s"} read, questions waiting for their Owner; no A/B tool connected` }
+              ? { ...c, issue: `Setup unfinished — ${n} site${n === 1 ? "" : "s"} read, questions waiting; no A/B tool connected` }
               : c))), 4500);
             setAdding(false); setRoom("Customers");
           }} />
