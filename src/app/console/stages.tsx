@@ -195,6 +195,27 @@ const RUN_FACTS: Record<string, RunFacts> = {
       { name: "Page errors", state: "pass", lift: "0.0%", ci: "−0.2 to +0.2", tolerance: "no worse than +2%" },
     ],
   },
+  "kaanapali-urgency": {
+    day: 9, days: 14, sessions: [11840, 11792], declared: "50 / 50",
+    srm: { state: "healthy", p: 0.66, note: "The split you declared is the split that arrived." },
+    observed: { lift: "+3.8%", ci: "+1.6 to +6.0", daysToConfirm: 0 },
+    mde: { stated: true, target: "≥ 2%", daysToTarget: 0 },
+    guardrails: [
+      { name: "Cancellation rate", state: "breach", lift: "+4.9%", ci: "+2.7 to +7.1", tolerance: "no worse than +2%" },
+      { name: "Revenue per visit", state: "at_risk_point", lift: "−2.4%", ci: "−5.0 to +0.2", tolerance: "no worse than −2%" },
+      { name: "Page errors", state: "pass", lift: "0.0%", ci: "−0.1 to +0.1", tolerance: "no worse than +2%" },
+    ],
+  },
+  "waikiki-gallery": {
+    day: 4, days: 14, sessions: [5204, 2131], declared: "50 / 50",
+    srm: { state: "compromised", p: 0.0001, note: "You declared 50/50 and 71/29 arrived." },
+    observed: { lift: "+6.1%", ci: "+3.2 to +9.0", daysToConfirm: 0 },
+    mde: { stated: false },
+    guardrails: [
+      { name: "Bookings", state: "unknown", lift: "—", ci: "—", tolerance: "no worse than −2%" },
+      { name: "Page errors", state: "pass", lift: "0.0%", ci: "−0.2 to +0.2", tolerance: "no worse than +2%" },
+    ],
+  },
   "reef-rate-promise": {
     day: 13, days: 13, sessions: [9206, 9206], declared: "50 / 50",
     srm: { state: "healthy", p: 0.98, note: "The split you declared is the split that arrived." },
@@ -306,6 +327,8 @@ export function RunPanel({ e }: { e: Experiment }) {
 /** status → the verdict engine's state. Seven are possible; this mock's data
  *  reaches four. A closed run with nothing recorded is still adjudicable. */
 const verdictFor = (e: Experiment): Verdict | null => {
+  if (e.trouble === "invalid_split") return "invalid";
+  if (e.trouble === "guardrail_breach") return "guardrail_breach";
   if (e.status === "shipped") return "confirmed";
   if (e.status === "decide") return e.result?.tone === "ok" ? "confirmed" : "refuted";
   if (e.status === "running") return "keep_running";
@@ -317,7 +340,7 @@ export function DecisionPanel({ e, action }: { e: Experiment; action: React.Reac
   if (!v) return <NotYet what="No decision yet" needs="A decision is recorded once the run closes. It freezes the result and the statistics together, and it cannot be the person who wrote or built it." />;
   return (
     <div className="space-y-4">
-      {e.status === "decide" && action}
+      {(e.status === "decide" || e.trouble) && action}
       <VerdictPanel state={v} />
       <Readout compact />
       <EvidenceBoard />

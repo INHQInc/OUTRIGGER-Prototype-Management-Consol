@@ -36,6 +36,9 @@ export interface Experiment {
   guardrails: string[];
   build?: string;
   history: HistoryRow[];
+  /** What is wrong, when something is. Drives the list badge, the run facts
+   *  and the verdict — so a failure is a real row, not a demo switch. */
+  trouble?: "guardrail_breach" | "invalid_split" | "stalled";
 }
 
 export const SITES = ["outrigger.com", "outriggerkona.com", "waikikibeachcomber.com"];
@@ -156,6 +159,64 @@ export const EXPERIMENTS: Experiment[] = [
 ];
 
 export const needsMe = (e: Experiment) => Boolean(e.action);
+
+export const TROUBLE: Record<NonNullable<Experiment["trouble"]>, { label: string; tone: "danger" | "warn" }> = {
+  guardrail_breach: { label: "Guardrail breached", tone: "danger" },
+  invalid_split:    { label: "Split is broken",   tone: "danger" },
+  stalled:          { label: "Stalled 94 days",   tone: "warn" },
+};
+
+EXPERIMENTS.push(
+  {
+    id: "kaanapali-urgency", name: "Urgency banner on the rate calendar",
+    site: "outrigger.com", path: "/hawaii/maui/outrigger-kaanapali-beach-resort", env: "Production",
+    status: "running", stage: "Run", owner: "Kai N.", metric: "Reached the booking step",
+    result: { value: "+3.8%", tone: "ok", detail: "day 9 of 14 · winning on its own number" },
+    updated: "20 minutes ago", trouble: "guardrail_breach",
+    action: { title: "A guardrail is breached — stop this?", role: "Reviewer",
+      body: "The main number is up 3.8%, but cancellations are confidently past the tolerance you set. A win that costs the guardrail is not a win.",
+      primary: "Stop the run", secondary: "Keep it running and explain why" },
+    hypothesis: "Showing how many people booked this room today will push hesitant guests to book.",
+    frozen: "Brief 1 · frozen 1 Sep 2026, 08:00 when Run 1 opened",
+    guardrails: ["Cancellation rate", "Revenue per visit", "Page errors"], build: "e21c7a0",
+    history: [
+      { at: "10 Sep, 06:00", who: "Prism", role: "System", what: "Cancellation rate crossed its tolerance with the interval settled. Flagged as a breach." },
+      { at: "1 Sep, 08:00", who: "Kai N.", role: "Author", what: "Opened Run 1 at 50/50 on Production.", sealed: "Brief 1 · Build e21c7a0 frozen" },
+      { at: "28 Aug, 15:12", who: "Kai N.", role: "Author", what: "Created the experiment." },
+    ],
+  },
+  {
+    id: "waikiki-gallery", name: "Photo gallery first on property pages",
+    site: "outrigger.com", path: "/hawaii/oahu/outrigger-waikiki-beach-resort", env: "Production",
+    status: "running", stage: "Run", owner: "Malia K.", metric: "Room detail views",
+    result: { value: "+6.1%", tone: "flat", detail: "day 4 of 14 · cannot be read" },
+    updated: "1 hour ago", trouble: "invalid_split",
+    action: { title: "The traffic split is broken", role: "Reviewer",
+      body: "You declared 50/50 and 71/29 arrived. Nothing this run reports can be trusted, however good it looks. Stop it and fix the allocation in Optimizely.",
+      primary: "Stop the run", secondary: "Open it in Optimizely" },
+    hypothesis: "Leading with photographs instead of the rate panel will raise room detail views.",
+    frozen: "Brief 2 · frozen 6 Sep 2026, 10:30 when Run 1 opened",
+    guardrails: ["Bookings", "Page errors"], build: "b09d4c1",
+    history: [
+      { at: "9 Sep, 06:00", who: "Prism", role: "System", what: "Sample ratio mismatch: 5,204 vs 2,131 sessions against a declared 50/50. Verdict set to invalid." },
+      { at: "6 Sep, 10:30", who: "Malia K.", role: "Author", what: "Opened Run 1 at 50/50 on Production.", sealed: "Brief 2 · Build b09d4c1 frozen" },
+    ],
+  },
+  {
+    id: "kona-loyalty", name: "Loyalty sign-up in the booking flow",
+    site: "outriggerkona.com", path: "/book", env: "Prep", status: "review", stage: "Review",
+    owner: "Marcus R.", metric: "Loyalty sign-ups", updated: "94 days ago", trouble: "stalled",
+    action: { title: "Nobody has touched this in 94 days", role: "Author",
+      body: "Build 4d8f2e1 has waited for a site sign-off since June. The page it targets has changed twice since. Decide whether this is still worth doing.",
+      primary: "Re-check it against the page", secondary: "Archive it" },
+    hypothesis: "Offering loyalty sign-up inside the booking flow will raise sign-ups without hurting completion.",
+    guardrails: ["Bookings", "Page errors"], build: "4d8f2e1",
+    history: [
+      { at: "8 Jun, 14:20", who: "Prism Agent", role: "Builder", what: "Pushed the first build.", sealed: "4d8f2e1" },
+      { at: "2 Jun, 09:00", who: "Marcus R.", role: "Author", what: "Created the experiment." },
+    ],
+  },
+);
 
 /* ── Sites ──────────────────────────────────────────────────────────────
    Customer → Site (many) → Environment (many). Environment kind is the

@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
-import { EXPERIMENTS, ME, SITES, needsMe, type Experiment } from "@/lib/console/fake";
+import { EXPERIMENTS, ME, SITES, TROUBLE, needsMe, type Experiment } from "@/lib/console/fake";
 import { Badge, Chip, Meta, PageHeader, Pill, Section, StageRail, Th, Toolbar } from "./ui";
 import { StagePanel } from "./stages";
 import { SetupChecklist } from "./setup";
@@ -102,6 +102,7 @@ export function ExperimentsView({ open, onNew }: { open: (id: string) => void; o
                   <div className="flex items-center gap-2">
                     <span className="text-[14px] font-medium truncate">{e.name}</span>
                     {needsMe(e) && <span className="shrink-0 text-[10.5px] font-bold tracking-wide text-accent bg-accent/10 rounded px-1.5 py-0.5">NEEDS YOU</span>}
+                    {e.trouble && <Pill tone={TROUBLE[e.trouble].tone}>{TROUBLE[e.trouble].label}</Pill>}
                   </div>
                   <div className="text-[12.5px] text-muted-2 truncate mt-0.5">{e.site}{e.path} · {e.env}</div>
                 </td>
