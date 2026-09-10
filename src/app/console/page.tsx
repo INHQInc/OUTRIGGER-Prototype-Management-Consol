@@ -70,6 +70,8 @@ export default function Console() {
   const [creating, setCreating] = useState(false);
   const [flow, setFlow] = useState<null | "site">(null);
   const [switcher, setSwitcher] = useState(false);
+  /** The site the console is scoped to; null is every site. Set by the site selector, never by an account. */
+  const [siteFilter, setSiteFilter] = useState<string | null>(null);
   /** The site being read / asked / corrected right now, if any. */
   const [understanding, setUnderstanding] = useState<string | null>(null);
   const [backOffice, setBackOffice] = useState(false);
@@ -101,8 +103,11 @@ export default function Console() {
   const rows: Site[] = [...(fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS), ...sessionSites];
   const site = rows.find((s) => s.id === siteId) ?? null;
   const learning = rows.find((s) => s.id === understanding) ?? null;
-  const waiting = fresh ? 0 : EXPERIMENTS.filter(needsMe).length;
-  const count: Record<string, number | undefined> = { Experiments: fresh ? 0 : EXPERIMENTS.length, Sites: rows.length };
+  /** Whose console this is — the support session's account, or the signed-in account. */
+  const account = support?.customer ?? CUSTOMERS[0].name;
+  const scoped = fresh ? [] : EXPERIMENTS.filter((e) => !siteFilter || e.site === (rows.find((r) => r.id === siteFilter)?.domain ?? siteFilter));
+  const waiting = scoped.filter(needsMe).length;
+  const count: Record<string, number | undefined> = { Experiments: scoped.length, Sites: rows.length };
 
   const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); setUnderstanding(null); };
   const openExp = (id: string) => { setNav("Experiments"); setExpId(id); };
@@ -128,23 +133,30 @@ export default function Console() {
           <span className="text-[14px] font-semibold tracking-[-0.01em]">Prism</span>
         </div>
 
-        {/* The switcher switches. Creating a customer is a back-office act, so the
-            menu says where to go rather than pretending to do it here. */}
+        {/* Signed in, you belong to ONE account — so this picks a SITE, never an
+            account. Other accounts are reachable only through the back office,
+            which loads you into one with its sites (a support session). */}
         <div className="relative mx-3 mt-3 mb-1">
-          <button onClick={() => setSwitcher((v) => !v)} title="Switch customer"
+          <div className="px-1 pb-1 text-[11px] text-muted-2 truncate">{account}</div>
+          <button onClick={() => setSwitcher((v) => !v)} aria-haspopup="listbox" aria-expanded={switcher} title="Choose a site"
             className="w-full flex items-center gap-2.5 rounded-lg border border-border px-2.5 py-2 hover:border-border-strong text-left">
             <div className="w-[18px] h-[18px] rounded bg-border-strong shrink-0" />
-            <span className="text-[13px] font-medium flex-1 truncate">{support?.customer ?? "OUTRIGGER Hotels"}</span>
+            <span className="text-[13px] font-medium flex-1 truncate">{siteFilter ? (rows.find((r) => r.id === siteFilter)?.domain ?? siteFilter) : "All sites"}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="text-muted-2"><path d="m6 9 6 6 6-6" /></svg>
           </button>
           {switcher && (
-            <div className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-border bg-surface shadow-lg py-1">
-              {CUSTOMERS.map((c) => (
-                <button key={c.id} onClick={() => { setSwitcher(false); if (c.id !== "outrigger") window.dispatchEvent(new CustomEvent("mock-not-built", { detail: `Switch to ${c.name}` })); }}
-                  className={cn("w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-2 truncate", c.id === "outrigger" ? "font-semibold" : "text-muted")}>{c.name}</button>
+            <div role="listbox" className="absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-border bg-surface shadow-lg py-1">
+              <button role="option" aria-selected={siteFilter === null} onClick={() => { setSiteFilter(null); setSwitcher(false); }}
+                className={cn("w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-2", siteFilter === null ? "font-semibold" : "text-muted")}>All sites</button>
+              {rows.map((r) => (
+                <button key={r.id} role="option" aria-selected={siteFilter === r.id} onClick={() => { setSiteFilter(r.id); setSwitcher(false); }}
+                  className={cn("w-full text-left px-3 py-1.5 hover:bg-surface-2", siteFilter === r.id ? "font-semibold" : "text-muted")}>
+                  <span className="block text-[13px] truncate">{r.domain}</span>
+                  <span className="block text-[11.5px] text-muted-2 truncate">{r.label}</span>
+                </button>
               ))}
               <div className="border-t border-border mt-1 pt-1">
-                <button onClick={() => { setSwitcher(false); setBackOffice(true); }} className="w-full text-left px-3 py-1.5 text-[12.5px] text-muted hover:text-foreground hover:bg-surface-2">Add a customer → back office</button>
+                <button onClick={() => { setSwitcher(false); setSiteFilter(null); go("Sites"); setFlow("site"); }} className="w-full text-left px-3 py-1.5 text-[12.5px] text-muted hover:text-foreground hover:bg-surface-2">+ Add a site</button>
               </div>
             </div>
           )}
