@@ -342,7 +342,16 @@ export function DecisionPanel({ e, action }: { e: Experiment; action: React.Reac
     <div className="space-y-4">
       {(e.status === "decide" || e.trouble) && action}
       <VerdictPanel state={v} title={e.name} />
-      <Readout compact />
+      {/* A readout is WRITTEN when a decision is recorded — it is a document,
+          not a view. The fixture has one written readout; every other row
+          says so rather than borrowing it. */}
+      {e.id === "reef-rate-promise" || e.status === "shipped"
+        ? <Readout compact />
+        : <Section title="The readout">
+            <p className="px-5 py-6 text-[14px] text-muted text-center">
+              {v === "invalid" ? "Nothing to write up — this run produced no evidence." : "Written the moment a decision is recorded, then sent to whoever subscribes."}
+            </p>
+          </Section>}
       <EvidenceBoard />
       <MetricIndex />
       {e.status === "shipped" && <HandoffPanel />}
