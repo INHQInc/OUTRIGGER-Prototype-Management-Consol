@@ -60,6 +60,38 @@ html[data-theme="dark"] {
   --font-mono: var(--font-geist-mono);
 }
 
+/* ────────────────────────────────────────────────────────────────
+   CONSOLE MOCK — shadcn's default neutral palette, scoped.
+   Every console surface is written against the SEMANTIC tokens
+   (surface / foreground / muted / accent / ok / warn / danger), never a
+   literal colour — so re-skinning the whole thing is this block and
+   nothing else. Scoped to the mock so Beta 1's screens keep their palette.
+   In this theme `accent` is white-on-black: shadcn's primary is a white
+   button with black text, not a brand hue.
+   ──────────────────────────────────────────────────────────────── */
+[data-console], [data-backoffice] {
+  color-scheme: dark;
+  /* `body { color: var(--foreground) }` computes at BODY, where the token is
+     still the light value — so text that sets no colour of its own inherits
+     dark ink onto a dark ground. The scope has to restate both. */
+  color: var(--foreground);
+  background: var(--background);
+  --background: #0a0a0a;      /* neutral-950 */
+  --surface: #171717;         /* neutral-900 — cards */
+  --surface-2: #262626;       /* neutral-800 — insets, chips */
+  --border: #262626;
+  --border-strong: #404040;   /* neutral-700 */
+  --foreground: #fafafa;      /* neutral-50 */
+  --muted: #a1a1a1;           /* neutral-400 — body */
+  --muted-2: #737373;         /* neutral-500 — captions */
+  --accent: #fafafa;          /* primary = white */
+  --accent-hover: #e5e5e5;
+  --accent-fg: #0a0a0a;       /* black text on the white button */
+  --danger: #f87171;
+  --warn: #fbbf24;
+  --ok: #4ade80;
+}
+
 html { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
 

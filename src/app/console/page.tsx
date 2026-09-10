@@ -21,6 +21,7 @@ import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, 
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
 import { CustomerOnboarding, SiteOnboarding } from "./onboarding";
+import { BackOffice, SupportBanner } from "./operator";
 
 const NAV = [
   {
@@ -53,6 +54,8 @@ export default function Console() {
   const [siteId, setSiteId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [flow, setFlow] = useState<null | "customer" | "site">(null);
+  const [backOffice, setBackOffice] = useState(false);
+  const [support, setSupport] = useState<{ customer: string; reason: string } | null>(null);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
   const site = SITE_ROWS.find((s) => s.id === siteId) ?? null;
@@ -61,8 +64,15 @@ export default function Console() {
   const go = (s: string) => { setNav(s); setExpId(null); setSiteId(null); setCreating(false); setFlow(null); };
   const openExp = (id: string) => { setNav("Experiments"); setExpId(id); };
 
+  if (backOffice) {
+    return <BackOffice exit={() => setBackOffice(false)}
+      enterCustomer={(customer, reason) => { setSupport({ customer, reason }); setBackOffice(false); }} />;
+  }
+
   return (
-    <div className="fixed inset-0 z-50 bg-background flex" data-console>
+    <div className="fixed inset-0 z-50 bg-background flex flex-col" data-console>
+      {support && <SupportBanner customer={support.customer} reason={support.reason} end={() => { setSupport(null); setBackOffice(true); }} />}
+      <div className="flex-1 min-h-0 flex">
       <nav className="w-[244px] shrink-0 border-r border-border bg-surface flex flex-col">
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-border">
           <div className="w-[22px] h-[22px] rounded-md bg-accent" />
@@ -99,6 +109,10 @@ export default function Console() {
           ))}
         </div>
 
+        <button onClick={() => setBackOffice(true)}
+          className="mx-3 mb-1 rounded-lg border border-border px-2.5 py-1.5 text-[12.5px] text-muted hover:text-foreground hover:border-border-strong text-left">
+          Back office →
+        </button>
         <div className="border-t border-border px-4 py-3 flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-full bg-border-strong grid place-items-center text-[11px] font-semibold text-muted">{ME.initials}</div>
           <div className="min-w-0">
@@ -125,6 +139,7 @@ export default function Console() {
         {!flow && nav === "Guardrails" && <GuardrailsView />}
         {!flow && nav === "Activity" && <ActivityView />}
       </main>
+      </div>
     </div>
   );
 }
