@@ -4,6 +4,7 @@
  *  grammar — every feature screen is built from these, so adding a surface can
  *  never invent a second visual language. */
 
+import { Badge as UiBadge } from "@/components/ui/badge";
 import { cn } from "@/lib/ui/cn";
 import { STAGES, STATUS, type Experiment, type Stage } from "@/lib/console/fake";
 
@@ -40,13 +41,10 @@ export const Badge = ({ s }: { s: Experiment["status"] }) => {
   );
 };
 
-/** Any state worth a colour, without pretending to be an experiment status. */
+/** Any state worth a colour, without pretending to be an experiment status.
+ *  A thin name over shadcn's Badge so every call site converges on it. */
 export function Pill({ tone, children }: { tone: "ok" | "warn" | "danger" | "muted" | "accent"; children: React.ReactNode }) {
-  const map = {
-    ok: "bg-ok/10 text-ok", warn: "bg-warn/10 text-warn", danger: "bg-danger/10 text-danger",
-    muted: "bg-surface-2 text-muted", accent: "bg-accent/10 text-accent",
-  } as const;
-  return <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11.5px] font-semibold whitespace-nowrap", map[tone])}>{children}</span>;
+  return <UiBadge variant={tone}>{children}</UiBadge>;
 }
 
 export function StageRail({ stage }: { stage: Stage }) {
