@@ -14,7 +14,7 @@
  *    hypothesis sits in the same card as the buttons that adjudicate it.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITE_ROWS, needsMe } from "@/lib/console/fake";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, SitesView } from "./config";
@@ -62,6 +62,15 @@ export default function Console() {
   const [flow, setFlow] = useState<null | "customer" | "site">(null);
   const [backOffice, setBackOffice] = useState(false);
   const [support, setSupport] = useState<{ customer: string; reason: string } | null>(null);
+  /** A customer created in this session is the only one whose setup is unfinished. */
+  const [fresh, setFresh] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (ev: Event) => { setToast((ev as CustomEvent<string>).detail); };
+    window.addEventListener("mock-not-built", on);
+    return () => window.removeEventListener("mock-not-built", on);
+  }, []);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 2600); return () => clearTimeout(t); }, [toast]);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
   const site = SITE_ROWS.find((s) => s.id === siteId) ?? null;
@@ -78,6 +87,11 @@ export default function Console() {
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col" data-console>
       {support && <SupportBanner customer={support.customer} reason={support.reason} end={() => { setSupport(null); setBackOffice(true); }} />}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] rounded-lg border border-border bg-surface px-4 py-2.5 text-[13px] shadow-lg">
+          <span className="font-semibold">&ldquo;{toast}&rdquo;</span> <span className="text-muted">isn&rsquo;t built in this mock yet.</span>
+        </div>
+      )}
       <div className="flex-1 min-h-0 flex">
       <nav className="w-[244px] shrink-0 border-r border-border bg-surface flex flex-col">
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-border">
@@ -129,9 +143,9 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {flow === "customer" && <CustomerOnboarding onClose={() => setFlow(null)} onDone={() => { setFlow("site"); }} />}
+        {flow === "customer" && <CustomerOnboarding onClose={() => setFlow(null)} onDone={() => { setFresh(true); setFlow("site"); }} />}
         {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={() => { setFlow(null); go("Sites"); }} />}
-        {!flow && nav === "Overview" && <OverviewView open={openExp} />}
+        {!flow && nav === "Overview" && <OverviewView open={openExp} fresh={fresh} />}
         {!flow && nav === "Experiments" && (
           creating ? <NewExperiment cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
           : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />

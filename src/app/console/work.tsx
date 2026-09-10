@@ -14,14 +14,16 @@ import { STAGES, type Stage } from "@/lib/console/fake";
 
 /* ── Overview ──────────────────────────────────────────────────────── */
 
-export function OverviewView({ open }: { open: (id: string) => void }) {
+export function OverviewView({ open, fresh }: { open: (id: string) => void; fresh?: boolean }) {
   const mine = EXPERIMENTS.filter(needsMe);
   const running = EXPERIMENTS.filter((e) => e.status === "running");
   return (
     <>
       <PageHeader title="Overview" />
       <div className="flex-1 overflow-auto p-6 space-y-4">
-        <SetupChecklist />
+        {/* Derives its own completion and disappears — so it only appears for a
+            customer whose setup is genuinely unfinished, never for one that is done. */}
+        {fresh && <SetupChecklist />}
         <Section title={`Waiting on you — ${mine.length}`}>
           {mine.length === 0 ? (
             <p className="px-5 py-6 text-[14px] text-muted text-center">Nothing needs you right now.</p>

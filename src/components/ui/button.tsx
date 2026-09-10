@@ -44,10 +44,16 @@ const buttonVariants = cva(
 );
 
 function Button({
-  className, variant, size, asChild = false, ...props
+  className, variant, size, asChild = false, onClick, ...props
 }: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
   const Comp = asChild ? Slot : "button";
-  return <Comp data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+  // MOCK HONESTY. A button with no handler is a dead click, and a dead click
+  // reads as a broken product. Until a surface is built, the click says so.
+  const handler = onClick ?? (asChild || props.type === "submit" ? undefined : (ev: React.MouseEvent<HTMLButtonElement>) => {
+    const label = (ev.currentTarget.textContent ?? "").trim().slice(0, 60);
+    window.dispatchEvent(new CustomEvent("mock-not-built", { detail: label }));
+  });
+  return <Comp data-slot="button" className={cn(buttonVariants({ variant, size, className }))} onClick={handler} {...props} />;
 }
 
 export { Button, buttonVariants };
