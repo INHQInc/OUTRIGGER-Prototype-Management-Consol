@@ -156,3 +156,92 @@ export const EXPERIMENTS: Experiment[] = [
 ];
 
 export const needsMe = (e: Experiment) => Boolean(e.action);
+
+/* ── Sites ──────────────────────────────────────────────────────────────
+   Customer → Site (many) → Environment (many). Environment kind is the
+   customer's own word; the only bit that gates anything is `isProduction`. */
+
+export interface EnvRow {
+  label: string;
+  url: string;
+  isProduction: boolean;
+  script: "verified" | "missing" | "checking";
+  lastSeen?: string;
+}
+
+export interface SiteProfile {
+  pages: number;
+  components: number;
+  events: number;
+  readAt: string;
+  /** Generated, and a draft until a human accepts it. */
+  voice: { draft: string; approved: boolean };
+}
+
+export interface Site {
+  id: string;
+  domain: string;
+  label: string;
+  envs: EnvRow[];
+  repo?: string;
+  branchPrefix?: string;
+  profile?: SiteProfile;
+  experiments: number;
+}
+
+export const SITE_ROWS: Site[] = [
+  {
+    id: "outrigger", domain: "outrigger.com", label: "Outrigger — main site", experiments: 5,
+    repo: "INHQInc/outrigger-prototypes", branchPrefix: "prototype/",
+    envs: [
+      { label: "Production", url: "https://www.outrigger.com", isProduction: true, script: "verified", lastSeen: "4 minutes ago" },
+      { label: "Prep", url: "https://prep.outrigger.com", isProduction: false, script: "verified", lastSeen: "12 minutes ago" },
+      { label: "UAT", url: "https://uat.outrigger.com", isProduction: false, script: "missing" },
+    ],
+    profile: {
+      pages: 24, components: 11, events: 48, readAt: "3 Sep 2026",
+      voice: { approved: true, draft: "Warm and unhurried. Speaks about places before prices. Never uses urgency language — no countdowns, no “only 2 left”. Guests are “guests”, never “users” or “customers”." },
+    },
+  },
+  {
+    id: "kona", domain: "outriggerkona.com", label: "Kona Resort & Spa", experiments: 1,
+    repo: "INHQInc/outrigger-prototypes", branchPrefix: "kona/",
+    envs: [
+      { label: "Production", url: "https://www.outriggerkona.com", isProduction: true, script: "missing" },
+      { label: "Staging", url: "https://staging.outriggerkona.com", isProduction: false, script: "verified", lastSeen: "2 hours ago" },
+    ],
+    profile: {
+      pages: 9, components: 6, events: 31, readAt: "8 Sep 2026",
+      voice: { approved: false, draft: "Quieter and more residential than the main brand. Leads with the setting — ocean, lava fields, quiet — before amenities. Rarely uses the word “resort”." },
+    },
+  },
+  {
+    id: "beachcomber", domain: "waikikibeachcomber.com", label: "Waikiki Beachcomber", experiments: 1,
+    envs: [{ label: "Prep", url: "https://prep.waikikibeachcomber.com", isProduction: false, script: "checking" }],
+  },
+];
+
+/* ── Connections ────────────────────────────────────────────────────── */
+
+export interface Connection {
+  id: string;
+  name: string;
+  kind: string;
+  state: "connected" | "available" | "unavailable";
+  detail: string;
+  note?: string;
+}
+
+export const AB_TOOLS: Connection[] = [
+  { id: "optimizely", name: "Optimizely Web", kind: "A/B testing", state: "connected", detail: "Project 24138040550 · 48 events available" },
+  { id: "vwo", name: "VWO", kind: "A/B testing", state: "unavailable", detail: "Not available yet", note: "Planned" },
+  { id: "abtasty", name: "AB Tasty", kind: "A/B testing", state: "unavailable", detail: "Not available yet", note: "Planned" },
+  { id: "target", name: "Adobe Target", kind: "A/B testing", state: "unavailable", detail: "Not available yet", note: "Planned" },
+];
+
+export const OTHER_CONNECTIONS: Connection[] = [
+  { id: "github", name: "GitHub", kind: "Code host", state: "connected", detail: "INHQInc · 20 repositories visible" },
+  { id: "anthropic", name: "Anthropic", kind: "AI model", state: "connected", detail: "Your own key · Claude Opus 4.8", note: "Bring your own" },
+  { id: "openai", name: "OpenAI", kind: "AI model", state: "available", detail: "Not connected" },
+  { id: "firecrawl", name: "Firecrawl", kind: "Site reading", state: "connected", detail: "Your own key" },
+];
