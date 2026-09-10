@@ -164,8 +164,8 @@ const Swatch = ({ hex, name, uses }: { hex: string; name?: string; uses: number 
 function Measured() {
   const by = (o: "brand" | "framework" | "widget") => OBSERVED.colours.filter((c) => c.origin === o);
   return (
-    <div className="grid grid-cols-2 gap-4">
-      <Card title={`Type · ${OBSERVED.fonts.length} families, ${OBSERVED.fonts.reduce((n, f) => n + f.faces.length, 0)} faces`} className="col-span-2">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Card title={`Type · ${OBSERVED.fonts.length} families, ${OBSERVED.fonts.reduce((n, f) => n + f.faces.length, 0)} faces`} className="lg:col-span-2">
         {OBSERVED.fonts.map((f) => (
           <div key={f.family} className="flex items-center gap-4 px-5 py-3 border-b border-border last:border-0">
             <div className="w-40 text-[14px] font-medium">{f.family}</div>
@@ -177,8 +177,8 @@ function Measured() {
         <div className="px-5 py-3 text-[12.5px] text-muted-2 bg-surface-2/40">Montserrat Light is used most. Which family is for headlines is not something a stylesheet says — it&rsquo;s a question.</div>
       </Card>
 
-      <Card title={`Colour · ${OBSERVED.colours.length} distinct, by who owns them`} className="col-span-2">
-        <div className="px-5 py-4 grid grid-cols-3 gap-6">
+      <Card title={`Colour · ${OBSERVED.colours.length} distinct, by who owns them`} className="lg:col-span-2">
+        <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-6">
           {(["brand", "framework", "widget"] as const).map((o) => (
             <div key={o}>
               <Eyebrow>{o === "brand" ? "THE BRAND'S OWN" : o === "framework" ? "BOOTSTRAP'S DEFAULTS" : "THE BOOKING WIDGET'S"}</Eyebrow>
@@ -436,8 +436,8 @@ function Interview({ answers, setAnswers, sections, base, onFinish }: {
   };
 
   return (
-    <div ref={top} className="flex gap-6 items-start">
-      <div className="flex-1 min-w-0 space-y-3">
+    <div ref={top} className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex-1 min-w-0 space-y-3 w-full">
         {!ended ? (
           <>
             <div className="flex items-center gap-3 mb-1">
@@ -481,7 +481,7 @@ function Interview({ answers, setAnswers, sections, base, onFinish }: {
         )}
       </div>
 
-      <aside className="w-[264px] shrink-0 sticky top-0 space-y-4">
+      <aside className="w-full lg:w-[264px] shrink-0 lg:sticky lg:top-0 space-y-4">
         <Card>
           <div className="px-4 py-4">
             <Eyebrow>UNDERSTANDING</Eyebrow>
@@ -780,12 +780,12 @@ export function ProfileRoom({ customer = "OUTRIGGER Hotels & Resorts" }: { custo
           <Button size="sm" variant="outline" onClick={() => setReread(true)}>Re-read the site</Button>
         </>} />
       <div className="flex-1 overflow-auto p-6">
-        <div className="flex gap-6 items-start max-w-[1180px]">
-          <div className="flex-1 min-w-0 space-y-4">
+        <div className="flex flex-col xl:flex-row gap-6 items-start max-w-[1180px]">
+          <div className="flex-1 min-w-0 space-y-4 w-full">
             <Learned earned={OUTRIGGER_EARNED} />
             <ProfileEditor sections={sections} setSections={setSections} who="Dana Reyes" />
           </div>
-          <aside className="w-[300px] shrink-0 space-y-4">
+          <aside className="w-full xl:w-[300px] shrink-0 space-y-4">
             <Card title={`Context revision ${rev.r}`}>
               <div className="px-5 py-3.5 space-y-2.5">
                 <div className="text-[13px]"><span className="text-muted-2">Read</span> {OBSERVED.readAt.split(" ").slice(0, 3).join(" ")} · {OBSERVED.read} pages</div>
