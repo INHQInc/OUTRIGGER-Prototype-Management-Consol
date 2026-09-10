@@ -23,9 +23,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
+import { logActivity } from "./config";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
 
 /* ── Fixtures ──────────────────────────────────────────────────────── */
+
+/** The mock's clock. Anything redone this session is dated today. */
+const TODAY = "10 Sep 2026";
 
 const RUN = {
   experiment: "Rate-calendar best-price promise",
@@ -251,6 +255,11 @@ const Mono = ({ children }: { children: React.ReactNode }) => (
   <span className="font-mono text-[11px] text-muted-2 bg-surface-2 rounded px-1.5 py-0.5">{children}</span>
 );
 
+/** The busy ring — the one way this board says a read is in flight. */
+const Spinner = () => (
+  <span className="w-3.5 h-3.5 rounded-full border-2 border-accent border-t-transparent animate-spin" aria-hidden />
+);
+
 /* ── The shots ─────────────────────────────────────────────────────── */
 
 const BOX_TONE: Record<Tone, string> = {
@@ -338,6 +347,17 @@ function Shot({
   filter: FilterKey;
 }) {
   const boxes = ANNOTATIONS.filter((a) => rectFor(a, arm.id) !== null);
+  // The photograph can be redone at any time; the arm behind it cannot. So a
+  // re-shoot changes the shot's date and its provenance line, and nothing else.
+  const [reshoot, setReshoot] = useState<"idle" | "busy" | "done">("idle");
+  const busy = reshoot === "busy";
+  const reshootArm = () => {
+    setReshoot("busy");
+    setTimeout(() => {
+      setReshoot("done");
+      logActivity(`Re-shot the ${arm.name.toLowerCase()} arm of ${RUN.experiment}.`);
+    }, 1200);
+  };
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
@@ -350,7 +370,7 @@ function Shot({
         </span>
       </div>
 
-      <div className="rounded-lg border border-border bg-background overflow-hidden">
+      <div className={cn("rounded-lg border border-border bg-background overflow-hidden", busy && "animate-pulse")}>
         <div className="h-7 flex items-center gap-1.5 px-2.5 border-b border-border bg-surface-2">
           <span className="w-2 h-2 rounded-full bg-border-strong" />
           <span className="w-2 h-2 rounded-full bg-border-strong" />
@@ -358,7 +378,8 @@ function Shot({
           <span className="ml-1.5 font-mono text-[10.5px] text-muted-2 truncate">{RUN.page}</span>
         </div>
 
-        <div className="relative h-[340px]">
+        {/* `data-shot`: on paper the tinted regions ARE the picture, so print keeps their colour. */}
+        <div className="relative h-[340px]" data-shot={arm.id}>
           <Wire arm={arm.id} />
           {boxes.map((a) => {
             const r = rectFor(a, arm.id);
@@ -399,10 +420,20 @@ function Shot({
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <Frozen>{arm.armKey}</Frozen>
         <span className="text-[12.5px] text-muted-2 tabular-nums">{arm.size}</span>
-        <span className="text-[12.5px] text-muted-2">shot {arm.shot}</span>
-        <button className="ml-auto text-[12.5px] text-accent">Re-shoot</button>
+        <span className="text-[12.5px] text-muted-2">{reshoot === "done" ? "re-shot just now" : `shot ${arm.shot}`}</span>
+        <button
+          type="button"
+          data-act="reshoot"
+          disabled={busy}
+          onClick={reshootArm}
+          className="ml-auto text-[12.5px] text-accent disabled:opacity-60"
+        >
+          {busy ? "Re-shooting…" : "Re-shoot"}
+        </button>
       </div>
-      <p className="mt-1 text-[12.5px] text-muted-2 leading-relaxed">{arm.note}</p>
+      <p className="mt-1 text-[12.5px] text-muted-2 leading-relaxed">
+        {reshoot === "done" ? `re-shot ${TODAY} — the arm did not change; only its photograph did` : arm.note}
+      </p>
     </div>
   );
 }
@@ -413,6 +444,27 @@ export function EvidenceBoard() {
   const [sel, setSel] = useState<number | null>(1);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [showKeys, setShowKeys] = useState(false);
+  const [rereading, setRereading] = useState(false);
+  /** How many bindings the last re-read came back with unchanged; null until one has run this session. */
+  const [reread, setReread] = useState<number | null>(null);
+
+  // A re-read asks every key again. Readings are whatever the keys say, so a
+  // re-read that changes nothing is the ordinary outcome — and the line says so
+  // rather than pretending something moved.
+  const rereadAll = () => {
+    setRereading(true);
+    setTimeout(() => {
+      setRereading(false);
+      setReread(ANNOTATIONS.length);
+      logActivity(`Re-read every binding on the evidence board — all ${ANNOTATIONS.length} unchanged.`);
+    }, 1500);
+  };
+  const exportBoard = () => {
+    logActivity("Sent the evidence board to print.");
+    window.print();
+  };
+  /** When the figures on this board were read. Every place that prints it reads this one value. */
+  const readAt = reread === null ? RUN.readAt : "just now";
 
   const counts: Record<FilterKey, number> = {
     all: ANNOTATIONS.length,
@@ -441,8 +493,16 @@ export function EvidenceBoard() {
         count={`${RUN.experiment} · ${RUN.window}`}
         actions={
           <>
-            <Button variant="outline" size="sm">Re-read every binding</Button>
-            <Button size="sm">Export board</Button>
+            <Button variant="outline" size="sm" disabled={rereading} onClick={rereadAll}>
+              {rereading ? (
+                <>
+                  <Spinner /> Re-reading…
+                </>
+              ) : (
+                "Re-read every binding"
+              )}
+            </Button>
+            <Button size="sm" onClick={exportBoard}>Export board</Button>
           </>
         }
       />
@@ -458,11 +518,20 @@ export function EvidenceBoard() {
           {showKeys ? "Callouts show the key" : "Callouts show the label"}
         </Chip>
         <span className="ml-auto text-[12.5px] text-muted-2">
-          Read from Optimizely at <span className="tabular-nums">{RUN.readAt}</span>
+          {reread === null ? (
+            <>
+              Read from Optimizely at <span className="tabular-nums">{RUN.readAt}</span>
+            </>
+          ) : (
+            <>
+              Re-read just now · <span className="tabular-nums">{reread}</span> bindings unchanged
+            </>
+          )}
         </span>
       </Toolbar>
 
-      <div className="flex-1 overflow-auto p-6 space-y-4">
+      {/* `print-board` is the print scope: Export board prints exactly this, none of the chrome around it. */}
+      <div className="flex-1 overflow-auto p-6 space-y-4 print-board">
         {/* What is frozen, and what is not. */}
         <Section
           title="What this board is evidence of"
@@ -522,7 +591,7 @@ export function EvidenceBoard() {
               <Meta k="Boxes" v={`${ANNOTATIONS.length} bindings · ${drawn} drawn · ${onBoth} on both arms`} />
               <Meta k="Colour earned" v={`${counts.moved} of ${ANNOTATIONS.length} boxes`} />
               <Meta k="Unreadable" v={`${counts.blind} box · bound to an event this run does not report`} />
-              <Meta k="Last read" v={RUN.readAt} />
+              <Meta k="Last read" v={readAt} />
               <p className="text-[12.5px] text-muted-2 leading-relaxed mt-3">
                 Annotations, captions and the shots themselves can be redone at any time. The arms, the build and the
                 stamped statistics above cannot — which is why they are the only things on this page wearing a lock.
@@ -560,8 +629,9 @@ export function EvidenceBoard() {
             <span className="text-foreground font-medium">Fig. 1</span> — {RUN.page}, build{" "}
             <span className="font-mono text-[12px]">{RUN.build}</span>, both arms at 1440 × 900.{" "}
             <span className="text-foreground">
-              Every box is bound to a metric key, and every figure printed on this board was read from that key at{" "}
-              <span className="tabular-nums">{RUN.readAt}</span> — not one of them is stored on the annotation.
+              Every box is bound to a metric key, and every figure printed on this board was read from that key{" "}
+              {reread === null && "at "}
+              <span className="tabular-nums">{readAt}</span> — not one of them is stored on the annotation.
             </span>{" "}
             <span className="tabular-nums">{onBoth}</span> of the {ANNOTATIONS.length} bindings are drawn on both shots;
             each is one binding rendered twice, so the two copies can never disagree. Colour is earned and not chosen:{" "}
@@ -592,7 +662,7 @@ export function EvidenceBoard() {
                   : "Nothing on either shot matches this filter right now."
               }
               action={
-                <Button size="sm" variant="outline" onClick={() => setFilter("all")}>
+                <Button size="sm" variant="outline" data-act="filter" onClick={() => setFilter("all")}>
                   Show all {ANNOTATIONS.length} boxes
                 </Button>
               }
