@@ -188,6 +188,77 @@ Changing a prompt changes model behaviour, so the work is: fix the 17, then diff
 one real readout before and after so the change is visible before it ships.
 A further 5 doc comments and 8 pieces of UI copy are cosmetic and can wait.
 
+## 5 · Archiving and deleting an account
+
+**Status:** defined 11 Sep 2026, not built. Nothing exists today — an account
+can be created and never ended.
+
+**Why it is not just a button.** An account holds things Prism does not own: a
+script tag in the customer's own HTML, branches in the customer's own GitHub,
+readout links in other people's inboxes. It also holds the one thing the product
+claims is immutable — recorded decisions, the earned layer. Ending an account
+has to be honest about what it can reach and what it cannot.
+
+### Two acts, not one
+
+**Archive = stop.** Reversible. Nothing runs, everything stays readable.
+**Delete = leave.** Irreversible, and only reachable from archived — you cannot
+delete an account that still has something live.
+
+Both are gated by a DERIVED precondition list, never a checkbox: each line is
+state some other surface already reads, exactly like the setup checklist and
+back-office Health. You cannot archive while a run is reaching real visitors;
+you cannot delete while a script is still calling home.
+
+### What happens to each thing
+
+| What the account holds | Archive | Delete |
+|---|---|---|
+| **Runs reaching real visitors** (4 in the fixture) | Blocks it. Offers *Stop them and archive* as one deliberate act — never a side effect. Each run stops with whatever the data supports | none can remain |
+| **Experiments mid-build or in review** | frozen where they are; no new builds, no pushes | gone |
+| **The Prism script on their pages** | Prism CANNOT remove it — it is their HTML. The loader serves nothing, so every page reverts to control on the next load. The account is told the tag is still there and given the line to remove | must be gone first; Prism verifies by the heartbeat stopping |
+| **Recorded decisions and the earned layer** | kept and readable — this is the point of archiving | offered as an export first, then gone. It is theirs, not ours |
+| **Readouts shared with people who have no account** | keep working, read-only | the links die. Say so, and say how many |
+| **Branches in their repository** | untouched — Prism does not own that repository | untouched. Say so explicitly: someone deleting an account will assume the branches went with it |
+| **Their keys** (A/B tool, AI model, code host) | kept, unused | revoked and destroyed |
+| **People** | keep read access, lose write | access ends |
+| **Metered usage / billing** | stops on the archive date | — |
+| **Activity and support-session records** | kept | gone with the account — it was their record of who looked at their data |
+| **The operator's own audit** | — | one line survives: an account was deleted, when, by whom, on whose request. No customer content |
+
+### The invariant that matters most
+
+**An administratively stopped run is not a finding.** When archiving stops four
+live runs, their verdicts must NOT read as *refuted* — nothing was disproved.
+They are `not_adjudicable`, with the reason recorded as *stopped because the
+account was archived*, never as a result. Anything else writes false evidence
+into the earned layer, which is the one layer the product calls immutable and
+measured.
+
+### Open calls
+
+1. **Cooling-off before delete.** Proposed: archived for at least 30 days, with
+   the earliest delete date shown. Irreversible plus human error argues for it;
+   a data-protection request argues for honouring it sooner. Probably: 30 days
+   by default, overridable by a written request from the Owner.
+2. **Who may delete.** Owner, operator, or both. If the product is ever
+   self-serve, the Owner must be able to — a data-protection right cannot
+   require a support ticket.
+3. **Read access after archiving.** Proposed: their people keep read access. The
+   readouts are theirs, and an archived account whose owner cannot open it is a
+   hostage, not an archive.
+4. **Whether archiving is reversible for the script.** Un-archiving cannot put
+   the tag back if they removed it. Un-archive therefore lands in the same
+   setup-checklist state a new account has, rather than pretending it is live.
+
+### Where it lands
+
+Back office → Customers (the operator's path), and the customer console's own
+settings (the Owner's path) — the same two acts, the same preconditions, the
+same copy. `operator.tsx`, a new account-lifecycle surface, plus a `state` on
+the account fixture (`active | archived | deleted`) that the shell reads: an
+archived account's console is readable and every write control is gone.
+
 ## Open questions
 
 - **Demo accounts across verticals.** The back office lists four accounts and
