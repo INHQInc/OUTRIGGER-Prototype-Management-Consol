@@ -92,6 +92,9 @@ export function SitesView({ open, onAdd, rows = SITE_ROWS }: { open: (id: string
 /** Repositories the connected GitHub account can see. The connection is real state; this list is what it would return. */
 const REPOS = ["INHQInc/outrigger-prototypes", "INHQInc/kona-web", "INHQInc/beachcomber-site", "INHQInc/starter"];
 
+/** Repositories holding a site's real stylesheets and components. Read, never written. */
+const SOURCE_REPOS = ["INHQInc/outrigger-web", "INHQInc/outrigger-design-system", "INHQInc/kona-web"];
+
 const SCRIPT_TAG = '<script src="https://tag.prism.build/opmc.js" data-tag="…" async></script>';
 
 export function SiteDetail({ s, back, understand }: { s: Site; back: () => void; understand: (id: string) => void }) {
@@ -110,6 +113,9 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
   const [sendTo, setSendTo] = useState("");
 
   const [connecting, setConnecting] = useState(false);
+  const [connectingSource, setConnectingSource] = useState(false);
+  const [sourcePick, setSourcePick] = useState(SOURCE_REPOS[0]);
+  const [source, setSource] = useState<string | undefined>(s.source);
   const [pick, setPick] = useState(REPOS[0]);
   const [prefix, setPrefix] = useState("prototype/");
 
@@ -190,6 +196,31 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
                   <Meta k="Branch prefix" v={branchPrefix} mono />
                   <Meta k="Artifact" v="dist/variation.js" mono />
                   <p className="text-[13px] text-muted-2 mt-3">Each site can live in its own repository. Prototypes for this site are branches here — Prism never touches your main branch.</p>
+
+                  {/* The OTHER repository: read, never written. It names what a crawl can only
+                      count, and answers three of the interview's questions outright (D12). */}
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">READ-ONLY SOURCE</div>
+                    {source ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Pill tone="ok">Connected</Pill>
+                          <span className="font-mono text-[12.5px]">{source}</span>
+                          <span className="text-[12.5px] text-muted-2">· read, never written</span>
+                        </div>
+                        <p className="text-[12.5px] text-muted-2 mt-2 leading-relaxed">
+                          Your real stylesheets and components. It is read alongside the site, and it is why the palette arrives named rather than counted.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[13px] text-muted leading-relaxed mb-2.5">
+                          Not connected. Prism reads the site, which shows what a browser computed — it will ask you three questions your stylesheet could have answered.
+                        </p>
+                        <Button size="sm" variant="outline" onClick={() => setConnectingSource(true)}>Connect a read-only source</Button>
+                      </>
+                    )}
+                  </div>
                 </>
               ) : (
                 <div className="text-center py-4">
@@ -252,6 +283,29 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
           <DialogFooter>
             <Button variant="ghost" onClick={() => setSending(null)}>Not now</Button>
             <Button disabled={!/.+@.+\..+/.test(sendTo)} onClick={sendInstall}>Send it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={connectingSource} onOpenChange={setConnectingSource}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect a read-only source for {s.domain}</DialogTitle>
+            <DialogDescription>
+              The repository holding this site&rsquo;s real stylesheets and components. Prism reads it and never writes to it — experiments stay in the prototypes repository above.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <Label htmlFor="src-pick" className="mb-1.5">Repository <span className="font-normal text-muted-2">— what your code host can see</span></Label>
+            <Select value={sourcePick} onValueChange={setSourcePick}>
+              <SelectTrigger id="src-pick" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>{SOURCE_REPOS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+            </Select>
+            <p className="text-[12.5px] text-muted-2 mt-2.5">It is read the next time this site is read. Three of the questions Prism would ask are answered by it.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConnectingSource(false)}>Cancel</Button>
+            <Button onClick={() => { setSource(sourcePick); setConnectingSource(false); logActivity(`Connected ${sourcePick} as a read-only source for ${s.domain}.`); }}>Connect it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

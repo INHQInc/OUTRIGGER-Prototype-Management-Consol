@@ -123,6 +123,12 @@ export function markRead(siteId: string) {
 
 const askedNothing = (answers: Answers) => Object.keys(answers).length === 0;
 
+/** A question the source repository answers is never asked (D12). Three of the seven exist
+ *  only because a crawl cannot read source — which family is for headlines, whether the
+ *  framework's blue is a leak, which button is primary. Each is one line in a stylesheet. */
+const settledBySource = (id: string, source?: string) => Boolean(source) && Boolean(SOURCE_SETTLES[id]);
+const askable = (source?: string) => QUESTIONS.filter((q) => !settledBySource(q.id, source));
+
 /** A site's understanding, as the Sites list and the site page state it. */
 export function understandingOf(siteId: string): { label: string; tone: "ok" | "warn" | "muted"; ctx: (SiteContext & { sections?: Live[] }) | null } {
   const ctx = contextFor(siteId);
@@ -367,7 +373,12 @@ const PHASES = [
   { id: "derive", label: "Deriving", detail: "fonts, colours, components, selectors; then drafting what they mean" },
 ];
 
-function Reading({ done }: { done: () => void }) {
+/** With a source repository connected the read has a second half: what somebody wrote,
+ *  beside what a browser computed. */
+const SOURCE_PHASE = { id: "source", label: "Reading the code", detail: `${SOURCE.repo} · read-only · ${SOURCE.read} files that matter` };
+
+function Reading({ done, source }: { done: () => void; source?: string }) {
+  const phases = source ? [...PHASES.slice(0, 3), SOURCE_PHASE, PHASES[3]] : PHASES;
   const [phase, setPhase] = useState(0);
   const [pages, setPages] = useState(0);
   useEffect(() => {
@@ -376,12 +387,13 @@ function Reading({ done }: { done: () => void }) {
     t.push(setTimeout(() => setPhase(2), 1500));
     for (let i = 1; i <= OBSERVED.read; i++) t.push(setTimeout(() => setPages(i), 1500 + i * 45));
     t.push(setTimeout(() => setPhase(3), 1500 + OBSERVED.read * 45 + 200));
-    t.push(setTimeout(done, 1500 + OBSERVED.read * 45 + 1100));
+    if (source) t.push(setTimeout(() => setPhase(4), 1500 + OBSERVED.read * 45 + 900));
+    t.push(setTimeout(done, 1500 + OBSERVED.read * 45 + (source ? 1800 : 1100)));
     return () => t.forEach(clearTimeout);
-  }, [done]);
+  }, [done, source]);
   return (
     <Card>
-      {PHASES.map((p, i) => (
+      {phases.map((p, i) => (
         <div key={p.id} className="flex items-start gap-3.5 px-5 py-3.5 border-b border-border last:border-0">
           <span className={cn("mt-1 w-4 h-4 rounded-full grid place-items-center shrink-0",
             i < phase ? "bg-ok text-ok-fg" : i === phase ? "border-2 border-accent border-t-transparent animate-spin" : "border border-border-strong")}>
@@ -451,7 +463,7 @@ function Learned({ earned }: { earned: Earned[] }) {
   );
 }
 
-function ReadReport({ sections, earned = [] }: { sections: Live[]; earned?: Earned[] }) {
+function ReadReport({ sections, earned = [], source }: { sections: Live[]; earned?: Earned[]; source?: string }) {
   return (
     <>
       <Card>
@@ -460,19 +472,34 @@ function ReadReport({ sections, earned = [] }: { sections: Live[]; earned?: Earn
           <Stat n={OBSERVED.read} l="pages read" />
           <Stat n={`${OBSERVED.seconds}s`} l="to read and derive" />
           <Stat n={overall(sections)} l="understanding, before asking" tone="warn" />
+          {source && <Stat n={Object.keys(SOURCE_SETTLES).length} l="questions your code answered" tone="ok" />}
           <div className="ml-auto text-right text-[12.5px] text-muted-2">
             <div>read {OBSERVED.readAt}</div>
             <div>through Firecrawl · {OBSERVED.readFrom}</div>
+            {source && <div className="font-mono">+ {source}</div>}
           </div>
         </div>
       </Card>
       <Tabs defaultValue="measured" className="mt-4">
         <TabsList>
-          <TabsTrigger value="measured">What we measured</TabsTrigger>
+          <TabsTrigger value="measured">From the pages</TabsTrigger>
+          {source && <TabsTrigger value="source">From your code</TabsTrigger>}
           <TabsTrigger value="think">What we think</TabsTrigger>
           <TabsTrigger value="learned">What we&rsquo;ve learned</TabsTrigger>
         </TabsList>
-        <TabsContent value="measured" className="mt-2"><Measured /></TabsContent>
+        <TabsContent value="measured" className="mt-2">
+          {source && <p className="text-[13px] text-muted mb-3 leading-relaxed">What a browser computed on {OBSERVED.read} pages. The next tab is what somebody wrote — where the two disagree, the code is the one that meant it.</p>}
+          <Measured />
+        </TabsContent>
+        {source && (
+          <TabsContent value="source" className="mt-2">
+            <p className="text-[13px] text-muted mb-3 leading-relaxed">
+              Read from <span className="font-mono text-foreground">{source}</span>, read-only. A crawl can count a colour; only this can name it —
+              and it answers {Object.keys(SOURCE_SETTLES).length} of the {QUESTIONS.length} questions outright.
+            </p>
+            <FromSource />
+          </TabsContent>
+        )}
         <TabsContent value="think" className="mt-2">
           <p className="text-[13px] text-muted mb-3 leading-relaxed">Written by Prism from what it measured. Everything on the other tab is a fact; everything here is a guess with a number on it, and the next step is where you make it true.</p>
           <Drafts sections={sections} />
@@ -535,8 +562,10 @@ function QuestionCard({ q, a, set }: { q: Question; a: Answer | undefined; set: 
   );
 }
 
-function Interview({ answers, setAnswers, sections, base, onFinish, startRound = 1 }: {
+function Interview({ answers, setAnswers, sections, base, onFinish, startRound = 1, source }: {
   answers: Answers; setAnswers: (a: Answers) => void; sections: Live[]; base: Live[]; onFinish: () => void; startRound?: 1 | 2 | 3;
+  /** Connected source repository, if any. What it settles is shown, not asked. */
+  source?: string;
 }) {
   const [round, setRound] = useState<1 | 2 | 3>(startRound);
   const [prev, setPrev] = useState<Live[]>(base);
@@ -545,12 +574,14 @@ function Interview({ answers, setAnswers, sections, base, onFinish, startRound =
   const top = useRef<HTMLDivElement>(null);
   // A new round starts at the top of the page, not wherever the last answer left you.
   useEffect(() => { top.current?.closest(".overflow-auto")?.scrollTo({ top: 0 }); }, [round, ended]);
-  const inRound = QUESTIONS.filter((q) => q.round === round);
+  const asks = askable(source);
+  const settled = source ? QUESTIONS.filter((q) => SOURCE_SETTLES[q.id]) : [];
+  const inRound = asks.filter((q) => q.round === round);
   const roundDone = inRound.every((q) => answered(answers[q.id]));
   const score = overall(sections);
   const enough = score >= 90;
   const last = round === ROUNDS;
-  const unknowns = QUESTIONS.filter((q) => !answers[q.id] || answers[q.id].skipped);
+  const unknowns = asks.filter((q) => !answers[q.id] || answers[q.id].skipped);
 
   const next = () => {
     setPrev(sections);
@@ -559,7 +590,7 @@ function Interview({ answers, setAnswers, sections, base, onFinish, startRound =
   };
   const stopHere = () => {
     const rest: Answers = { ...answers };
-    for (const q of QUESTIONS) if (!answered(rest[q.id])) rest[q.id] = { skipped: true };
+    for (const q of asks) if (!answered(rest[q.id])) rest[q.id] = { skipped: true };
     setAnswers(rest);
     setPrev(sections);
     setStoppedEarly(!(last && roundDone));
@@ -571,9 +602,32 @@ function Interview({ answers, setAnswers, sections, base, onFinish, startRound =
       <div className="flex-1 min-w-0 space-y-3 w-full">
         {!ended ? (
           <>
+            {settled.length > 0 && (
+              <Card className="mb-3 border-ok/40 bg-ok/[0.04]">
+                <div className="px-5 py-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eyebrow>ANSWERED BY YOUR CODE — NOT ASKED</Eyebrow>
+                    <Badge variant="ok">{settled.length} of {QUESTIONS.length}</Badge>
+                  </div>
+                  {settled.map((q) => (
+                    <div key={q.id} className="py-1.5 border-b border-border last:border-0">
+                      <div className="text-[13.5px]"><span className="text-muted-2">{q.short}</span> — {SOURCE_SETTLES[q.id].answer}</div>
+                      <div className="font-mono text-[11.5px] text-muted-2 mt-0.5">{SOURCE_SETTLES[q.id].where}</div>
+                    </div>
+                  ))}
+                  <p className="text-[12.5px] text-muted-2 mt-2.5 leading-relaxed">
+                    From <span className="font-mono">{source}</span>. What is left is the part no file can answer.
+                  </p>
+                </div>
+              </Card>
+            )}
             <div className="flex items-center gap-3 mb-1">
               <Eyebrow>ROUND {round} OF {ROUNDS}</Eyebrow>
-              <span className="text-[12.5px] text-muted-2">{inRound.length} question{inRound.length === 1 ? "" : "s"} — each one changes what the agent would build.</span>
+              <span className="text-[12.5px] text-muted-2">
+                {inRound.length === 0
+                  ? "Nothing left to ask in this round — your code answered it."
+                  : `${inRound.length} question${inRound.length === 1 ? "" : "s"} — each one changes what the agent would build.`}
+              </span>
             </div>
             {inRound.map((q) => (
               <QuestionCard key={q.id} q={q} a={answers[q.id]} set={(a) => setAnswers({ ...answers, [q.id]: a })} />
@@ -970,18 +1024,22 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
             : "Prism maps the whole site, reads one of every kind of page within a budget, and derives the design system and the page inventory. It writes nothing anywhere."}>
           {reading === "idle" && (
             <div className="flex items-center gap-3">
-              <Button onClick={() => setReading("reading")}>Read {site.domain}</Button>
-              <span className="text-[12.5px] text-muted-2">Budget: {OBSERVED.budget} pages. A big site is hundreds; most teach nothing new.</span>
+              <Button onClick={() => setReading("reading")}>Read {site.domain}{site.source ? " and its code" : ""}</Button>
+              <span className="text-[12.5px] text-muted-2">
+                {site.source
+                  ? <>Both sources: up to {OBSERVED.budget} pages, and <span className="font-mono">{site.source}</span>, read-only.</>
+                  : <>Budget: {OBSERVED.budget} pages — one of every kind. No source repository is connected, so Prism will have to ask you more.</>}
+              </span>
             </div>
           )}
-          {reading === "reading" && <Reading done={() => setReading("done")} />}
-          {reading === "done" && <ReadReport sections={base} earned={ctx?.earned} />}
+          {reading === "reading" && <Reading done={() => setReading("done")} source={site.source} />}
+          {reading === "done" && <ReadReport sections={base} earned={ctx?.earned} source={site.source} />}
         </Q>
       )}
 
       {step === 1 && (
         <Q n={2} of={3} wide title="What the pages couldn't say" help="Every question below is one the crawl could not settle and whose answer changes what the agent would build. There are no others.">
-          <Interview answers={answers} setAnswers={(a) => { setAnswers(a); setSections(null); }} sections={asked} base={base}
+          <Interview answers={answers} setAnswers={(a) => { setAnswers(a); setSections(null); }} sections={asked} base={base} source={site.source}
             startRound={resumeRound(answers)} onFinish={() => { setInterviewDone(true); setStep(2); }} />
         </Q>
       )}
@@ -1111,11 +1169,11 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
           <DialogHeader>
             <DialogTitle>Re-read {s.domain}?</DialogTitle>
             <DialogDescription>
-              Reads up to {OBSERVED.budget} pages again and re-derives the measured layer. It makes revision {rev.r + 1}. Nothing you approved is rewritten —
+              Reads up to {OBSERVED.budget} pages again{s.source ? <>, and <span className="font-mono">{s.source}</span> with them,</> : ""} and re-derives the measured layer. It makes revision {rev.r + 1}. Nothing you approved is rewritten —
               where the pages now disagree with a section, that section is flagged for you, not changed behind you. The {rev.pinnedBy} build{rev.pinnedBy === 1 ? "" : "s"} cut against r{rev.r} keep{rev.pinnedBy === 1 ? "s" : ""} r{rev.r}.
             </DialogDescription>
           </DialogHeader>
-          {rereading && <Reading done={rereadDone} />}
+          {rereading && <Reading done={rereadDone} source={s.source} />}
           {!rereading && (
             <DialogFooter>
               <Button variant="ghost" onClick={() => setReread(false)}>Not now</Button>
