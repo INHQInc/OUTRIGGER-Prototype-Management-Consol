@@ -16,18 +16,28 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/ui/cn";
 import { SITE_ROWS } from "@/lib/console/fake";
+import { logActivity } from "./config";
 import { Pill } from "./ui";
 
 const STEPS = ["Where", "What changes", "Who for", "What you expect", "How we'll know", "What must not get worse"];
 
-const PAGES = [
-  { name: "Home", path: "/", visits: "48,210 / mo" },
-  { name: "Property detail — Reef Waikiki", path: "/hawaii/oahu/outrigger-reef-waikiki-beach-resort", visits: "31,004 / mo" },
-  { name: "All offers", path: "/offers", visits: "9,780 / mo" },
-  { name: "Destinations", path: "/destinations", visits: "6,140 / mo" },
+/** A page on the site. `read` is what Prism learned by reading it — a page you
+ *  add by hand has none of that yet, and the screen says so rather than guess. */
+interface Page { path: string; read?: { name: string; visits: string } }
+
+const PAGES: Page[] = [
+  { path: "/", read: { name: "Home", visits: "48,210 / mo" } },
+  { path: "/hawaii/oahu/outrigger-reef-waikiki-beach-resort", read: { name: "Property detail — Reef Waikiki", visits: "31,004 / mo" } },
+  { path: "/offers", read: { name: "All offers", visits: "9,780 / mo" } },
+  { path: "/destinations", read: { name: "Destinations", visits: "6,140 / mo" } },
 ];
+
+/** A path on the chosen site: starts with a slash, no spaces, no domain. */
+const isPath = (s: string) => /^\/\S*$/.test(s);
 
 const POLICY = ["Bookings", "Revenue per visit", "Page errors"];
 
@@ -57,6 +67,28 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
   const [step, setStep] = useState(0);
   const [d, setD] = useState<Draft>(EMPTY);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((p) => ({ ...p, [k]: v }));
+
+  /** The pages you can pick from: the ones Prism read, plus any you add by path. */
+  const [pages, setPages] = useState<Page[]>(PAGES);
+  const [addingPage, setAddingPage] = useState(false);
+  const [pagePath, setPagePath] = useState("");
+  const [pageError, setPageError] = useState<string | null>(null);
+  const chosen = pages.find((p) => p.path === d.page);
+
+  const closePageForm = () => { setAddingPage(false); setPagePath(""); setPageError(null); };
+
+  /** A path Prism hasn't read is listed and chosen straight away. The read
+   *  happens before the build, and the note under the list says so. */
+  const addPage = () => {
+    const path = pagePath.trim();
+    if (!isPath(path)) { setPageError(`Start with a slash and leave off the domain — /offers, not ${d.site}/offers.`); return; }
+    if (!pages.some((p) => p.path === path)) {
+      setPages((p) => [...p, { path }]);
+      logActivity(`Added ${d.site}${path} as a page to test.`);
+    }
+    set("page", path);
+    closePageForm();
+  };
 
   /** Every step is individually valid — leaving after any of them is coherent.
    *  Only question 5 is a hard gate, because a direction that was never stated
@@ -100,20 +132,35 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
               {SITE_ROWS.map((s) => <option key={s.id}>{s.domain}</option>)}
             </select>
             <div className="rounded-xl border border-border bg-surface overflow-hidden">
-              {PAGES.map((p) => (
+              {pages.map((p) => (
                 <button key={p.path} onClick={() => set("page", p.path)}
                   className={cn("w-full flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 text-left hover:bg-surface-2/60",
                     d.page === p.path && "bg-accent/5")}>
                   <span className={cn("w-4 h-4 rounded-full border-2 shrink-0", d.page === p.path ? "border-accent border-[5px]" : "border-border-strong")} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-medium">{p.name}</div>
-                    <div className="text-[12.5px] text-muted-2 truncate">{d.site}{p.path}</div>
+                    <div className="text-[14px] font-medium truncate">{p.read ? p.read.name : `${d.site}${p.path}`}</div>
+                    {p.read && <div className="text-[12.5px] text-muted-2 truncate">{d.site}{p.path}</div>}
                   </div>
-                  <span className="text-[12.5px] text-muted-2 shrink-0">{p.visits}</span>
+                  {p.read && <span className="text-[12.5px] text-muted-2 shrink-0">{p.read.visits}</span>}
                 </button>
               ))}
             </div>
-            <button className="text-[13px] text-accent mt-3">Test a page that isn&rsquo;t listed →</button>
+            {chosen && !chosen.read && <p className="text-[12.5px] text-muted-2 mt-3">Prism hasn&rsquo;t read this page yet — it will before the build.</p>}
+            {addingPage ? (
+              <form onSubmit={(e) => { e.preventDefault(); addPage(); }} className="mt-4">
+                <Label htmlFor="page-path" className="mb-1.5">Path on {d.site}</Label>
+                <Input id="page-path" value={pagePath} onChange={(e) => { setPagePath(e.target.value); setPageError(null); }}
+                  placeholder="/hawaii/maui/kaanapali-beach-hotel" spellCheck={false} autoFocus
+                  aria-invalid={pageError ? true : undefined} aria-describedby={pageError ? "page-path-error" : undefined} />
+                {pageError && <p id="page-path-error" className="text-[12.5px] text-danger mt-2">{pageError}</p>}
+                <div className="flex items-center gap-2 mt-3">
+                  <Button type="submit" size="sm">Add page</Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={closePageForm}>Cancel</Button>
+                </div>
+              </form>
+            ) : (
+              <button type="button" onClick={() => setAddingPage(true)} className="text-[13px] text-accent mt-3">Test a page that isn&rsquo;t listed →</button>
+            )}
           </Q>
         )}
 
