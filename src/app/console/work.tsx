@@ -2,7 +2,7 @@
 
 /** The work surfaces: Overview, Experiments (list + one), Ideas, Readouts. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -98,7 +98,10 @@ export function ExperimentsView({ open, onNew, all = EXPERIMENTS }: { open: (id:
         .map((v) => `"${v.replace(/"/g, '""')}"`).join(","))].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const link = Object.assign(document.createElement("a"), { href: url, download: "prism-experiments.csv" });
-    link.click(); URL.revokeObjectURL(url);
+    // In the document, and the object URL outlives the click — revoking on the same
+    // line is enough for a browser to abort the save while Activity says it happened.
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     logActivity(`Exported ${rows.length} experiment${rows.length === 1 ? "" : "s"} as a spreadsheet.`);
   };
   return (
@@ -148,13 +151,21 @@ export function ExperimentsView({ open, onNew, all = EXPERIMENTS }: { open: (id:
 /** Where Preview opens: the page on the experiment's own environment, with the variation injected. */
 const previewUrl = (e: Experiment) => {
   const envs = SITE_ROWS.find((s) => s.domain === e.site)?.envs ?? [];
-  const env = envs.find((x) => x.label === e.env) ?? envs.find((x) => !x.isProduction);
+  // No fallback to "some other environment": opening staging while the header says Prep
+  // is a guess dressed as a fact. An unknown name falls through to the bare domain.
+  const env = envs.find((x) => x.label === e.env);
   return `${env?.url ?? `https://${e.site}`}${e.path}?opmc=${e.id}`;
 };
 
-/** The signed-in person, however a fixture writes an owner: "Bryan Hopkins" or "Bryan H.". */
 /** See fake.ts — one definition of the second-person rule. */
 const isMine = (owner: string) => authoredByMe(owner);
+
+/** What was done to an experiment from its action card, for the length of the session.
+ *  Component state died with the mount, so a decision the dialog called permanent
+ *  ("it can't be changed after") could be recorded again by going back and reopening —
+ *  and logged twice. stages.tsx keeps SIGNOFFS and STOPPED at module scope for the same
+ *  reason. A real one would be a row; here it is the honest equivalent. */
+const ACTED = new Map<string, { line: string; sealed?: boolean }>();
 
 const OPTIMIZELY = "https://app.optimizely.com/v2/projects/24138040550/experiments";
 const REVIEWERS = ["Ana Kealoha", "Dana R.", "Kai N.", "Malia K.", "Marcus R."];
@@ -251,19 +262,64 @@ function OneExperiment({ e, back }: { e: Experiment; back: () => void }) {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [note, setNote] = useState("");
   const [choice, setChoice] = useState("");
-  const [acted, setActed] = useState<{ line: string; busy?: boolean; sealed?: boolean } | null>(null);
+  const [acted, setActed] = useState<{ line: string; busy?: boolean; sealed?: boolean } | null>(() => ACTED.get(e.id) ?? null);
   /** The decision seals the readout — recorded before this session, or in it. */
   const sealed = e.status === "shipped" || Boolean(acted?.sealed);
   const buttons = e.action ? [e.action.primary, ...(e.action.secondary ? [e.action.secondary] : [])] : [];
   // Whoever wrote or built an experiment can't record its result. Stopping a run needs nobody's permission.
   const blocked = (label: string) => isMine(e.owner) && /won|win|record|decid/i.test(label);
   const press = (label: string) => { const a = actOn(e, label); if (a) { setNote(""); setChoice(""); setAsk(a); } };
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   const settle = (o: Outcome) => {
     setAsk(null);
-    if (!o.pending) { setActed({ line: o.line, sealed: o.seals }); logActivity(o.log); return; }
+    const done = () => { ACTED.set(e.id, { line: o.line, sealed: o.seals }); setActed({ line: o.line, sealed: o.seals }); logActivity(o.log); };
+    if (!o.pending) { done(); return; }
     setActed({ line: o.pending, busy: true });
-    setTimeout(() => { setActed({ line: o.line, sealed: o.seals }); logActivity(o.log); }, 900);
+    timer.current = setTimeout(done, 900);
   };
+
+  /** The card is the thing to do now, so it sits on the stage the experiment is at —
+   *  not only on Decision, where DecisionPanel used to be its only renderer and four
+   *  of its seven actions could never be reached. Decision still receives it as a prop
+   *  so the panel can place it inside its own argument. */
+  const actionCard = e.action && (tab === e.stage || tab === "Decision") ? (
+    <section className="rounded-xl border-[1.5px] border-accent bg-surface p-5 shadow-[0_4px_16px_rgba(29,78,216,0.07)]">
+      <div className="flex items-center gap-2 mb-1.5">
+        <h2 className="text-[16px] font-semibold">{e.action.title}</h2>
+        <span className="text-[11px] font-semibold text-muted-2 border border-border rounded px-1.5 py-0.5">{e.action.role.toUpperCase()}</span>
+      </div>
+      <p className="text-[14px] text-muted leading-relaxed mb-4">{e.action.body}</p>
+      <div className="rounded-lg border border-border bg-surface-2/50 p-4 mb-4">
+        <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">WHAT WE SAID WE&rsquo;D TEST — BEFORE ANY NUMBERS EXISTED</div>
+        <p className="text-[14px] leading-relaxed">{e.hypothesis}</p>
+        {e.frozen && <div className="font-mono text-[11px] text-muted-2 mt-2.5">{e.frozen}</div>}
+      </div>
+      {e.result && (
+        <div className="flex items-baseline gap-6 mb-4">
+          <div>
+            <div className={cn("text-[22px] font-semibold tabular-nums tracking-[-0.02em]", e.result.tone === "ok" ? "text-ok" : e.result.tone === "danger" ? "text-danger" : "")}>{e.result.value}</div>
+            <div className="text-[12.5px] text-muted-2">{e.metric}</div>
+          </div>
+          <div className="text-[12.5px] text-muted-2 leading-relaxed">{e.result.detail}</div>
+        </div>
+      )}
+      {acted ? (
+        <div className="flex items-center gap-2.5 text-[13.5px]">
+          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", acted.busy ? "bg-warn animate-pulse" : "bg-ok")} />
+          <span className={acted.busy ? "text-muted" : "font-medium"}>{acted.line}</span>
+        </div>
+      ) : (
+        <div className="flex gap-2.5">
+          {buttons.map((label, i) => (
+            <Button key={label} variant={i ? "outline" : "default"} disabled={blocked(label)}
+              title={blocked(label) ? "You wrote this one — someone else records the result." : undefined}
+              onClick={() => press(label)}>{label}</Button>
+          ))}
+        </div>
+      )}
+    </section>
+  ) : null;
 
   return (
     <>
@@ -400,44 +456,8 @@ function OneExperiment({ e, back }: { e: Experiment; back: () => void }) {
       <div className="flex-1 overflow-auto">
         <div className="flex gap-6 p-6 items-start">
           <div className="flex-1 min-w-0 space-y-4">
-            <StagePanel e={e} stage={tab} action={e.action ? (
-              <section className="rounded-xl border-[1.5px] border-accent bg-surface p-5 shadow-[0_4px_16px_rgba(29,78,216,0.07)]">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <h2 className="text-[16px] font-semibold">{e.action.title}</h2>
-                  <span className="text-[11px] font-semibold text-muted-2 border border-border rounded px-1.5 py-0.5">{e.action.role.toUpperCase()}</span>
-                </div>
-                <p className="text-[14px] text-muted leading-relaxed mb-4">{e.action.body}</p>
-                <div className="rounded-lg border border-border bg-surface-2/50 p-4 mb-4">
-                  <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">WHAT WE SAID WE&rsquo;D TEST — BEFORE ANY NUMBERS EXISTED</div>
-                  <p className="text-[14px] leading-relaxed">{e.hypothesis}</p>
-                  {e.frozen && <div className="font-mono text-[11px] text-muted-2 mt-2.5">{e.frozen}</div>}
-                </div>
-                {e.result && (
-                  <div className="flex items-baseline gap-6 mb-4">
-                    <div>
-                      <div className={cn("text-[22px] font-semibold tabular-nums tracking-[-0.02em]", e.result.tone === "ok" ? "text-ok" : e.result.tone === "danger" ? "text-danger" : "")}>{e.result.value}</div>
-                      <div className="text-[12.5px] text-muted-2">{e.metric}</div>
-                    </div>
-                    <div className="text-[12.5px] text-muted-2 leading-relaxed">{e.result.detail}</div>
-                  </div>
-                )}
-                {acted ? (
-                  <div className="flex items-center gap-2.5 text-[13.5px]">
-                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", acted.busy ? "bg-warn animate-pulse" : "bg-ok")} />
-                    <span className={acted.busy ? "text-muted" : "font-medium"}>{acted.line}</span>
-                  </div>
-                ) : (
-                  <div className="flex gap-2.5">
-                    {buttons.map((label, i) => (
-                      <Button key={label} variant={i ? "outline" : "default"} disabled={blocked(label)}
-                        title={blocked(label) ? "You wrote this one — someone else records the result." : undefined}
-                        onClick={() => press(label)}>{label}</Button>
-                    ))}
-                  </div>
-                )}
-              </section>
-            ) : null} />
-
+            {actionCard}
+            <StagePanel e={e} stage={tab} action={tab === "Decision" ? actionCard : null} />
             <Section title="History">
               <ol>
                 {e.history.map((h, i) => (
@@ -556,7 +576,14 @@ export function ReadoutsView({ rows = EXPERIMENTS }: { rows?: Experiment[] }) {
   const waiting = rows.filter((e) => e.status === "decide");
   const decided = rows.filter((e) => e.status === "shipped");
   /** The decision behind what goes out: the newest one at the Decision stage. */
-  const latest = rows.find((e) => e.stage === "Decision");
+  const [subs, setSubs] = useState(SUBS);
+  const [editWho, setEditWho] = useState("");
+  const [editWhen, setEditWhen] = useState("");
+  const saveSub = () => {
+    setSubs((xs) => xs.map((x) => (x.name === editing ? { ...x, who: editWho.trim(), when: editWhen } : x)));
+    logActivity(`Changed who gets the ${editing} readout — ${editWho.trim()}, ${editWhen}.`);
+    setEditing(null);
+  };
   if (open) {
     return (
       <>
@@ -610,15 +637,37 @@ export function ReadoutsView({ rows = EXPERIMENTS }: { rows?: Experiment[] }) {
         </DialogContent>
       </Dialog>
 
+      {/* A row here is a SUBSCRIPTION — who hears what happened, and when. Editing one
+          changes that, not the readout: a readout is written from the decision record
+          and nothing about it is editable here. */}
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit — {editing}</DialogTitle>
-            <DialogDescription>A readout is generated from the decision record. Change the record and the readout follows.</DialogDescription>
+            <DialogTitle>{editing}</DialogTitle>
+            <DialogDescription>
+              Who hears about it, and when. The readout itself is written from the decision record — this only changes who it reaches.
+            </DialogDescription>
           </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="sub-who" className="mb-1.5">Who</Label>
+              <Input id="sub-who" value={editWho} onChange={(ev) => setEditWho(ev.target.value)} placeholder="Leadership · 6 people" />
+              <p className="text-[12.5px] text-muted-2 mt-2">Recipients don&rsquo;t need a Prism account — they get the readout as a read-only page.</p>
+            </div>
+            <div>
+              <Label className="mb-2" id="sub-when">When it goes out</Label>
+              <RadioGroup aria-labelledby="sub-when" value={editWhen} onValueChange={setEditWhen}>
+                {["Mondays 9:00am", "when one is recorded", "immediately"].map((w) => (
+                  <Label key={w} htmlFor={`when-${w}`} className={cn("gap-3 rounded-xl border px-4 py-2.5 cursor-pointer font-normal text-foreground", editWhen === w ? "border-accent bg-accent/5" : "border-border")}>
+                    <RadioGroupItem id={`when-${w}`} value={w} /><span className="text-[13.5px]">{w}</span>
+                  </Label>
+                ))}
+              </RadioGroup>
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Not now</Button>
-            {latest && <Button onClick={() => { setEditing(null); goDecision(latest.id); }}>Open the decision</Button>}
+            <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button disabled={!editWho.trim()} onClick={saveSub}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -626,11 +675,11 @@ export function ReadoutsView({ rows = EXPERIMENTS }: { rows?: Experiment[] }) {
       <Toolbar><span className="text-[13px] text-muted">Who hears what happened, and when. Recipients don&rsquo;t need a Prism account.</span></Toolbar>
       <div className="flex-1 overflow-auto p-6 space-y-4">
         <Section title="Going out">
-          {SUBS.map((s) => (
+          {subs.map((s) => (
             <div key={s.name} className="flex items-center gap-4 px-5 py-3.5 border-b border-border last:border-0">
               <div className="flex-1"><div className="text-[14px] font-medium">{s.name}</div><div className="text-[12.5px] text-muted-2 mt-0.5">{s.who}</div></div>
               <span className="text-[13px] text-muted">{s.when}</span>
-              <button onClick={() => setEditing(s.name)} className="text-[13px] text-accent font-medium w-12 text-right">Edit</button>
+              <button onClick={() => { setEditing(s.name); setEditWho(s.who); setEditWhen(s.when); }} className="text-[13px] text-accent font-medium w-12 text-right">Edit</button>
             </div>
           ))}
         </Section>
