@@ -261,3 +261,65 @@ just sign up — keep it generic.")
 word") and opens at four characters; an eight-character gate that explained
 nothing read as a broken button.
 
+---
+
+## D12 · Two repositories per site, and the read-only one is read at onboarding
+
+**Decision.** A site names two repositories and they are never the same thing.
+The **prototypes** repository is where Prism WRITES — each experiment is a
+branch under `prototype/`. The **source** repository is where Prism READS — the
+site's real stylesheets and components — and it is read-only, always. Both are
+collected when the site is added, before anything is read.
+
+**Why read the source at all.** A crawl sees what a browser computed; the
+repository sees what somebody wrote. `deriveDesignTokens` already says so:
+*"Computed styles in the browser miss media queries and pseudo-states. Prefer
+the source repo's SCSS when it's available."* The difference is not cosmetic —
+counting says `#004561` appears 73 times; the stylesheet says its name is
+`$clr-deep-turquoise`, that it is `$primary`, and that six more colours are
+declared which no page we read happens to use. Only two sources can find that
+last one.
+
+**The mechanic that makes it worth doing.** Connecting the source SHORTENS THE
+INTERVIEW. Three of the seven questions exist only because a crawl cannot see
+the source — which type family is for headlines, whether the framework's blue
+is a leak, which button is the primary. Each is one line in a stylesheet or one
+component name. The interview shows them answered, with the line that answered
+them, and asks the remaining four — which are the ones no file can answer.
+The product thesis in one screen: give Prism more and it asks you less.
+
+**Consequence.** Adding a site is INFRASTRUCTURE only — address, code,
+environments, script. The wizard used to read the site itself and then
+Understand read it again; now the read happens once, over both sources, in
+Understand. Page selection is gone: the read chooses by template and says so.
+
+---
+
+## D13 · The product is vertical-neutral; the site profile learns a vertical
+
+**Decision.** Nothing the console says about itself may assume what a customer
+sells. Room titles, help text, dialog copy, validation, empty states, the
+interview's questions, and every `prism/*` built-in skill are written for any
+website in the world — retail, SaaS, media, charity, banking, travel. A person
+on a customer's website is a **visitor**. The product never names what converts:
+not bookings, not sign-ups, not sales — it says "the action that matters" or
+recasts the sentence.
+
+The opposite is true one layer down. A **site profile** is supposed to be
+specific: the drafts about outrigger.com are written in hotel words because
+outrigger.com is a hotel site, and the `outrigger/brand-voice` skill saying
+*"Guests, never users"* is that brand's own rule, correctly discovered. That
+contrast is the proof the architecture works — the product assumes nothing, the
+profile learns everything.
+
+**Why it is written down.** The demo account is a hotel group, and its
+vocabulary leaked out of the fixture and into the product: 262 occurrences of
+guest/booking across 19 files, including a rule stated in agent briefings that
+site visitors are called "guests". A prospect from a bank would have seen a
+console that assumed they sold rooms. (Bryan, 11 Sep 2026: "this is not a hotel
+solution… this is for any brand in the world.")
+
+**How to hold the line.** Before writing product copy, ask whether it would read
+correctly on a console loaded for a bookshop. Fixture content is exempt and
+should NOT be sanitised — the demo has to describe a real site in its own words.
+
