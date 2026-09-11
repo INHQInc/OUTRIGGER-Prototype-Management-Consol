@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { ME, STAGES, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
+import { STAGES, authoredByMe, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
 import { Meta, Pill, Section } from "./ui";
 import { logActivity } from "./config";
 import { MeasurementPlan, MetricIndex } from "./measurement";
@@ -28,8 +28,8 @@ const TODAY = "10 Sep 2026";
 
 /** The fixture writes owners short — "Bryan H." — and ME in full. Both are you,
  *  and the second-person rule has to see that. */
-const ME_SHORT = ME.name.replace(/^(\S+) .*?(\S)\S*$/, "$1 $2.");
-const isMine = (e: Experiment) => e.owner === ME.name || e.owner === ME_SHORT;
+/** See fake.ts — one definition of the second-person rule. */
+const isMine = (e: Experiment) => authoredByMe(e.owner);
 
 /* ── Session memory ────────────────────────────────────────────────── */
 

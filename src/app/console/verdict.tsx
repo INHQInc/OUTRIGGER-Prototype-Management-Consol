@@ -41,7 +41,7 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { EXPERIMENTS, ME, type Stage } from "@/lib/console/fake";
+import { EXPERIMENTS, ME, authoredByMe, type Stage } from "@/lib/console/fake";
 import { logActivity } from "./config";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
 
@@ -701,7 +701,8 @@ export function VerdictPanel({ state, title = EXPERIMENT }: { state: Verdict; ti
   const did = done[state];
   const exp = experimentNamed(title);
   /** The second-person rule: whoever wrote or built this cannot record its result. */
-  const mine = exp?.owner === ME.name;
+  // fake.ts owns the rule: owners are written short, ME long.
+  const mine = exp ? authoredByMe(exp.owner) : false;
   const stop = cfg.actions.find((a) => a.do.kind === "stop");
 
   const nextStep = () => {

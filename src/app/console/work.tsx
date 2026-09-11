@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { EXPERIMENTS, ME, SITE_ROWS, STATUS, TROUBLE, needsMe, type Experiment } from "@/lib/console/fake";
+import { EXPERIMENTS, ME, SITE_ROWS, authoredByMe, STATUS, TROUBLE, needsMe, type Experiment } from "@/lib/console/fake";
 import { Badge, Chip, Meta, PageHeader, Pill, Section, StageRail, Th, Toolbar } from "./ui";
 import { StagePanel } from "./stages";
 import { SetupChecklist } from "./setup";
@@ -153,7 +153,8 @@ const previewUrl = (e: Experiment) => {
 };
 
 /** The signed-in person, however a fixture writes an owner: "Bryan Hopkins" or "Bryan H.". */
-const isMine = (owner: string) => owner === ME.name || owner === ME.name.replace(/^(\S+)\s+(\S).*$/, "$1 $2.");
+/** See fake.ts — one definition of the second-person rule. */
+const isMine = (owner: string) => authoredByMe(owner);
 
 const OPTIMIZELY = "https://app.optimizely.com/v2/projects/24138040550/experiments";
 const REVIEWERS = ["Ana Kealoha", "Dana R.", "Kai N.", "Malia K.", "Marcus R."];

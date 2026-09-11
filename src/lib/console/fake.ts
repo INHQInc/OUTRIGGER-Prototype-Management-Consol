@@ -44,6 +44,13 @@ export interface Experiment {
 export const SITES = ["outrigger.com", "outriggerkona.com", "waikikibeachcomber.com"];
 export const ME = { name: "Bryan Hopkins", initials: "BH", role: "Approver" };
 
+/** THE SECOND-PERSON RULE, in one place. Whoever wrote or built an experiment
+ *  cannot approve it going live or record its result. One definition, because
+ *  the fixture writes owners short ("Bryan H.") and ME long ("Bryan Hopkins") —
+ *  three surfaces compared them directly and the rule could never fire. */
+export const ME_SHORT = ME.name.replace(/^(\S+)\s+(\S).*$/, "$1 $2.");
+export const authoredByMe = (owner: string) => owner === ME.name || owner === ME_SHORT;
+
 export const EXPERIMENTS: Experiment[] = [
   {
     id: "reef-rate-promise", name: "Rate-calendar best-price promise",
