@@ -76,3 +76,125 @@ existing `?opmc=` previews keep working untouched.
    that is the whole story and none of it is on screen.
 4. Enterprise table stakes: SSO, SCIM, roles beyond admin/not-admin, data
    residency. Necessary, not differentiating.
+
+---
+
+# Feature backlog
+
+*Ordered by what a buyer would miss first. Each entry says what is missing, why
+it matters, and where it lands, so it can be picked up without this context.*
+
+## 1 · The brief carries a decision rule the analytics side reads
+
+**Status:** designed, not built. Agreed 11 Sep 2026.
+
+**The gap.** `deriveVerdict` runs nine gates and every one of them asks whether
+a number is REAL — adjudicable, bound, hypothesis declared, past the runtime
+floor, past the sample floor, guardrails intact, both arms converting,
+computing, significant. Not one asks whether the number is WORTH ANYTHING to
+this business. So the verdict says *Confirmed* and a person still has to guess
+whether to ship, using judgement that was never written down and cannot be
+audited later.
+
+**Why it matters more than it looks.** With no customer-supplied economics, the
+product fills the gap with its own assumptions — and that is exactly how
+hospitality vocabulary reached a JSON schema description in `lib/ai/results.ts`
+(`"e.g. 'Total booking intent'"`). Ask the customer what a good outcome is and
+the product never has to guess (D13). This entry and the vertical-neutrality
+rule are the same fix seen from two directions.
+
+**What to add to the brief.** Five fields, PRE-REGISTERED — stated before any
+number exists, frozen with the brief revision, so they cannot be rationalised
+afterwards. Each must change a decision or it does not earn a place (the brief
+author's own rule: at most two questions, first pass only).
+
+| Field | What it is | Why |
+|---|---|---|
+| Smallest lift worth having | below this you would not bother | exists today as `mde.stated` in `stages.tsx` RUN_FACTS, but it lives in run facts, not the brief, and `deriveVerdict` never consults it |
+| What shipping it properly costs | engineering days | turns "+2.4%" into "worth three days?" — every business has this, no vertical needed |
+| What one conversion is worth | optional, customer supplies unit AND number | the field that makes the product vertical-neutral by construction: the customer says what converts, the product never names it |
+| What you would do at each outcome | win big · win small · flat · lose · underpowered | the pre-registration that turns a finding into a decision |
+| What would stop you shipping a winner | legal, brand, ops — the veto no metric can see | guardrails cover measurable vetoes; this covers the rest |
+
+**What it changes on screen.** The Decision panel stops reporting a finding and
+states the decision the customer already made:
+
+> **Confirmed at +0.4%.** You said below 2% is not worth the three days.
+> **You said: do not ship.**
+
+A statistically significant win that the customer's own rule says to drop —
+a call nothing in the system can make today. Likewise *"you said you would
+extend once; this is the second time"* on an underpowered run.
+
+**Where it lands.** `brief-author.tsx` (the nine parts become fourteen, or a
+sixth group), `measurement.tsx` (the plan freezes them with the metric map),
+`stages.tsx` RUN_FACTS (reads them instead of holding its own `mde`),
+`verdict.tsx` (a tenth gate, AFTER significance — economics never override
+validity), and `readout.tsx` (the readout cites the rule it was judged against).
+
+**The invariant to keep.** Economics are consulted only once a result is
+admissible. A verdict must never become *Confirmed* because it would be
+profitable; the order is validity → significance → worth. Same reason the
+existing gates put validity before significance.
+
+## 2 · What we have learned — the evidence room
+
+**Status:** proposed 11 Sep 2026, not started.
+
+Covers **B12** (find what we learned about X, eighteen months later) and **C7**
+(someone joins mid-programme and must understand the history), both of which
+have nothing behind them today.
+
+The earned layer is the one `CONTEXT-INGESTION.md` calls "the layer nobody else
+can build" and the loudest thing in the builder's context — and it exists in
+exactly one place: a card inside a site profile with three hard-coded claims.
+There is no way to search it, see which runs back a claim, or read the
+programme's history.
+
+Build: a room listing every recorded decision across the account's sites, with
+claims DERIVED from those decisions rather than written by hand, each clicking
+through to the runs that earned it — including the contradictions, where two
+runs disagree, which is the honest case the flywheel has to handle. Searchable
+by page, component or pattern.
+
+It is also the longest-lived surface in the product: setup happens once, this is
+opened for years.
+
+## 3 · Access you can actually revoke, and a way back in
+
+**Status:** not started. Both are on the operator's original nine use cases.
+
+- **A4 — remove someone's access immediately.** People & roles has *Change* but
+  no *Remove*. `USE-CASES.md` calls it "not possible inside a year". One dialog,
+  plus the Activity line, plus what happens to work they had in flight.
+- **A3 — get back in when your link died.** Shared secret / magic link only
+  today. Enterprise trust, small surface.
+
+## 4 · De-verticalize Beta 1's live prompts
+
+**Status:** found 11 Sep 2026, NOT actioned — needs Bryan's go, and it is on
+`main`, not this branch.
+
+17 occurrences of guest/booking sit inside LIVE LLM prompts and JSON-schema
+descriptions in `lib/ai/results.ts`, `lib/ai/observation.ts`,
+`lib/ai/measurement.ts` and `lib/skills/builtins.ts` — including a few-shot
+headline example, *"Guests engage far more — but the booking path moved"*. A
+few-shot example inside a schema is the strongest signal in a prompt: pointed at
+a bank, the model writes hospitality language into their readout because we told
+it that is what a readout sounds like.
+
+Harmless today — Beta 1 is single-tenant — and a hard blocker for customer two.
+Changing a prompt changes model behaviour, so the work is: fix the 17, then diff
+one real readout before and after so the change is visible before it ships.
+A further 5 doc comments and 8 pieces of UI copy are cosmetic and can wait.
+
+## Open questions
+
+- **Demo accounts across verticals.** The back office lists four accounts and
+  all four are hotel groups. Making them a retailer, a SaaS, a charity would
+  make the product's neutrality visible rather than merely true — at the cost of
+  fixtures that are no longer backed by a real crawl and a real Optimizely
+  project. Undecided.
+- **The wizard stepper.** shadcn has no stepper; the step bar is the one
+  hand-rolled control in the console. Keep, or rebuild from primitives.
+
