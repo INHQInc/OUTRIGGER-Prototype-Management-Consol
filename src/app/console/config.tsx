@@ -22,7 +22,7 @@ import { cn } from "@/lib/ui/cn";
 import { AB_TOOLS, ME, OTHER_CONNECTIONS, PROJECT_EVENTS, SITE_ROWS, type Connection, type Site } from "@/lib/console/fake";
 import { Empty, Meta, PageHeader, Pill, Section, Th, Toolbar } from "./ui";
 import { SkillsPanel } from "./skills";
-import { SiteProfile, UnderstandingPill } from "./customer-context";
+import { UnderstandingPill } from "./customer-context";
 
 /* ── Session memory ────────────────────────────────────────────────── */
 
@@ -107,7 +107,10 @@ const SOURCE_REPOS = ["INHQInc/outrigger-web", "INHQInc/outrigger-design-system"
 
 const SCRIPT_TAG = '<script src="https://tag.prism.build/opmc.js" data-tag="…" async></script>';
 
-export function SiteDetail({ s, back, understand }: { s: Site; back: () => void; understand: (id: string) => void }) {
+/** SETUP — the site's infrastructure: where it runs, where its code is, whether the
+ *  script is on. What Prism UNDERSTANDS about it is its own room (customer-context.tsx):
+ *  a different job, done by a different person, at a different time. */
+export function SiteDetail({ s }: { s: Site }) {
   const edits = SITE_EDITS.get(s.id);
   const [envs, setEnvs] = useState<Site["envs"]>(edits?.envs ?? s.envs);
   const [repo, setRepo] = useState<string | undefined>(edits?.repo ?? s.repo);
@@ -152,11 +155,11 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
   return (
     <>
       <header className="shrink-0 border-b border-border bg-surface px-6 pt-3 pb-4">
-        <button onClick={back} className="text-[12.5px] text-muted-2 hover:text-foreground mb-1.5">Sites</button>
+
         <div className="flex items-start gap-3">
           <div>
-            <h1 className="text-[19px] font-semibold tracking-[-0.01em]">{s.domain}</h1>
-            <div className="text-[13px] text-muted-2 mt-1">{s.label} · {s.experiments} experiment{s.experiments === 1 ? "" : "s"}</div>
+            <h1 className="text-[19px] font-semibold tracking-[-0.01em]">Setup</h1>
+            <div className="text-[13px] text-muted-2 mt-1">{s.domain} · {s.label} · {s.experiments} experiment{s.experiments === 1 ? "" : "s"}</div>
           </div>
           <div className="ml-auto flex gap-2">
             <Button size="sm" onClick={() => setAddingEnv(true)}>Add an environment</Button>
@@ -258,7 +261,6 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
           </Section>
         </div>
 
-        <SiteProfile s={s} onRead={() => understand(s.id)} />
       </div>
 
       <Dialog open={addingEnv} onOpenChange={setAddingEnv}>

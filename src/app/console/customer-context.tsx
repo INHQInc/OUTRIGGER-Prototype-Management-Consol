@@ -1060,7 +1060,9 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
 
 /* ── What Prism understands about this site (Sites → site) ─────────── */
 
-export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
+/** UNDERSTANDING — its own room, because it is a different job from Setup: what Prism
+ *  read, what it asked, and what a person corrected. */
+export function SiteProfile({ s, onRead, room }: { s: Site; onRead: () => void; room?: boolean }) {
   const u = understandingOf(s.id);
   const ctx = u.ctx;
   const initial = (): Live[] => {
@@ -1119,7 +1121,7 @@ export function SiteProfile({ s, onRead }: { s: Site; onRead: () => void }) {
   return (
     <>
       <div className="flex items-center gap-3 pt-2">
-        <h2 className="text-[15px] font-semibold">What Prism understands about {s.domain}</h2>
+        <h2 className="text-[15px] font-semibold">{room ? "What Prism understands" : `What Prism understands about ${s.domain}`}</h2>
         <Pill tone={u.tone}>{u.label}</Pill>
         <div className="ml-auto flex items-center gap-2">
           {changed > 0 && <Button size="sm" onClick={pin}>Save {changed} change{changed === 1 ? "" : "s"} as revision {rev.r + 1}</Button>}

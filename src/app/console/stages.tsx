@@ -222,7 +222,7 @@ export function BuildPanel({ e }: { e: Experiment }) {
             produced would be written from the outside of a page — guessing at the system behind it from what a browser happened to compute — and it
             would sit beside your site rather than inside it. The brief, the measurement plan and everything already recorded are untouched.
           </p>
-          <Button size="sm" onClick={() => window.dispatchEvent(new CustomEvent("console:go", { detail: { nav: "Site setup" } }))}>
+          <Button size="sm" onClick={() => window.dispatchEvent(new CustomEvent("console:go", { detail: { nav: "Setup" } }))}>
             Set up {e.site}
           </Button>
         </div>

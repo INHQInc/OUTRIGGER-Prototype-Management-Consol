@@ -360,3 +360,42 @@ sharp case, half set up. waikikibeachcomber.com has neither. (Bryan, 11 Sep
 2026: "we need each site's source code to properly build the code… its
 required… no prototype can be built without it.")
 
+---
+
+## D15 · A nav group names a SCOPE, not a verb
+
+**Decision.** The sidebar's groups say whose settings these are, not what you
+are about to do to them. `CONFIGURE` is gone. In its place:
+
+```
+Overview · Experiments · Ideas · Readouts · Activity     (the work, and the record)
+<the chosen site's domain>                               Setup · Understanding
+ACCOUNT                                                  Connections · People & roles · Guardrails · Account
+DEMO
+```
+
+**What was wrong.** `CONFIGURE` held six things with nothing in common — one
+site's setup, account integrations, people, experiment defaults, an audit
+record and account lifecycle. Two of them were not configuration at all:
+Activity is a record and Account is lifecycle. Worse, a person who had just
+chosen a site had no way to tell which of the six followed that choice. Exactly
+one did. Reading "Guardrails" under a heading that appeared below a chosen site
+invited exactly the wrong conclusion.
+
+**Consequences.**
+- **Activity moves up**, with the things you READ. In a product whose pitch is
+  the audit trail, it was fifth in a list of settings.
+- **The site splits in two.** One item was carrying environments, the script,
+  both repositories AND the whole understanding surface — the read, the
+  interview, five sections, revisions, output files. Its own subtitle truncated
+  to "environments · source · understan…", which was the overload showing.
+  `Setup` is infrastructure; `Understanding` is knowledge — a different job,
+  done by a different person, at a different time (the same split D12 drew
+  through onboarding).
+- **The site group vanishes when no site is chosen**, so the nav never offers a
+  setting with nothing to apply it to.
+- **State rides the row it describes.** The understanding state was briefly a
+  pill beside the group header, which truncated the domain — and it describes
+  Understanding, not the site. It is a dot on that row, with the words in its
+  title and the full pill on the page itself.
+
