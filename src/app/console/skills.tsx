@@ -29,7 +29,14 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label as FieldLabel } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
+import { logActivity } from "./config";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
 
 /* ── Fixtures ──────────────────────────────────────────────────────── */
@@ -629,6 +636,74 @@ const DeliveryPill = ({ d }: { d: Delivery }) =>
 
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`;
 
+/* ── Importing, and writing one from scratch ───────────────────────── */
+
+/** Repositories the connected code host can see. Importing READS; it never writes. */
+const IMPORT_REPOS = ["INHQInc/outrigger-prototypes", "INHQInc/starter", "INHQInc/kona-web"];
+
+/** What a read of `.claude/skills/**` on that branch would return. Branch delivery,
+ *  because a skill found in a repo is context for the building agent — never one of
+ *  Prism's own prompts, which cannot arrive from outside. */
+const IMPORTABLE: { id: string; summary: string; bytes: number; body: string[] }[] = [
+  {
+    id: "outrigger/rate-calendar", bytes: 2310,
+    summary: "How the SynXis rate calendar is wired, and what may never be re-rendered inside it.",
+    body: [
+      "---", "name: outrigger/rate-calendar", "tier: customer", "delivery: branch", "---", "",
+      "# The rate calendar",
+      "",
+      "The calendar is a SynXis web component (`shs-widgets--calendar`). Its DOM",
+      "belongs to the vendor: never re-render inside it, never re-bind its click",
+      "handlers, never move its nodes. Append beside it and let it own itself.",
+      "",
+      "Prices come from the widget's own fetch. Do not read a price out of the DOM",
+      "and restate it — if it changes after paint, the copy lies.",
+    ],
+  },
+  {
+    id: "outrigger/booking-bar", bytes: 1840,
+    summary: "The sticky booking bar: when it appears, what it covers, and the z-index it must sit under.",
+    body: [
+      "---", "name: outrigger/booking-bar", "tier: customer", "delivery: branch", "---", "",
+      "# The sticky booking bar",
+      "",
+      "Appears below 1024px once the hero has scrolled past. It covers the bottom",
+      "72px of the viewport: anything you add at the foot of a property page must",
+      "clear it, or it is untappable on the phones most guests use.",
+      "",
+      "Its z-index is 900. Stay under it.",
+    ],
+  },
+  {
+    id: "outrigger/photography", bytes: 2040,
+    summary: "Which images may be reused, and the one rule about people in them.",
+    body: [
+      "---", "name: outrigger/photography", "tier: customer", "delivery: branch", "---", "",
+      "# Photography",
+      "",
+      "Reuse images already on the page you are changing. Do not pull one from",
+      "another property: a room shot from Waikīkī on a Kona page is a promise the",
+      "stay will not keep.",
+      "",
+      "Never crop a person out of frame to fit a layout. Re-frame or choose another.",
+    ],
+  },
+];
+
+const TEMPLATE = (name: string, tier: Tier, delivery: Delivery) => [
+  "---",
+  `name: ${name || "outrigger/new-skill"}`,
+  `tier: ${tier}`,
+  `delivery: ${delivery}`,
+  "version: 1.0.0",
+  "---",
+  "",
+  `# ${name ? name.replace(/^[^/]+\//, "").replace(/-/g, " ") : "A new skill"}`,
+  "",
+  "Write what the agent must do, in the words you would use with a colleague.",
+  "One rule per paragraph. Say why, so it can tell when the rule does not apply.",
+];
+
 /* ── The surface ───────────────────────────────────────────────────── */
 
 export function SkillsPanel() {
@@ -641,6 +716,18 @@ export function SkillsPanel() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importRepo, setImportRepo] = useState(IMPORT_REPOS[0]);
+  const [importPath, setImportPath] = useState(".claude/skills/");
+  const [reading, setReading] = useState(false);
+  const [imported, setImported] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newTier, setNewTier] = useState<Tier>("site");
+  const [newDelivery, setNewDelivery] = useState<Delivery>("branch");
+  const [newBody, setNewBody] = useState("");
+  const nameOk = /^[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9-]*$/.test(newName.trim());
+  const nameTaken = skills.some((x) => x.id === newName.trim());
 
   const consoleSkills = skills.filter((s) => s.delivery === "console");
   const forkedCount = skills.filter((s) => s.origin === "forked").length;
@@ -728,14 +815,55 @@ export function SkillsPanel() {
   const toggle = (id: string) =>
     setSkills((xs) => xs.map((x) => x.id === id ? { ...x, enabled: !x.enabled } : x));
 
+  /** Importing reads a branch and brings back what it finds. Anything already
+   *  here is left alone — an import never overwrites a skill someone edited. */
+  const runImport = () => {
+    setReading(true);
+    setTimeout(() => {
+      const fresh = IMPORTABLE.filter((i) => !skills.some((x) => x.id === i.id));
+      const added: Skill[] = fresh.map((i) => ({
+        id: i.id, tier: "customer", delivery: "branch", origin: "yours", capability: "build",
+        version: "1.0.0", bytes: i.bytes, enabled: true, updated: `imported ${NOW} from ${importRepo}`,
+        summary: i.summary, body: i.body,
+      }));
+      setSkills((xs) => [...xs, ...added]);
+      setBodies((b) => ({ ...b, ...Object.fromEntries(added.map((a) => [a.id, a.body])) }));
+      setImported(added.map((a) => a.id));
+      setReading(false);
+      setImporting(false);
+      logActivity(added.length
+        ? `Imported ${added.length} skill${added.length === 1 ? "" : "s"} from ${importRepo}.`
+        : `Read ${importRepo} for skills — everything it holds is already here.`);
+    }, 1200);
+  };
+
+  const create = () => {
+    const id = newName.trim();
+    const body = (newBody.trim() ? newBody : TEMPLATE(id, newTier, newDelivery).join("\n")).split("\n");
+    const skill: Skill = {
+      id, tier: newTier, delivery: newDelivery, origin: "yours", capability: "build",
+      version: "1.0.0", bytes: body.join("\n").length, enabled: true, updated: `written ${NOW} by Kaila T.`,
+      summary: "Written here. Nobody has run a build against it yet.", body,
+    };
+    setSkills((xs) => [...xs, skill]);
+    setBodies((b) => ({ ...b, [id]: body }));
+    setSelected(id);
+    setDraft(body.join("\n"));
+    setEditing(true);
+    setSavedId(null);
+    setCreating(false);
+    setNewName(""); setNewBody(""); setNewTier("site"); setNewDelivery("branch");
+    logActivity(`Wrote a new skill, ${id}.`);
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         title="Skills"
         count={`${skills.length} skills · ${consoleSkills.length} are Prism's own prompts · ${forkedCount} forked`}
         actions={<>
-          <Button variant="outline" size="sm">Import from a repo</Button>
-          <Button size="sm">New skill</Button>
+          <Button variant="outline" size="sm" onClick={() => setImporting(true)}>Import from a repo</Button>
+          <Button size="sm" onClick={() => { setCreating(true); setNewBody(""); }}>New skill</Button>
         </>}
       />
 
@@ -855,6 +983,7 @@ export function SkillsPanel() {
                     {s.broken && <Pill tone="danger">will not parse</Pill>}
                     {shadowed && <Pill tone="muted">shadowed by your fork</Pill>}
                     {child && !shadowed && <Pill tone="warn">running — your fork is skipped</Pill>}
+                    {imported.includes(s.id) && <Pill tone="accent">imported just now</Pill>}
                   </div>
                   <p className="text-[13.5px] text-muted leading-relaxed mt-1">{s.summary}</p>
                   <div className="mt-1.5 flex items-center gap-2.5 flex-wrap">
@@ -1118,6 +1247,98 @@ export function SkillsPanel() {
           </div>
         </Section>
       </div>
+
+      {/* Importing READS a branch. It never writes to the repository, and never
+          overwrites a skill that is already here. */}
+      <Dialog open={importing} onOpenChange={(o) => { if (!reading) setImporting(o); }}>
+        <DialogContent showCloseButton={!reading}>
+          <DialogHeader>
+            <DialogTitle>Import skills from a repository</DialogTitle>
+            <DialogDescription>
+              Reads the path below on the default branch and brings back what it finds, as skills for the building agent.
+              Nothing is written to the repository, and anything already here is left as it is.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <FieldLabel htmlFor="import-repo" className="mb-1.5">Repository</FieldLabel>
+              <Select value={importRepo} onValueChange={setImportRepo}>
+                <SelectTrigger id="import-repo" className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{IMPORT_REPOS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <FieldLabel htmlFor="import-path" className="mb-1.5">Path</FieldLabel>
+              <Input id="import-path" value={importPath} onChange={(e) => setImportPath(e.target.value)} spellCheck={false} />
+            </div>
+            {reading && <p className="text-[13px] text-muted">Reading {importRepo}/{importPath}&hellip;</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" disabled={reading} onClick={() => setImporting(false)}>Cancel</Button>
+            <Button disabled={reading || importPath.trim().length < 2} onClick={runImport}>{reading ? "Reading…" : "Import"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* A new skill is yours from the start — no fork, no parent, nothing shadowed. */}
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Write a new skill</DialogTitle>
+            <DialogDescription>
+              It is yours from the moment you save it: no parent, nothing shadowed. You can edit it here whenever you like.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <FieldLabel htmlFor="skill-name" className="mb-1.5">Name</FieldLabel>
+              <Input id="skill-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="outrigger.com/hero-rules" spellCheck={false} autoFocus />
+              <p className={cn("text-[12.5px] mt-2", newName && (!nameOk || nameTaken) ? "text-warn" : "text-muted-2")}>
+                {nameTaken ? "A skill with that name is already here." : "Two parts, lower case: where it applies, then what it is about — outrigger.com/hero-rules."}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <FieldLabel htmlFor="skill-tier" className="mb-1.5">Where it applies</FieldLabel>
+                <Select value={newTier} onValueChange={(v) => setNewTier(v as Tier)}>
+                  <SelectTrigger id="skill-tier" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(["experiment", "site", "customer"] as Tier[]).map((t) => (
+                      <SelectItem key={t} value={t}>{TIER_LONG[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <FieldLabel className="mb-2" id="skill-delivery">Who reads it</FieldLabel>
+                <RadioGroup aria-labelledby="skill-delivery" value={newDelivery} onValueChange={(v) => setNewDelivery(v as Delivery)} className="gap-2">
+                  {([["branch", "The building agent"], ["console", "Prism itself"]] as const).map(([v, l]) => (
+                    <FieldLabel key={v} htmlFor={`del-${v}`} className={cn("gap-2.5 rounded-xl border px-3 py-2 cursor-pointer font-normal text-foreground", newDelivery === v ? "border-accent bg-accent/5" : "border-border")}>
+                      <RadioGroupItem id={`del-${v}`} value={v} /><span className="text-[13px]">{l}</span>
+                    </FieldLabel>
+                  ))}
+                </RadioGroup>
+              </div>
+            </div>
+            {newDelivery === "console" && (
+              <p className="text-[12.5px] text-warn leading-relaxed">
+                This becomes one of Prism&rsquo;s own prompts. Exactly one wins per call site, nothing is merged, and there is no review step —
+                the next brief anyone writes uses it.
+              </p>
+            )}
+            <div>
+              <FieldLabel htmlFor="skill-body" className="mb-1.5">What it says</FieldLabel>
+              <Textarea id="skill-body" rows={7} className="font-mono text-[12.5px]"
+                value={newBody || TEMPLATE(newName.trim(), newTier, newDelivery).join("\n")}
+                onChange={(e) => setNewBody(e.target.value)} spellCheck={false} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCreating(false)}>Cancel</Button>
+            <Button disabled={!nameOk || nameTaken} onClick={create}>Create it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
