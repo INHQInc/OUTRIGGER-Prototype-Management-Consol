@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { EXPERIMENTS, ME, SITE_ROWS, needsMe, type Site } from "@/lib/console/fake";
 import { ThemeScope } from "@/components/ui/theme-scope";
+import { Archived, ArchivedBanner, EndOfLife, type AccountState, type Holdings } from "./lifecycle";
+import { PageHeader as RoomHeader } from "./ui";
 import { Empty, PageHeader } from "./ui";
 import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail } from "./config";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
@@ -43,6 +45,7 @@ const NAV = [
       ["People & roles", "M16 20v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
       ["Guardrails", "M12 2 4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6z"],
       ["Activity", "M3 12h4l3 8 4-16 3 8h4"],
+      ["Account", "M3 21h18M5 21V8l7-5 7 5v13M10 21v-6h4v6"],
     ] as const,
   },
   {
@@ -72,6 +75,10 @@ export default function Console() {
   const [siteFilter, setSiteFilter] = useState<string | null>(null);
   /** The site being read / asked / corrected right now, if any. */
   const [understanding, setUnderstanding] = useState<string | null>(null);
+  /** Ending an account (lifecycle.tsx). Archived is readable and unwritable. */
+  const [accountState, setAccountState] = useState<AccountState>("active");
+  const [archivedOn, setArchivedOn] = useState<string | undefined>();
+  const [stoppedByArchive, setStoppedByArchive] = useState(0);
   const [backOffice, setBackOffice] = useState(false);
   const [support, setSupport] = useState<{ customer: string; reason: string } | null>(null);
   /** A customer created in this session is the only one whose setup is unfinished. */
@@ -106,6 +113,18 @@ export default function Console() {
   const waiting = scoped.filter(needsMe).length;
   const count: Record<string, number | undefined> = { Experiments: scoped.length };
   const picked = siteFilter ? rows.find((r) => r.id === siteFilter) ?? null : null;
+  /** Counted from state, never stored — the same rule the setup checklist follows. */
+  const holdings: Holdings = {
+    name: account,
+    live: accountState === "archived" ? 0 : EXPERIMENTS.filter((e) => e.status === "running").length,
+    inFlight: EXPERIMENTS.filter((e) => e.status === "building" || e.status === "review" || e.status === "drafting").length,
+    beaconing: rows.flatMap((r) => r.envs.filter((e) => e.script === "verified").map((e) => ({ env: e.label, url: e.url }))),
+    decisions: EXPERIMENTS.filter((e) => e.status === "shipped" || e.status === "decide").length,
+    sharedLinks: 6,
+    branches: EXPERIMENTS.length,
+    people: 5,
+    archivedOn,
+  };
 
   const go = (s: string) => { setNav(s); setExpId(null); setCreating(false); setFlow(null); setUnderstanding(null); };
   /** Choosing a site scopes the console; the site's own setup lives under CONFIGURE while it is chosen. */
@@ -119,8 +138,12 @@ export default function Console() {
 
   return (
     <ThemeScope.Provider value={scope}>
+    <Archived.Provider value={accountState === "archived"}>
     <div ref={scope} className="fixed inset-0 z-50 bg-background flex flex-col" data-console>
       {support && <SupportBanner customer={support.customer} reason={support.reason} end={() => { setSupport(null); setBackOffice(true); }} />}
+      {accountState === "archived" && archivedOn && (
+        <ArchivedBanner on={archivedOn} onUnarchive={() => { setAccountState("active"); setArchivedOn(undefined); setFresh(true); }} />
+      )}
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] rounded-lg border border-border bg-surface px-4 py-2.5 text-[13px] shadow-lg">
           <span className="font-semibold">&ldquo;{toast}&rdquo;</span> <span className="text-muted">isn&rsquo;t built in this mock yet.</span>
@@ -237,10 +260,30 @@ export default function Console() {
         {!flow && nav === "People & roles" && <PeopleView />}
         {!flow && nav === "Guardrails" && <GuardrailsView />}
         {!flow && nav === "Activity" && <ActivityView />}
+        {!flow && nav === "Account" && (
+          <>
+            <RoomHeader title="Account" count={account} />
+            <div className="flex-1 overflow-auto p-6 space-y-4">
+              {stoppedByArchive > 0 && accountState === "archived" && (
+                <div className="rounded-xl border border-warn/40 bg-warn/[0.06] px-4 py-3 text-[13px] leading-relaxed">
+                  <span className="font-semibold text-warn">{stoppedByArchive} run{stoppedByArchive === 1 ? " was" : "s were"} stopped when this was archived.</span>{" "}
+                  <span className="text-muted">
+                    Each one is recorded as stopped because the account was archived — not as refuted. Nothing was disproved, so nothing was written into what this account has learned.
+                  </span>
+                </div>
+              )}
+              <EndOfLife h={holdings} state={accountState}
+                onArchive={(stopped) => { setAccountState("archived"); setArchivedOn("11 Sep 2026"); setStoppedByArchive(stopped); }}
+                onUnarchive={() => { setAccountState("active"); setArchivedOn(undefined); setFresh(true); }}
+                onDelete={() => { setAccountState("active"); setArchivedOn(undefined); setBackOffice(true); setSupport(null); }} />
+            </div>
+          </>
+        )}
         {!flow && nav === "All verdict states" && <VerdictPicker />}
       </main>
       </div>
     </div>
+    </Archived.Provider>
     </ThemeScope.Provider>
   );
 }

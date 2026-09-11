@@ -4,16 +4,26 @@
  *  grammar — every feature screen is built from these, so adding a surface can
  *  never invent a second visual language. */
 
+import { useContext } from "react";
 import { Badge as UiBadge } from "@/components/ui/badge";
+import { Archived } from "./lifecycle";
 import { cn } from "@/lib/ui/cn";
 import { STAGES, STATUS, type Experiment, type Stage } from "@/lib/console/fake";
 
 export function PageHeader({ title, count, actions }: { title: string; count?: string; actions?: React.ReactNode }) {
+  // An archived account is readable and unwritable. Enforcing it here rather than in
+  // each room means a room cannot forget — every action a room offers passes through
+  // this one header (see lifecycle.tsx).
+  const archived = useContext(Archived);
   return (
     <header className="h-14 shrink-0 border-b border-border bg-surface flex items-center px-6 gap-3">
       <h1 className="text-[15px] font-semibold">{title}</h1>
       {count && <span className="text-[13px] text-muted-2">{count}</span>}
-      {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+      {actions && (
+        archived
+          ? <span className="ml-auto text-[12.5px] text-muted-2">Archived — nothing here can change</span>
+          : <div className="ml-auto flex items-center gap-2">{actions}</div>
+      )}
     </header>
   );
 }

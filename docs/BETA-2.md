@@ -190,8 +190,8 @@ A further 5 doc comments and 8 pieces of UI copy are cosmetic and can wait.
 
 ## 5 · Archiving and deleting an account
 
-**Status:** defined 11 Sep 2026, not built. Nothing exists today — an account
-can be created and never ended.
+**Status:** UX BUILT 11 Sep 2026 (`src/app/console/lifecycle.tsx`). The backend
+rules below are the specification for when it is made real.
 
 **Why it is not just a button.** An account holds things Prism does not own: a
 script tag in the customer's own HTML, branches in the customer's own GitHub,
@@ -235,21 +235,32 @@ account was archived*, never as a result. Anything else writes false evidence
 into the earned layer, which is the one layer the product calls immutable and
 measured.
 
-### Open calls
+### The four calls, settled
 
-1. **Cooling-off before delete.** Proposed: archived for at least 30 days, with
-   the earliest delete date shown. Irreversible plus human error argues for it;
-   a data-protection request argues for honouring it sooner. Probably: 30 days
-   by default, overridable by a written request from the Owner.
-2. **Who may delete.** Owner, operator, or both. If the product is ever
-   self-serve, the Owner must be able to — a data-protection right cannot
-   require a support ticket.
-3. **Read access after archiving.** Proposed: their people keep read access. The
-   readouts are theirs, and an archived account whose owner cannot open it is a
-   hostage, not an archive.
-4. **Whether archiving is reversible for the script.** Un-archiving cannot put
-   the tag back if they removed it. Un-archive therefore lands in the same
-   setup-checklist state a new account has, rather than pretending it is live.
+1. **Cooling-off: 30 days from the archive date**, shown as a date rather than a
+   countdown. Waivable by a written request — the Owner's own words, kept on the
+   record beside the deletion, because a data-protection request cannot be made
+   to wait a month.
+2. **Both may delete.** The Owner from their own Account room, the operator from
+   the back office. Same preconditions, same words. A deletion right that needs
+   a support ticket is not a right.
+3. **Archiving keeps read access.** An archived account its owner cannot open is
+   a hostage, not an archive.
+4. **Un-archiving returns to the setup checklist, not to running.** It cannot put
+   back a tag that was removed while it was gone, and Prism cannot know until a
+   page calls home. Saying "live" would be a guess presented as a fact.
+
+### How it is enforced
+
+Read-only is ONE context (`Archived`), read by `PageHeader` — the single grammar
+for a room's actions. A room cannot forget to be read-only, because every action
+it offers passes through that header. Verified across Experiments, Guardrails,
+Connections and People.
+
+The script precondition clears by LISTENING, never by a checkbox: *Check again*
+waits for a tag to call home and reports what it heard. Asking someone to
+confirm a tag is gone would be a flag somebody has to remember to set, which is
+exactly what the derived-preconditions rule forbids.
 
 ### Where it lands
 

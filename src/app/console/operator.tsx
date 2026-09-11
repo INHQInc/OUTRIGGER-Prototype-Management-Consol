@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ThemeScope } from "@/components/ui/theme-scope";
 import { cn } from "@/lib/ui/cn";
 import { CustomerWizard } from "./customer-context";
+import { ArchiveDialog, DeleteDialog, type Holdings } from "./lifecycle";
 import { Pill, Section, Th } from "./ui";
 
 interface Cust {
@@ -39,6 +40,9 @@ interface Cust {
   fresh?: boolean;
   /** The sites the wizard created, none of them read yet. */
   siteDomains?: string[];
+  /** Ending an account — archived is readable and unwritable (lifecycle.tsx). */
+  state?: "active" | "archived";
+  archivedOn?: string;
 }
 
 export const CUSTOMERS: Cust[] = [
@@ -105,6 +109,23 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
   const [sessions, setSessions] = useState<Session[]>(SESSIONS);
   const [issues, setIssues] = useState<Issue[]>(HEALTH);
   const [acting, setActing] = useState<number | null>(null);
+  const [archiving, setArchiving] = useState<Cust | null>(null);
+  const [deleting, setDeleting] = useState<Cust | null>(null);
+
+  /** Counted from the row, never stored. */
+  const holdings = (c: Cust): Holdings => ({
+    name: c.name, live: c.running, inFlight: Math.max(0, c.experiments - c.running),
+    beaconing: c.state === "archived" ? [] : Array.from({ length: c.sites }, (_, i) => ({ env: i === 0 ? "Production" : "Prep", url: `site ${i + 1}` })),
+    decisions: c.experiments, sharedLinks: c.people * 2, branches: c.experiments, people: c.people,
+    archivedOn: c.archivedOn,
+  });
+  const archive = (c: Cust, stopped: number) => {
+    setList((l) => l.map((x) => (x.id === c.id
+      ? { ...x, state: "archived", archivedOn: "11 Sep 2026", running: 0, health: "ok",
+          issue: stopped > 0 ? `Archived — ${stopped} run${stopped === 1 ? "" : "s"} stopped, none of them refuted` : "Archived — nothing was running", usage: "$0 / mo" }
+      : x)));
+    setArchiving(null);
+  };
 
   const open = issues.filter((i) => !i.sent).length;
   const live = sessions.filter((s) => s.live).length;
@@ -175,7 +196,7 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
           {room === "Customers" && (
             <table className="w-full border-collapse">
               <thead className="sticky top-0 bg-surface-2/80 backdrop-blur">
-                <tr><Th first>Customer</Th><Th>Health</Th><Th>Sites</Th><Th>Experiments</Th><Th>People</Th><Th>AI usage</Th><Th>Since</Th><Th>Access</Th></tr>
+                <tr><Th first>Account</Th><Th>Health</Th><Th>Sites</Th><Th>Experiments</Th><Th>People</Th><Th>AI usage</Th><Th>Since</Th><Th>Access</Th></tr>
               </thead>
               <tbody>
                 {list.map((c) => (
@@ -184,14 +205,25 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
                       <div className="text-[14px] font-medium">{c.name}</div>
                       {c.issue && <div className="text-[12.5px] text-warn mt-0.5">{c.issue}</div>}
                     </td>
-                    <td className="px-4 py-3">{healthPill(c.health)}</td>
+                    <td className="px-4 py-3">{c.state === "archived" ? <Pill tone="muted">Archived</Pill> : healthPill(c.health)}</td>
                     <td className="px-4 py-3 text-[13.5px] text-muted tabular-nums">{c.sites}</td>
                     <td className="px-4 py-3 text-[13.5px] text-muted tabular-nums">{c.experiments}{c.running > 0 && <span className="text-ok"> · {c.running} live</span>}</td>
                     <td className="px-4 py-3 text-[13.5px] text-muted tabular-nums">{c.people}</td>
                     <td className="px-4 py-3 text-[13.5px] text-muted tabular-nums">{c.usage}</td>
                     <td className="px-4 py-3 text-[13px] text-muted-2 whitespace-nowrap">{c.since}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => { setAsking(c); setReason(""); }} className="text-[13px] font-medium text-accent whitespace-nowrap">Open their console →</button>
+                      <div className="flex items-center gap-3 whitespace-nowrap">
+                        <button onClick={() => { setAsking(c); setReason(""); }} className="text-[13px] font-medium text-accent">Open →</button>
+                        {c.state === "archived" ? (
+                          <>
+                            <button onClick={() => setList((l) => l.map((x) => (x.id === c.id ? { ...x, state: "active", archivedOn: undefined, issue: "Back from archive — setup has to be checked before anything runs", health: "warn", fresh: true } : x)))}
+                              className="text-[12.5px] text-muted-2 hover:text-foreground">Un-archive</button>
+                            <button onClick={() => setDeleting(c)} className="text-[12.5px] text-danger hover:opacity-80">Delete…</button>
+                          </>
+                        ) : (
+                          <button onClick={() => setArchiving(c)} className="text-[12.5px] text-muted-2 hover:text-foreground">Archive…</button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -329,6 +361,15 @@ export function BackOffice({ exit, enterCustomer }: { exit: () => void; enterCus
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {archiving && (
+        <ArchiveDialog h={holdings(archiving)} open onOpenChange={(o) => !o && setArchiving(null)}
+          onArchived={(stopped) => archive(archiving, stopped)} />
+      )}
+      {deleting && (
+        <DeleteDialog h={holdings(deleting)} open operator onOpenChange={(o) => !o && setDeleting(null)}
+          onDeleted={() => { setList((l) => l.filter((x) => x.id !== deleting.id)); setDeleting(null); }} />
+      )}
 
       {/* Inviting a colleague grants the back office, never a customer. */}
       <Dialog open={inviting} onOpenChange={setInviting}>
