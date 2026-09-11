@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { EXPERIMENTS, ME, SITES, SITE_ROWS, STATUS, TROUBLE, needsMe, type Experiment } from "@/lib/console/fake";
+import { EXPERIMENTS, ME, SITE_ROWS, STATUS, TROUBLE, needsMe, type Experiment } from "@/lib/console/fake";
 import { Badge, Chip, Meta, PageHeader, Pill, Section, StageRail, Th, Toolbar } from "./ui";
 import { StagePanel } from "./stages";
 import { SetupChecklist } from "./setup";
@@ -29,16 +29,15 @@ const goDecision = (expId: string) => {
 
 /* ── Overview ──────────────────────────────────────────────────────── */
 
-export function OverviewView({ open, fresh }: { open: (id: string) => void; fresh?: boolean }) {
-  // A customer created this session has no experiments; the fixture's are OUTRIGGER's.
-  const mine = fresh ? [] : EXPERIMENTS.filter(needsMe);
-  const running = fresh ? [] : EXPERIMENTS.filter((e) => e.status === "running");
+export function OverviewView({ open, rows = EXPERIMENTS, fresh }: { open: (id: string) => void; rows?: Experiment[]; fresh?: boolean }) {
+  const mine = rows.filter(needsMe);
+  const running = rows.filter((e) => e.status === "running");
   return (
     <>
       <PageHeader title="Overview" />
       <div className="flex-1 overflow-auto p-6 space-y-4">
-        {/* Derives its own completion and disappears — so it only appears for a
-            customer whose setup is genuinely unfinished, never for one that is done. */}
+        {/* Derives its own completion and disappears — so it only appears for an
+            account whose setup is genuinely unfinished, never for one that is done. */}
         {fresh && <SetupChecklist environments={[]} />}
         <Section title={`Waiting on you — ${mine.length}`}>
           {mine.length === 0 ? (
@@ -76,22 +75,21 @@ export function OverviewView({ open, fresh }: { open: (id: string) => void; fres
 
 /* ── Experiments ───────────────────────────────────────────────────── */
 
-export function ExperimentsView({ open, onNew }: { open: (id: string) => void; onNew: () => void }) {
+/** `all` is the scoped list the sidebar chose; the chips and the search narrow it further. */
+export function ExperimentsView({ open, onNew, all = EXPERIMENTS }: { open: (id: string) => void; onNew: () => void; all?: Experiment[] }) {
   const [filter, setFilter] = useState<"all" | "mine" | "running" | "decided">("all");
-  const [site, setSite] = useState("All sites");
   const [q, setQ] = useState("");
-  const rows = useMemo(() => EXPERIMENTS.filter((e) => {
-    if (site !== "All sites" && e.site !== site) return false;
+  const rows = useMemo(() => all.filter((e) => {
     if (q.trim() && !e.name.toLowerCase().includes(q.trim().toLowerCase())) return false;
     if (filter === "mine") return needsMe(e);
     if (filter === "running") return e.status === "running";
     if (filter === "decided") return e.status === "shipped" || e.status === "decide";
     return true;
-  }), [filter, site, q]);
+  }), [all, filter, q]);
   const counts = {
-    all: EXPERIMENTS.length, mine: EXPERIMENTS.filter(needsMe).length,
-    running: EXPERIMENTS.filter((e) => e.status === "running").length,
-    decided: EXPERIMENTS.filter((e) => e.status === "shipped" || e.status === "decide").length,
+    all: all.length, mine: all.filter(needsMe).length,
+    running: all.filter((e) => e.status === "running").length,
+    decided: all.filter((e) => e.status === "shipped" || e.status === "decide").length,
   };
   /** The list as filtered, as a spreadsheet. */
   const exportCsv = () => {
@@ -105,17 +103,13 @@ export function ExperimentsView({ open, onNew }: { open: (id: string) => void; o
   };
   return (
     <>
-      <PageHeader title="Experiments" count={`${rows.length} of ${EXPERIMENTS.length}`}
+      <PageHeader title="Experiments" count={`${rows.length} of ${all.length}`}
         actions={<><Button variant="outline" size="sm" onClick={exportCsv}>Export</Button><Button size="sm" onClick={onNew}>New experiment</Button></>} />
       <Toolbar>
         {([["all", "All"], ["mine", "Needs me"], ["running", "Running"], ["decided", "Decided"]] as const).map(([k, label]) => (
           <Chip key={k} on={filter === k} onClick={() => setFilter(k)}>{label} <span className="tabular-nums opacity-60">{counts[k]}</span></Chip>
         ))}
         <div className="w-px h-5 bg-border mx-1" />
-        <select value={site} onChange={(e) => setSite(e.target.value)}
-          className="h-8 px-2.5 rounded-lg border border-border bg-surface text-[13px] text-muted focus:border-accent focus:outline-none">
-          {["All sites", ...SITES].map((s) => <option key={s}>{s}</option>)}
-        </select>
         <input value={q} onChange={(ev) => setQ(ev.target.value)} placeholder="Search experiments…" className="h-8 px-3 rounded-lg border border-border bg-surface text-[13px] w-56 placeholder:text-muted-2 focus:border-accent focus:outline-none" />
       </Toolbar>
       <div className="flex-1 overflow-auto">
@@ -554,14 +548,14 @@ const SENT = [
   { t: "Weekly digest — 6 people", when: "1 Sep", opened: "6 of 6 opened" },
 ];
 
-export function ReadoutsView() {
+export function ReadoutsView({ rows = EXPERIMENTS }: { rows?: Experiment[] }) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const waiting = EXPERIMENTS.filter((e) => e.status === "decide");
-  const decided = EXPERIMENTS.filter((e) => e.status === "shipped");
+  const waiting = rows.filter((e) => e.status === "decide");
+  const decided = rows.filter((e) => e.status === "shipped");
   /** The decision behind what goes out: the newest one at the Decision stage. */
-  const latest = EXPERIMENTS.find((e) => e.stage === "Decision");
+  const latest = rows.find((e) => e.stage === "Decision");
   if (open) {
     return (
       <>

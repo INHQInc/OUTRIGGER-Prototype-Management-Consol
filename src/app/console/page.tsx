@@ -214,17 +214,17 @@ export default function Console() {
 
       <main className="flex-1 min-w-0 flex flex-col">
         {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); setSessionSites((ss) => [...ss.filter((x) => x.id !== site.id), site]); setFlow(null); setSiteFilter(site.id); setNav("Site setup"); }} />}
-        {!flow && nav === "Overview" && <OverviewView open={openExp} fresh={fresh} />}
+        {!flow && nav === "Overview" && <OverviewView open={openExp} rows={scoped} fresh={fresh} />}
         {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Readouts" && fresh && <FreshEmpty title="Readouts" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Experiments" && !fresh && (
           creating ? <NewExperiment cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
           : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />
-          : <ExperimentsView open={setExpId} onNew={() => setCreating(true)} />
+          : <ExperimentsView open={setExpId} onNew={() => setCreating(true)} all={scoped} />
         )}
         {!flow && nav === "Ideas" && !fresh && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
-        {!flow && nav === "Readouts" && !fresh && <ReadoutsView />}
+        {!flow && nav === "Readouts" && !fresh && <ReadoutsView rows={scoped} />}
         {!flow && nav === "Site setup" && (
           learning ? (
             <UnderstandSite key={learning.id} site={learning} others={rows.filter((s) => s.id !== learning.id)}
