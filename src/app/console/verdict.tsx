@@ -33,7 +33,7 @@
  * cannot record its result — the panel holds that rule, not the reader.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label as FieldLabel } from "@/components/ui/label";
@@ -681,6 +681,16 @@ function Disclosures({ items }: { items: Disclosure[] }) {
 
 /* ── The panel ─────────────────────────────────────────────────────── */
 
+/** setTimeout that cannot outlive the panel: every timer started here is cleared on unmount, so a
+ *  click that sends you to another stage mid-write leaves nothing ticking behind it. It lives in a
+ *  hook because the panel builds its dialog during render, and the timer list is nobody's business
+ *  there. */
+function useTimers() {
+  const timers = useRef<number[]>([]);
+  useEffect(() => { const t = timers.current; return () => t.forEach(window.clearTimeout); }, []);
+  return (ms: number, fn: () => void) => { timers.current.push(window.setTimeout(fn, ms)); };
+}
+
 /** What a confirm dialog shows. No `confirm` means the only way out is Close; a `confirm` with no `run` is a named door that is shut, with the reason above it. */
 type Plan = { title: string; body: string; field?: React.ReactNode; confirm?: { label: string; variant: Variant; run?: () => void } };
 
@@ -694,7 +704,7 @@ export function VerdictPanel({ state, title = EXPERIMENT }: { state: Verdict; ti
   const [done, setDone] = useState<Partial<Record<Verdict, Done>>>({});
   const [copied, setCopied] = useState<"Copied" | "Could not copy" | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const later = (ms: number, fn: () => void) => { window.setTimeout(fn, ms); };
+  const later = useTimers();
 
   const cfg = CONFIG[state];
   const tone = TONE[cfg.tone];
@@ -734,8 +744,12 @@ export function VerdictPanel({ state, title = EXPERIMENT }: { state: Verdict; ti
     if (next) next.scrollIntoView({ behavior: "smooth", block: "start" });
     else goStage("Decision");
   };
+  /* No clipboard outside a secure context, and reaching for it there throws before a promise exists —
+   * so the "Could not copy" this button already has a state for is checked first, not caught. */
   const copyAsk = () => {
-    void navigator.clipboard.writeText(INSTRUMENTATION_ASK)
+    const wrote = navigator.clipboard?.writeText(INSTRUMENTATION_ASK);
+    if (!wrote) { setCopied("Could not copy"); later(1500, () => setCopied(null)); return; }
+    void wrote
       .then(() => { setCopied("Copied"); logActivity("Copied the instrumentation ask for run 4."); })
       .catch(() => setCopied("Could not copy"))
       .finally(() => later(1500, () => setCopied(null)));
@@ -897,15 +911,19 @@ export function VerdictPanel({ state, title = EXPERIMENT }: { state: Verdict; ti
           <p className="text-[14.5px] text-muted mt-2.5 leading-relaxed max-w-2xl">{cfg.means}</p>
 
           <div className="mt-4">
-            {cfg.closed
+            {/* Frozen is a fact about the run, not about the state it arrived in: an extension reopens run 4,
+              * so its numbers stop being a receipt the moment the extension is recorded. */}
+            {cfg.closed && did?.kind !== "extended"
               ? <Receipt>{cfg.result} · frozen with the verdict</Receipt>
               : (
                 <div className="flex flex-wrap items-center gap-2.5">
                   <Stamp>{cfg.result}</Stamp>
                   <span className="text-[12.5px] text-warn">
-                    {did?.kind === "stopped"
-                      ? "stopped — these numbers will not move again, and they were never read as a result"
-                      : "not frozen — this run is still open and these numbers still move"}
+                    {did?.kind === "extended"
+                      ? "reopened — these numbers move again, and the verdict is derived again when the new floor is reached"
+                      : did?.kind === "stopped"
+                        ? "stopped — these numbers will not move again, and they were never read as a result"
+                        : "not frozen — this run is still open and these numbers still move"}
                   </span>
                 </div>
               )}

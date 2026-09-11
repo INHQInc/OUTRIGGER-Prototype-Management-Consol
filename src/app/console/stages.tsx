@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { STAGES, authoredByMe, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
+import { SITE_ROWS, STAGES, authoredByMe, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
 import { Meta, Pill, Section } from "./ui";
 import { logActivity } from "./config";
 import { MeasurementPlan, MetricIndex } from "./measurement";
@@ -63,39 +63,45 @@ const NotYet = ({ what, needs }: { what: string; needs: string }) => (
 
 /* ── Brief ─────────────────────────────────────────────────────────── */
 
-/** What Compare shows for a brief revision, read against the current one. The
- *  cuts are the Build stage's ledger: cuts 1 and 2 were built against Brief 2,
- *  cuts 3 and 4 against Brief 3, and nothing was ever built against Brief 1. */
+/** What Compare shows for a brief revision, read against the current one. Keyed
+ *  by experiment, because a diff belongs to one experiment and no other — the
+ *  cuts below are reef-rate-promise's Build ledger: cuts 1 and 2 were built
+ *  against Brief 2, cuts 3 and 4 against Brief 3, and nothing was ever built
+ *  against Brief 1. An experiment with no ledger here offers no Compare. */
 interface Comparison { title: string; changed: string; cuts: string; files: { path: string; add: number; del: number; note: string }[] }
 
 const REVISIONS = ["Brief 3 — current", "Brief 2", "Brief 1"] as const;
 
-const COMPARISONS: Record<(typeof REVISIONS)[number], Comparison> = {
-  "Brief 3 — current": {
-    title: "Cut 3 vs cut 4",
-    changed: "Cut 4 inlines the badge artwork so the promise paints without waiting on a fetch. The copy and the rate-calendar hook are untouched.",
-    cuts: "Both cuts were built against Brief 3 — the revision this run is judged against.",
-    files: [
-      { path: "src/promise/badge.ts", add: 41, del: 9, note: "The SVG lives in the file, not behind a request" },
-      { path: "src/promise/index.ts", add: 3, del: 12, note: "Drops the fetch and its retry" },
-      { path: "src/promise/promise.css", add: 4, del: 0, note: "Sizes the inlined badge at 375" },
-    ],
-  },
-  "Brief 2": {
-    title: "Cut 1 vs cut 3",
-    changed: "Cut 3 fixes the mobile sheet clipping at 375px that Dana R. caught in review. Nothing else in the change moved.",
-    cuts: "Cut 1 was built against Brief 2 and cut 3 against Brief 3. Two briefs, so run 3 and run 4 are not one series of numbers.",
-    files: [
-      { path: "src/promise/sheet.ts", add: 18, del: 7, note: "The sheet measures the viewport before it opens" },
-      { path: "src/promise/promise.css", add: 9, del: 3, note: "A 375px breakpoint for the sheet" },
-      { path: "src/promise/index.ts", add: 2, del: 2, note: "Waits for the calendar before mounting" },
-    ],
-  },
-  "Brief 1": {
-    title: "Brief 1 vs Brief 2",
-    changed: "Brief 2 changed the success metric from booking starts to completed bookings. Nothing else moved.",
-    cuts: "No cut was built against Brief 1 — it was revised on 15 August, before the first cut that afternoon.",
-    files: [],
+type Ledger = Record<(typeof REVISIONS)[number], Comparison>;
+
+const COMPARISONS: Record<string, Ledger> = {
+  "reef-rate-promise": {
+    "Brief 3 — current": {
+      title: "Cut 3 vs cut 4",
+      changed: "Cut 4 inlines the badge artwork so the promise paints without waiting on a fetch. The copy and the rate-calendar hook are untouched.",
+      cuts: "Both cuts were built against Brief 3 — the revision this run is judged against.",
+      files: [
+        { path: "src/promise/badge.ts", add: 41, del: 9, note: "The SVG lives in the file, not behind a request" },
+        { path: "src/promise/index.ts", add: 3, del: 12, note: "Drops the fetch and its retry" },
+        { path: "src/promise/promise.css", add: 4, del: 0, note: "Sizes the inlined badge at 375" },
+      ],
+    },
+    "Brief 2": {
+      title: "Cut 1 vs cut 3",
+      changed: "Cut 3 fixes the mobile sheet clipping at 375px that Dana R. caught in review. Nothing else in the change moved.",
+      cuts: "Cut 1 was built against Brief 2 and cut 3 against Brief 3. Two briefs, so run 3 and run 4 are not one series of numbers.",
+      files: [
+        { path: "src/promise/sheet.ts", add: 18, del: 7, note: "The sheet measures the viewport before it opens" },
+        { path: "src/promise/promise.css", add: 9, del: 3, note: "A 375px breakpoint for the sheet" },
+        { path: "src/promise/index.ts", add: 2, del: 2, note: "Waits for the calendar before mounting" },
+      ],
+    },
+    "Brief 1": {
+      title: "Brief 1 vs Brief 2",
+      changed: "Brief 2 changed the success metric from booking starts to completed bookings. Nothing else moved.",
+      cuts: "No cut was built against Brief 1 — it was revised on 15 August, before the first cut that afternoon.",
+      files: [],
+    },
   },
 };
 
@@ -114,6 +120,9 @@ export function BriefPanel({ e }: { e: Experiment }) {
   // ONE definition, not a second one living here. Beta 1's isBriefComplete is
   // imported by every gate; a private copy is how the bug it prevents returns.
   const incomplete = !isBriefComplete(e);
+  // Only an experiment with its own ledger can be compared — no experiment is
+  // shown another one's diff.
+  const ledger: Ledger | undefined = COMPARISONS[e.id];
   return (
     <div className="space-y-4">
       <Section title="The brief" action={frozen ? <Frozen>{e.frozen}</Frozen> : <Pill tone="warn">Editable — nothing has run yet</Pill>}>
@@ -154,7 +163,7 @@ export function BriefPanel({ e }: { e: Experiment }) {
             <div className="flex-1 text-[13.5px]">{r}</div>
             {i === 0 && frozen && <Frozen>judged against this</Frozen>}
             {i > 0 && <span className="text-[12.5px] text-muted-2 line-through">superseded</span>}
-            <button className="text-[13px] text-accent w-16 text-right" onClick={() => setComparing(COMPARISONS[r])}>Compare</button>
+            {ledger && <button className="text-[13px] text-accent w-16 text-right" onClick={() => setComparing(ledger[r])}>Compare</button>}
           </div>
         ))}
       </Section>
@@ -223,11 +232,20 @@ export function ReviewPanel({ e }: { e: Experiment }) {
   if (e.stage === "Brief" || e.stage === "Build") return <NotYet what="Not ready for review" needs="Someone reviews this once there is a build to look at on the real page." />;
 
   const mine = isMine(e);
+  // Review is behind this experiment: the run already opened, so the sign-off
+  // is the record and cannot be given again.
+  const past = STAGES.indexOf(e.stage) > STAGES.indexOf("Review");
+  // The build sits on the experiment's own environment, not on the apex domain
+  // — resolve it the way the header's Preview does, and say which host opens.
+  const envs = SITE_ROWS.find((s) => s.domain === e.site)?.envs ?? [];
+  const target = envs.find((x) => x.label === e.env) ?? envs.find((x) => !x.isProduction);
+  const base = target?.url ?? `https://${e.site}`;
+  const host = base.replace(/^https?:\/\//, "");
   const record = (s: SignOff) => { SIGNOFFS.set(e.id, s); setSignOffState(s); };
   const approve = () => { record({ kind: "approved" }); logActivity(`Approved the build of “${e.name}” on the real page — it does what the brief asked.`); };
   const sendBack = () => { const n = note.trim(); record({ kind: "sent_back", note: n }); setSendingBack(false); logActivity(`Sent “${e.name}” back with a note — “${n}”.`); };
-  const start = () => { record({ kind: "running", split }); setStarting(false); logActivity(`Started the run of “${e.name}” at ${split} on Production.`); };
-  const open = () => window.open(`https://${e.site}${e.path}?opmc=${e.id}`, "_blank", "noopener");
+  const start = () => { record({ kind: "running", split }); setStarting(false); logActivity(`Started the run of “${e.name}” at ${split} on ${e.env}.`); };
+  const open = () => window.open(`${base}${e.path}?opmc=${e.id}`, "_blank", "noopener");
 
   return (
     <div className="space-y-4">
@@ -238,7 +256,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
           <div className="rounded-lg border border-border bg-surface-2/40 h-[190px] grid place-items-center mb-4">
             <div className="text-center">
               <div className="text-[13px] text-muted-2 mb-2">The change, on the real page</div>
-              <Button size="sm" variant="outline" onClick={open}>Open {e.site}{e.path}</Button>
+              <Button size="sm" variant="outline" onClick={open}>Open {host}{e.path}</Button>
             </div>
           </div>
           <div className="rounded-lg border border-border p-4 mb-4">
@@ -246,7 +264,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
             <p className="text-[14px] leading-relaxed">{e.hypothesis}</p>
           </div>
 
-          {!signOff && (
+          {!signOff && !past && (
             <>
               <p className="text-[13.5px] text-muted mb-4">
                 You&rsquo;re signing off that it matches the brief and is safe on your site — not that it will win. Nothing reaches a real guest until someone approves the run.
@@ -259,13 +277,20 @@ export function ReviewPanel({ e }: { e: Experiment }) {
             </>
           )}
 
+          {!signOff && past && (
+            <div className="rounded-lg border border-border bg-surface-2/40 p-4">
+              <p className="text-[13.5px] text-muted">Signed off before the run opened. This stage is the record now — the sign-off cannot be given again.</p>
+              {e.frozen && <div className="mt-2.5"><Frozen>{e.frozen}</Frozen></div>}
+            </div>
+          )}
+
           {signOff?.kind === "sent_back" && (
             <div className="rounded-lg border border-warn/40 bg-warn/5 p-4">
               <div className="flex items-center gap-3">
                 <Pill tone="warn">Sent back</Pill>
                 <span className="text-[13.5px]">Sent back · {signOff.note}</span>
               </div>
-              <p className="text-[12.5px] text-muted-2 mt-2">{e.owner} sees the note on this experiment and in Activity. Nothing reaches a guest until a new build is approved.</p>
+              <p className="text-[12.5px] text-muted-2 mt-2">{mine ? "The note stays on this experiment and in Activity." : `${e.owner} sees the note on this experiment and in Activity.`} Nothing reaches a guest until a new build is approved.</p>
             </div>
           )}
 
@@ -276,7 +301,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
                 <span className="text-[13.5px]">Approved by you · {TODAY}</span>
               </div>
               {signOff.kind === "running" ? (
-                <p className="text-[13.5px] mt-3">Running since {TODAY} · {signOff.split} on Production.</p>
+                <p className="text-[13.5px] mt-3">Running since {TODAY} · {signOff.split} on {e.env}.</p>
               ) : (
                 <div className="flex items-center gap-3 mt-3 flex-wrap">
                   <Button size="sm" onClick={() => setStarting(true)}>Start the run</Button>
@@ -292,7 +317,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Send this back</DialogTitle>
-            <DialogDescription>Say what is wrong and where you saw it. {e.owner} gets the note with your name on it, and nothing moves until a new build is approved.</DialogDescription>
+            <DialogDescription>Say what is wrong and where you saw it. {mine ? "The note stays on this experiment and in Activity" : `${e.owner} gets the note with your name on it`}, and nothing moves until a new build is approved.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="send-back-note">Your note</Label>
@@ -309,7 +334,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Start the run?</DialogTitle>
-            <DialogDescription>Opens “{e.name}” on Production — this reaches real guests. The brief and the build freeze the moment it opens.</DialogDescription>
+            <DialogDescription>Opens “{e.name}” on {e.env}{e.env === "Production" ? " — this reaches real guests" : ""}. The brief and the build freeze the moment it opens.</DialogDescription>
           </DialogHeader>
           <div>
             <div id="split-label" className="text-[13px] font-semibold text-muted mb-2.5">Split</div>
@@ -326,7 +351,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
             </RadioGroup>
           </div>
           <div>
-            <Meta k="Environment" v={<span>Production <span className="text-warn">— this reaches real guests</span></span>} />
+            <Meta k="Environment" v={<span>{e.env}{e.env === "Production" ? <span className="text-warn"> — this reaches real guests</span> : null}</span>} />
             <Meta k="Build" v={e.build ?? "—"} mono />
             <Meta k="Brief" v="The current revision, frozen when the run opens" />
           </div>

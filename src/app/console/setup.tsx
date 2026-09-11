@@ -35,8 +35,9 @@
  * mutable, so they are plain text.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/ui/cn";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
 import { logActivity } from "./config";
@@ -286,7 +287,7 @@ export function SetupChecklist({ environments = ENVIRONMENTS }: { environments?:
             GitHub at any time, which is why this is plain text and not a receipt.
           </p>
         ) : (
-          <Button size="sm" onClick={() => setHostConnected(true)}>Connect {CODE_HOST.kind}</Button>
+          <Button size="sm" onClick={() => { setHostConnected(true); logActivity(`Connected ${CODE_HOST.kind} on ${CODE_HOST.org}.`); }}>Connect {CODE_HOST.kind}</Button>
         )}
       </StepRow>
 
@@ -306,7 +307,7 @@ export function SetupChecklist({ environments = ENVIRONMENTS }: { environments?:
         ) : hostConnected ? (
           <div className="space-y-1.5">
             {REPO_CANDIDATES.map((r) => (
-              <button key={r.name} onClick={() => r.ok && setRepo(r.name)} disabled={!r.ok}
+              <button key={r.name} onClick={() => { if (!r.ok) return; setRepo(r.name); logActivity(`Picked ${r.name} to keep prototypes in.`); }} disabled={!r.ok}
                 className={cn("w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left",
                   r.ok ? "border-border bg-surface hover:border-border-strong" : "border-border bg-surface-2/40 cursor-not-allowed")}>
                 <span className={cn("w-4 h-4 rounded-full border-2 shrink-0", r.ok ? "border-border-strong" : "border-border")} />
@@ -466,6 +467,7 @@ export function AgentHandshake() {
     setFiles((fs) => fs.map((f) => (f.stale ? { ...f, onBranch: f.inConsole, stale: false } : f)));
     setBranchSkills(SKILLS_V7);
     setSyncedAt("10 Sep 2026 11:52:08 HST");
+    logActivity(`Re-synced ${stale.length} file${stale.length === 1 ? "" : "s"} onto ${BRANCH.name} — skills now ${SKILLS_V7.rev}.`);
   };
 
   return (
@@ -783,6 +785,13 @@ export function InjectionProof() {
   const [vouched, setVouched] = useState<Record<string, Vouch>>({});
   const [recheck, setRecheck] = useState<Record<string, Recheck>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [vouching, setVouching] = useState<Target | null>(null);
+
+  // Timers this panel started, cleared on unmount — leaving the stage mid-check
+  // leaves nothing ticking behind it.
+  const timers = useRef<number[]>([]);
+  useEffect(() => { const t = timers.current; return () => t.forEach(window.clearTimeout); }, []);
+  const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   /** Derived, never stored: what the fetch saw decides the state. */
   const stateOf = (t: Target): ProofState =>
@@ -805,10 +814,14 @@ export function InjectionProof() {
   const envCount = new Set(TARGETS.map((t) => t.env)).size;
   const attention = TARGETS.filter((t) => ["wrong-env", "absent", "unknown"].includes(stateOf(t))).length;
 
-  const vouch = (t: Target) => setVouched((v) => ({
-    ...v,
-    [t.id]: { by: ME.name, role: ME.role, at: "10 Sep 2026 11:47:22 HST", client: "Chrome 141 · macOS", digest: "html sha256:b2e7…4c19" },
-  }));
+  const vouch = (t: Target) => {
+    setVouched((v) => ({
+      ...v,
+      [t.id]: { by: ME.name, role: ME.role, at: "10 Sep 2026 11:47:22 HST", client: "Chrome 141 · macOS", digest: "html sha256:b2e7…4c19" },
+    }));
+    setVouching(null);
+    logActivity(`Vouched for the tag on ${t.url} — the server-side fetch could not see it.`);
+  };
 
   const checking = (t: Target) => recheck[t.id] === "checking";
   const checkedText = (t: Target) => (recheck[t.id] === "just now" ? "just now" : t.checked);
@@ -818,15 +831,17 @@ export function InjectionProof() {
   /** Fetch again, one page after another. Nothing underneath changes — the result is derived from what came back. */
   const checkAgain = (targets: Target[]) => {
     setRecheck((r) => ({ ...r, ...Object.fromEntries(targets.map((t) => [t.id, "checking" as const])) }));
-    targets.forEach((t, i) => setTimeout(() => setRecheck((r) => ({ ...r, [t.id]: "just now" })), 900 + i * 180));
+    targets.forEach((t, i) => later(() => setRecheck((r) => ({ ...r, [t.id]: "just now" })), 900 + i * 180));
     logActivity(targets.length === 1 ? `Checked ${targets[0].url} again.` : `Checked all ${targets.length} target pages again.`);
   };
 
+  // No clipboard, or a refused one, is not a copy: the label stays put and nothing is logged.
   const copyTag = (t: Target) => {
-    void navigator.clipboard?.writeText(TAG_LINES(t.expect).join("\n"));
-    setCopiedId(t.id);
-    setTimeout(() => setCopiedId((id) => (id === t.id ? null : id)), 1500);
-    logActivity(`Copied the ${t.env} tag.`);
+    navigator.clipboard?.writeText(TAG_LINES(t.expect).join("\n")).then(() => {
+      setCopiedId(t.id);
+      logActivity(`Copied the ${t.env} tag.`);
+      later(() => setCopiedId((id) => (id === t.id ? null : id)), 1500);
+    }, () => setCopiedId(null));
   };
 
   return (
@@ -957,7 +972,7 @@ export function InjectionProof() {
                 <p className="text-[13px] text-muted-2 mt-2 leading-relaxed">
                   Open the page in a browser. If the tag is there, say so — your name goes on it.
                 </p>
-                <Button size="sm" className="mt-3" onClick={() => vouch(open)}>I can see the tag on this page</Button>
+                <Button size="sm" className="mt-3" onClick={() => setVouching(open)}>I can see the tag on this page</Button>
               </div>
             )}
             {openState === "confirmed" && vouched[open.id] && (
@@ -996,6 +1011,34 @@ export function InjectionProof() {
           </div>
         </Section>
       </div>
+
+      {/* A vouch is a permanent attributed receipt, so it is asked for once and never taken from a stray click. */}
+      <Dialog open={vouching !== null} onOpenChange={(o) => { if (!o) setVouching(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Say you can see the tag on this page</DialogTitle>
+            <DialogDescription>
+              Your name, your role and the time go on this page and stay there. The row reads
+              {" "}<span className="text-foreground">Confirmed by a person</span> from then on — never
+              {" "}<span className="text-foreground">Found</span>, because what you saw and what a server-side fetch
+              sees are different kinds of evidence.
+            </DialogDescription>
+          </DialogHeader>
+          {vouching && (
+            <div className="rounded-lg border border-border bg-surface-2/40 px-3.5 py-2.5 space-y-1">
+              <div className="font-mono text-[12px] break-all">{vouching.url}</div>
+              <div className="text-[12.5px] text-muted-2 leading-relaxed">
+                Open that page in a browser and look for
+                {" "}<span className="font-mono text-[12px]">{vouching.expect}</span> before you answer.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setVouching(null)}>Not now</Button>
+            <Button onClick={() => { if (vouching) vouch(vouching); }}>Yes — I can see it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

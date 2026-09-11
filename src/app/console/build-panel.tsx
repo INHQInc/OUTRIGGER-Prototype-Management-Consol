@@ -22,9 +22,10 @@
  *    hypothesis or the metrics — where code contradicts either, it stops.
  */
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/ui/cn";
 import { ME } from "@/lib/console/fake";
 import { logActivity } from "./config";
@@ -384,8 +385,10 @@ function StepList({ steps }: { steps: { label: string; detail: string; tone: Ste
 
 /* ── Certification ─────────────────────────────────────────────────── */
 
-/** A cut coming through the gate. Steps 0–2 run in turn; step 4 means it exists. */
-interface GateRun { n: number; sha: string; step: number; override?: Cut["override"] }
+/** A cut coming through the gate. Steps 0–2 run in turn; step 4 means it exists.
+ *  The gate is only reachable with a failing check ticked past, so every cut that
+ *  comes through it carries an override — there is no un-overridden path. */
+interface GateRun { n: number; sha: string; step: number; override: NonNullable<Cut["override"]> }
 const GATE_DONE = 4;
 
 export function CertificationPanel() {
@@ -394,6 +397,12 @@ export function CertificationPanel() {
   const [gate, setGate] = useState<GateRun | null>(null);
   const [fileOpen, setFileOpen] = useState(false);
   const cuts = useStore(cutsStore);
+
+  // Timers this panel started, cleared on unmount — leaving the stage mid-cut
+  // leaves nothing ticking behind it.
+  const timers = useRef<number[]>([]);
+  useEffect(() => { const t = timers.current; return () => t.forEach(window.clearTimeout); }, []);
+  const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
 
   const passed = CHECKS.filter((c) => c.state === "pass").length;
   const warned = CHECKS.filter((c) => c.state === "warn").length;
@@ -410,28 +419,26 @@ export function CertificationPanel() {
   const cutFromGate = () => {
     const n = next;
     const sha = shortSha(`cut-${n}`);
-    const run: GateRun = { n, sha, step: 0, override: override ? { check: failing.map((c) => c.id).join(", "), why: reason.trim() } : undefined };
+    const run: GateRun = { n, sha, step: 0, override: { check: failing.map((c) => c.id).join(", "), why: reason.trim() } };
     setGate(run);
-    [700, 1800].forEach((ms, i) => setTimeout(() => setGate({ ...run, step: i + 1 }), ms));
-    setTimeout(() => {
+    [700, 1800].forEach((ms, i) => later(() => setGate({ ...run, step: i + 1 }), ms));
+    later(() => {
       setGate({ ...run, step: GATE_DONE });
       cutsStore.set([{
         sha, cut: n, at: "just now", by: "Prism Agent", briefRev: "rev 3", bytes: CANDIDATE_BYTES,
-        cert: run.override ? "warn" : "pass", certNote: run.override ? "certified · 1 override" : "certified",
+        cert: "warn", certNote: "certified · 1 override",
         purpose: `Cut from the certification gate on ${EXPERIMENT.today}. Same source as d40b9f5; all eight checks re-run from scratch.`,
         override: run.override, attempts: [],
       }, ...cutsStore.get()]);
-      logActivity(run.override
-        ? `Overrode the ${run.override.check} check on d40b9f5 (“${run.override.why}”) and cut ${n} (${sha}) came out certified.`
-        : `Cut ${n} (${sha}) from d40b9f5. It came out certified.`);
+      logActivity(`Overrode the ${run.override.check} check on d40b9f5 (“${run.override.why}”) and cut ${n} (${sha}) came out certified.`);
     }, 3000);
   };
 
   const gateSteps = gate ? [
-    { label: "Queued the cut", detail: `cut ${gate.n} · from d40b9f5 · ${gate.override ? `override on ${gate.override.check}, on ${EXPERIMENT.me}` : "no override"}` },
+    { label: "Queued the cut", detail: `cut ${gate.n} · from d40b9f5 · override on ${gate.override.check}, on ${EXPERIMENT.me}` },
     { label: "Building", detail: "one self-contained file · same source as d40b9f5 · nothing minified" },
-    { label: "Certifying — all eight checks from scratch", detail: gate.override ? `${passed} pass · ${warned} warn · ${gate.override.check} fails again · the override carries it` : `${passed} pass · ${warned} warn · 0 fail` },
-    { label: "Done", detail: `cut ${gate.n} · ${gate.sha} · certified${gate.override ? " · the override travels with the cut" : ""}` },
+    { label: "Certifying — all eight checks from scratch", detail: `${passed} pass · ${warned} warn · ${gate.override.check} fails again · the override carries it` },
+    { label: "Done", detail: `cut ${gate.n} · ${gate.sha} · certified · the override travels with the cut` },
   ] : [];
 
   return (
@@ -501,7 +508,7 @@ export function CertificationPanel() {
                 {override && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
               </span>
               <span className="text-[13.5px] leading-snug">
-                Override the block and push d40b9f5 anyway.
+                Override the block and cut {next} from d40b9f5 anyway.
                 <span className="text-muted-2"> This is written to the audit log with my name on it.</span>
               </span>
             </label>
@@ -509,8 +516,9 @@ export function CertificationPanel() {
             {override && (
               <div className="mt-3.5 space-y-3">
                 <div>
-                  <FieldLabel className="mb-1.5">WHY — GOES IN THE LOG AND ON THE READOUT</FieldLabel>
+                  <Label htmlFor="override-why" className="mb-1.5 text-[10.5px] font-semibold tracking-[0.07em] text-muted-2">WHY — GOES IN THE LOG AND ON THE READOUT</Label>
                   <input
+                    id="override-why"
                     value={reason}
                     disabled={locked}
                     onChange={(e) => setReason(e.target.value)}
@@ -532,12 +540,12 @@ export function CertificationPanel() {
               <div className={cn("mt-4 rounded-lg border p-4", done ? "border-border bg-surface-2/40" : "border-accent/40 bg-accent/[0.04]")}>
                 <div className="flex items-center gap-2.5 mb-3 flex-wrap">
                   <Pill tone={done ? "ok" : "accent"}>{done ? `Cut ${gate.n} certified` : `Cutting ${gate.n}…`}</Pill>
-                  <span className="text-[12.5px] text-muted-2">{EXPERIMENT.today} · {gate.override ? `override on ${gate.override.check} · ` : ""}{EXPERIMENT.me} ({EXPERIMENT.myRole})</span>
+                  <span className="text-[12.5px] text-muted-2">{EXPERIMENT.today} · override on {gate.override.check} · {EXPERIMENT.me} ({EXPERIMENT.myRole})</span>
                 </div>
                 <StepList steps={gateSteps.map((s, i) => ({ ...s, tone: liveTone(i, gate.step) }))} />
                 {done && (
                   <p className="text-[13px] text-muted leading-relaxed mt-3 pt-3 border-t border-border">
-                    Cut {gate.n} is certified and sits in Versions below{gate.override ? ", with the override on your name" : ""}. Nothing reaches a guest until you push it from there.
+                    Cut {gate.n} is certified and sits in Versions below, with the override on your name. Nothing reaches a guest until you push it from there.
                   </p>
                 )}
               </div>
@@ -547,7 +555,7 @@ export function CertificationPanel() {
               {!gate && (
                 <>
                   <Button variant={override ? "danger" : "default"} disabled={blocked || (override && reason.trim().length === 0)} onClick={cutFromGate}>
-                    {override ? "Push anyway — on my name" : "Push to Optimizely"}
+                    {override ? `Override and cut ${next} — on my name` : `Cut ${next} and re-certify`}
                   </Button>
                   {blocked && <span className="text-[13px] text-danger">Blocked by 1 of 8 checks.</span>}
                   {override && reason.trim().length === 0 && <span className="text-[13px] text-warn">An override with no reason is not a record. Say why.</span>}
@@ -646,6 +654,12 @@ export function VersionsPanel() {
   const busy = pushing !== null;
   const inFlight = pushing !== null && pushing.sha === cut.sha;
 
+  // Timers this panel started, cleared on unmount — leaving the stage mid-push
+  // leaves nothing ticking behind it.
+  const timers = useRef<number[]>([]);
+  useEffect(() => { const t = timers.current; return () => t.forEach(window.clearTimeout); }, []);
+  const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
+
   /** Sends the cut, reads it back, and only then marks it live. About three seconds.
    *  A rollback is the same push with a different last line — it never removes a cut. */
   const push = (c: Cut, kind: PushKind) => {
@@ -653,8 +667,8 @@ export function VersionsPanel() {
     const steps = pushSteps(c, kind, cuts);
     const prev = live;
     setPushing({ sha: c.sha, kind, step: 0 });
-    [550, 1100, 1700, 2300].forEach((ms, i) => setTimeout(() => setPushing({ sha: c.sha, kind, step: i + 1 }), ms));
-    setTimeout(() => {
+    [550, 1100, 1700, 2300].forEach((ms, i) => later(() => setPushing({ sha: c.sha, kind, step: i + 1 }), ms));
+    later(() => {
       const attempt: PushAttempt = { at: "just now", by: EXPERIMENT.me, result: "verified", steps };
       cutsStore.set(cutsStore.get().map((x) => x.sha === c.sha ? { ...x, live: true, attempts: [...x.attempts, attempt] } : x.live ? { ...x, live: false } : x));
       setPushing(null);
@@ -862,12 +876,11 @@ export function DriftPanel() {
   const applied = done.filter((d) => resolved[d.id] === "applied").length;
   const shown = tab === "open" ? open : done;
 
-  /** Writes the contradictions down as drift, reopens the brief as revision 4, and takes you there. Revision 3 is not touched. */
+  /** Writes the contradictions down as drift and reopens the brief as revision 4. Revision 3 is not touched. */
   const sendBack = () => {
     reopenedStore.set(`opmc.audit · drift.contradiction · ${CONTRADICTIONS.map((d) => d.id).join(", ")} · brief reopened as rev 4 · rev 3 stays frozen · ${EXPERIMENT.me} · ${EXPERIMENT.today}`);
     setSendingBack(false);
     logActivity(`Took the build back to the brief: recorded ${CONTRADICTIONS.length} contradictions as drift and reopened the brief as revision 4.`);
-    window.dispatchEvent(new CustomEvent("console:go", { detail: { stage: "Brief" } }));
   };
 
   return (

@@ -16,8 +16,10 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/ui/cn";
 import { SITE_ROWS } from "@/lib/console/fake";
 import { logActivity } from "./config";
@@ -49,19 +51,24 @@ interface Draft {
 
 const EMPTY: Draft = { site: "outrigger.com", page: "", change: "", audience: "Everyone", expect: "", because: "", metric: "", direction: null, guardrails: [...POLICY] };
 
+/** The question's own heading names every choice group under it — one question,
+ *  one label, so a screen reader hears the same thing you read. */
 const Q = ({ n, title, help, children }: { n: number; title: string; help?: string; children: React.ReactNode }) => (
   <div className="w-[640px]">
     <div className="text-[11.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">QUESTION {n} OF 6</div>
-    <h1 className="text-[24px] font-semibold tracking-[-0.02em] mb-2">{title}</h1>
+    <h1 id={`q${n}-title`} className="text-[24px] font-semibold tracking-[-0.02em] mb-2">{title}</h1>
     {help && <p className="text-[14.5px] text-muted leading-relaxed mb-6">{help}</p>}
     {children}
   </div>
 );
 
-const Field = ({ value, onChange, placeholder, rows = 3 }: { value: string; onChange: (v: string) => void; placeholder: string; rows?: number }) => (
-  <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} placeholder={placeholder}
+const Field = ({ id, value, onChange, placeholder, rows = 3 }: { id?: string; value: string; onChange: (v: string) => void; placeholder: string; rows?: number }) => (
+  <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} rows={rows} placeholder={placeholder}
     className="w-full rounded-xl border border-border bg-surface px-4 py-3 text-[15px] leading-relaxed resize-none placeholder:text-muted-2 focus:border-accent focus:outline-none" />
 );
+
+/** An answer becomes part of an id, and an id cannot carry a space. */
+const idFor = (prefix: string, value: string) => `${prefix}-${value.replace(/\s+/g, "-")}`;
 
 export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: Draft) => void }) {
   const [step, setStep] = useState(0);
@@ -126,25 +133,26 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
 
       <div className="flex-1 overflow-auto flex justify-center px-6 py-10">
         {step === 0 && (
-          <Q n={1} title="Which page are you testing?" help="These are the real pages on your site — Prism read them, so you don't have to find a URL.">
-            <select value={d.site} onChange={(e) => set("site", e.target.value)}
+          <Q n={1} title="Which page are you testing?" help="These are the pages Prism has read on your site. If the one you want isn't here, add it by path.">
+            <select value={d.site} onChange={(e) => set("site", e.target.value)} aria-label="Site"
               className="h-10 px-3 mb-3 rounded-lg border border-border bg-surface text-[14px] focus:border-accent focus:outline-none">
               {SITE_ROWS.map((s) => <option key={s.id}>{s.domain}</option>)}
             </select>
-            <div className="rounded-xl border border-border bg-surface overflow-hidden">
+            <RadioGroup aria-labelledby="q1-title" value={d.page} onValueChange={(v) => set("page", v)}
+              className="gap-0 rounded-xl border border-border bg-surface overflow-hidden">
               {pages.map((p) => (
-                <button key={p.path} onClick={() => set("page", p.path)}
-                  className={cn("w-full flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 text-left hover:bg-surface-2/60",
+                <Label key={p.path} htmlFor={idFor("page", p.path)}
+                  className={cn("gap-3 px-4 py-3 border-b border-border last:border-0 cursor-pointer font-normal text-foreground hover:bg-surface-2/60",
                     d.page === p.path && "bg-accent/5")}>
-                  <span className={cn("w-4 h-4 rounded-full border-2 shrink-0", d.page === p.path ? "border-accent border-[5px]" : "border-border-strong")} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-medium truncate">{p.read ? p.read.name : `${d.site}${p.path}`}</div>
-                    {p.read && <div className="text-[12.5px] text-muted-2 truncate">{d.site}{p.path}</div>}
-                  </div>
+                  <RadioGroupItem id={idFor("page", p.path)} value={p.path} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[14px] font-medium truncate">{p.read ? p.read.name : `${d.site}${p.path}`}</span>
+                    {p.read && <span className="block text-[12.5px] text-muted-2 truncate mt-0.5">{d.site}{p.path}</span>}
+                  </span>
                   {p.read && <span className="text-[12.5px] text-muted-2 shrink-0">{p.read.visits}</span>}
-                </button>
+                </Label>
               ))}
-            </div>
+            </RadioGroup>
             {chosen && !chosen.read && <p className="text-[12.5px] text-muted-2 mt-3">Prism hasn&rsquo;t read this page yet — it will before the build.</p>}
             {addingPage ? (
               <form onSubmit={(e) => { e.preventDefault(); addPage(); }} className="mt-4">
@@ -174,65 +182,68 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
 
         {step === 2 && (
           <Q n={3} title="Who should see it?" help="Most experiments run for everyone. Narrow it only if the change is for a specific group.">
-            {["Everyone", "First-time visitors", "Returning visitors", "Mobile only"].map((a) => (
-              <button key={a} onClick={() => set("audience", a)}
-                className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl border mb-2 text-left",
-                  d.audience === a ? "border-accent bg-accent/5" : "border-border bg-surface hover:border-border-strong")}>
-                <span className={cn("w-4 h-4 rounded-full border-2 shrink-0", d.audience === a ? "border-accent border-[5px]" : "border-border-strong")} />
-                <span className="text-[14.5px]">{a}</span>
-                {a === "Everyone" && <span className="ml-auto text-[12px] text-muted-2">recommended</span>}
-              </button>
-            ))}
+            <RadioGroup aria-labelledby="q3-title" value={d.audience} onValueChange={(v) => set("audience", v)} className="gap-2">
+              {["Everyone", "First-time visitors", "Returning visitors", "Mobile only"].map((a) => (
+                <Label key={a} htmlFor={idFor("audience", a)}
+                  className={cn("gap-3 px-4 py-3 rounded-xl border cursor-pointer font-normal text-foreground",
+                    d.audience === a ? "border-accent bg-accent/5" : "border-border bg-surface hover:border-border-strong")}>
+                  <RadioGroupItem id={idFor("audience", a)} value={a} />
+                  <span className="text-[14.5px]">{a}</span>
+                  {a === "Everyone" && <span className="ml-auto text-[12px] text-muted-2">recommended</span>}
+                </Label>
+              ))}
+            </RadioGroup>
           </Q>
         )}
 
         {step === 3 && (
           <Q n={4} title="What do you expect to happen — and why?" help="This is the sentence you'll be held to. It gets frozen the moment the experiment goes live, and the result is judged against it.">
-            <label className="block text-[13px] font-semibold text-muted mb-1.5">You expect…</label>
-            <Field value={d.expect} onChange={(v) => set("expect", v)} rows={2} placeholder="More guests will click Check availability." />
-            <label className="block text-[13px] font-semibold text-muted mt-4 mb-1.5">…because</label>
-            <Field value={d.because} onChange={(v) => set("because", v)} rows={2} placeholder="the offer badge competes with the booking call to action and pulls attention away from it." />
+            <Label htmlFor="expect" className="mb-1.5">You expect…</Label>
+            <Field id="expect" value={d.expect} onChange={(v) => set("expect", v)} rows={2} placeholder="More guests will click Check availability." />
+            <Label htmlFor="because" className="mt-4 mb-1.5">…because</Label>
+            <Field id="because" value={d.because} onChange={(v) => set("because", v)} rows={2} placeholder="the offer badge competes with the booking call to action and pulls attention away from it." />
           </Q>
         )}
 
         {step === 4 && (
           <Q n={5} title="How will we know it worked?" help="Say it the way you'd say it to a colleague. Prism works out which of your site's measurements that means once the experiment is set up — and asks you if it isn't sure.">
-            <label className="block text-[13px] font-semibold text-muted mb-1.5">The outcome that decides it</label>
-            <Field value={d.metric} onChange={(v) => set("metric", v)} rows={2}
+            <Label htmlFor="metric" className="mb-1.5">The outcome that decides it</Label>
+            <Field id="metric" value={d.metric} onChange={(v) => set("metric", v)} rows={2}
               placeholder="More guests get all the way through to a completed booking — not just more people starting one." />
             <p className="text-[12.5px] text-muted-2 mt-2 mb-4">
               Prism never invents a measurement. It can only use what your A/B tool already records on this site, and it will show you the match before anything runs.
             </p>
-            <label className="block text-[13px] font-semibold text-muted mb-1.5">Which way should it move?</label>
-            <div className="flex gap-2.5">
+            <Label id="direction-label" className="mb-1.5">Which way should it move?</Label>
+            <RadioGroup aria-labelledby="direction-label" value={d.direction ?? ""} className="grid-cols-2 gap-2.5"
+              onValueChange={(v) => set("direction", v === "up" ? "up" : "down")}>
               {(["up", "down"] as const).map((dir) => (
-                <button key={dir} onClick={() => set("direction", dir)}
-                  className={cn("flex-1 rounded-xl border px-4 py-3 text-left", d.direction === dir ? "border-accent bg-accent/5" : "border-border bg-surface hover:border-border-strong")}>
-                  <div className="text-[14.5px] font-medium">{dir === "up" ? "Up — more is better" : "Down — less is better"}</div>
-                  <div className="text-[12.5px] text-muted-2 mt-0.5">{dir === "up" ? "clicks, bookings, engagement" : "bounces, errors, cancellations"}</div>
-                </button>
+                <Label key={dir} htmlFor={idFor("direction", dir)}
+                  className={cn("items-start gap-3 rounded-xl border px-4 py-3 cursor-pointer font-normal text-foreground",
+                    d.direction === dir ? "border-accent bg-accent/5" : "border-border bg-surface hover:border-border-strong")}>
+                  <RadioGroupItem id={idFor("direction", dir)} value={dir} className="mt-0.5" />
+                  <span className="flex-1">
+                    <span className="block text-[14.5px] font-medium">{dir === "up" ? "Up — more is better" : "Down — less is better"}</span>
+                    <span className="block text-[12.5px] text-muted-2 mt-0.5">{dir === "up" ? "clicks, bookings, engagement" : "bounces, errors, cancellations"}</span>
+                  </span>
+                </Label>
               ))}
-            </div>
+            </RadioGroup>
             {!d.direction && <p className="text-[13px] text-warn mt-3">Say which way it should move. Prism will not guess — a direction nobody stated turns into a caveat on the result.</p>}
           </Q>
         )}
 
         {step === 5 && (
           <Q n={6} title="What must not get worse?" help="Even if the experiment wins on its own number, these can veto it. They come from your guardrail policy — change them only if this experiment is unusual.">
-            <div className="rounded-xl border border-border bg-surface overflow-hidden">
-              {[...POLICY, "Cancellation rate", "Bounce rate"].map((g) => {
-                const on = d.guardrails.includes(g);
-                return (
-                  <button key={g} onClick={() => set("guardrails", on ? d.guardrails.filter((x) => x !== g) : [...d.guardrails, g])}
-                    className="w-full flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 text-left hover:bg-surface-2/60">
-                    <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", on ? "bg-accent border-accent text-accent-fg" : "border-border-strong")}>
-                      {on && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                    </span>
-                    <span className="text-[14px]">{g}</span>
-                    {POLICY.includes(g) && <span className="ml-auto text-[12px] text-muted-2">from your policy</span>}
-                  </button>
-                );
-              })}
+            <div role="group" aria-labelledby="q6-title" className="rounded-xl border border-border bg-surface overflow-hidden">
+              {[...POLICY, "Cancellation rate", "Bounce rate"].map((g) => (
+                <Label key={g} htmlFor={idFor("rail", g)}
+                  className="gap-3 px-4 py-3 border-b border-border last:border-0 cursor-pointer font-normal text-foreground hover:bg-surface-2/60">
+                  <Checkbox id={idFor("rail", g)} checked={d.guardrails.includes(g)}
+                    onCheckedChange={(v) => set("guardrails", v === true ? [...d.guardrails, g] : d.guardrails.filter((x) => x !== g))} />
+                  <span className="text-[14px]">{g}</span>
+                  {POLICY.includes(g) && <span className="ml-auto text-[12px] text-muted-2">from your policy</span>}
+                </Label>
+              ))}
             </div>
           </Q>
         )}
@@ -242,7 +253,11 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
         <Button variant="ghost" onClick={() => (step === 0 ? cancel() : setStep(step - 1))}>{step === 0 ? "Cancel" : "Back"}</Button>
         <div className="ml-auto flex items-center gap-3">
           {!ok && step === 4 && <span className="text-[13px] text-muted-2">Both answers are needed to continue</span>}
-          <Button disabled={!ok} onClick={() => (last ? done(d) : setStep(step + 1))}>
+          <Button disabled={!ok} onClick={() => {
+            if (!last) { setStep(step + 1); return; }
+            logActivity(`Wrote a new experiment on ${d.site}${d.page} — expects “${d.expect.trim()}”`);
+            done(d);
+          }}>
             {last ? "Create and start building" : "Continue"}
           </Button>
         </div>

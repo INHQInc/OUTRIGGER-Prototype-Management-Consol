@@ -20,7 +20,7 @@
  * arm can be shot. It cannot be read: its boxes show a dash until a run reports.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { logActivity } from "./config";
@@ -351,12 +351,16 @@ function Shot({
   // re-shoot changes the shot's date and its provenance line, and nothing else.
   const [reshoot, setReshoot] = useState<"idle" | "busy" | "done">("idle");
   const busy = reshoot === "busy";
+  // Timers this shot started, cleared on unmount — leaving the board mid-shot
+  // must not write "re-shot" into the activity feed afterwards.
+  const timers = useRef<number[]>([]);
+  useEffect(() => { const t = timers.current; return () => t.forEach(window.clearTimeout); }, []);
   const reshootArm = () => {
     setReshoot("busy");
-    setTimeout(() => {
+    timers.current.push(window.setTimeout(() => {
       setReshoot("done");
       logActivity(`Re-shot the ${arm.name.toLowerCase()} arm of ${RUN.experiment}.`);
-    }, 1200);
+    }, 1200));
   };
   return (
     <div>
@@ -378,41 +382,45 @@ function Shot({
           <span className="ml-1.5 font-mono text-[10.5px] text-muted-2 truncate">{RUN.page}</span>
         </div>
 
-        {/* `data-shot`: on paper the tinted regions ARE the picture, so print keeps their colour. */}
+        {/* `data-shot`: on paper the tinted regions ARE the picture, so print keeps their colour.
+            The rule that grants that reaches direct `div` children only, so the marks sit inside
+            one — box fills and number tabs inherit it from there instead of printing blank. */}
         <div className="relative h-[340px]" data-shot={arm.id}>
           <Wire arm={arm.id} />
-          {boxes.map((a) => {
-            const r = rectFor(a, arm.id);
-            if (!r) return null;
-            const c = chroma(a);
-            const on = sel === a.n;
-            const dim = !matches(a, filter);
-            return (
-              <button
-                key={a.n}
-                type="button"
-                onClick={() => setSel(on ? null : a.n)}
-                title={`Box ${a.n} — bound to ${a.metricKey}`}
-                className={cn(
-                  "absolute rounded-[4px] border-2 transition-opacity",
-                  BOX_TONE[c.tone],
-                  on && "ring-2 ring-accent ring-offset-1 ring-offset-background",
-                  dim && "opacity-20",
-                )}
-                style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
-              >
-                <span
+          <div className="absolute inset-0">
+            {boxes.map((a) => {
+              const r = rectFor(a, arm.id);
+              if (!r) return null;
+              const c = chroma(a);
+              const on = sel === a.n;
+              const dim = !matches(a, filter);
+              return (
+                <button
+                  key={a.n}
+                  type="button"
+                  onClick={() => setSel(on ? null : a.n)}
+                  title={`Box ${a.n} — bound to ${a.metricKey}`}
                   className={cn(
-                    "absolute left-0 bottom-0 m-[3px] w-[15px] h-[15px] rounded-[3px] grid place-items-center text-[10px] font-bold tabular-nums",
-                    TAB_TONE[c.tone],
+                    "absolute rounded-[4px] border-2 transition-opacity",
+                    BOX_TONE[c.tone],
+                    on && "ring-2 ring-accent ring-offset-1 ring-offset-background",
+                    dim && "opacity-20",
                   )}
+                  style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
                 >
-                  {a.n}
-                </span>
-                <Callout a={a} r={r} selected={on} showKeys={showKeys} />
-              </button>
-            );
-          })}
+                  <span
+                    className={cn(
+                      "absolute left-0 bottom-0 m-[3px] w-[15px] h-[15px] rounded-[3px] grid place-items-center text-[10px] font-bold tabular-nums",
+                      TAB_TONE[c.tone],
+                    )}
+                  >
+                    {a.n}
+                  </span>
+                  <Callout a={a} r={r} selected={on} showKeys={showKeys} />
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -448,18 +456,23 @@ export function EvidenceBoard() {
   /** How many bindings the last re-read came back with unchanged; null until one has run this session. */
   const [reread, setReread] = useState<number | null>(null);
 
+  // Timers this surface started, cleared on unmount — a re-read that outlives
+  // the board must not report back on a board the person already left.
+  const timers = useRef<number[]>([]);
+  useEffect(() => { const t = timers.current; return () => t.forEach(window.clearTimeout); }, []);
+
   // A re-read asks every key again. Readings are whatever the keys say, so a
   // re-read that changes nothing is the ordinary outcome — and the line says so
   // rather than pretending something moved.
   const rereadAll = () => {
     setRereading(true);
-    setTimeout(() => {
+    timers.current.push(window.setTimeout(() => {
       setRereading(false);
       setReread(ANNOTATIONS.length);
       logActivity(`Re-read every binding on the evidence board — all ${ANNOTATIONS.length} unchanged.`);
-    }, 1500);
+    }, 1500));
   };
-  const exportBoard = () => {
+  const printBoard = () => {
     logActivity("Sent the evidence board to print.");
     window.print();
   };
@@ -502,7 +515,7 @@ export function EvidenceBoard() {
                 "Re-read every binding"
               )}
             </Button>
-            <Button size="sm" onClick={exportBoard}>Export board</Button>
+            <Button size="sm" onClick={printBoard}>Print the board</Button>
           </>
         }
       />
@@ -530,7 +543,7 @@ export function EvidenceBoard() {
         </span>
       </Toolbar>
 
-      {/* `print-board` is the print scope: Export board prints exactly this, none of the chrome around it. */}
+      {/* `print-board` is the print scope: Print the board prints exactly this, none of the chrome around it. */}
       <div className="flex-1 overflow-auto p-6 space-y-4 print-board">
         {/* What is frozen, and what is not. */}
         <Section

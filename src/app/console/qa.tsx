@@ -28,7 +28,7 @@
  * width), and record a verdict — the only way a case ever gets a receipt.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { ME } from "@/lib/console/fake";
+import { authoredByMe, ME } from "@/lib/console/fake";
 import { logActivity } from "./config";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
 
@@ -356,7 +356,7 @@ const Label = ({ children }: { children: React.ReactNode }) => (
 );
 
 /** Your own name reads as "you" — a receipt is addressed to the person looking at it. */
-const whoLabel = (who: string) => (who === ME.name ? "you" : who);
+const whoLabel = (who: string) => (authoredByMe(who) ? "you" : who);
 
 function verdictLabel(v: Verdict): string {
   if (v.outcome === "not run") return "Not run yet";
@@ -401,9 +401,18 @@ export function QaPanel() {
   const failing = cases.filter((c) => c.verdict.outcome === "fail").length;
   const notRun = cases.filter((c) => c.verdict.outcome === "not run").length;
   const humanVerdicts = cases.filter((c) => c.verdict.by === "human").length;
+  /** What a re-run may write: not a human receipt, and the agent has a result for it. */
+  const agentTouchable = cases.filter((c) => c.verdict.by !== "human" && c.agentFinding !== "not run").length;
 
   const shown = cases.filter((c) =>
     (device === "All" || c.device === device) && (outcome === "all" || c.verdict.outcome === outcome));
+
+  /** The Exported flash owns its timer, so leaving QA inside 1.5s takes it with you. */
+  useEffect(() => {
+    if (!exported) return;
+    const t = window.setTimeout(() => setExported(false), 1500);
+    return () => window.clearTimeout(t);
+  }, [exported]);
 
   /** The privilege rule, enforced here rather than described in a tooltip:
    *  a human verdict is copied through untouched, and the count of the ones
@@ -411,7 +420,7 @@ export function QaPanel() {
   const runAgent = () => {
     const before: Record<string, Verdict> = {};
     const next = cases.map<TestCase>((c) => {
-      if (c.verdict.by === "human") return c;
+      if (c.verdict.by === "human" || c.agentFinding === "not run") return c;
       before[c.id] = c.verdict;
       return {
         ...c,
@@ -419,14 +428,13 @@ export function QaPanel() {
           outcome: c.agentFinding, by: "agent", who: "Prism agent", at: "10 Sep 09:41",
           note: c.agentFinding === "fail"
             ? `Re-run against build ${RUN.build} — same defect, reproduced.`
-            : c.agentFinding === "pass"
-              ? `Re-run against build ${RUN.build} — behaves as scripted.`
-              : `Re-run against build ${RUN.build} — a case a person scripted by hand has no agent result yet. Still not run.`,
+            : `Re-run against build ${RUN.build} — behaves as scripted.`,
         },
       };
     });
     setCases(next);
-    setAgentRun({ wrote: cases.length - humanVerdicts, preserved: humanVerdicts, before });
+    setAgentRun({ wrote: Object.keys(before).length, preserved: humanVerdicts, before });
+    logActivity(`Re-ran the QA agent against build ${RUN.build}.`);
   };
 
   /** Undo puts back only what the run wrote. A verdict a person recorded since,
@@ -438,6 +446,7 @@ export function QaPanel() {
       return c.verdict.by === "agent" && prev ? { ...c, verdict: prev } : c;
     }));
     setAgentRun(null);
+    logActivity("Undid the agent run and put the earlier verdicts back.");
   };
 
   /** The cases and their verdicts as they stand. The build and the brief are
@@ -457,7 +466,6 @@ export function QaPanel() {
     link.click(); URL.revokeObjectURL(url);
     logActivity(`Exported the QA cases and verdicts for the ${RUN.experiment} readout.`);
     setExported(true);
-    window.setTimeout(() => setExported(false), 1500);
   };
 
   /** A new case is bound to a scenario and a width, and starts with no verdict
@@ -480,12 +488,18 @@ export function QaPanel() {
   };
 
   const target = cases.find((c) => c.id === recording) ?? null;
+
+  /** Leaving the dialog throws the draft away, whichever way you leave it. A
+   *  verdict half-kept from the last case is how a note about TC-02 ends up
+   *  locked onto TC-05. */
+  const closeRecording = () => { setRecording(null); setVerdictPick(""); setNote(""); };
+
   const recordVerdict = () => {
     if (!target || verdictPick === "") return;
     const verdict: Verdict = { outcome: verdictPick, by: "human", who: ME.name, at: TODAY, note: note.trim() };
     setCases((cs) => cs.map((c) => (c.id === target.id ? { ...c, verdict } : c)));
     logActivity(`Recorded a ${verdictPick} on QA case ${target.id} — ${target.title}.`);
-    setRecording(null); setVerdictPick(""); setNote("");
+    closeRecording();
   };
 
   return (
@@ -681,8 +695,8 @@ export function QaPanel() {
                     {" "}<span className="text-foreground font-medium">{agentRun.preserved}</span> human receipts exactly as they were.
                   </p>
                 : <p className="text-[13px] text-muted-2 mt-1.5 tabular-nums">
-                    {humanVerdicts} of {cases.length} verdicts are human receipts. An agent re-run can touch the
-                    other {cases.length - humanVerdicts}.
+                    {humanVerdicts} of {cases.length} verdicts are human receipts. An agent re-run can write
+                    {" "}{agentTouchable} of the other {cases.length - humanVerdicts}.
                   </p>}
             </div>
           </div>
@@ -741,11 +755,7 @@ export function QaPanel() {
                       <div className="flex items-center gap-3 mt-4 pt-3.5 border-t border-border">
                         {locked ? (
                           <>
-                            <Frozen>
-                              {c.verdict.who === ME.name
-                                ? `Human verdict: ${c.verdict.outcome} · by you · ${c.verdict.at} · ${c.verdict.note}`
-                                : `recorded by ${c.verdict.who} · ${c.verdict.at} · agent runs skip this`}
-                            </Frozen>
+                            <Frozen>recorded by {whoLabel(c.verdict.who)} · {c.verdict.at} · agent runs skip this</Frozen>
                             <span className="text-[12.5px] text-muted-2">Only a person can change a person&rsquo;s verdict.</span>
                           </>
                         ) : (
@@ -753,7 +763,9 @@ export function QaPanel() {
                             <span className="text-[12.5px] text-muted-2">
                               {c.verdict.by === "agent"
                                 ? `Agent verdict from ${c.verdict.at}. The next run overwrites it.`
-                                : "No verdict yet. The next agent run will write one."}
+                                : c.agentFinding === "not run"
+                                  ? "No verdict yet, and the agent has no result for this one — only a person can record it."
+                                  : "No verdict yet. The next agent run will write one."}
                             </span>
                             <Button size="sm" variant="outline" className="ml-auto" onClick={() => setRecording(c.id)}>Record a human verdict</Button>
                           </>
@@ -813,7 +825,7 @@ export function QaPanel() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(target)} onOpenChange={(o) => !o && setRecording(null)}>
+      <Dialog open={Boolean(target)} onOpenChange={(o) => { if (!o) closeRecording(); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Record a human verdict</DialogTitle>
@@ -842,7 +854,7 @@ export function QaPanel() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRecording(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={closeRecording}>Cancel</Button>
             <Button disabled={verdictPick === "" || note.trim().length < 3} onClick={recordVerdict}>Record it</Button>
           </DialogFooter>
         </DialogContent>
