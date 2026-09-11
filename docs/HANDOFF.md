@@ -91,11 +91,25 @@ session read, asked, saved, and any half-finished wizard), `SESSION_ACTIVITY` +
 Typecheck `npx tsc --noEmit -p .`; lint `npx eslint src/app/console
 src/components/ui src/lib/console` (two pre-existing warnings in `stages.tsx`).
 
-**Next on the list.** Finish the dead-click sweep on the experiment side
-(inventory: `for f in src/app/console/*.tsx; do grep "<Button" "$f" | grep -vc
-"onClick"; done`), then scope the work rooms' contents to the chosen site
-(`page.tsx` computes `scoped`; the views still read the full fixture), then wire
-the mock to Beta 1's engine behind the same screens.
+**Done, 10 Sep.** The dead-click sweep: every button on every console screen
+does what its label says, inside the session. Thirteen files, written by one
+agent each in isolated worktrees, then adversarially reviewed file by file — 30
+findings confirmed and fixed. The two that mattered: sign-off was live on stages
+already past Review, and four places asserted "Production — this reaches real
+guests" on experiments that are on Prep. A third was found by hand: `ME.name` is
+long and fixture owners are short, so the second-person rule could never fire —
+`authoredByMe()` in fake.ts is now its one definition.
+
+**What a session should watch for**, learned from those reviews: a `setTimeout`
+that setStates after unmount (hold ids in a ref, clear in one effect — the
+handoff.tsx pattern); state that lives in a mount while its log line lives in
+module memory, so a "permanent" act can be repeated; a fixture keyed to one
+experiment being asserted for all of them; and a label that promises more than
+its handler does.
+
+**Next on the list.** Behaviour is per-session module state everywhere; deciding
+what becomes real persistence is the seam to Beta 1's engine. Then wire the mock
+to that engine behind the same screens.
 
 ---
 
