@@ -31,7 +31,17 @@ const SESSION_ACTIVITY: { at: string; who: string; what: string; sealed?: boolea
 export const logActivity = (what: string, who: string = ME.name) => { SESSION_ACTIVITY.unshift({ at: "Just now", who, what }); };
 
 /** Edits to a site's environments and source made this session, so leaving the page doesn't lose them. */
-const SITE_EDITS = new Map<string, { envs?: Site["envs"]; repo?: string; branchPrefix?: string }>();
+const SITE_EDITS = new Map<string, { envs?: Site["envs"]; repo?: string; branchPrefix?: string; source?: string }>();
+
+/** A site as it stands THIS SESSION — the fixture with anything changed here applied.
+ *  Every surface that gates on a site's code must ask this, not the fixture, or a
+ *  source connected a minute ago would not count. */
+export const resolveSite = (domain: string): Site | undefined => {
+  const base = SITE_ROWS.find((s) => s.domain === domain || s.id === domain);
+  if (!base) return undefined;
+  const e = SITE_EDITS.get(base.id);
+  return e ? { ...base, ...e } : base;
+};
 
 const scriptPill = (s: Site["envs"][number]) =>
   s.script === "verified" ? <Pill tone="ok">Installed</Pill>
@@ -102,7 +112,7 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
   const [envs, setEnvs] = useState<Site["envs"]>(edits?.envs ?? s.envs);
   const [repo, setRepo] = useState<string | undefined>(edits?.repo ?? s.repo);
   const [branchPrefix, setBranchPrefix] = useState(edits?.branchPrefix ?? s.branchPrefix ?? "prototype/");
-  const remember = (patch: { envs?: Site["envs"]; repo?: string; branchPrefix?: string }) => SITE_EDITS.set(s.id, { ...(SITE_EDITS.get(s.id) ?? {}), ...patch });
+  const remember = (patch: { envs?: Site["envs"]; repo?: string; branchPrefix?: string; source?: string }) => SITE_EDITS.set(s.id, { ...(SITE_EDITS.get(s.id) ?? {}), ...patch });
 
   const [addingEnv, setAddingEnv] = useState(false);
   const [envLabel, setEnvLabel] = useState("");
@@ -115,7 +125,7 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
   const [connecting, setConnecting] = useState(false);
   const [connectingSource, setConnectingSource] = useState(false);
   const [sourcePick, setSourcePick] = useState(SOURCE_REPOS[0]);
-  const [source, setSource] = useState<string | undefined>(s.source);
+  const [source, setSource] = useState<string | undefined>(edits?.source ?? s.source);
   const [pick, setPick] = useState(REPOS[0]);
   const [prefix, setPrefix] = useState("prototype/");
 
@@ -155,6 +165,20 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
       </header>
 
       <div className="flex-1 overflow-auto p-6 space-y-4">
+        {(!repo || !source) && (
+          <div className="rounded-xl border border-warn/40 bg-warn/[0.06] px-4 py-3">
+            <div className="text-[13.5px] font-semibold text-warn mb-1">Nothing can be built for this site yet</div>
+            <p className="text-[13px] text-muted leading-relaxed">
+              {!source && !repo
+                ? "It has neither a source to build from nor a repository to build into. Both are required."
+                : !source
+                  ? "Prism builds from the site's own stylesheets and components. Without a read-only source there is nothing to build against — anything written would guess at the system from the outside of a page."
+                  : "There is nowhere to put a build. Every experiment is a branch in a repository Prism writes to."}{" "}
+              Reading the site and answering its questions still work; building does not.
+            </p>
+          </div>
+        )}
+
         <Section title="Environments" action={<span className="text-[12.5px] text-muted-2">Call them whatever you call them. Only “is production” changes what Prism allows.</span>}>
           {envs.length === 0 ? (
             <div className="px-5 py-6 text-center">
@@ -215,7 +239,9 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
                     ) : (
                       <>
                         <p className="text-[13px] text-muted leading-relaxed mb-2.5">
-                          Not connected. Prism reads the site, which shows what a browser computed — it will ask you three questions your stylesheet could have answered.
+                          Not connected. This is what the agent builds against — its real stylesheets and components. Without it Prism can read the
+                          site and ask its questions, but it cannot build: there is nothing to reuse, and three of the questions it asks are ones
+                          your stylesheet would have answered.
                         </p>
                         <Button size="sm" variant="outline" onClick={() => setConnectingSource(true)}>Connect a read-only source</Button>
                       </>
@@ -305,7 +331,7 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConnectingSource(false)}>Cancel</Button>
-            <Button onClick={() => { setSource(sourcePick); setConnectingSource(false); logActivity(`Connected ${sourcePick} as a read-only source for ${s.domain}.`); }}>Connect it</Button>
+            <Button onClick={() => { setSource(sourcePick); remember({ source: sourcePick }); setConnectingSource(false); logActivity(`Connected ${sourcePick} as a read-only source for ${s.domain}.`); }}>Connect it</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

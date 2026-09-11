@@ -326,6 +326,29 @@ export const OTHER_CONNECTIONS: Connection[] = [
 export const isBriefComplete = (e: Experiment) =>
   e.metric !== "—" && e.metric.trim().length > 0 && e.guardrails.length > 0;
 
+/** THE build gate, the sibling of the one above and held to the same rule: one
+ *  definition, imported by every surface that gates on it.
+ *
+ *  A prototype is code, so it needs somewhere to come FROM and somewhere to go TO.
+ *  The read-only source is what the agent builds against — the site's own
+ *  stylesheets and components. Without it the agent would write from the outside of
+ *  a page, guessing at the system behind it from what a browser happened to compute,
+ *  and the result would sit beside the site rather than inside it. The prototypes
+ *  repository is where the build lands.
+ *
+ *  Neither is required to ADD a site — you may not know them yet, and a site that
+ *  cannot be finished is worse than one that says plainly what it still needs. Both
+ *  are required before anything is built (DECISIONS.md D14). */
+export const buildBlockers = (site: Site | undefined): string[] => {
+  if (!site) return ["This site is not set up in Prism."];
+  const out: string[] = [];
+  if (!site.source) out.push("no read-only source — there is nothing to build against");
+  if (!site.repo) out.push("no repository to build into");
+  return out;
+};
+
+export const canBuild = (site: Site | undefined) => buildBlockers(site).length === 0;
+
 /* ── Measurement ────────────────────────────────────────────────────────
    Real event keys from Optimizely project 24138040550, including the real
    duplicate display names — which are the reason the planner has to ask. */

@@ -323,3 +323,40 @@ solution… this is for any brand in the world.")
 correctly on a console loaded for a bookshop. Fixture content is exempt and
 should NOT be sanitised — the demo has to describe a real site in its own words.
 
+---
+
+## D14 · A site's own code is required to build; the gate is on Build, not on setup
+
+**Decision.** Every site names two repositories and a prototype cannot be built
+without both. The **read-only source** is what the agent builds AGAINST — the
+site's own stylesheets and components. The **prototypes repository** is where
+the build lands. Neither is optional.
+
+But neither is required to ADD a site. You may not know them when you are
+adding it, and a wizard you cannot finish is worse than a site that says plainly
+what it still needs. **The gate is on Build.** A site missing either one can be
+added, read, interviewed, corrected, and have experiments written and measured
+against it — the moment something would be built, it stops, names what is
+missing and offers to go and fix it.
+
+**Why the source specifically.** Without it the agent writes from the OUTSIDE of
+a page: it guesses at the design system from what a browser happened to compute,
+which silently misses media queries, hover and focus states, and every token
+declared but not used on the pages that were read. What it produces then sits
+beside the site rather than inside it. With the source it reuses the real
+components and the real names — and it answers three of the interview's
+questions outright (D12).
+
+**One definition, like the other gate.** `buildBlockers(site)` sits beside
+`isBriefComplete` in `fake.ts` and is imported by every surface that gates on
+it: the Build stage, and the point where an experiment chooses a site. Session
+changes count — `resolveSite(domain)` in `config.tsx` applies what was connected
+a minute ago, so connecting a source unblocks the build immediately rather than
+at the next reload.
+
+**The three states are all in the fixture, on purpose.** outrigger.com has both
+and builds. outriggerkona.com has a prototypes repository and no source — the
+sharp case, half set up. waikikibeachcomber.com has neither. (Bryan, 11 Sep
+2026: "we need each site's source code to properly build the code… its
+required… no prototype can be built without it.")
+

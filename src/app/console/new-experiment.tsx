@@ -21,7 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/ui/cn";
-import { SITE_ROWS } from "@/lib/console/fake";
+import { SITE_ROWS, buildBlockers } from "@/lib/console/fake";
+import { resolveSite } from "./config";
 import { logActivity } from "./config";
 import { Pill } from "./ui";
 
@@ -100,6 +101,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
   /** Every step is individually valid — leaving after any of them is coherent.
    *  Only question 5 is a hard gate, because a direction that was never stated
    *  propagates all the way to the verdict as an assumption. */
+  const siteBlockers = buildBlockers(resolveSite(d.site));
   const ok = [Boolean(d.page), d.change.trim().length > 8, true, d.expect.trim().length > 5, Boolean(d.metric.trim().length > 5 && d.direction), true][step];
 
   const last = step === STEPS.length - 1;
@@ -138,6 +140,14 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
               className="h-10 px-3 mb-3 rounded-lg border border-border bg-surface text-[14px] focus:border-accent focus:outline-none">
               {SITE_ROWS.map((s) => <option key={s.id}>{s.domain}</option>)}
             </select>
+            {siteBlockers.length > 0 && (
+              <div className="rounded-xl border border-warn/40 bg-warn/[0.06] px-4 py-3 mb-3">
+                <div className="text-[13.5px] font-semibold text-warn mb-1">Nothing can be built for {d.site} yet</div>
+                <p className="text-[13px] text-muted leading-relaxed">
+                  It has {siteBlockers.join(", and ")}. You can still write the experiment and plan how it is measured — the build is what waits.
+                </p>
+              </div>
+            )}
             <RadioGroup aria-labelledby="q1-title" value={d.page} onValueChange={(v) => set("page", v)}
               className="gap-0 rounded-xl border border-border bg-surface overflow-hidden">
               {pages.map((p) => (

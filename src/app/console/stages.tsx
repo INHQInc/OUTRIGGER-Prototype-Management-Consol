@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { SITE_ROWS, STAGES, authoredByMe, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
+import { SITE_ROWS, STAGES, authoredByMe, buildBlockers, isBriefComplete, type Experiment, type Stage } from "@/lib/console/fake";
+import { resolveSite } from "./config";
 import { Meta, Pill, Section } from "./ui";
 import { logActivity } from "./config";
 import { MeasurementPlan, MetricIndex } from "./measurement";
@@ -206,6 +207,28 @@ const BUILD_STEPS = [
 ] as const;
 
 export function BuildPanel({ e }: { e: Experiment }) {
+  // The site's code is not optional. Without a source there is nothing to build
+  // against; without a repository there is nowhere for the build to land (D14).
+  const blockers = buildBlockers(resolveSite(e.site));
+  if (blockers.length > 0) {
+    return (
+      <Section title="Nothing can be built for this site">
+        <div className="px-5 py-5">
+          <p className="text-[14px] text-muted leading-relaxed mb-3">
+            {e.site} has {blockers.join(", and ")}.
+          </p>
+          <p className="text-[13.5px] text-muted leading-relaxed mb-4">
+            Prism builds from a site&rsquo;s own stylesheets and components and writes what it builds to a repository of yours. Without both, anything
+            produced would be written from the outside of a page — guessing at the system behind it from what a browser happened to compute — and it
+            would sit beside your site rather than inside it. The brief, the measurement plan and everything already recorded are untouched.
+          </p>
+          <Button size="sm" onClick={() => window.dispatchEvent(new CustomEvent("console:go", { detail: { nav: "Site setup" } }))}>
+            Set up {e.site}
+          </Button>
+        </div>
+      </Section>
+    );
+  }
   if (e.stage === "Brief") return <NotYet what="Nothing has been built yet" needs="The brief needs a decision metric and a direction first. Once it is complete, the agent starts building." />;
   return (
     <div className="space-y-4">

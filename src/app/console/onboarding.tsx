@@ -116,6 +116,9 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
   const [source, setSource] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [pick, setPick] = useState(SOURCE_REPOS[0]);
+  // Both repositories are REQUIRED before anything can be built, but not required to add
+  // the site — you may not know them yet, and being unable to finish adding a site is worse
+  // than a site that says plainly what it still needs. The gate is on Build (D14).
   const ok = [domain.trim().length > 3, true, envs.length > 0, true][step];
   const host = domain.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   const finish = () => onDone({
@@ -141,7 +144,7 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
 
       {step === 1 && (
         <Q n={2} of={4} title="Where does this site&rsquo;s code live?"
-          help="Two different repositories, doing two different things. Prism only ever writes to the first.">
+          help="Two repositories, doing two different things. Both are required: Prism builds from this site's own code, and writes what it builds somewhere separate. It only ever writes to the first.">
           <Section title="Where Prism builds — it writes here">
             <div className="p-5">
               <label htmlFor="proto-repo" className="block text-[13px] font-semibold text-muted mb-1.5">Repository for experiments</label>
@@ -149,6 +152,7 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
               <p className="text-[12.5px] text-muted-2 mt-2.5">
                 Each experiment becomes a branch here under <span className="font-mono">prototype/</span>. Prism never touches its main branch, and never writes to the repository below.
               </p>
+              {!repo.trim() && <p className="text-[12.5px] text-warn mt-2">Needed before a build — there is nowhere to put one without it. You can add it later.</p>}
             </div>
           </Section>
 
@@ -164,10 +168,11 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
               ) : (
                 <>
                   <p className="text-[13px] text-muted leading-relaxed mb-3">
-                    Your real stylesheets and components. A crawl sees what a browser computed; this sees what somebody wrote —
-                    which is the difference between counting a colour and knowing its name.
+                    This site&rsquo;s real stylesheets and components. It is what the agent builds against — without it there is nothing to reuse,
+                    and anything built would be written from the outside of a page rather than from the system behind it.
                   </p>
                   <Button size="sm" variant="outline" onClick={() => setConnecting(true)}>Connect a read-only source</Button>
+                  <p className="text-[12.5px] text-warn mt-2.5">Needed before a build — Prism builds from this code and cannot build without it. You can add it later, from the site itself.</p>
                 </>
               )}
 
@@ -180,7 +185,7 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
                   <li>· <span className="text-foreground">Three of the seven questions</span> Prism would otherwise ask are answered by the code, so the interview gets shorter.</li>
                 </ul>
                 <p className="text-[12.5px] text-muted-2 mt-3">
-                  You can skip it. Prism still reads the site and can still build — it will just ask you more, and match the page rather than the system behind it.
+                  Read-only, always. Prism reads it and never writes to it — every build lands in the repository above.
                 </p>
               </div>
             </div>

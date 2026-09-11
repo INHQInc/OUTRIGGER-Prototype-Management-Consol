@@ -270,6 +270,20 @@ same copy. `operator.tsx`, a new account-lifecycle surface, plus a `state` on
 the account fixture (`active | archived | deleted`) that the shell reads: an
 archived account's console is readable and every write control is gone.
 
+## 6 · Per-site source control — DONE
+
+**Status:** built 11 Sep 2026. See DECISIONS.md D12 and D14.
+
+Each site names a read-only source (what the agent builds against) and a
+prototypes repository (where the build lands). Collected when a site is added or
+connected later from the site itself; both required before anything is built,
+neither required to add the site. `buildBlockers()` in `fake.ts` is the single
+definition, and `resolveSite()` in `config.tsx` makes session changes count.
+
+Backend rules still to make real: reading a branch read-only, verifying the
+token's scope is read-only, and refusing a write to the source repository even
+if a token would allow it.
+
 ## Open questions
 
 - **Demo accounts across verticals.** The back office lists four accounts and
