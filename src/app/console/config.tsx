@@ -152,7 +152,7 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
         <Section title="Environments" action={<span className="text-[12.5px] text-muted-2">Call them whatever you call them. Only “is production” changes what Prism allows.</span>}>
           {envs.length === 0 ? (
             <div className="px-5 py-6 text-center">
-              <p className="text-[14px] text-muted mb-3">No environments yet. An environment is an address Prism can look at, plus one bit: whether real guests reach it.</p>
+              <p className="text-[14px] text-muted mb-3">No environments yet. An environment is an address Prism can look at, plus one bit: whether real visitors reach it.</p>
               <Button size="sm" variant="outline" onClick={() => setAddingEnv(true)}>Add the first one</Button>
             </div>
           ) : (
@@ -208,7 +208,7 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add an environment to {s.domain}</DialogTitle>
-            <DialogDescription>An address Prism can look at. The only thing that changes what Prism allows is whether real guests reach it.</DialogDescription>
+            <DialogDescription>An address Prism can look at. The only thing that changes what Prism allows is whether real visitors reach it.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -222,8 +222,8 @@ export function SiteDetail({ s, back, understand }: { s: Site; back: () => void;
             <Label htmlFor="env-prod" className="items-start gap-3 rounded-xl border border-border px-4 py-3 cursor-pointer font-normal text-foreground">
               <Checkbox id="env-prod" checked={envProd} onCheckedChange={(v) => setEnvProd(v === true)} className="mt-0.5" />
               <span className="flex-1">
-                <span className="block text-[14px] font-medium">Real guests reach this one</span>
-                <span className="block text-[12.5px] text-muted-2 mt-0.5">Makes it production. An experiment can only reach real guests here, and only with an approval. {envs.some((e) => e.isProduction) && "It replaces the current production environment."}</span>
+                <span className="block text-[14px] font-medium">Real visitors reach this one</span>
+                <span className="block text-[12.5px] text-muted-2 mt-0.5">Makes it production. An experiment can only reach real visitors here, and only with an approval. {envs.some((e) => e.isProduction) && "It replaces the current production environment."}</span>
               </span>
             </Label>
           </div>

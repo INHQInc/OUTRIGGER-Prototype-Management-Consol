@@ -5,7 +5,7 @@
  *
  * Two halves, and the order matters:
  *
- *  · COVERAGE reads the brief for everything it implies a guest can do, reads
+ *  · COVERAGE reads the brief for everything it implies a visitor can do, reads
  *    the build for what it actually handles, and the HEADLINE IS THE
  *    DIFFERENCE. A covered scenario is a quiet line; a gap is loud. A QA
  *    surface whose loudest thing is a wall of green ticks has buried its own
@@ -78,7 +78,7 @@ type Scenario = {
   covered: boolean;
 };
 
-/** Ten things the brief implies a guest can do at the overlay. Six of them the
+/** Ten things the brief implies a visitor can do at the overlay. Six of them the
  *  compiled file has no code path for. */
 const SCENARIOS: Scenario[] = [
   {
@@ -565,7 +565,7 @@ export function QaPanel() {
             <p className="text-[14.5px] leading-relaxed">
               <span className="font-semibold text-danger tabular-nums">{gaps.length} of {SCENARIOS.length}</span> scenarios the
               brief implies have no code path in build <span className="font-mono text-[12.5px]">{RUN.build}</span>. Run 4 closed
-              at <span className="tabular-nums">{RUN.lift}</span> without any of them being handled — the guests who hit one of
+              at <span className="tabular-nums">{RUN.lift}</span> without any of them being handled — the visitors who hit one of
               these are inside that number.
             </p>
             <div className="flex items-center gap-3 mt-3.5">

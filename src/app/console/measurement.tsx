@@ -145,7 +145,7 @@ export function MeasurementPlan({ confirmed }: { confirmed: boolean }) {
       {open && (
         <div className="px-5 py-4 border-b border-border bg-warn/5">
           <div className="text-[10.5px] font-semibold tracking-[0.06em] text-warn mb-2">ONE THING PRISM CANNOT WORK OUT ON ITS OWN</div>
-          <p className="text-[14.5px] mb-1">Two of your events are both called &ldquo;Offer Detail Book Now Button Clicks&rdquo;. Which one means a guest booking?</p>
+          <p className="text-[14.5px] mb-1">Two of your events are both called &ldquo;Offer Detail Book Now Button Clicks&rdquo;. Which one means the action that matters?</p>
           <p className="text-[12.5px] text-muted-2 mb-3">Being more confident would not answer this. Only you know.</p>
           {PROJECT_EVENTS.filter((e) => e.name === "Offer Detail Book Now Button Clicks").map((e) => (
             <button key={e.key} onClick={() => setPlan((p) => ({ ...p, answered: e.key }))}

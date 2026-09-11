@@ -651,7 +651,7 @@ export function EvidenceBoard() {
             <span className="tabular-nums">{counts.moved}</span> boxes carry an interval that excludes zero and are
             coloured, <span className="tabular-nums">{counts.flat}</span> moved but not enough to say so and stay neutral,
             and <span className="tabular-nums">{counts.blind}</span> cannot be read at all. One region deliberately has no
-            box: nothing on this site fires when a guest scrubs dates in the calendar, so there is no key to bind and the
+            box: nothing on this site fires when a visitor scrubs dates in the calendar, so there is no key to bind and the
             board will not draw a box without one.
           </p>
         </Section>

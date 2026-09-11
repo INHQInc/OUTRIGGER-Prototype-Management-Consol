@@ -95,49 +95,19 @@ const Text = ({ value, onChange, placeholder, prefix }: { value: string; onChang
 
 /* ── Site onboarding ───────────────────────────────────────────── */
 
-/** What one read of the site turns up. The first few are the ones most people start with; the rest sit
- *  behind "Show more". Only visible pages start ticked, so the count under the list never disagrees
- *  with what you can see. */
-const FOUND_PAGES = [
-  { name: "Home", path: "/", visits: "48,210 / mo", on: true },
-  { name: "All offers", path: "/offers", visits: "9,780 / mo", on: true },
-  { name: "Property detail — Reef Waikiki", path: "/hawaii/oahu/outrigger-reef-waikiki-beach-resort", visits: "31,004 / mo", on: false },
-  { name: "Destinations", path: "/destinations", visits: "6,140 / mo", on: false },
-  { name: "Rooms &amp; suites", path: "/hawaii/oahu/outrigger-reef-waikiki-beach-resort/rooms", visits: "12,400 / mo", on: false },
-  { name: "Property detail — Waikiki Beach Resort", path: "/hawaii/oahu/outrigger-waikiki-beach-resort", visits: "27,860 / mo", on: false },
-  { name: "Property detail — Kāʻanapali Beach", path: "/hawaii/maui/outrigger-kaanapali-beach-resort", visits: "18,330 / mo", on: false },
-  { name: "Property detail — Kona Resort &amp; Spa", path: "/hawaii/big-island/outrigger-kona-resort-and-spa", visits: "11,920 / mo", on: false },
-  { name: "Property detail — Kauaʻi Beach Resort", path: "/hawaii/kauai/outrigger-kauai-beach-resort", visits: "9,410 / mo", on: false },
-  { name: "Property detail — Fiji Beach Resort", path: "/fiji/outrigger-fiji-beach-resort", visits: "8,760 / mo", on: false },
-  { name: "Property detail — Khao Lak", path: "/thailand/outrigger-khao-lak-beach-resort", visits: "4,180 / mo", on: false },
-  { name: "Property detail — Mauritius Beach Resort", path: "/mauritius/outrigger-mauritius-beach-resort", visits: "3,950 / mo", on: false },
-  { name: "Property detail — Maldives Maafushivaru", path: "/maldives/outrigger-maldives-maafushivaru-resort", visits: "3,420 / mo", on: false },
-  { name: "Rooms — Waikiki Beach Resort", path: "/hawaii/oahu/outrigger-waikiki-beach-resort/rooms", visits: "10,150 / mo", on: false },
-  { name: "Dining — Duke&rsquo;s Waikiki", path: "/hawaii/oahu/outrigger-waikiki-beach-resort/dining", visits: "7,340 / mo", on: false },
-  { name: "Dining — Reef Waikiki", path: "/hawaii/oahu/outrigger-reef-waikiki-beach-resort/dining", visits: "6,020 / mo", on: false },
-  { name: "Offer — Stay longer, save more", path: "/offers/stay-longer-save-more", visits: "5,270 / mo", on: false },
-  { name: "Offer — Free breakfast", path: "/offers/free-breakfast", visits: "4,630 / mo", on: false },
-  { name: "Offer — Kamaʻāina &amp; military", path: "/offers/kamaaina", visits: "3,880 / mo", on: false },
-  { name: "Offer — Advance purchase", path: "/offers/advance-purchase", visits: "2,940 / mo", on: false },
-  { name: "Destination — Hawaiʻi", path: "/destinations/hawaii", visits: "5,610 / mo", on: false },
-  { name: "Destination — Maui", path: "/destinations/maui", visits: "3,270 / mo", on: false },
-  { name: "Destination — Fiji", path: "/destinations/fiji", visits: "2,480 / mo", on: false },
-  { name: "Outrigger DISCOVERY loyalty", path: "/outrigger-discovery", visits: "4,890 / mo", on: false },
-];
-/** How many of them the list shows before you ask for the rest. */
-const PAGES_SHOWN = 5;
+/** Repositories the connected code host can see. The read-only one holds the site's
+ *  real stylesheets and components; it is never written to. */
+const SOURCE_REPOS = ["INHQInc/outrigger-web", "INHQInc/outrigger-design-system", "INHQInc/kona-web"];
 
-/** Repositories your GitHub connection can see that hold the site's real source. */
-const SOURCE_REPOS = ["INHQInc/outrigger-web", "INHQInc/outrigger-design-system"];
-
-const STEPS_S = ["Address", "Pages", "Environments", "Source code", "The script"];
+/** ADDING A SITE IS INFRASTRUCTURE — address, code, environments, script. What Prism
+ *  UNDERSTANDS about the site is a separate flow (customer-context.tsx), because the read
+ *  happens once, over both sources, and the questions it can't settle need a person.
+ *  The wizard used to read the site itself and then Understand read it again. */
+const STEPS_S = ["Address", "Code", "Environments", "The script"];
 
 export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDone: (site: Site) => void }) {
   const [step, setStep] = useState(0);
   const [domain, setDomain] = useState("");
-  const [read, setRead] = useState(false);
-  const [pages, setPages] = useState(FOUND_PAGES.map((p) => p.on));
-  const [showAll, setShowAll] = useState(false);
   const [envs, setEnvs] = useState([
     { label: "Production", url: "www.outrigger.com", prod: true },
     { label: "Prep", url: "prep.outrigger.com", prod: false },
@@ -146,12 +116,11 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
   const [source, setSource] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [pick, setPick] = useState(SOURCE_REPOS[0]);
-  const chosen = pages.filter(Boolean).length;
-  const ok = [domain.trim().length > 3 && read, chosen > 0, envs.length > 0, true, true][step];
+  const ok = [domain.trim().length > 3, true, envs.length > 0, true][step];
   const host = domain.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   const finish = () => onDone({
     id: host, domain: host, label: "Added just now", experiments: 0,
-    repo: repo.trim() || undefined, branchPrefix: repo.trim() ? "prototype/" : undefined,
+    repo: repo.trim() || undefined, branchPrefix: repo.trim() ? "prototype/" : undefined, source: source ?? undefined,
     envs: envs.map((e) => ({ label: e.label, url: `https://${e.url.replace(/^https?:\/\//, "")}`, isProduction: e.prod, script: "checking" as const })),
   });
   const connectSource = () => {
@@ -161,59 +130,86 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
 
   return (
     <Wizard title="Add a site" steps={STEPS_S} step={step} setStep={setStep} onClose={onClose}
-      canContinue={ok} finishLabel="Finish" saved={read} onFinish={finish}>
+      canContinue={ok} finishLabel="Add the site" saved={domain.trim().length > 3} onFinish={finish}>
       {step === 0 && (
-        <Q n={1} of={5} title="What&rsquo;s the website?" help="Prism reads it once to learn your pages, your components and the way you write. Nothing is changed and nothing is published.">
+        <Q n={1} of={4} title="What&rsquo;s the website?" help="The address visitors reach. Prism reads it once the site exists — it changes nothing and publishes nothing.">
           <label className="block text-[13px] font-semibold text-muted mb-1.5">Address</label>
           <Text value={domain} onChange={setDomain} placeholder="outrigger.com" prefix="https://" />
-          {!read ? (
-            <Button className="mt-4" disabled={domain.trim().length < 4} onClick={() => setRead(true)}>Read this site</Button>
-          ) : (
-            <div className="mt-5 rounded-xl border border-border bg-surface p-5">
-              <div className="flex items-center gap-2.5 pb-4 border-b border-border">
-                <span className="w-4 h-4 rounded-full bg-ok text-ok-fg grid place-items-center shrink-0">
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-                </span>
-                <span className="text-[14px] font-medium">Read {domain}</span>
-                <span className="text-[12.5px] text-muted-2 ml-auto">6 seconds</span>
-              </div>
-              <div className="flex gap-8 pt-4">
-                {[[String(FOUND_PAGES.length), "pages found"], ["11", "repeated components"], ["1", "thing still to do"]].map(([n, l]) => (
-                  <div key={l}><div className={cn("text-[20px] font-semibold tabular-nums tracking-[-0.02em]", l.includes("still") && "text-warn")}>{n}</div>
-                    <div className="text-[12.5px] text-muted-2 mt-0.5">{l}</div></div>
-                ))}
-              </div>
-            </div>
-          )}
+          <p className="text-[12.5px] text-muted-2 mt-2.5">Everything after this is about this site alone: its code, its environments, what Prism understands about it.</p>
         </Q>
       )}
 
       {step === 1 && (
-        <Q n={2} of={5} title="Which pages will you test?" help="Pick the ones you expect to work on. You can add more at any time — this just decides what Prism keeps a close eye on.">
-          <div className="rounded-xl border border-border bg-surface overflow-hidden">
-            {FOUND_PAGES.slice(0, showAll ? FOUND_PAGES.length : PAGES_SHOWN).map((p, i) => (
-              <button key={p.path} onClick={() => setPages((ps) => ps.map((v, j) => (i === j ? !v : v)))}
-                className="w-full flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 text-left hover:bg-surface-2/60">
-                <span className={cn("w-4 h-4 rounded border grid place-items-center shrink-0", pages[i] ? "bg-accent border-accent text-accent-fg" : "border-border-strong")}>
-                  {pages[i] && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[14px] font-medium" dangerouslySetInnerHTML={{ __html: p.name }} />
-                  <div className="text-[12.5px] text-muted-2 truncate">{domain}{p.path}</div>
+        <Q n={2} of={4} title="Where does this site&rsquo;s code live?"
+          help="Two different repositories, doing two different things. Prism only ever writes to the first.">
+          <Section title="Where Prism builds — it writes here">
+            <div className="p-5">
+              <label htmlFor="proto-repo" className="block text-[13px] font-semibold text-muted mb-1.5">Repository for experiments</label>
+              <Text value={repo} onChange={setRepo} placeholder="INHQInc/outrigger-prototypes" />
+              <p className="text-[12.5px] text-muted-2 mt-2.5">
+                Each experiment becomes a branch here under <span className="font-mono">prototype/</span>. Prism never touches its main branch, and never writes to the repository below.
+              </p>
+            </div>
+          </Section>
+
+          <Section title="Where Prism reads — read-only" className="mt-4">
+            <div className="p-5">
+              {source ? (
+                <div className="flex items-center gap-2 text-[13px]">
+                  <Pill tone="ok">Connected</Pill>
+                  <span className="font-mono text-[12.5px]">{source}</span>
+                  <span className="text-muted-2">· read-only</span>
+                  <button onClick={() => setSource(null)} className="ml-auto text-[12.5px] text-muted-2 hover:text-foreground">Remove</button>
                 </div>
-                <span className="text-[12.5px] text-muted-2 shrink-0">{p.visits}</span>
-              </button>
-            ))}
-            <Button variant="link" size="sm" className="w-full justify-start rounded-none px-4 h-9 bg-surface-2/40" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Show fewer" : `Show ${FOUND_PAGES.length - PAGES_SHOWN} more`}
-            </Button>
-          </div>
-          <p className="text-[12.5px] text-muted-2 mt-3">{chosen} selected</p>
+              ) : (
+                <>
+                  <p className="text-[13px] text-muted leading-relaxed mb-3">
+                    Your real stylesheets and components. A crawl sees what a browser computed; this sees what somebody wrote —
+                    which is the difference between counting a colour and knowing its name.
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => setConnecting(true)}>Connect a read-only source</Button>
+                </>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">WHAT IT CHANGES</div>
+                <ul className="space-y-1.5 text-[13px] text-muted leading-relaxed">
+                  <li>· The palette arrives <span className="text-foreground">named</span> — <span className="font-mono text-[12px]">$clr-deep-turquoise</span>, not &ldquo;#004561, used 73 times&rdquo;.</li>
+                  <li>· Type gets <span className="text-foreground">roles</span>: which family is for headlines is a line in the stylesheet, not a guess from counts.</li>
+                  <li>· The agent reuses your <span className="text-foreground">actual components</span> instead of writing parallel ones.</li>
+                  <li>· <span className="text-foreground">Three of the seven questions</span> Prism would otherwise ask are answered by the code, so the interview gets shorter.</li>
+                </ul>
+                <p className="text-[12.5px] text-muted-2 mt-3">
+                  You can skip it. Prism still reads the site and can still build — it will just ask you more, and match the page rather than the system behind it.
+                </p>
+              </div>
+            </div>
+          </Section>
+
+          <Dialog open={connecting} onOpenChange={setConnecting}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Connect a read-only source</DialogTitle>
+                <DialogDescription>The repository that holds this site&rsquo;s real stylesheets and components. Prism reads it and never writes to it.</DialogDescription>
+              </DialogHeader>
+              <div>
+                <Label htmlFor="source-pick" className="mb-1.5">Repository <span className="font-normal text-muted-2">— what your GitHub connection can see</span></Label>
+                <Select value={pick} onValueChange={setPick}>
+                  <SelectTrigger id="source-pick" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{SOURCE_REPOS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setConnecting(false)}>Cancel</Button>
+                <Button onClick={connectSource}>Connect it</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </Q>
       )}
 
       {step === 2 && (
-        <Q n={3} of={5} title="Where does this site run?" help="Call them whatever your team calls them. The only one that changes what Prism allows is production — an experiment can only reach real guests there, and only with an approval.">
+        <Q n={3} of={4} title="Where does this site run?" help="Call them whatever your team calls them. The only one that changes what Prism allows is production — an experiment can only reach real visitors there, and only with an approval.">
           <div className="rounded-xl border border-border bg-surface overflow-hidden mb-3">
             {envs.map((e, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-0">
@@ -234,54 +230,7 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
       )}
 
       {step === 3 && (
-        <Q n={4} of={5} title="Where does this site&rsquo;s code live?" help="Each site can have its own repository. Prism builds each experiment as a branch here — it never touches your main branch, and never writes to your production source.">
-          <label className="block text-[13px] font-semibold text-muted mb-1.5">Repository for experiments</label>
-          <Text value={repo} onChange={setRepo} placeholder="INHQInc/outrigger-prototypes" />
-          <div className="mt-4 rounded-xl border border-border bg-surface p-4">
-            <div className="text-[13.5px] font-semibold mb-1">Your production source, read-only</div>
-            <p className="text-[13px] text-muted leading-relaxed mb-2.5">
-              Optional, and worth it. With your real stylesheets in front of it, the agent reuses your actual components and tokens
-              instead of guessing from what a browser computed — which silently misses media queries and hover states.
-            </p>
-            {source ? (
-              <div className="flex items-center gap-2 text-[13px]">
-                <Pill tone="ok">Connected</Pill>
-                <span className="text-muted-2">·</span>
-                <span className="font-mono text-[12.5px]">{source}</span>
-                <span className="text-muted-2">·</span>
-                <span className="text-muted-2">read-only</span>
-              </div>
-            ) : (
-              <Button size="sm" variant="outline" onClick={() => setConnecting(true)}>Connect a read-only source</Button>
-            )}
-          </div>
-          <p className="text-[12.5px] text-muted-2 mt-3">You can skip this. Prism can still measure the site — it just can&rsquo;t build anything for it.</p>
-
-          <Dialog open={connecting} onOpenChange={setConnecting}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Connect a read-only source</DialogTitle>
-                <DialogDescription>Pick the repository that holds this site&rsquo;s real stylesheets and components.</DialogDescription>
-              </DialogHeader>
-              <div>
-                <Label htmlFor="source-pick" className="mb-1.5">Repository <span className="font-normal text-muted-2">— what your GitHub connection can see</span></Label>
-                <Select value={pick} onValueChange={setPick}>
-                  <SelectTrigger id="source-pick" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{SOURCE_REPOS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
-                </Select>
-                <p className="text-[12.5px] text-muted-2 mt-2.5">Read-only. Prism reads stylesheets and components here and never writes.</p>
-              </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setConnecting(false)}>Cancel</Button>
-                <Button onClick={connectSource}>Connect</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </Q>
-      )}
-
-      {step === 4 && (
-        <Q n={5} of={5} title="One line goes on the site" help="A single script tag lets Prism show an experiment on the page. Until it's there, you can build and preview but nothing reaches a real guest.">
+        <Q n={4} of={4} title="One line goes on the site" help="A single script tag lets Prism show an experiment on the page. Until it's there, you can build and preview but nothing reaches a real visitor.">
           <Section title="Where it needs to go">
             {envs.map((e) => (
               <div key={e.label} className="flex items-center gap-3 px-5 py-3.5 border-b border-border last:border-0">

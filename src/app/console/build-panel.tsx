@@ -4,7 +4,7 @@
  * BUILD — CERTIFICATION, VERSIONS, DRIFT.
  *
  * Three surfaces that all answer one question: is the code that runs for a real
- * guest the code we said we were running? The rules that carry the weight:
+ * visitor the code we said we were running? The rules that carry the weight:
  *
  *  · CERTIFICATION IS A GATE, NOT A REPORT. Every check here encodes a bug that
  *    already shipped once. A failure blocks the push for everyone — the only way
@@ -62,7 +62,7 @@ interface Check {
   meter?: boolean;
 }
 
-/** Eight checks. Each one is a bug that reached a guest at least once. */
+/** Eight checks. Each one is a bug that reached a visitor at least once. */
 const CHECKS: Check[] = [
   {
     id: "idempotency",
@@ -82,7 +82,7 @@ const CHECKS: Check[] = [
     id: "init_retry",
     title: "Dependency-gated init retries instead of bailing",
     state: "fail",
-    why: "init() looks for the rate calendar and returns when it is missing — once, and never again. Through the loader the calendar is already on the page, so this passes by hand every time. In the real experiment it runs before the calendar renders: nothing errors, nothing logs, and the variation quietly does nothing for every guest in it.",
+    why: "init() looks for the rate calendar and returns when it is missing — once, and never again. Through the loader the calendar is already on the page, so this passes by hand every time. In the real experiment it runs before the calendar renders: nothing errors, nothing logs, and the variation quietly does nothing for every visitor in it.",
     evidence: "line 41  if (!document.querySelector('.rate-cal__grid')) return;   // no retry, no observer",
   },
   {
@@ -96,7 +96,7 @@ const CHECKS: Check[] = [
     id: "assets",
     title: "Every asset is same-origin",
     state: "pass",
-    why: "A third-party URL makes the experiment depend on a host the site's content security policy can block, and tells that vendor which guests are in the test.",
+    why: "A third-party URL makes the experiment depend on a host the site's content security policy can block, and tells that vendor which visitors are in the test.",
     evidence: "4 assets · 3 inlined as data URIs · 1 from outrigger.com · 0 third-party",
   },
   {
@@ -228,7 +228,7 @@ const CUTS: Cut[] = [
           { label: "Optimizely accepted the write", detail: "variation 24138040550:v1 · project revision 44", state: "ok" },
           { label: "Read the stored bytes back", detail: `${n(2204)} bytes returned — 12 fewer than we sent`, state: "bad" },
           { label: "Compared SHA-256, ours against theirs", detail: "sha256 c7ab19…4d02  ≠  sha256 41e0bd…9c77", state: "bad" },
-          { label: "Halted. Nothing was marked live.", detail: "Optimizely's variation editor re-wrapped the file and dropped the trailing source comment. The bytes a guest would have run are not the bytes we certified.", state: "halted" },
+          { label: "Halted. Nothing was marked live.", detail: "Optimizely's variation editor re-wrapped the file and dropped the trailing source comment. The bytes a visitor would have run are not the bytes we certified.", state: "halted" },
         ],
       },
       {
@@ -264,7 +264,7 @@ const DESIGN_DRIFT: Drift[] = [
   {
     id: "trigger", field: "When it appears", layer: "design",
     brief: "Shows as soon as the rate calendar opens.",
-    build: "Shows on the first date cell a guest taps.",
+    build: "Shows on the first date cell a visitor taps.",
     note: "Design-layer trigger. It does not change what is being tested or how the result is read.",
   },
 ];
@@ -454,7 +454,7 @@ export function CertificationPanel() {
           </div>
         ))}
         <p className="text-[12.5px] text-muted-2 leading-relaxed max-w-[300px] ml-auto">
-          Every check is a bug that reached a guest once. Three of them exist because our loader runs after the page settles and Optimizely does not.
+          Every check is a bug that reached a visitor once. Three of them exist because our loader runs after the page settles and Optimizely does not.
         </p>
       </div>
 
@@ -522,7 +522,7 @@ export function CertificationPanel() {
                     value={reason}
                     disabled={locked}
                     onChange={(e) => setReason(e.target.value)}
-                    placeholder="e.g. the rate calendar is server-rendered on this page, so init cannot race it"
+                    placeholder="e.g. the element it waits for is server-rendered on this page, so init cannot race it"
                     className="w-full h-9 px-3 rounded-lg border border-border bg-surface text-[13px] placeholder:text-muted-2 focus:border-accent focus:outline-none disabled:opacity-60"
                   />
                 </div>
@@ -545,7 +545,7 @@ export function CertificationPanel() {
                 <StepList steps={gateSteps.map((s, i) => ({ ...s, tone: liveTone(i, gate.step) }))} />
                 {done && (
                   <p className="text-[13px] text-muted leading-relaxed mt-3 pt-3 border-t border-border">
-                    Cut {gate.n} is certified and sits in Versions below, with the override on your name. Nothing reaches a guest until you push it from there.
+                    Cut {gate.n} is certified and sits in Versions below, with the override on your name. Nothing reaches a visitor until you push it from there.
                   </p>
                 )}
               </div>
@@ -735,7 +735,7 @@ export function VersionsPanel() {
         <div className="flex items-center gap-2.5 mb-3">
           <Receipt>{cut.sha}</Receipt>
           <span className="text-[14px] font-medium">Cut {cut.cut}</span>
-          {cut.live && <Pill tone="ok">running for guests right now</Pill>}
+          {cut.live && <Pill tone="ok">running for visitors right now</Pill>}
         </div>
         <p className="text-[13.5px] text-muted leading-relaxed mb-4 max-w-[680px]">{cut.purpose}</p>
         {cut.override && (
@@ -767,7 +767,7 @@ export function VersionsPanel() {
             {cut.attempts.length === 0 && !inFlight && (
               <div className="rounded-lg border border-border bg-surface-2/40 p-4">
                 <div className="text-[13.5px] font-medium mb-1">This cut has never reached Optimizely.</div>
-                <p className="text-[13px] text-muted leading-relaxed">{cut.blocked ?? "It is certified. Push it when you are ready — nothing reaches a guest until then."}</p>
+                <p className="text-[13px] text-muted leading-relaxed">{cut.blocked ?? "It is certified. Push it when you are ready — nothing reaches a visitor until then."}</p>
               </div>
             )}
           </div>
@@ -797,7 +797,7 @@ export function VersionsPanel() {
                 <DialogDescription>
                   {confirm.kind === "rollback"
                     ? `Traffic keeps flowing. The live cut becomes cut ${target.cut} (${target.sha})${live ? `; cut ${live.cut} (${live.sha}) stops serving and stays in the list` : ""}. Nothing is deleted — a rollback adds a push.`
-                    : `Cut ${target.cut} (${target.sha}) goes live for every guest in the experiment${live ? `, and cut ${live.cut} (${live.sha}) stops serving. It stays in the list, so you can roll back to it` : ""}. It is live only once the bytes read back match, byte for byte.`}
+                    : `Cut ${target.cut} (${target.sha}) goes live for every visitor in the experiment${live ? `, and cut ${live.cut} (${live.sha}) stops serving. It stays in the list, so you can roll back to it` : ""}. It is live only once the bytes read back match, byte for byte.`}
                 </DialogDescription>
               </DialogHeader>
               {target.override && (

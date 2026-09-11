@@ -8,7 +8,7 @@
  *  · A BRANCH skill is context for the BUILDING AGENT. Every enabled one is
  *    assembled into the agent's prompt, most specific last. Getting one wrong
  *    produces a worse variation — and a person reviews the variation before a
- *    guest ever sees it, so the blast radius ends at review.
+ *    visitor ever sees it, so the blast radius ends at review.
  *  · A CONSOLE skill IS one of Prism's own prompts — the brief author, the
  *    measurement planner, the analyst that writes the readout. Exactly one wins
  *    per call site, nothing is merged, and THERE IS NO REVIEW STEP: the next
@@ -115,8 +115,9 @@ const SKILLS: Skill[] = [
       "",
       "## Never write the expected result as a number",
       "",
-      "\"More guests reach the booking step\" is a hypothesis. \"+3%\" is a forecast,",
-      "and a forecast on a frozen brief reads as a promise the run then breaks.",
+      "\"More visitors take the action that matters\" is a hypothesis. \"+3%\" is a",
+      "forecast, and a forecast on a frozen brief reads as a promise the run then",
+      "breaks.",
     ],
   },
   {
@@ -185,7 +186,7 @@ const SKILLS: Skill[] = [
     tier: "global", delivery: "console", origin: "built-in", capability: "write-qa",
     version: "2.1.0", bytes: 2870, enabled: true, updated: "shipped with Prism 6.2",
     receipt: "built-in · v2.1.0 · read-only",
-    summary: "Reads the brief for what it implies a guest can do, reads the build for what it handles, and reports the difference.",
+    summary: "Reads the brief for what it implies a visitor can do, reads the build for what it handles, and reports the difference.",
     body: [
       "---",
       "name: prism/qa-scenarios",
@@ -197,7 +198,7 @@ const SKILLS: Skill[] = [
       "",
       "# Generating scenarios",
       "",
-      "Read the brief for everything it implies a guest can do. Read the compiled",
+      "Read the brief for everything it implies a visitor can do. Read the compiled",
       "file for what it actually handles. THE HEADLINE IS THE DIFFERENCE.",
       "",
       "A covered scenario is a quiet line. A gap is loud, and cites the evidence",
@@ -239,7 +240,7 @@ const SKILLS: Skill[] = [
     tier: "global", delivery: "branch", origin: "built-in", capability: "build",
     version: "1.6.0", bytes: 2380, enabled: true, updated: "shipped with Prism 6.2",
     receipt: "built-in · v1.6.0 · read-only",
-    summary: "The things a variation may never touch on a live site — the booking form, consent, anything that takes a payment.",
+    summary: "The things a variation may never touch on a live site — a form that takes personal details, consent, anything that takes a payment.",
     body: [
       "---",
       "name: prism/change-safety",
@@ -251,8 +252,8 @@ const SKILLS: Skill[] = [
       "# What a variation may never touch",
       "",
       "Never modify, wrap, re-order or re-label a form that takes a name, a card",
-      "or a date of stay. Never intercept its submit. Never move a consent",
-      "control, and never pre-tick one.",
+      "or a date. Never intercept its submit. Never move a consent control, and",
+      "never pre-tick one.",
       "",
       "If the change the brief asks for cannot be made without touching one of",
       "these, stop and say so in the build notes rather than building it.",
@@ -557,7 +558,7 @@ const CALL_SITES: CallSite[] = [
     surface: "Brief → How we'll know",
     capability: "plan-measurement",
     writes: "The measurement plan that gets frozen before traffic",
-    fallback: "Bind only events this experiment reports. If two share a name, ask. Never invent a booking event.",
+    fallback: "Bind only events this experiment reports. If two share a name, ask. Never invent an event nobody records.",
   },
   {
     module: "prompts/readout.ts",
@@ -578,7 +579,7 @@ const CALL_SITES: CallSite[] = [
     surface: "QA → coverage",
     capability: "write-qa",
     writes: "The scenario set, from the brief and the compiled file",
-    fallback: "List what the brief implies a guest can do. Mark anything the build has no code path for.",
+    fallback: "List what the brief implies a visitor can do. Mark anything the build has no code path for.",
   },
 ];
 
@@ -894,7 +895,7 @@ export function SkillsPanel() {
         {/* ── The distinction the whole screen turns on ── */}
         <Section title="Two deliveries — the difference is not cosmetic">
           <div className="grid grid-cols-2">
-            {/* Branch: quiet, additive, reviewed by a person before a guest sees it. */}
+            {/* Branch: quiet, additive, reviewed by a person before a visitor sees it. */}
             <div className="px-5 py-4 border-r border-border">
               <Label>GOES TO THE BUILDING AGENT</Label>
               <p className="text-[14.5px] leading-relaxed">
@@ -903,7 +904,7 @@ export function SkillsPanel() {
               </p>
               <p className="text-[13px] text-muted mt-2.5 leading-relaxed">
                 Get one wrong and you get a worse variation — which a person still reviews on the real page before
-                a guest sees it. <span className="text-foreground tabular-nums">{branchStack.length} skills · {kb(branchBytes)}</span> reach
+                a visitor sees it. <span className="text-foreground tabular-nums">{branchStack.length} skills · {kb(branchBytes)}</span> reach
                 the agent on the next build.
               </p>
               <div className="mt-3 space-y-1.5">
@@ -924,7 +925,7 @@ export function SkillsPanel() {
               </p>
             </div>
 
-            {/* Console: loud, exclusive, ships to guests with nobody in between. */}
+            {/* Console: loud, exclusive, ships to visitors with nobody in between. */}
             <div className="px-5 py-4 border-l-2 border-l-accent bg-accent/[0.04]">
               <div className="text-[10.5px] font-semibold tracking-[0.07em] text-accent mb-1.5">IS PRISM&rsquo;S OWN PROMPT</div>
               <p className="text-[14.5px] leading-relaxed">

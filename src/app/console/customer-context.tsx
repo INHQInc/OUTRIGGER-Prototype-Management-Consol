@@ -6,7 +6,7 @@
  *
  * THE CUSTOMER IS A CONTAINER. A name, its sites, its people, its connections.
  * Nothing is read, asked or characterized at that level, because a crawl is of
- * a site and a hotel group's properties do not share a voice. Everything below
+ * a site and one company's sites do not share a voice. Everything below
  * happens per site, from Sites → the site → "What Prism understands".
  *
  * The shape is READ → ASK → CORRECT → COMPILE, and each step is honest about
@@ -14,7 +14,7 @@
  *
  *  · READ produces FACTS. Fonts, colours, pages, buttons. Shown as a receipt,
  *    with the awkward findings kept in (every colour variable on outrigger.com
- *    belongs to the booking-widget vendor). Re-derivable, never approved.
+ *    belongs to a widget vendor). Re-derivable, never approved.
  *  · ASK produces ANSWERS, only where the crawl could not settle something.
  *    Same rule as the brief: a question is asked only if the answer changes
  *    what the agent would build, three rounds at most, and the answers pass is
@@ -45,7 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
 import {
-  BUILD_THRESHOLD, DRAFT_SECTIONS, OBSERVED, OUTPUT_FILES, QUESTIONS, ROUNDS, SECTION_LABEL, SITE_CONTEXT, bandFor,
+  BUILD_THRESHOLD, DRAFT_SECTIONS, OBSERVED, OUTPUT_FILES, QUESTIONS, ROUNDS, SECTION_LABEL, SITE_CONTEXT, SOURCE, SOURCE_SETTLES, bandFor,
   type Answer, type Answers, type Earned, type Question, type Section, type SectionKey, type SiteContext,
 } from "@/lib/console/context";
 import type { Site } from "@/lib/console/fake";
@@ -218,13 +218,13 @@ function Measured() {
         <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-3 gap-6">
           {(["brand", "framework", "widget"] as const).map((o) => (
             <div key={o}>
-              <Eyebrow>{o === "brand" ? "THE SITE'S OWN" : o === "framework" ? "BOOTSTRAP'S DEFAULTS" : "THE BOOKING WIDGET'S"}</Eyebrow>
+              <Eyebrow>{o === "brand" ? "THE SITE'S OWN" : o === "framework" ? "BOOTSTRAP'S DEFAULTS" : "THE VENDOR WIDGET'S"}</Eyebrow>
               <div className="mt-2.5 space-y-2.5">{by(o).map((c) => <Swatch key={c.hex} {...c} />)}</div>
             </div>
           ))}
         </div>
         <div className="px-5 py-3 border-t border-border text-[12.5px] leading-relaxed bg-surface-2/40 text-muted">
-          The site names its own palette: <span className="text-foreground">{OBSERVED.variables.palette.n} <span className="font-mono">{OBSERVED.variables.palette.prefix}</span> variables</span> in main.css, beside {OBSERVED.variables.framework.n} of Bootstrap&rsquo;s and {OBSERVED.variables.components.n} per-component ones; the booking widget brings {OBSERVED.variables.widget.n} of its own. The counts above are how often each colour is used on the pages read — not how important it is.
+          The site names its own palette: <span className="text-foreground">{OBSERVED.variables.palette.n} <span className="font-mono">{OBSERVED.variables.palette.prefix}</span> variables</span> in main.css, beside {OBSERVED.variables.framework.n} of Bootstrap&rsquo;s and {OBSERVED.variables.components.n} per-component ones; the vendor widget brings {OBSERVED.variables.widget.n} of its own. The counts above are how often each colour is used on the pages read — not how important it is.
         </div>
       </Card>
 
@@ -262,6 +262,99 @@ function Measured() {
           </div>
         ))}
         <div className="px-5 py-2.5 text-[12.5px] text-muted-2 bg-surface-2/40">Media on the home page alone: {OBSERVED.media.images} images, {OBSERVED.media.videos} videos. This is a photography-led site.</div>
+      </Card>
+    </div>
+  );
+}
+
+/** What the repository gave that counting could not. Shown beside the crawl, never merged
+ *  into it: one is what a browser computed, the other is what somebody wrote. */
+function FromSource() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Card className="lg:col-span-2">
+        <div className="px-5 py-4 flex flex-wrap items-center gap-x-8 gap-y-3">
+          <Stat n={SOURCE.files.toLocaleString()} l="files in the repository" />
+          <Stat n={SOURCE.read} l="read" />
+          <Stat n={`${SOURCE.seconds}s`} l="to read" />
+          <Stat n={Object.keys(SOURCE_SETTLES).length} l="questions it answered" tone="ok" />
+          <div className="ml-auto text-right text-[12.5px] text-muted-2">
+            <div className="font-mono">{SOURCE.repo}</div>
+            <div>{SOURCE.branch} · read-only · {SOURCE.readAt}</div>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="The palette, named">
+        {SOURCE.tokens.map((t) => (
+          <div key={t.name} className="flex items-center gap-3 px-5 py-2.5 border-b border-border last:border-0">
+            <span className="w-6 h-6 rounded border border-border shrink-0" style={{ background: t.value }} />
+            <span className="font-mono text-[12.5px]">{t.name}</span>
+            <span className="font-mono text-[12px] text-muted-2">{t.value}</span>
+            <span className="ml-auto text-[12px] text-muted-2 text-right">{t.note}<br /><span className="font-mono text-[11px]">{t.where}</span></span>
+          </div>
+        ))}
+        <div className="px-5 py-2.5 text-[12.5px] text-muted-2 bg-surface-2/40 leading-relaxed">
+          The crawl found {OBSERVED.colours.filter((c) => c.origin === "brand").length} of these by counting pixels on the pages it read. It could not have found a name.
+        </div>
+      </Card>
+
+      <Card title="Type, with roles">
+        {SOURCE.fonts.map((f) => (
+          <div key={f.family} className="px-5 py-3 border-b border-border last:border-0">
+            <div className="flex items-center gap-3">
+              <span className="text-[14px] font-medium">{f.family}</span>
+              <span className="ml-auto font-mono text-[12px] text-muted">{f.role}</span>
+            </div>
+            <div className="font-mono text-[11px] text-muted-2 mt-0.5">{f.where}</div>
+          </div>
+        ))}
+        <div className="px-5 py-2.5 text-[12.5px] text-muted-2 bg-surface-2/40 leading-relaxed">
+          Which family is for headlines was a question the crawl had to ask. It is a line in the stylesheet.
+        </div>
+      </Card>
+
+      <Card title={`Components · ${SOURCE.components.length} of 44 that matter here`}>
+        {SOURCE.components.map((c) => (
+          <div key={c.name} className="px-5 py-2.5 border-b border-border last:border-0">
+            <div className="flex items-center gap-3">
+              <span className="text-[13.5px] font-medium">{c.name}</span>
+              <span className="ml-auto font-mono text-[11.5px] text-muted-2 truncate">{c.file}</span>
+            </div>
+            <div className="text-[12px] text-muted-2 mt-0.5">{c.props}</div>
+          </div>
+        ))}
+      </Card>
+
+      <Card title="Breakpoints">
+        <div className="px-5 py-4 flex flex-wrap gap-2">
+          {SOURCE.breakpoints.map((b) => (
+            <span key={b.name} className="rounded-lg border border-border px-2.5 py-1.5 text-[12.5px]">
+              <span className="font-mono">{b.name}</span> <span className="text-muted-2 tabular-nums">{b.px}px</span>
+            </span>
+          ))}
+        </div>
+        <div className="px-5 py-2.5 text-[12.5px] text-muted-2 bg-surface-2/40 leading-relaxed">
+          The real ones. A crawl can only infer a breakpoint from the widths it happened to render at.
+        </div>
+      </Card>
+
+      <Card title="Declared, never used on any page we read" className="lg:col-span-2">
+        <div className="px-5 py-4 flex flex-wrap gap-1.5">
+          {SOURCE.unused.map((u) => <Badge key={u} variant="muted"><span className="font-mono">{u}</span></Badge>)}
+        </div>
+        <div className="px-5 py-2.5 text-[12.5px] text-muted-2 bg-surface-2/40 leading-relaxed">
+          Only two sources can find this: the stylesheet declares them, {OBSERVED.read} pages use none of them. They may be for pages Prism has not read, or they may be dead. Worth someone knowing either way.
+        </div>
+      </Card>
+
+      <Card title="What it read" className="lg:col-span-2">
+        {SOURCE.looked.map((l) => (
+          <div key={l.path} className="flex items-center gap-3 px-5 py-2.5 border-b border-border last:border-0">
+            <span className="font-mono text-[12px] truncate">{l.path}</span>
+            <span className="ml-auto text-[12px] text-muted-2">{l.why}</span>
+          </div>
+        ))}
       </Card>
     </div>
   );
@@ -643,7 +736,7 @@ function ProfileEditor({ sections, setSections, who = "you" }: { sections: Live[
                     <div className="mt-3.5 rounded-xl border border-border px-4 py-3.5">
                       <Label htmlFor={`note-${s.key}`} className="mb-2">Tell Prism what&rsquo;s wrong, in your words</Label>
                       <Textarea id={`note-${s.key}`} value={note} onChange={(e) => setNote(e.target.value)} rows={2} autoFocus
-                        placeholder={s.key === "voice" ? "We never say luxury" : "e.g. the Fiji properties are run by a partner and don't share our design"} />
+                        placeholder={s.key === "voice" ? "We never say luxury" : "e.g. the regional sites are run by a partner and don't share our design"} />
                       <div className="flex gap-2 mt-3">
                         <Button size="sm" disabled={note.trim().length < 4}
                           onClick={() => { setProposal({ key: s.key, was: s.body, now: revise(s.body, note), note: note.trim() }); setAsking(null); setNote(""); }}>
@@ -719,7 +812,7 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
           <div className="space-y-5">
             <div>
               <Label htmlFor="cname" className="mb-1.5">Company</Label>
-              <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} placeholder="OUTRIGGER Hotels & Resorts" autoFocus />
+              <Input id="cname" value={name} onChange={(e) => setName(e.target.value)} placeholder="OUTRIGGER" autoFocus />
             </div>
             <div>
               <Label htmlFor="site-0" className="mb-1.5">Sites</Label>
@@ -761,7 +854,7 @@ export function CustomerWizard({ onClose, onDone }: { onClose: () => void; onDon
                 </div>
               ))}
               <div className="px-5 py-3 bg-surface-2/40 text-[12.5px] text-muted-2 leading-relaxed">
-                Prism reads each site itself. What it can&rsquo;t read — who the guests are, where bookings are lost, which button is primary — it asks,
+                Prism reads each site itself. What it can&rsquo;t read — who the visitors are, where the site loses them, which button is primary — it asks,
                 from the site selector at the top of the console, one site at a time, of whoever knows that site.
               </div>
             </Card>
@@ -878,7 +971,7 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
           {reading === "idle" && (
             <div className="flex items-center gap-3">
               <Button onClick={() => setReading("reading")}>Read {site.domain}</Button>
-              <span className="text-[12.5px] text-muted-2">Budget: {OBSERVED.budget} pages. A hospitality site is hundreds; most teach nothing new.</span>
+              <span className="text-[12.5px] text-muted-2">Budget: {OBSERVED.budget} pages. A big site is hundreds; most teach nothing new.</span>
             </div>
           )}
           {reading === "reading" && <Reading done={() => setReading("done")} />}

@@ -23,7 +23,7 @@
  *    hot-load, so a re-synced branch and a running session can disagree, and the
  *    console can see that they do.
  *  · PROOF IS PER TARGET PAGE, NOT PER ENVIRONMENT. A tag on the home page says
- *    nothing about the resort page a prototype actually targets. And the worst
+ *    nothing about the one page a prototype actually targets. And the worst
  *    result is not ABSENT — it is a prep tag answering on a production URL.
  *  · A SERVER-SIDE FETCH CANNOT SEE A CLIENT-SIDE INJECTION. Where the served
  *    HTML carries something that could inject the tag after load, the honest
@@ -260,9 +260,9 @@ export function SetupChecklist({ environments = ENVIRONMENTS }: { environments?:
       {/* 1 — environments. True before anyone arrives, so it opens already done. */}
       <StepRow n={1} state={state.env}
         title="An environment to work against"
-        why="An environment is an address Prism can look at, plus one bit: whether real guests can reach it.">
+        why="An environment is an address Prism can look at, plus one bit: whether real visitors can reach it.">
         {environments.length === 0 && (
-          <p className="text-[13px] text-muted">None yet. Each site gets its own — add them from <span className="text-foreground">Sites</span> → the site, and mark the one real guests reach as production.</p>
+          <p className="text-[13px] text-muted">None yet. Each site gets its own — add them from <span className="text-foreground">Sites</span> → the site, and mark the one real visitors reach as production.</p>
         )}
         <div className="flex flex-wrap gap-1.5">
           {environments.map((e) => (
@@ -345,9 +345,9 @@ export function SetupChecklist({ environments = ENVIRONMENTS }: { environments?:
               <span className="text-foreground tabular-nums">{project.events} events</span>, and
               {project.conversionEvent
                 ? " a conversion event to judge against."
-                : " not one of them records a booking, a conversion or revenue."} Prism will not stand a lookalike in for
-              one, so anything you brief as &ldquo;more bookings&rdquo; gets measured as reaching the booking step and
-              labelled that way.
+                : " not one of them records a conversion or revenue."} Prism will not stand a lookalike in for
+              one, so what you brief as the action that matters gets measured as the nearest step this project does
+              record, and labelled that way.
               <span className="text-foreground tabular-nums"> {project.duplicateNames} display names</span> are used by more
               than one event — one of them is the pair below, where only the first is attached to this experiment:
             </p>
@@ -750,7 +750,7 @@ const TARGETS: Target[] = [
     evidence: [
       "<!-- served HTML, line 39 of <head> -->",
       '<script src="https://tag.prism.build/opmc.js" data-tag="opmc-prep-2c08" async></script>',
-      "<!-- expected opmc-prod-7f31 — this is the prep tag, on a page real guests reach -->",
+      "<!-- expected opmc-prod-7f31 — this is the prep tag, on a page real visitors reach -->",
     ],
   },
   {
@@ -801,7 +801,7 @@ export function InjectionProof() {
 
   const toneOf = (t: Target): "ok" | "warn" | "danger" | "muted" | "accent" => {
     const s = stateOf(t);
-    // A mismatched tag on a page guests can reach is the one result worse than nothing.
+    // A mismatched tag on a page visitors can reach is the one result worse than nothing.
     if (s === "wrong-env" && !t.isProduction) return "warn";
     return PROOF[s].tone;
   };
@@ -867,7 +867,7 @@ export function InjectionProof() {
         ))}
         <span className="text-[12.5px] text-muted-2 ml-2 max-w-[46ch] leading-relaxed">
           One row per page a prototype points at, across {envCount} environments — a tag on the home page proves nothing
-          about a resort page.
+          about the rest of the site.
         </span>
       </Toolbar>
 
@@ -923,7 +923,7 @@ export function InjectionProof() {
           <div className="px-5 py-4 border-b border-border flex flex-wrap gap-6 items-start">
             <div className="min-w-[320px] flex-1">
               <Meta k="Page" v={open.url} mono />
-              <Meta k="Environment" v={`${open.env}${open.isProduction ? " · real guests reach this" : " · nobody outside the team reaches this"}`} />
+              <Meta k="Environment" v={`${open.env}${open.isProduction ? " · real visitors reach this" : " · nobody outside the team reaches this"}`} />
               <Meta k="Expected" v={open.expect} mono />
               <Meta k="Found" v={open.found ?? "nothing from tag.prism.build"} mono />
               <Meta k="HTML scanned" v={<span className="tabular-nums">{open.bytes.toLocaleString("en-US")} bytes · fetched server-side</span>} />
@@ -947,9 +947,9 @@ export function InjectionProof() {
             {openState === "wrong-env" && (
               <p className="text-[14px] max-w-[74ch] leading-relaxed">
                 <span className="text-danger font-medium">This is worse than finding nothing.</span> The page carries
-                <span className="font-mono text-[12.5px]"> {open.found}</span>, which belongs to Prep, on a URL a paying guest
-                can open. Two things follow, and both are already true: whatever Prep points at can be served to a real
-                guest, and every beacon from this page files under the wrong environment — so a Prep experiment&rsquo;s
+                <span className="font-mono text-[12.5px]"> {open.found}</span>, which belongs to Prep, on a URL a real
+                visitor can open. Two things follow, and both are already true: whatever Prep points at can be served to
+                a real visitor, and every beacon from this page files under the wrong environment — so a Prep experiment&rsquo;s
                 numbers quietly include production traffic. Remove the tag before anything else on this screen.
               </p>
             )}

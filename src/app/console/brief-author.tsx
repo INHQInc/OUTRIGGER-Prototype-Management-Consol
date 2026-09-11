@@ -49,7 +49,7 @@ const EXPERIMENT = {
   name: "Rate-calendar best-price promise",
   site: "outrigger.com",
   path: "/hawaii/oahu/outrigger-reef-waikiki-beach-resort",
-  property: "Outrigger Reef Waikiki Beach Resort",
+  pageName: "Outrigger Reef Waikiki Beach Resort",
   author: "Malia K.",
 };
 
@@ -155,7 +155,7 @@ const QUESTIONS: Question[] = [
   },
   {
     id: "q2", short: "which Book Now event counts",
-    ask: "Two of your events are both called “Offer Detail Book Now Button Clicks”. Which one means a guest reached booking?",
+    ask: "Two of your events are both called “Offer Detail Book Now Button Clicks”. Which one records the click this brief counts?",
     why: "Only you know which of the two your team wired to the calendar. Prism will not guess between duplicate names.",
     options: [
       {
@@ -180,7 +180,7 @@ const QUESTIONS: Question[] = [
 
 const METRICS: { role: string; label: string; means: string; event: string; win: string; tone: Tone; reported: string }[] = [
   {
-    role: "Primary", label: "Reached the booking step", means: "A guest clicked Book Now on this page",
+    role: "Primary", label: "Reached the booking step", means: "A visitor clicked Book Now on this page",
     event: "24138040550_book_now_button_clicks", win: "↑ at least 2%", tone: "ok", reported: "Reports here",
   },
   {
@@ -192,8 +192,8 @@ const METRICS: { role: string; label: string; means: string; event: string; win:
     event: "24138040550_hero_cta_click", win: "must not fall", tone: "warn", reported: "Duplicate name in project",
   },
   {
-    role: "Missing", label: "A completed booking", means: "Nothing on this site records one",
-    event: "no event exists", win: "—", tone: "danger", reported: "48 events, none of them a booking",
+    role: "Missing", label: "The action that matters", means: "Nothing on this site records it",
+    event: "no event exists", win: "—", tone: "danger", reported: "48 events, none of them a conversion",
   },
 ];
 
@@ -261,8 +261,8 @@ export function BriefAuthor({ onDone }: { onDone?: () => void }) {
         }]
       : []),
     {
-      title: "Nobody measures a completed booking",
-      detail: "This project has 48 events and not one of them is a booking, a revenue event or a conversion. The brief can still be built — but afterwards you can only claim clicks, not bookings.",
+      title: "Nobody measures the action that matters",
+      detail: "This project has 48 events and not one of them is a conversion, a revenue event or anything that records what a click led to. The brief can still be built — but afterwards you can only claim clicks.",
       state: "open", blocks: false,
     },
   ];
@@ -482,7 +482,7 @@ export function BriefAuthor({ onDone }: { onDone?: () => void }) {
                 </Section>
 
                 <Section title="How we&rsquo;ll know"
-                  action={<Pill tone="warn">No booking event exists in this project</Pill>}>
+                  action={<Pill tone="warn">No event records the action that matters</Pill>}>
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                       <thead>
@@ -504,8 +504,8 @@ export function BriefAuthor({ onDone }: { onDone?: () => void }) {
                   </div>
                   <div className="px-5 py-3.5 border-t border-border">
                     <p className="text-[13px] text-muted leading-relaxed">
-                      Prism will not stand a lookalike event in for a booking. A click on Book Now is an intention, and the
-                      readout will say so in those words rather than calling it a conversion.
+                      Prism will not stand a lookalike event in for the action that matters. A click on Book Now is an
+                      intention, and the readout will say so in those words rather than calling it a conversion.
                     </p>
                   </div>
                 </Section>
@@ -610,7 +610,7 @@ export function BriefAuthor({ onDone }: { onDone?: () => void }) {
             <Section title="What this revision answers to">
               <div className="px-5 py-2">
                 <Meta k="Where" v={`${EXPERIMENT.site}${EXPERIMENT.path}`} />
-                <Meta k="Property" v={EXPERIMENT.property} />
+                <Meta k="Page name" v={EXPERIMENT.pageName} />
                 <Meta k="Audience" v="Everyone on the property page" />
                 <Meta k="Author" v={EXPERIMENT.author} />
                 <Meta k="Revision" v="4 — draft, editable by anyone who can author" />

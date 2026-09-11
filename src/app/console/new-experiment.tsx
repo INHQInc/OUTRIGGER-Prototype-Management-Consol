@@ -158,7 +158,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
               <form onSubmit={(e) => { e.preventDefault(); addPage(); }} className="mt-4">
                 <Label htmlFor="page-path" className="mb-1.5">Path on {d.site}</Label>
                 <Input id="page-path" value={pagePath} onChange={(e) => { setPagePath(e.target.value); setPageError(null); }}
-                  placeholder="/hawaii/maui/kaanapali-beach-hotel" spellCheck={false} autoFocus
+                  placeholder="/offers/spring-sale" spellCheck={false} autoFocus
                   aria-invalid={pageError ? true : undefined} aria-describedby={pageError ? "page-path-error" : undefined} />
                 {pageError && <p id="page-path-error" className="text-[12.5px] text-danger mt-2">{pageError}</p>}
                 <div className="flex items-center gap-2 mt-3">
@@ -173,7 +173,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
         )}
 
         {step === 1 && (
-          <Q n={2} title="What are you changing?" help="In your own words. Prism's agent builds from this, so describe what a guest would see — not how to build it.">
+          <Q n={2} title="What are you changing?" help="In your own words. Prism's agent builds from this, so describe what a visitor would see — not how to build it.">
             <Field value={d.change} onChange={(v) => set("change", v)} rows={5}
               placeholder="Remove the offer badge from the hero so the Check availability button is the only thing competing for attention." />
             <p className="text-[12.5px] text-muted-2 mt-3">Prism knows this site&rsquo;s components, type scale and how you write, so you don&rsquo;t need to describe any of that.</p>
@@ -199,9 +199,9 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
         {step === 3 && (
           <Q n={4} title="What do you expect to happen — and why?" help="This is the sentence you'll be held to. It gets frozen the moment the experiment goes live, and the result is judged against it.">
             <Label htmlFor="expect" className="mb-1.5">You expect…</Label>
-            <Field id="expect" value={d.expect} onChange={(v) => set("expect", v)} rows={2} placeholder="More guests will click Check availability." />
+            <Field id="expect" value={d.expect} onChange={(v) => set("expect", v)} rows={2} placeholder="More visitors will click Check availability." />
             <Label htmlFor="because" className="mt-4 mb-1.5">…because</Label>
-            <Field id="because" value={d.because} onChange={(v) => set("because", v)} rows={2} placeholder="the offer badge competes with the booking call to action and pulls attention away from it." />
+            <Field id="because" value={d.because} onChange={(v) => set("because", v)} rows={2} placeholder="the offer badge competes with the main call to action and pulls attention away from it." />
           </Q>
         )}
 
@@ -209,7 +209,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
           <Q n={5} title="How will we know it worked?" help="Say it the way you'd say it to a colleague. Prism works out which of your site's measurements that means once the experiment is set up — and asks you if it isn't sure.">
             <Label htmlFor="metric" className="mb-1.5">The outcome that decides it</Label>
             <Field id="metric" value={d.metric} onChange={(v) => set("metric", v)} rows={2}
-              placeholder="More guests get all the way through to a completed booking — not just more people starting one." />
+              placeholder="More visitors get all the way through — not just more people starting." />
             <p className="text-[12.5px] text-muted-2 mt-2 mb-4">
               Prism never invents a measurement. It can only use what your A/B tool already records on this site, and it will show you the match before anything runs.
             </p>
@@ -223,7 +223,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
                   <RadioGroupItem id={idFor("direction", dir)} value={dir} className="mt-0.5" />
                   <span className="flex-1">
                     <span className="block text-[14.5px] font-medium">{dir === "up" ? "Up — more is better" : "Down — less is better"}</span>
-                    <span className="block text-[12.5px] text-muted-2 mt-0.5">{dir === "up" ? "clicks, bookings, engagement" : "bounces, errors, cancellations"}</span>
+                    <span className="block text-[12.5px] text-muted-2 mt-0.5">{dir === "up" ? "clicks, completions, engagement" : "bounces, errors, cancellations"}</span>
                   </span>
                 </Label>
               ))}

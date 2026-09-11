@@ -156,7 +156,7 @@ const unev = (blockedBy: string): Outcome => ({ result: "unevaluated", saw: "—
 const SPLIT_OK = "9,206 / 9,206 — 50.0 / 50.0 against a declared 50 / 50, χ² p 1.00";
 const FLOOR_OK = `${SESSIONS.toLocaleString()} sessions against a floor of ${FLOOR.toLocaleString()}`;
 const METRIC_BOTH = "24138040550_book_now_button_clicks fires in both versions";
-const PREREG_OK = `Revision 3 frozen 26 Aug 09:14 HST — ${TO_TRAFFIC} before the first guest saw it`;
+const PREREG_OK = `Revision 3 frozen 26 Aug 09:14 HST — ${TO_TRAFFIC} before the first visitor saw it`;
 const GUARDRAILS_OK = "Both holding — Reached the offers page +0.4%, Hero engagement +1.1%";
 const DIRECTION_OK = "up declared 26 Aug 09:14, before any number existed";
 const POWER_OK = `80% power at ≥ 2.0% needed ${FLOOR.toLocaleString()} sessions; ${SESSIONS.toLocaleString()} ran`;
@@ -191,12 +191,12 @@ const TRIP_PLANNER = "24138040550_opmc__trip_planner_cta_target";
 const DECISIONS: Record<Decision, { title: string; body: string; confirm: string; variant: Variant; busy: string; sub: string; next: string; logged: string }> = {
   ship: {
     title: "Record the decision: ship it",
-    body: `Seals run 4 with the verdict Confirmed and the numbers above — +2.4% on Reached the booking step, ${SESSIONS.toLocaleString()} sessions — and writes the readout, under your name, ${ME.name}, on ${TODAY}. Recording does not touch the page: moving build ${BUILD} to every guest is a build step that comes after.`,
+    body: `Seals run 4 with the verdict Confirmed and the numbers above — +2.4% on Reached the booking step, ${SESSIONS.toLocaleString()} sessions — and writes the readout, under your name, ${ME.name}, on ${TODAY}. Recording does not touch the page: moving build ${BUILD} to every visitor is a build step that comes after.`,
     confirm: "Record: ship it",
     variant: "default",
     busy: "Sealing run 4 and writing the readout…",
-    sub: `Confirmed — ship it. The result and the statistics are frozen with the verdict, and the readout is written. Rolling build ${BUILD} out to every guest is the next step on Build.`,
-    next: `Move build ${BUILD} to every guest on the Reef Waikiki rate calendar — the decision is recorded, and the roll-out is the next build step.`,
+    sub: `Confirmed — ship it. The result and the statistics are frozen with the verdict, and the readout is written. Rolling build ${BUILD} out to every visitor is the next step on Build.`,
+    next: `Move build ${BUILD} to every visitor on the Reef Waikiki rate calendar — the decision is recorded, and the roll-out is the next build step.`,
     logged: "ship it",
   },
   accept_null: {
@@ -211,7 +211,7 @@ const DECISIONS: Record<Decision, { title: string; body: string; confirm: string
   },
   refuted: {
     title: `Roll build ${BUILD} off the page`,
-    body: `Every guest sees the rate calendar without the promise. Run 4 is sealed with the verdict Refuted — −1.9% on Reached the booking step, ${SESSIONS.toLocaleString()} sessions — and the hypothesis is filed as answered so nobody runs it again. This is a recorded decision, made under your name, ${ME.name}, on ${TODAY}.`,
+    body: `Every visitor sees the rate calendar without the promise. Run 4 is sealed with the verdict Refuted — −1.9% on Reached the booking step, ${SESSIONS.toLocaleString()} sessions — and the hypothesis is filed as answered so nobody runs it again. This is a recorded decision, made under your name, ${ME.name}, on ${TODAY}.`,
     confirm: `Roll ${BUILD} off the page`,
     variant: "danger",
     busy: `Taking ${BUILD} off the page and sealing run 4…`,
@@ -331,7 +331,7 @@ const CONFIG: Record<Verdict, Config> = {
       { arm: "Control", sub: "the rate calendar as it is today", sessions: "9,206", share: "50.0%", hits: "1,231", rate: "13.37%", vs: "—" },
       { arm: "Variation", sub: "best-price promise above the calendar", sessions: "9,206", share: "50.0%", hits: "1,261", rate: "13.70%", vs: "+2.4%", tone: "ok" },
     ],
-    armsNote: "The deciding number went up. It is rendered here in full, and it changes nothing: the promise pulled guests straight past the offers page, which the brief listed as a thing that must not get worse. Hiding the +2.4% would only guarantee somebody asks for it later.",
+    armsNote: "The deciding number went up. It is rendered here in full, and it changes nothing: the promise pulled visitors straight past the offers page, which the brief listed as a thing that must not get worse. Hiding the +2.4% would only guarantee somebody asks for it later.",
     trace: [
       pass(SPLIT_OK), pass(FLOOR_OK), pass(METRIC_BOTH), pass(PREREG_OK),
       fail("Reached the offers page fell 6.1% (95% CI −9.8 to −2.3) on 24138040550_all_offers_page. It was declared before traffic as a number that must not get worse."),
@@ -460,7 +460,7 @@ const CONFIG: Record<Verdict, Config> = {
       { arm: "Control", sub: "the rate calendar as it is today", sessions: "9,206", share: "50.0%", hits: "—", rate: "—", vs: "—" },
       { arm: "Variation", sub: "best-price promise above the calendar", sessions: "9,206", share: "50.0%", hits: "1,102", rate: "11.97%", vs: "—" },
     ],
-    armsNote: "The control column is dashes rather than zeroes, and the difference matters: zero would mean guests were offered the trip planner and did not open it. There was nothing on the old page to open. A dash is the honest cell.",
+    armsNote: "The control column is dashes rather than zeroes, and the difference matters: zero would mean visitors were offered the trip planner and did not open it. There was nothing on the old page to open. A dash is the honest cell.",
     trace: [
       pass(SPLIT_OK), pass(FLOOR_OK),
       fail(`The deciding number is ${TRIP_PLANNER}, which only exists in the new version. The old page had no surface that could fire it, so there is a variation number and a dash, not a comparison.`),
@@ -547,7 +547,7 @@ const RESULT_PILL: Record<GateResult, { tone: "ok" | "danger" | "muted"; label: 
 
 const TIMELINE = (closed: boolean) => [
   { at: "26 Aug 2026 09:14 HST", what: "Plan frozen — brief revision 3, build " + BUILD, delta: "—", frozen: true },
-  { at: "27 Aug 2026 06:00 HST", what: "First guest saw the change", delta: `+ ${TO_TRAFFIC} after the freeze`, frozen: false },
+  { at: "27 Aug 2026 06:00 HST", what: "First visitor saw the change", delta: `+ ${TO_TRAFFIC} after the freeze`, frozen: false },
   { at: "27 Aug 2026 14:22 HST", what: "First arm-level number existed", delta: `+ ${TO_NUMBERS} after the freeze`, frozen: false },
   closed
     ? { at: "8 Sep 2026 17:00 HST", what: `Run 4 closed — ${SESSIONS.toLocaleString()} sessions`, delta: `+ ${TO_CLOSE} after the freeze`, frozen: true }
@@ -659,7 +659,7 @@ function Disclosures({ items }: { items: Disclosure[] }) {
       {items.length === 0 ? (
         <Empty
           title="Nothing to disclose"
-          body="The brief, the deciding number and the declared direction on this result are the ones frozen on 26 Aug. None of them moved after a guest saw the page."
+          body="The brief, the deciding number and the declared direction on this result are the ones frozen on 26 Aug. None of them moved after a visitor saw the page."
         />
       ) : (
         items.map((d) => (
@@ -800,11 +800,11 @@ export function VerdictPanel({ state, title = EXPERIMENT }: { state: Verdict; ti
       case "roll_off":
         return {
           title: `Roll build ${BUILD} off the page now`,
-          body: `Every guest sees the rate calendar without the promise, right away. Run 4 stays on file with the verdict Guardrail breach — the +2.4% is kept, and vetoed by gate 5. Taking a change off the page is a safety action: anyone can do it, and it needs no second person.`,
+          body: `Every visitor sees the rate calendar without the promise, right away. Run 4 stays on file with the verdict Guardrail breach — the +2.4% is kept, and vetoed by gate 5. Taking a change off the page is a safety action: anyone can do it, and it needs no second person.`,
           confirm: { label: `Roll ${BUILD} off now`, variant: "danger", run: () => simulate(`Taking ${BUILD} off the page…`, () => {
             finish({
               kind: "rolled", line: `Rolled off by you · ${TODAY}`, head: `run 4 closed · ${BUILD} off the page`,
-              sub: `Build ${BUILD} is off the page for every guest. Run 4 keeps its verdict and its numbers.`,
+              sub: `Build ${BUILD} is off the page for every visitor. Run 4 keeps its verdict and its numbers.`,
               next: `Build ${BUILD} is off the page. Run 4 stays on file with its verdict and the +2.4% it is not allowed to claim.`,
             });
             logActivity(`Rolled build ${BUILD} off the page after a guardrail breach on ${title}.`);
@@ -822,7 +822,7 @@ export function VerdictPanel({ state, title = EXPERIMENT }: { state: Verdict; ti
       case "stop":
         return {
           title: "Stop run 4",
-          body: `Build ${BUILD} comes off the page for every guest. The ${OPEN_SESSIONS.toLocaleString()} sessions so far stay on file, but no verdict is written — a run stopped at ${OPEN_PCT}% of its floor cannot be read, and Prism will not pretend otherwise. Anyone can stop a run; it never needs a second person.`,
+          body: `Build ${BUILD} comes off the page for every visitor. The ${OPEN_SESSIONS.toLocaleString()} sessions so far stay on file, but no verdict is written — a run stopped at ${OPEN_PCT}% of its floor cannot be read, and Prism will not pretend otherwise. Anyone can stop a run; it never needs a second person.`,
           field: noteField("Why you are stopping it (optional)", "Goes on the run's record, next to your name."),
           confirm: { label: "Stop this run", variant: "danger", run: () => simulate(`Taking ${BUILD} off the page…`, () => {
             finish({

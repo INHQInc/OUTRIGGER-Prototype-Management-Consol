@@ -131,7 +131,7 @@ export function BriefPanel({ e }: { e: Experiment }) {
             ["Which page", `${e.site}${e.path} · ${e.env}`],
             ["What changes", e.hypothesis],
             ["Who for", "Everyone"],
-            ["What we expect", e.status === "drafting" ? "Not answered yet." : "More guests reach the booking step, because the change removes something competing with it."],
+            ["What we expect", e.status === "drafting" ? "Not answered yet." : "More visitors take the action that matters, because the change removes something competing with it."],
           ].map(([k, v]) => (
             <div key={k}>
               <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-1.5">{String(k).toUpperCase()}</div>
@@ -219,8 +219,8 @@ export function BuildPanel({ e }: { e: Experiment }) {
 /* ── Review ────────────────────────────────────────────────────────── */
 
 const SPLITS: { value: Split; means: string }[] = [
-  { value: "50 / 50", means: "Half of guests see the change. The fastest honest read." },
-  { value: "90 / 10", means: "One guest in ten sees the change. Slower, and safer on a page that pays." },
+  { value: "50 / 50", means: "Half of visitors see the change. The fastest honest read." },
+  { value: "90 / 10", means: "One visitor in ten sees the change. Slower, and safer on a page that pays." },
 ];
 
 export function ReviewPanel({ e }: { e: Experiment }) {
@@ -267,7 +267,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
           {!signOff && !past && (
             <>
               <p className="text-[13.5px] text-muted mb-4">
-                You&rsquo;re signing off that it matches the brief and is safe on your site — not that it will win. Nothing reaches a real guest until someone approves the run.
+                You&rsquo;re signing off that it matches the brief and is safe on your site — not that it will win. Nothing reaches a real visitor until someone approves the run.
               </p>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <Button disabled={mine} aria-describedby={mine ? "why-not-you" : undefined} onClick={approve}>Looks right</Button>
@@ -290,7 +290,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
                 <Pill tone="warn">Sent back</Pill>
                 <span className="text-[13.5px]">Sent back · {signOff.note}</span>
               </div>
-              <p className="text-[12.5px] text-muted-2 mt-2">{mine ? "The note stays on this experiment and in Activity." : `${e.owner} sees the note on this experiment and in Activity.`} Nothing reaches a guest until a new build is approved.</p>
+              <p className="text-[12.5px] text-muted-2 mt-2">{mine ? "The note stays on this experiment and in Activity." : `${e.owner} sees the note on this experiment and in Activity.`} Nothing reaches a visitor until a new build is approved.</p>
             </div>
           )}
 
@@ -334,7 +334,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Start the run?</DialogTitle>
-            <DialogDescription>Opens “{e.name}” on {e.env}{e.env === "Production" ? " — this reaches real guests" : ""}. The brief and the build freeze the moment it opens.</DialogDescription>
+            <DialogDescription>Opens “{e.name}” on {e.env}{e.env === "Production" ? " — this reaches real visitors" : ""}. The brief and the build freeze the moment it opens.</DialogDescription>
           </DialogHeader>
           <div>
             <div id="split-label" className="text-[13px] font-semibold text-muted mb-2.5">Split</div>
@@ -351,7 +351,7 @@ export function ReviewPanel({ e }: { e: Experiment }) {
             </RadioGroup>
           </div>
           <div>
-            <Meta k="Environment" v={<span>{e.env}{e.env === "Production" ? <span className="text-warn"> — this reaches real guests</span> : null}</span>} />
+            <Meta k="Environment" v={<span>{e.env}{e.env === "Production" ? <span className="text-warn"> — this reaches real visitors</span> : null}</span>} />
             <Meta k="Build" v={e.build ?? "—"} mono />
             <Meta k="Brief" v="The current revision, frozen when the run opens" />
           </div>

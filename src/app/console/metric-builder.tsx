@@ -611,7 +611,7 @@ export function MetricBuilder({ onClose }: { onClose?: () => void }) {
                       {r.lift !== null && c.ifCounted.lift !== null && (
                         <>
                           <span className="font-semibold tabular-nums">{Math.abs(r.lift - c.ifCounted.lift).toFixed(1)} points</span> of that gap
-                          is bookkeeping rather than guests, and the gap reads
+                          is bookkeeping rather than visitors, and the gap reads
                           {" "}<span className="font-semibold">{Math.abs(r.lift) > Math.abs(c.ifCounted.lift) ? "wider" : "narrower"}</span> than it is.
                           {" "}
                         </>
@@ -668,9 +668,9 @@ export function MetricBuilder({ onClose }: { onClose?: () => void }) {
         {/* ── Footer: the semantics, stated rather than implied ──────── */}
         <footer className="shrink-0 border-t border-border bg-surface px-6 py-3.5 flex items-start gap-6">
           <p className="text-[12.5px] text-muted-2 leading-relaxed max-w-[580px]">
-            Every number here is <span className="text-foreground">summed actions, not unique guests</span>. Two clicks from one guest count
+            Every number here is <span className="text-foreground">summed actions, not unique visitors</span>. Two clicks from one visitor count
             twice. That is why All Outrigger reads {pct(homeControl / SESSIONS.control)} in the old version — {num(homeControl)} views across
-            {" "}{num(SESSIONS.control)} sessions. A rate over 100% is not a bug; it is what summing actions means. If you need one guest
+            {" "}{num(SESSIONS.control)} sessions. A rate over 100% is not a bug; it is what summing actions means. If you need one visitor
             counted once, that is a different metric, and this build cannot make it.
           </p>
           <div className="ml-auto flex items-center gap-3 shrink-0">

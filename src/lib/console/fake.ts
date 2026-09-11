@@ -249,6 +249,9 @@ export interface SiteProfile {
 }
 
 export interface Site {
+  /** The read-only repository holding this site's real stylesheets and components.
+   *  Never written to — experiments are branches in `repo`. */
+  source?: string;
   id: string;
   domain: string;
   label: string;
@@ -262,7 +265,7 @@ export interface Site {
 export const SITE_ROWS: Site[] = [
   {
     id: "outrigger", domain: "outrigger.com", label: "Outrigger — main site", experiments: 5,
-    repo: "INHQInc/outrigger-prototypes", branchPrefix: "prototype/",
+    repo: "INHQInc/outrigger-prototypes", branchPrefix: "prototype/", source: "INHQInc/outrigger-web",
     envs: [
       { label: "Production", url: "https://www.outrigger.com", isProduction: true, script: "verified", lastSeen: "4 minutes ago" },
       { label: "Prep", url: "https://prep.outrigger.com", isProduction: false, script: "verified", lastSeen: "12 minutes ago" },

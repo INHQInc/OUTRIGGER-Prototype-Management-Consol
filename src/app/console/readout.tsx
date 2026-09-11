@@ -190,12 +190,12 @@ const linkDaysLeft = Math.floor(spanDays(NOW, EXPIRES));
 const controlShare = (ARMS.control / SESSIONS) * 100;
 const variationShare = (ARMS.variation / SESSIONS) * 100;
 
-/** The decision metric's lift, restated as guests. A relative percentage on a
+/** The decision metric's lift, restated as visitors. A relative percentage on a
  *  6% base is a number people over-read; the counterfactual count is the same
  *  fact at a size a human can hold. */
 const reachedActual = Math.round(ARMS.variation * (DECISION.variation / 100));
 const reachedCounterfactual = Math.round(ARMS.variation * ((DECISION.control ?? 0) / 100));
-const extraGuests = reachedActual - reachedCounterfactual;
+const extraVisitors = reachedActual - reachedCounterfactual;
 
 const settledCount = FINDINGS.filter(isSettled).length;
 const unwatchedCount = GUARDRAILS.filter((g) => g.state === "unwatched").length;
@@ -302,7 +302,8 @@ function ArmsFigure({ control, variation, dense }: { control: number; variation:
 }
 
 /** Coverage, drawn as the project rather than described as a shortfall: one cell
- *  per event, filled where this readout uses it. Nothing here is a booking. */
+ *  per event, filled where this readout uses it. None of them records the outcome
+ *  the brief named as success. */
 function CoverageFigure() {
   return (
     <div>
@@ -449,7 +450,7 @@ export function Readout({ compact }: { compact?: boolean }) {
 
                   <div className={cn("flex-1 min-w-0", dense ? "border-t border-border pt-4 w-full" : "border-l border-border pl-5")}>
                     <p className={cn("font-medium leading-snug", dense ? "text-[15.5px]" : "text-[17px]")}>
-                      More guests reached the booking step. Whether more of them booked is not something this site records.
+                      More visitors reached the booking step. Whether more of them booked is not something this site records.
                     </p>
                     <p className="text-[12.5px] text-muted-2 mt-2.5 leading-relaxed">
                       A confirmed verdict may not be told its decision metric lost or went quiet. This sentence claims neither: it
@@ -530,27 +531,27 @@ export function Readout({ compact }: { compact?: boolean }) {
                 <Section title="What moved" className="rounded-none border-0 border-b border-border bg-transparent">
                   <Movement
                     n={1} of={4} dense={dense}
-                    title="Guests reached the booking step more often, and the interval clears zero."
+                    title="Visitors reached the booking step more often, and the interval clears zero."
                     tag={<Pill tone="ok">settled</Pill>}
                     figure={<CiFigure ci={DECISION_CI} point={DECISION_LIFT} settled dense={dense} />}
                   >
                     <p>
-                      {rate(DECISION.control ?? 0)} of the old version&rsquo;s guests reached it against{" "}
+                      {rate(DECISION.control ?? 0)} of the old version&rsquo;s visitors reached it against{" "}
                       {rate(DECISION.variation)} of the new version&rsquo;s — a lift of{" "}
                       <span className="text-foreground font-medium tabular-nums">{signed(DECISION_LIFT)}</span> at p{" "}
                       <span className="tabular-nums">{DECISION.p?.toFixed(3)}</span>.
                     </p>
                     <p>
-                      In guests: {count(reachedActual)} of the {count(ARMS.variation)} people who saw the new version reached the booking
+                      In visitors: {count(reachedActual)} of the {count(ARMS.variation)} people who saw the new version reached the booking
                       step, where the old version&rsquo;s rate would have produced {count(reachedCounterfactual)} —{" "}
-                      <span className="text-foreground font-medium tabular-nums">{extraGuests} more guests</span>. Read the low end of the
+                      <span className="text-foreground font-medium tabular-nums">{extraVisitors} more visitors</span>. Read the low end of the
                       interval, not the middle: the honest floor of this change is {signed(DECISION_CI[0])}.
                     </p>
                   </Movement>
 
                   <Movement
                     n={2} of={4} dense={dense}
-                    title="The hero moved with it, which is what you would expect if guests read the promise before they clicked."
+                    title="The hero moved with it, which is what you would expect if visitors read the promise before they clicked."
                     tag={<Pill tone="ok">settled</Pill>}
                     figure={<ArmsFigure control={FINDINGS[1].control ?? 0} variation={FINDINGS[1].variation} dense={dense} />}
                   >

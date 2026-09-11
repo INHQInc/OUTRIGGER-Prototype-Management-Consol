@@ -208,7 +208,7 @@ const CUTS: Cut[] = [
       },
       { path: "dist", name: "dist/", depth: 0, dir: true, lines: [] },
       {
-        path: "dist/inject.8c1d7e2.js", name: "inject.8c1d7e2.js", depth: 1, size: "2.4 KB", tag: "served to guests",
+        path: "dist/inject.8c1d7e2.js", name: "inject.8c1d7e2.js", depth: 1, size: "2.4 KB", tag: "served to visitors",
         lines: [
           "/* cut 8c1d7e2 · 2,412 bytes · this exact file is what 18,412 sessions loaded */",
           "(()=>{const P=\"/hawaii/oahu/outrigger-reef-waikiki-beach-resort\",",
@@ -699,7 +699,7 @@ export function HandoffPanel() {
             <div>
               <Label>WHY THIS SHIPPED</Label>
               <p className="text-[14.5px] leading-relaxed">
-                Guests on the {PROPERTY} rate calendar reached the booking step 2.4% more often when the best-price
+                Visitors on the {PROPERTY} rate calendar reached the booking step 2.4% more often when the best-price
                 promise sat inside the calendar grid instead of above it. The brief said this was worth shipping at 2% or
                 better, and it was frozen 13 days before the numbers existed.
               </p>
