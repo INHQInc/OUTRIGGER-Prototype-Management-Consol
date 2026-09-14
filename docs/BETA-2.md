@@ -284,6 +284,51 @@ Backend rules still to make real: reading a branch read-only, verifying the
 token's scope is read-only, and refusing a write to the source repository even
 if a token would allow it.
 
+## 7 · A prototype shows its key, and opens the page with it
+
+**Status:** proposed 14 Sep 2026, not built. Prompted by a real hunt in Beta 1.
+
+**What happened.** Three prototypes of one idea — an original and two mockups —
+sat on the board looking identical: same description, same next step, same drift
+warning. Two of them carried their slug where a name belongs, so they read as
+duplicates. Worse, one had been renamed after creation, so its KEY and its NAME
+had drifted apart:
+
+| | key (what `?opmc=` needs) | name | branch |
+|---|---|---|---|
+| original | `property-overview-modernization` | Property Overview Modernization | …modernization |
+| B | `property-overview-mockup-b` | property-overview-mockup-b | …-mockup-b |
+| C | **`property-overview-mockup`** | property-overview-mockup-**c** | …-mockup-**c** |
+
+Nothing was broken — the loader resolves the key to the record and reads the
+branch off it — but `?opmc=property-overview-mockup-c` fails while the bare one
+works, and NOTHING ON SCREEN SAYS SO. Recovering C's real key took reading
+`.opmc/context.json` off the branch through the GitHub API.
+
+**The gap.** The key is the only thing you need to look at a prototype on the
+real page, and no list shows it. In Beta 2 today `previewUrl()` exists in
+`work.tsx` and the detail header has Preview — but the experiments LIST shows
+Experiment · Status · Stage · Primary metric · Owner · Updated, and the key
+appears nowhere at all.
+
+**Build.**
+- The list row and the detail both show the key, as selectable mono text, with
+  copy — it gets pasted into Slack, into Optimizely variation configs, into a
+  colleague's browser.
+- Beside it, an **Open** link that goes straight to the page with the query
+  string already on it: `https://<env host><path>?opmc=<key>`. `previewUrl()`
+  already builds exactly this; it is one function away.
+- When the name no longer contains the key (a rename, as with C), say so once
+  next to the key rather than letting someone infer the URL from the name. That
+  inference is what failed here.
+
+**Why it is worth a row of a table.** A key that can only be recovered from a
+JSON file on a git branch is not a key anybody can use. And this is cheap
+precisely BECAUSE renaming a key is not: `key` is the primary key, referenced by
+`artifact_version`, `promotion`, the loader cache, the live URL and `.opmc/` on
+the branch, and `deletePrototype` cascades to versions and promotions. Showing
+the key costs a table cell; changing it costs an ordered migration.
+
 ## Open questions
 
 - **Demo accounts across verticals.** The back office lists four accounts and
