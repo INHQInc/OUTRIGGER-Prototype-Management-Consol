@@ -399,3 +399,38 @@ invited exactly the wrong conclusion.
   Understanding, not the site. It is a dot on that row, with the words in its
   title and the full pill on the page itself.
 
+---
+
+## D16 · The code host belongs to the SITE, never to the account
+
+**Decision.** Where a site's code lives — GitHub, GitLab, Bitbucket, Azure
+DevOps, cloud or self-hosted — is a property of the SITE. There is no
+account-level code-host connection.
+
+**Why.** Bryan, 14 Sep 2026: "a customer might have 10 sites managed by
+different systems." One site is built in-house on the company GitHub; the next
+is an agency's self-hosted GitLab; a third is a partner's Bitbucket. An
+account-level connection means the second site can only be set up by granting
+Prism access it has no business holding — or cannot be set up at all.
+
+**What it changes.** A site's Setup now reads in the order the work happens:
+
+1. **WHERE THE CODE LIVES** — the host, its organisation, and whether it is
+   self-hosted. Prism reaches that organisation and nothing else on that host.
+2. **READS FROM** — this site's own stylesheets and components. Required to
+   build (D14), so it comes before the repository that merely receives output.
+3. **WRITES TO** — the prototypes repository and its branch prefix.
+
+Connections keeps only what genuinely IS account-wide — the A/B tool, the model
+key, site reading — and carries a table naming each site's host, so somebody
+looking for it there is told where it actually lives rather than finding nothing.
+
+**Fixture.** outrigger.com is on GitHub at `INHQInc`; outriggerkona.com is on a
+self-hosted GitLab at `git.kaimana.dev` under an agency's group, with its own
+prototypes repository; waikikibeachcomber.com has no host at all. The three
+states are in the demo on purpose.
+
+**Open, and adjacent.** The A/B tool is still account-wide ("one per account").
+If a customer's sites live in different Optimizely projects — likely, on the same
+argument as above — that is the same mistake one layer along. Not yet decided.
+

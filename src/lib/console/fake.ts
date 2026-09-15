@@ -248,7 +248,24 @@ export interface SiteProfile {
   voice: { draft: string; approved: boolean };
 }
 
+/** WHERE A SITE'S CODE LIVES. Per site, never per account: a customer with ten
+ *  sites can have ten different arrangements — an agency's GitLab for one, the
+ *  in-house GitHub org for another, a self-hosted server for a third. Tying the
+ *  code host to the account would mean the second site could never be set up
+ *  without giving Prism access it has no business holding (DECISIONS.md D16). */
+export interface CodeHost {
+  kind: "GitHub" | "GitLab" | "Bitbucket" | "Azure DevOps";
+  /** The organisation, group or project this connection reaches — and only this one. */
+  org: string;
+  repos: number;
+  connectedBy: string;
+  /** Self-hosted rather than the vendor's cloud. */
+  selfHosted?: string;
+}
+
 export interface Site {
+  /** Where this site's code lives. Nothing about its code works without it. */
+  codeHost?: CodeHost;
   /** The read-only repository holding this site's real stylesheets and components.
    *  Never written to — experiments are branches in `repo`. */
   source?: string;
@@ -265,6 +282,7 @@ export interface Site {
 export const SITE_ROWS: Site[] = [
   {
     id: "outrigger", domain: "outrigger.com", label: "Outrigger — main site", experiments: 5,
+    codeHost: { kind: "GitHub", org: "INHQInc", repos: 20, connectedBy: "Bryan Hopkins" },
     repo: "INHQInc/outrigger-prototypes", branchPrefix: "prototype/", source: "INHQInc/outrigger-web",
     envs: [
       { label: "Production", url: "https://www.outrigger.com", isProduction: true, script: "verified", lastSeen: "4 minutes ago" },
@@ -278,7 +296,9 @@ export const SITE_ROWS: Site[] = [
   },
   {
     id: "kona", domain: "outriggerkona.com", label: "Kona Resort & Spa", experiments: 1,
-    repo: "INHQInc/outrigger-prototypes", branchPrefix: "kona/",
+    // A different host entirely — this site is built by an agency on their own GitLab.
+    codeHost: { kind: "GitLab", org: "kaimana-digital/kona", repos: 6, connectedBy: "Malia K.", selfHosted: "git.kaimana.dev" },
+    repo: "kaimana-digital/kona/prototypes", branchPrefix: "kona/",
     envs: [
       { label: "Production", url: "https://www.outriggerkona.com", isProduction: true, script: "missing" },
       { label: "Staging", url: "https://staging.outriggerkona.com", isProduction: false, script: "verified", lastSeen: "2 hours ago" },
@@ -313,7 +333,6 @@ export const AB_TOOLS: Connection[] = [
 ];
 
 export const OTHER_CONNECTIONS: Connection[] = [
-  { id: "github", name: "GitHub", kind: "Code host", state: "connected", detail: "INHQInc · 20 repositories visible" },
   { id: "anthropic", name: "Anthropic", kind: "AI model", state: "connected", detail: "Your own key · Claude Opus 4.8", note: "Bring your own" },
   { id: "openai", name: "OpenAI", kind: "AI model", state: "available", detail: "Not connected" },
   { id: "firecrawl", name: "Firecrawl", kind: "Site reading", state: "connected", detail: "Your own key" },
@@ -341,6 +360,7 @@ export const isBriefComplete = (e: Experiment) =>
  *  are required before anything is built (DECISIONS.md D14). */
 export const buildBlockers = (site: Site | undefined): string[] => {
   if (!site) return ["This site is not set up in Prism."];
+  if (!site.codeHost) return ["no code host connected — Prism cannot reach this site's code at all"];
   const out: string[] = [];
   if (!site.source) out.push("no read-only source — there is nothing to build against");
   if (!site.repo) out.push("no repository to build into");
