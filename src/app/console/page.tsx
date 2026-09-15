@@ -22,7 +22,7 @@ import { ThemeScope } from "@/components/ui/theme-scope";
 import { Archived, ArchivedBanner, EndOfLife, type AccountState, type Holdings } from "./lifecycle";
 import { PageHeader as RoomHeader } from "./ui";
 import { Empty, PageHeader } from "./ui";
-import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail } from "./config";
+import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, rememberSite } from "./config";
 import { SiteProfile } from "./customer-context";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
@@ -118,7 +118,11 @@ export default function Console() {
   }, []);
 
   const exp = EXPERIMENTS.find((e) => e.id === expId) ?? null;
-  const rows: Site[] = [...(fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS), ...sessionSites];
+  // ONE ROW PER DOMAIN. The fixture keys sites by slug ("outrigger") and both wizards
+  // key them by hostname, so filtering by id left two rows claiming outrigger.com —
+  // one set up, one not. A site added this session replaces the one it names.
+  const baseRows: Site[] = fresh ? freshSites.map((d) => ({ id: d, domain: d, label: "Not set up yet", experiments: 0, envs: [] })) : SITE_ROWS;
+  const rows: Site[] = [...baseRows.filter((b) => !sessionSites.some((x) => x.domain === b.domain)), ...sessionSites];
   const learning = rows.find((s) => s.id === understanding) ?? null;
   /** Whose console this is — the support session's account, or the signed-in account. */
   const account = support?.customer ?? CUSTOMERS[0].name;
@@ -253,13 +257,13 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); setSessionSites((ss) => [...ss.filter((x) => x.id !== site.id), site]); setFlow(null); setSiteFilter(site.id); setNav("Setup"); }} />}
+        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); rememberSite(site); setSessionSites((ss) => [...ss.filter((x) => x.domain !== site.domain), site]); setFlow(null); setSiteFilter(site.id); setNav("Setup"); }} />}
         {!flow && nav === "Overview" && <OverviewView open={openExp} rows={scoped} fresh={fresh} />}
         {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Readouts" && fresh && <FreshEmpty title="Readouts" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Experiments" && !fresh && (
-          creating ? <NewExperiment cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
+          creating ? <NewExperiment sites={rows} cancel={() => setCreating(false)} done={() => { setCreating(false); setExpId("room-compare"); }} />
           : exp ? <ExperimentDetail e={exp} back={() => setExpId(null)} />
           : <ExperimentsView open={setExpId} onNew={() => setCreating(true)} all={scoped} />
         )}

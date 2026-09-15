@@ -33,11 +33,21 @@ export const logActivity = (what: string, who: string = ME.name) => { SESSION_AC
 /** Edits to a site's environments and source made this session, so leaving the page doesn't lose them. */
 const SITE_EDITS = new Map<string, { envs?: Site["envs"]; repo?: string; branchPrefix?: string; source?: string; codeHost?: CodeHost }>();
 
-/** A site as it stands THIS SESSION — the fixture with anything changed here applied.
- *  Every surface that gates on a site's code must ask this, not the fixture, or a
- *  source connected a minute ago would not count. */
+/** Sites added this session through Add a site. They are not in the fixture, so
+ *  without this every surface that gates on a site's code — buildBlockers, the
+ *  experiment picker, the Setup room — answered "This site is not set up in Prism"
+ *  for a site the console had just finished setting up. Keyed by domain, because the
+ *  fixture keys sites by slug ("outrigger") and both wizards key them by hostname. */
+const SESSION_SITES = new Map<string, Site>();
+export const rememberSite = (s: Site) => SESSION_SITES.set(s.domain, s);
+
+/** A site as it stands THIS SESSION — the fixture, or one added since, with anything
+ *  changed here applied. Every surface that gates on a site's code must ask this, not
+ *  the fixture, or a source connected a minute ago would not count. */
 export const resolveSite = (domain: string): Site | undefined => {
-  const base = SITE_ROWS.find((s) => s.domain === domain || s.id === domain);
+  const base = SESSION_SITES.get(domain)
+    ?? [...SESSION_SITES.values()].find((s) => s.id === domain)
+    ?? SITE_ROWS.find((s) => s.domain === domain || s.id === domain);
   if (!base) return undefined;
   const e = SITE_EDITS.get(base.id);
   return e ? { ...base, ...e } : base;

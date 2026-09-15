@@ -19,10 +19,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/ui/cn";
-import type { Site } from "@/lib/console/fake";
+import { ME, type CodeHost, type Site } from "@/lib/console/fake";
 import { logActivity } from "./config";
 import { Pill, Section } from "./ui";
 
@@ -95,9 +97,13 @@ const Text = ({ value, onChange, placeholder, prefix }: { value: string; onChang
 
 /* ── Site onboarding ───────────────────────────────────────────── */
 
-/** Repositories the connected code host can see. The read-only one holds the site's
- *  real stylesheets and components; it is never written to. */
-const SOURCE_REPOS = ["INHQInc/outrigger-web", "INHQInc/outrigger-design-system", "INHQInc/kona-web"];
+/** What the connected host can see. Prism reaches exactly one organisation per site
+ *  (D16), so the candidates come from the org just connected — never from a list that
+ *  would offer one customer another customer's repositories. */
+const repoCandidates = (org: string) => {
+  const base = org.trim().split("/")[0] || "your-org";
+  return [`${base}/web`, `${base}/design-system`, `${base}/components`];
+};
 
 /** ADDING A SITE IS INFRASTRUCTURE — address, code, environments, script. What Prism
  *  UNDERSTANDS about the site is a separate flow (customer-context.tsx), because the read
@@ -115,20 +121,34 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
   const [repo, setRepo] = useState("");
   const [source, setSource] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
-  const [pick, setPick] = useState(SOURCE_REPOS[0]);
+  const [pick, setPick] = useState("");
+  // WHERE THE CODE LIVES comes first, because nothing else on this step means
+  // anything without it: buildBlockers short-circuits on a missing host before it
+  // looks at the source or the repository (fake.ts). The Setup room asks in this
+  // same order — host, then reads-from, then writes-to — so the two are one grammar.
+  const [host, setHost] = useState<CodeHost | undefined>(undefined);
+  const [connectingHost, setConnectingHost] = useState(false);
+  const [hostKind, setHostKind] = useState<CodeHost["kind"]>("GitHub");
+  const [hostOrg, setHostOrg] = useState("");
   // Both repositories are REQUIRED before anything can be built, but not required to add
   // the site — you may not know them yet, and being unable to finish adding a site is worse
   // than a site that says plainly what it still needs. The gate is on Build (D14).
   const ok = [domain.trim().length > 3, true, envs.length > 0, true][step];
-  const host = domain.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  const domainOf = domain.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
   const finish = () => onDone({
-    id: host, domain: host, label: "Added just now", experiments: 0,
+    id: domainOf, domain: domainOf, label: "Added just now", experiments: 0,
+    codeHost: host,
     repo: repo.trim() || undefined, branchPrefix: repo.trim() ? "prototype/" : undefined, source: source ?? undefined,
     envs: envs.map((e) => ({ label: e.label, url: `https://${e.url.replace(/^https?:\/\//, "")}`, isProduction: e.prod, script: "checking" as const })),
   });
+  const connectHost = () => {
+    const h: CodeHost = { kind: hostKind, org: hostOrg.trim(), repos: 12, connectedBy: ME.name };
+    setHost(h); setPick(repoCandidates(h.org)[0]); setConnectingHost(false);
+    logActivity(`Connected ${h.kind} on ${h.org} for ${domainOf}.`);
+  };
   const connectSource = () => {
     setSource(pick); setConnecting(false);
-    logActivity(`Connected ${pick} as a read-only source for ${host}.`);
+    logActivity(`Connected ${pick} as a read-only source for ${domainOf}.`);
   };
 
   return (
@@ -144,11 +164,32 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
 
       {step === 1 && (
         <Q n={2} of={4} title="Where does this site&rsquo;s code live?"
-          help="Two repositories, doing two different things. Both are required: Prism builds from this site's own code, and writes what it builds somewhere separate. It only ever writes to the first.">
-          <Section title="Where Prism builds — it writes here">
+          help="A host, and two repositories doing two different things. This site names its own host — another site on this account can be somewhere else entirely, and often is.">
+          <Section title="Where the code lives — this site&rsquo;s own host">
+            <div className="p-5">
+              {host ? (
+                <div className="flex items-center gap-2 text-[13px]">
+                  <Pill tone="ok">Connected</Pill>
+                  <span>{host.kind}</span>
+                  <span className="font-mono text-[12.5px] text-muted-2">{host.org}</span>
+                  <button onClick={() => { setHost(undefined); setSource(null); }} className="ml-auto text-[12.5px] text-muted-2 hover:text-foreground">Remove</button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[13px] text-muted leading-relaxed mb-3">
+                    Prism reaches only the organisation you name — nothing else on that host. Without it Prism cannot see this site&rsquo;s code at all, so neither repository below can be chosen.
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => setConnectingHost(true)}>Connect a code host</Button>
+                  <p className="text-[12.5px] text-warn mt-2.5">Needed before a build — it is the first thing Prism checks. You can add it later, from the site itself.</p>
+                </>
+              )}
+            </div>
+          </Section>
+
+          <Section title="Where Prism builds — it writes here" className="mt-4">
             <div className="p-5">
               <label htmlFor="proto-repo" className="block text-[13px] font-semibold text-muted mb-1.5">Repository for experiments</label>
-              <Text value={repo} onChange={setRepo} placeholder="INHQInc/outrigger-prototypes" />
+              <Text value={repo} onChange={setRepo} placeholder={host ? `${host.org.split("/")[0]}/prototypes` : "your-org/prototypes"} />
               <p className="text-[12.5px] text-muted-2 mt-2.5">
                 Each experiment becomes a branch here under <span className="font-mono">prototype/</span>. Prism never touches its main branch, and never writes to the repository below.
               </p>
@@ -171,8 +212,12 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
                     This site&rsquo;s real stylesheets and components. It is what the agent builds against — without it there is nothing to reuse,
                     and anything built would be written from the outside of a page rather than from the system behind it.
                   </p>
-                  <Button size="sm" variant="outline" onClick={() => setConnecting(true)}>Connect a read-only source</Button>
-                  <p className="text-[12.5px] text-warn mt-2.5">Needed before a build — Prism builds from this code and cannot build without it. You can add it later, from the site itself.</p>
+                  <Button size="sm" variant="outline" disabled={!host} onClick={() => setConnecting(true)}>Connect a read-only source</Button>
+                  <p className="text-[12.5px] text-warn mt-2.5">
+                    {host
+                      ? "Needed before a build — Prism builds from this code and cannot build without it. You can add it later, from the site itself."
+                      : "Connect a code host first — this list is what that connection can see."}
+                  </p>
                 </>
               )}
 
@@ -191,6 +236,38 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
             </div>
           </Section>
 
+          <Dialog open={connectingHost} onOpenChange={setConnectingHost}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Where does {domainOf || "this site"}&rsquo;s code live?</DialogTitle>
+                <DialogDescription>
+                  This site&rsquo;s own host — another site can be somewhere else entirely, and often is. Prism reaches only the organisation you name here.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label className="mb-2" id="new-host-kind">Host</Label>
+                  <RadioGroup aria-labelledby="new-host-kind" value={hostKind} onValueChange={(v) => setHostKind(v as CodeHost["kind"])} className="grid-cols-2">
+                    {(["GitHub", "GitLab", "Bitbucket", "Azure DevOps"] as const).map((k) => (
+                      <Label key={k} htmlFor={`new-host-${k}`} className={cn("gap-3 rounded-xl border px-4 py-2.5 cursor-pointer font-normal text-foreground", hostKind === k ? "border-accent bg-accent/5" : "border-border")}>
+                        <RadioGroupItem id={`new-host-${k}`} value={k} /><span className="text-[13.5px]">{k}</span>
+                      </Label>
+                    ))}
+                  </RadioGroup>
+                </div>
+                <div>
+                  <Label htmlFor="new-host-org" className="mb-1.5">Organisation or group</Label>
+                  <Input id="new-host-org" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} placeholder="your-org" spellCheck={false} />
+                  <p className="text-[12.5px] text-muted-2 mt-2">Prism can see repositories here and nowhere else on that host. If this site is built by an agency, it is usually theirs, not yours.</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setConnectingHost(false)}>Cancel</Button>
+                <Button disabled={hostOrg.trim().length < 2} onClick={connectHost}>Connect it</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={connecting} onOpenChange={setConnecting}>
             <DialogContent>
               <DialogHeader>
@@ -198,10 +275,10 @@ export function SiteOnboarding({ onClose, onDone }: { onClose: () => void; onDon
                 <DialogDescription>The repository that holds this site&rsquo;s real stylesheets and components. Prism reads it and never writes to it.</DialogDescription>
               </DialogHeader>
               <div>
-                <Label htmlFor="source-pick" className="mb-1.5">Repository <span className="font-normal text-muted-2">— what your GitHub connection can see</span></Label>
+                <Label htmlFor="source-pick" className="mb-1.5">Repository <span className="font-normal text-muted-2">— what the {host?.kind ?? "code host"} connection on {host?.org ?? "this site"} can see</span></Label>
                 <Select value={pick} onValueChange={setPick}>
                   <SelectTrigger id="source-pick" className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>{SOURCE_REPOS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+                  <SelectContent>{repoCandidates(host?.org ?? "").map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <DialogFooter>

@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/ui/cn";
-import { SITE_ROWS, buildBlockers } from "@/lib/console/fake";
+import { SITE_ROWS, buildBlockers, type Site } from "@/lib/console/fake";
 import { resolveSite } from "./config";
 import { logActivity } from "./config";
 import { Pill } from "./ui";
@@ -71,9 +71,12 @@ const Field = ({ id, value, onChange, placeholder, rows = 3 }: { id?: string; va
 /** An answer becomes part of an id, and an id cannot carry a space. */
 const idFor = (prefix: string, value: string) => `${prefix}-${value.replace(/\s+/g, "-")}`;
 
-export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: Draft) => void }) {
+export function NewExperiment({ cancel, done, sites = SITE_ROWS }: { cancel: () => void; done: (d: Draft) => void; sites?: Site[] }) {
   const [step, setStep] = useState(0);
-  const [d, setD] = useState<Draft>(EMPTY);
+  // The picker offers what the console holds, not what the fixture holds — a site
+  // added through Add a site could otherwise never carry an experiment, and the
+  // draft would open naming a site this account may not even have.
+  const [d, setD] = useState<Draft>(() => ({ ...EMPTY, site: sites[0]?.domain ?? EMPTY.site }));
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((p) => ({ ...p, [k]: v }));
 
   /** The pages you can pick from: the ones Prism read, plus any you add by path. */
@@ -138,7 +141,7 @@ export function NewExperiment({ cancel, done }: { cancel: () => void; done: (d: 
           <Q n={1} title="Which page are you testing?" help="These are the pages Prism has read on your site. If the one you want isn't here, add it by path.">
             <select value={d.site} onChange={(e) => set("site", e.target.value)} aria-label="Site"
               className="h-10 px-3 mb-3 rounded-lg border border-border bg-surface text-[14px] focus:border-accent focus:outline-none">
-              {SITE_ROWS.map((s) => <option key={s.id}>{s.domain}</option>)}
+              {sites.map((s) => <option key={s.id}>{s.domain}</option>)}
             </select>
             {siteBlockers.length > 0 && (
               <div className="rounded-xl border border-warn/40 bg-warn/[0.06] px-4 py-3 mb-3">
