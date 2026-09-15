@@ -22,7 +22,7 @@ export function AppFrame({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const bare = pathname.startsWith("/login");
+  const bare = pathname.startsWith("/login") || pathname.startsWith("/console");
 
   if (bare) return <>{children}</>;
 
