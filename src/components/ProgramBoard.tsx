@@ -407,13 +407,17 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                           // scroll the page — the gaps and column background
                           // still can.
                           style={{ touchAction: "none" }}
-                          className={`select-none ${isDragged ? "opacity-40" : ""}`}
+                          // THE CARD BOX IS THIS DIV, NOT THE ANCHOR. The
+                          // preview links below are anchors themselves, and an
+                          // anchor inside an anchor is invalid markup that
+                          // swallows the inner click.
+                          className={`select-none rounded-lg border px-3 py-2.5 bg-surface hover:border-border-strong transition-colors ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"} ${isDragged ? "opacity-40" : ""}`}
                         >
                           <Link
                             href={`/prototypes/${c.key}`}
                             draggable={false}
                             onClick={(e) => { if (draggedRef.current) e.preventDefault(); }}
-                            className={`block rounded-lg border px-3 py-2.5 bg-surface hover:border-border-strong transition-colors space-y-1.5 ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"}`}
+                            className="block space-y-1.5"
                           >
                             <div className="text-[14px] font-semibold leading-snug">{c.name}</div>
                             {c.hypothesis && <div className="text-[12.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
@@ -445,6 +449,29 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                               {c.owner && <span className="text-[12.5px] text-muted-2 ml-auto">{c.owner}</span>}
                             </div>
                           </Link>
+
+                          {/* SEE IT, DON'T TAKE OUR WORD FOR IT. The ?opmc link
+                              is the only URL that shows the build — the loader
+                              tag is inert without it — and the experiment link
+                              goes to the platform, bound or running either way.
+                              stopPropagation keeps a press on a link from
+                              starting a card drag. */}
+                          {(c.previewUrl || c.experimentUrl) && (
+                            <div className="flex items-center gap-3 pt-1.5" onPointerDown={(e) => e.stopPropagation()}>
+                              {c.previewUrl && (
+                                <a href={c.previewUrl} target="_blank" rel="noreferrer" draggable={false}
+                                  title={`Opens ${c.previewUrl} — the ?opmc token is what wakes the loader`}
+                                  className="text-[12.5px] font-medium text-accent hover:text-accent-hover">
+                                  Prototype ↗{c.targetCount && c.targetCount > 1 ? <span className="font-normal text-muted-2"> · 1 of {c.targetCount}</span> : null}
+                                </a>
+                              )}
+                              {c.experimentUrl && (
+                                <a href={c.experimentUrl} target="_blank" rel="noreferrer" draggable={false}
+                                  title="Open this experiment in the experimentation platform"
+                                  className="text-[12.5px] font-medium text-accent hover:text-accent-hover">Experiment ↗</a>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </Fragment>
                     );

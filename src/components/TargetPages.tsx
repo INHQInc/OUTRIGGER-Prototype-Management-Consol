@@ -4,22 +4,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PrototypeTarget, TargetInjection } from "@/lib/prototypes/types";
+// ONE definition of the review URL — the board rows link to the same thing.
+import { withOpmcToken as withToken } from "@/lib/prototypes/board-model";
 
 interface EnvLite { id: string; label: string; kind: string; url: string; loaderKey: string; heartbeatAt: string | null }
 
 const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] font-mono text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
-
-/** Append the ?opmc token that triggers the loader for this prototype. */
-function withToken(url: string, key: string): string {
-  try {
-    const u = new URL(url);
-    u.searchParams.set("opmc", key);
-    return u.toString();
-  } catch {
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}opmc=${encodeURIComponent(key)}`;
-  }
-}
 
 /**
  * The pages this prototype injects on. Add as many as you want; each gets a

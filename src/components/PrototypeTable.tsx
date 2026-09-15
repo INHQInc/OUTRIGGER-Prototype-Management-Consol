@@ -60,14 +60,14 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
         <table className="w-full text-[13.5px] border-collapse">
           <thead>
             <tr className="border-b border-border">
-              {["Name", "Status", "Primary metric", "Versions", "Experiment"].map((h, i) => (
+              {["Name", "Status", "Primary metric", "Versions", "Experiment", "Preview"].map((h, i) => (
                 <th key={h} className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-muted-2 whitespace-nowrap ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {shown.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-[14px] text-muted-2">No prototypes match{q ? ` “${q}”` : ""}.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-[14px] text-muted-2">No prototypes match{q ? ` “${q}”` : ""}.</td></tr>
             ) : shown.map((c) => (
               <tr key={c.key} onClick={() => router.push(`/prototypes/${c.key}`)}
                 className="border-b border-border/60 last:border-0 hover:bg-surface-2/40 cursor-pointer transition-colors">
@@ -94,6 +94,27 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                         {c.experimentStatus === "running" ? "running — results ↗" : c.experimentStatus.replace("_", " ")}
                       </Link>
                     : <span className="text-muted-2 text-[13px]">not bound</span>}
+                </td>
+                {/* SEE IT, DON'T TAKE OUR WORD FOR IT. The ?opmc link is the
+                    only URL that shows the build — the loader tag is inert
+                    without it — and the experiment link goes to the platform,
+                    bound or running either way. Whichever exists, shows. */}
+                <td className="px-4 py-3.5 align-top whitespace-nowrap">
+                  <div className="flex flex-col items-start gap-0.5">
+                    {c.previewUrl && (
+                      <a href={c.previewUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                        title={`Opens ${c.previewUrl} — the ?opmc token is what wakes the loader`}
+                        className="text-[13px] font-medium text-accent hover:text-accent-hover">
+                        Prototype ↗{c.targetCount && c.targetCount > 1 ? <span className="font-normal text-muted-2"> · 1 of {c.targetCount}</span> : null}
+                      </a>
+                    )}
+                    {c.experimentUrl && (
+                      <a href={c.experimentUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                        title="Open this experiment in the experimentation platform"
+                        className="text-[13px] font-medium text-accent hover:text-accent-hover">Experiment ↗</a>
+                    )}
+                    {!c.previewUrl && !c.experimentUrl && <span className="text-[13px] text-muted-2">no target page set</span>}
+                  </div>
                 </td>
               </tr>
             ))}

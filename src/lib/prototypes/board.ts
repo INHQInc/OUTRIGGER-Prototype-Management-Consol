@@ -17,9 +17,10 @@ import { getCoverage, coverageGate, coverageStale, testCasesStale } from "./cove
 import { getVerdict, adjudicationPending } from "./verdict";
 import { auditTargetCode } from "./brief-audit";
 import { getOptimizelyClientForOrg } from "../experimentation";
-import { normalizeStage, type PrototypeRecord } from "./types";
+import { injectionPasses, normalizeStage, type PrototypeRecord } from "./types";
 
 export { BOARD_COLUMNS } from "./board-model";
+import { withOpmcToken } from "./board-model";
 export type { BoardColumn, BoardCard } from "./board-model";
 import type { BoardColumn, BoardCard } from "./board-model";
 
@@ -65,6 +66,16 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     // (locked badge), all handled inside pipeline.stage.id. One source of truth.
     const column: BoardColumn = pipeline.stage.id;
 
+    // PREVIEW THE THING ITSELF. Prefer a page whose loader is proven present —
+    // a link to a page without the tag opens the untouched site and reads as a
+    // broken prototype. Fall back to the first target so the link still exists.
+    const target = p.targets.find(injectionPasses) ?? p.targets[0];
+    let experimentUrl: string | undefined;
+    if (client && p.experiment?.experimentId) {
+      // No project picked for this brand → experimentAppUrl throws. No link.
+      try { experimentUrl = client.experimentAppUrl(Number(p.experiment.experimentId)); } catch { /* no link */ }
+    }
+
     return {
       key: p.key, name: p.name, column, locked, experimentStatus, pipeline,
       metric: p.metrics.primary || undefined,
@@ -74,6 +85,9 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       versionCount: versions.length || undefined,
       owner: p.owner,
       priority: p.priority,
+      previewUrl: target ? withOpmcToken(target.url, p.key) : undefined,
+      targetCount: p.targets.length || undefined,
+      experimentUrl,
     };
   }));
 

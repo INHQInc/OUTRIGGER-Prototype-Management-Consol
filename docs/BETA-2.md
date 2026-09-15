@@ -286,7 +286,9 @@ if a token would allow it.
 
 ## 7 · A prototype shows its key, and opens the page with it
 
-**Status:** proposed 14 Sep 2026, not built. Prompted by a real hunt in Beta 1.
+**Status:** proposed 14 Sep 2026. **The Open link is built** — Beta 1's prototype
+list, board and table both, 15 Sep 2026. The key itself, its copy control, and the
+name-drift note are still not built, in either beta.
 
 **What happened.** Three prototypes of one idea — an original and two mockups —
 sat on the board looking identical: same description, same next step, same drift
@@ -314,10 +316,15 @@ appears nowhere at all.
 **Build.**
 - The list row and the detail both show the key, as selectable mono text, with
   copy — it gets pasted into Slack, into Optimizely variation configs, into a
-  colleague's browser.
+  colleague's browser. *(Not built.)*
 - Beside it, an **Open** link that goes straight to the page with the query
   string already on it: `https://<env host><path>?opmc=<key>`. `previewUrl()`
-  already builds exactly this; it is one function away.
+  already builds exactly this; it is one function away. *(Built in Beta 1:
+  `withOpmcToken()` in `lib/prototypes/board-model.ts`, one definition shared by
+  the board card, the table row and the detail's Target Pages. It prefers a
+  target whose loader is verified present — a link to a page without the tag
+  opens the untouched site and reads as a broken prototype. Beside it, a link to
+  the bound experiment in the platform, running or not.)*
 - When the name no longer contains the key (a rename, as with C), say so once
   next to the key rather than letting someone infer the URL from the name. That
   inference is what failed here.
