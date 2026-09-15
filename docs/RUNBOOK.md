@@ -173,3 +173,31 @@ Fix: push anything (an empty commit works: `git commit --allow-empty -m
   it in Optimizely IS the human sign-off. No override flag exists on purpose.
 - **"Certification failed … the push is gated"**: fix and re-cut, or use the
   explicit recorded override in the Launch card if you accept the risk.
+
+## Experiment data stops appearing in GA4
+
+**OPEN as of 2026-09-15** — see
+[`investigations/GA4-OPTIMIZELY-2026-09.md`](investigations/GA4-OPTIMIZELY-2026-09.md)
+for the full record, the environment IDs, and the evidence.
+
+Fast orientation if this comes back:
+
+- The impression path is **browser → GTM → GA4**. It does **not** use Optimizely's
+  Google OAuth grant. Re-authorizing the integration cannot fix missing impressions —
+  that grant only serves Optimizely reading GA4 back, and the audiences API.
+- **"There was an error loading Google Audiences"** is a *different* fault. It belongs
+  to the Audience Targeting integration, which is off at project level. Don't chase it
+  as the outage.
+- Before concluding a tag never fired: **GTM trigger groups fire once per page.**
+  Replaying a dataLayer event does not re-fire the tag, so silence proves nothing.
+  Confirm a new `gtm.triggerGroup` push before believing a negative result.
+- The in-app browser's network log records first-party requests only. GA4 hits must be
+  caught by patching `sendBeacon` / `fetch` / `XHR.open` / `Image.src` — and have the
+  patch **block** them if you don't want test events in production GA4.
+- "Is GA4 actually receiving it?" is answered by **Admin → Events → Recent events**
+  (28-day window) or DebugView. Realtime's event card is top-N and hides low-volume
+  events.
+- First check, and the current best hypothesis: GA4 → Admin → Custom definitions.
+  If the property is at **50/50 event-scoped custom dimensions**, dimensions stop
+  populating — events still arrive, the parameter goes empty, every experiment report
+  goes blank, and it happens on an arbitrary date with no change on your side.

@@ -1,6 +1,6 @@
 # Experiment Integration (Optimizely)
 
-*Last updated: 2026-07-17*
+*Last updated: 2026-09-15*
 
 The Experiment area lets a feature be tested as a live Optimizely **Web Experimentation** A/B test (or Personalization experience) *before* permanent dev handoff. The same overlay that powers a deploy becomes the experiment variation — no re-authoring.
 
@@ -14,6 +14,12 @@ Account **OUHH Outrigger Hotels Hawaii** → Experimentation. Snippet is dynamic
 | **Prod** | `21089662478` | www.outrigger.com | `cdn.optimizely.com/js/21089662478.js` |
 
 Products available: **Web Experimentation** (A/B — lead) and **Personalization** (audience targeting — second mode). Same variation code, different campaign wrapper.
+
+> **GA4 reporting is a separate path from the API integration.** Experiment impressions
+> reach GA4 through the site's own GTM container (`GTM-M84QDRN`), not through
+> Optimizely's Google OAuth grant. An open investigation into impressions not reaching
+> GA4 is recorded in
+> [`investigations/GA4-OPTIMIZELY-2026-09.md`](investigations/GA4-OPTIMIZELY-2026-09.md).
 
 ## Lifecycle (feature ↔ experiment binding)
 
