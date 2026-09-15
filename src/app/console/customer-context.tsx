@@ -116,6 +116,11 @@ export function markRead(siteId: string) {
   if (contextFor(siteId)) return;
   SESSION_CONTEXT.set(siteId, {
     answers: {}, approved: false, earned: [],
+    // Read, but not yet SEEN — the receipt plays the first time someone opens this
+    // site's understanding. Without it the wizard treated the site as resumed and
+    // opened on the questions, so the one screen that proves Prism read the site
+    // never showed for any site created in the console.
+    unseen: true,
     revisions: [{ r: 1, when: TODAY, who: "Prism", what: `Read automatically — ${OBSERVED.read} pages. Nobody has been asked anything yet.`, pinnedBy: 0 }],
     sections: applyAnswers(DRAFT_SECTIONS, {}),
   });
@@ -929,11 +934,15 @@ export function UnderstandSite({ site, others, onClose, onDone, onAnother }: {
   onAnother: (siteId?: string) => void;
 }) {
   const ctx = contextFor(site.id);
-  const resuming = Boolean(ctx);
+  // A read nobody has seen is not a read you can resume past. `unseen` sites open
+  // on Read and play it; every other site with a context opens on the questions.
+  const resuming = Boolean(ctx) && !ctx?.unseen;
   const key = `understand:${site.id}`;
   const d = (DRAFTS.get(key) ?? {}) as Partial<{ step: number; reading: "idle" | "reading" | "done"; answers: Answers; interviewDone: boolean; sections: Live[] | null }>;
   const [step, setStep] = useState(d.step ?? (resuming ? 1 : 0));
-  const [reading, setReading] = useState<"idle" | "reading" | "done">(d.reading === "reading" ? "idle" : (d.reading ?? (resuming ? "done" : "idle")));
+  // An unseen site starts the read itself — nobody asked Prism to read it, it read
+  // it when the site was created, and this is the receipt arriving.
+  const [reading, setReading] = useState<"idle" | "reading" | "done">(d.reading === "reading" ? "idle" : (d.reading ?? (resuming ? "done" : ctx?.unseen ? "reading" : "idle")));
   const [answers, setAnswers] = useState<Answers>(d.answers ?? ctx?.answers ?? {});
   const [interviewDone, setInterviewDone] = useState(d.interviewDone ?? false);
   const [sections, setSections] = useState<Live[] | null>(d.sections ?? null);
@@ -1101,7 +1110,10 @@ export function SiteProfile({ s, onRead, room }: { s: Site; onRead: () => void; 
   // Anything that differs from what the current revision holds — a rewrite, a note, or a flag answered.
   const changed = sections.filter((x) => { const p = pinned.find((y) => y.key === x.key); return !p || x.body !== p.body || x.notes.length !== p.notes.length || x.status !== p.status || Boolean(x.flag) !== Boolean(p.flag); }).length;
   const persist = (revs: typeof revisions, secs: Live[]) => {
-    if (ctx) SESSION_CONTEXT.set(s.id, { ...ctx, approved: true, revisions: revs, sections: secs });
+    // `unseen` is dropped, not spread: someone who approved the profile from this
+    // room has engaged with the read, and replaying the receipt at them later would
+    // be the product telling them something they already acted on.
+    if (ctx) SESSION_CONTEXT.set(s.id, { ...ctx, unseen: undefined, approved: true, revisions: revs, sections: secs });
   };
   const pin = () => {
     const next = sections.map((x) => ({ ...x, status: (x.status === "revised" || x.status === "draft") ? ("approved" as Status) : x.status, flag: undefined }));

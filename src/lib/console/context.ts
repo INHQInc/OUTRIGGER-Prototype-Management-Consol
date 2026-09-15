@@ -403,6 +403,14 @@ export interface Revision { r: number; when: string; who: string; what: string; 
 export interface Earned { claim: string; range: string; decisions: string[] }
 
 export interface SiteContext {
+  /** NOBODY HAS SEEN THE READ YET. Prism reads a site the moment it exists, so a
+   *  site created in the console already has its first revision before anyone
+   *  opens it — which used to mean the read screen was silently skipped and you
+   *  landed on the questions with no idea a read had happened. This flag makes
+   *  the receipt play once, the first time someone opens the site's understanding.
+   *  Cleared by the first save. Fixture sites never carry it: they were read
+   *  before this session and their receipt is history, not news. */
+  unseen?: boolean;
   /** The source repository read alongside the site, if one is connected. It
    *  settles three of the interview's questions — see SOURCE_SETTLES. */
   source?: string;
