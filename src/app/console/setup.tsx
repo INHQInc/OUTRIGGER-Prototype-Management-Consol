@@ -40,47 +40,15 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/ui/cn";
 import { Pill, Section, Meta, Th, PageHeader, Toolbar, Chip, Empty } from "./ui";
-import { logActivity } from "./config";
+import { logActivity, resolveSite } from "./config";
+import { understandingOf } from "./customer-context";
+import { firstUnmet, siteReady, siteSteps, type Site, type SiteStepKey } from "@/lib/console/fake";
 
 /* ── Fixtures ──────────────────────────────────────────────────────── */
 
 const ME = { name: "Bryan Hopkins", role: "Approver" };
-const CUSTOMER = "OUTRIGGER Hotels and Resorts";
 const PROTOTYPE = "Rate-calendar best-price promise";
 const BUILD = "8c1d7e2";
-
-const ENVIRONMENTS = [
-  { label: "Production", host: "outrigger.com", isProduction: true, tag: "opmc-prod-7f31" },
-  { label: "Prep", host: "prep.outrigger.com", isProduction: false, tag: "opmc-prep-2c08" },
-];
-
-const CODE_HOST = { kind: "GitHub", org: "outrigger-digital", repos: 14 };
-
-const REPO_CANDIDATES = [
-  { name: "outrigger-digital/outrigger-prototypes", hint: "empty but for a README — made for this", ok: true },
-  { name: "outrigger-digital/outrigger-web", hint: "the live site — Prism will not open branches here", ok: false },
-  { name: "outrigger-digital/outrigger-brand-assets", hint: "no build, nothing to compile", ok: false },
-];
-
-const OPTI_PROJECTS = [
-  { id: "24138040550", name: "Outrigger — Web", events: 48, duplicateNames: 7, conversionEvent: false },
-  { id: "24101992774", name: "OHANA by Outrigger", events: 11, duplicateNames: 0, conversionEvent: false },
-];
-
-/** Two keys, one display name — the evidence for the duplicate count above. */
-const DUPLICATE_PAIR = [
-  { key: "24138040550_book_now_button_clicks", attached: true },
-  { key: "24138040550_offer_detail_book_now_button_clicks", attached: false },
-];
-
-const LOADER_BEACON = {
-  env: "Prep",
-  url: "prep.outrigger.com/hawaii/oahu/outrigger-reef-waikiki-beach-resort",
-  tag: "opmc-prep-2c08",
-  at: "10 Sep 2026 09:07:12 HST",
-  loader: "loader 1.6.2",
-  client: "Chrome 141 · macOS",
-};
 
 /** The tag as it is pasted, for one environment's own id. Said once: the checklist shows it, Injection proof copies it. */
 const TAG_LINES = (tag: string) => [
@@ -101,14 +69,6 @@ const Check = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M20 6 9 17l-5-5" />
   </svg>
-);
-
-const Mono = ({ children }: { children: React.ReactNode }) => (
-  <span className="font-mono text-[11px] text-muted-2 bg-surface-2 rounded px-1.5 py-0.5">{children}</span>
-);
-
-const Label = ({ children }: { children: React.ReactNode }) => (
-  <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-1.5">{children}</div>
 );
 
 /** A frozen fact: observed, attributed, never editable in place. */
@@ -196,201 +156,115 @@ function StepRow({ n, state, title, why, reason, children }: {
 }
 
 /** `environments` is the fixture for OUTRIGGER; a customer created this session passes none. */
-export function SetupChecklist({ environments = ENVIRONMENTS }: { environments?: typeof ENVIRONMENTS } = {}) {
-  // Nothing here is a stored "step 3 complete" flag. Each of these is the state
-  // some other surface reads too, and completion falls out of it.
-  const [hostConnected, setHostConnected] = useState(false);
-  const [repo, setRepo] = useState<string | null>(null);
-  const [token, setToken] = useState("");
-  const [projectId, setProjectId] = useState<string>("");
-  const [beaconSeen, setBeaconSeen] = useState(false);
-  const [checks, setChecks] = useState(0);
-  const [reveal, setReveal] = useState(false);
+/** The teaching a wizard used to do, kept for the ONE step a person is on.
+ *  Only the first not-done step renders its passage, so the card stays a list. */
+const TEACHING: Partial<Record<SiteStepKey, React.ReactNode>> = {
+  env: (
+    <p className="text-[13px] text-muted-2 max-w-[68ch] leading-relaxed">
+      Call them whatever your team calls them. The only one that changes what Prism allows is production —
+      an experiment can only reach real visitors there, and only with an approval.
+    </p>
+  ),
+  host: (
+    <p className="text-[13px] text-muted-2 max-w-[68ch] leading-relaxed">
+      Prism can see repositories in the organisation you name and nowhere else on that host. If this site is
+      built by an agency, it is usually theirs, not yours.
+    </p>
+  ),
+  source: (
+    <div>
+      <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">WHAT IT CHANGES</div>
+      <ul className="space-y-1.5 text-[13px] text-muted leading-relaxed max-w-[68ch]">
+        <li>· The palette arrives <span className="text-foreground">named</span> — <span className="font-mono text-[12px]">$clr-deep-turquoise</span>, not &ldquo;#004561, used 73 times&rdquo;.</li>
+        <li>· Type gets <span className="text-foreground">roles</span>: which family is for headlines is a line in the stylesheet, not a guess from counts.</li>
+        <li>· The agent reuses your <span className="text-foreground">actual components</span> instead of writing parallel ones.</li>
+        <li>· <span className="text-foreground">Three of the seven questions</span> Prism would otherwise ask are answered by the code, so the interview gets shorter.</li>
+      </ul>
+    </div>
+  ),
+  tag: (
+    <p className="text-[13px] text-muted-2 max-w-[68ch] leading-relaxed">
+      Until it is there you can build and preview, but nothing reaches a real visitor. Send the install
+      instructions from the environment itself — Prism writes the email and listens for the first beacon.
+    </p>
+  ),
+};
 
-  const tokenValid = token.trim().length >= 8;
-  const project = OPTI_PROJECTS.find((p) => p.id === projectId) ?? null;
-  const prod = environments.find((e) => e.isProduction);
+/** WHAT EACH SITE STILL NEEDS — the only resume surface.
+ *
+ *  This replaces SetupChecklist, which was account-level and rendered behind
+ *  `fresh &&` in work.tsx — meaning it only ever appeared for an account created
+ *  in the session and entered through a support session. A customer's own Owner
+ *  never saw it. It also asserted an account-wide code host, which D16 makes
+ *  untrue at the second site, from a fixture that contradicted the site fixtures.
+ *
+ *  Every state here comes from siteSteps() in fake.ts, whose three build gates
+ *  ARE buildBlockers() (D14). Nothing on this card is a flag anyone can set.
+ *  It derives its own emptiness: when every site is ready it renders nothing,
+ *  which the preamble warns about before it happens. */
+export function SiteReadiness({ sites, picked, onFix }: {
+  sites: Site[];
+  picked: string | null;
+  onFix: (siteId: string, room: "Setup" | "Understanding") => void;
+}) {
+  const rows = sites.map((site) => {
+    const resolved = resolveSite(site.domain) ?? site;
+    const steps = siteSteps(resolved, understandingOf(site.id));
+    return { site, steps, next: firstUnmet(steps), ready: siteReady(steps) };
+  });
+  const unready = rows.filter((r) => !r.ready);
+  // Nothing to say. The card goes, and does not come back.
+  if (unready.length === 0) return null;
 
-  const state: Record<string, StepState> = {
-    env: environments.length > 0 ? "done" : "ready",
-    host: hostConnected ? "done" : "ready",
-    repo: repo ? "done" : hostConnected ? "ready" : "blocked",
-    opti: tokenValid && project ? "done" : "ready",
-    loader: beaconSeen ? "done" : "listening",
-  };
-
-  const steps = Object.values(state);
-  const done = steps.filter((s) => s === "done").length;
-  const blocked = steps.filter((s) => s === "blocked").length;
-  const complete = done === steps.length;
-
-  // The whole thing is finished, so the whole thing goes away.
-  if (complete && !reveal) {
-    return (
-      <Section title="Setup">
-        <Empty
-          title="Set up. This checklist has removed itself."
-          body={`All five steps derive from state that is now true for ${CUSTOMER}, so there is nothing left for the list to watch. It was scaffolding for the first run, not a room — each fact still lives where it is edited: environments on the site, the repository in Connections, the project in Measurement.`}
-          action={<Button size="sm" variant="outline" onClick={() => setReveal(true)}>Show the five steps again</Button>}
-        />
-      </Section>
-    );
-  }
-
+  const only = sites.length === 1;
   return (
     <Section
-      title="Before Prism can build anything"
+      title="What each site still needs"
       action={
-        <div className="flex items-center gap-3">
-          <span className="text-[12.5px] text-muted-2 tabular-nums">
-            {done} of {steps.length} done{blocked > 0 && ` · ${blocked} blocked`}
-          </span>
-          {complete && <Button size="sm" variant="outline" onClick={() => setReveal(false)}>Dismiss</Button>}
-        </div>
+        <span className="text-[12.5px] text-muted-2 tabular-nums">
+          {rows.length - unready.length} of {rows.length} site{rows.length === 1 ? "" : "s"} ready
+        </span>
       }>
-
       <div className="px-5 py-3.5 border-b border-border">
         <p className="text-[13.5px] text-muted max-w-[72ch] leading-relaxed">
-          Every step below ticks itself from state the rest of the console already reads — none of them is a box you can
-          check. The numbers are the order that works, not a lock: a step opens the moment its own prerequisite is met.
-          <span className="text-foreground"> When the fifth ticks, this list deletes itself and does not come back.</span>
+          Every step below ticks itself from state the rest of the console already reads — none of them is a
+          box you can check. A step opens the moment its own prerequisite is met.
+          <span className="text-foreground"> When the last one ticks, this list deletes itself and does not come back.</span>
         </p>
       </div>
 
-      {/* 1 — environments. True before anyone arrives, so it opens already done. */}
-      <StepRow n={1} state={state.env}
-        title="An environment to work against"
-        why="An environment is an address Prism can look at, plus one bit: whether real visitors can reach it.">
-        {environments.length === 0 && (
-          <p className="text-[13px] text-muted">None yet. Each site gets its own — add them from <span className="text-foreground">Sites</span> → the site, and mark the one real visitors reach as production.</p>
-        )}
-        <div className="flex flex-wrap gap-1.5">
-          {environments.map((e) => (
-            <span key={e.label} className={cn("inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[12.5px]",
-              e.isProduction ? "border-border-strong" : "border-border")}>
-              <span className="font-medium">{e.label}</span>
-              <span className="font-mono text-[11.5px] text-muted-2">{e.host}</span>
-              {e.isProduction && <Pill tone="accent">Production</Pill>}
-            </span>
-          ))}
-        </div>
-      </StepRow>
-
-      {/* 2 — the code host. */}
-      <StepRow n={2} state={state.host}
-        title="A code host Prism can read"
-        why="Prototypes are branches in your own repository, so Prism needs read access to the account that holds it. It never writes to your live site&rsquo;s default branch.">
-        {hostConnected ? (
-          <p className="text-[13px] text-muted">
-            {CODE_HOST.kind} app installed on <span className="font-mono text-[12px] text-foreground">{CODE_HOST.org}</span> ·
-            <span className="tabular-nums"> {CODE_HOST.repos}</span> repositories readable · installed by {ME.name}. Revocable from
-            GitHub at any time, which is why this is plain text and not a receipt.
-          </p>
-        ) : (
-          <Button size="sm" onClick={() => { setHostConnected(true); logActivity(`Connected ${CODE_HOST.kind} on ${CODE_HOST.org}.`); }}>Connect {CODE_HOST.kind}</Button>
-        )}
-      </StepRow>
-
-      {/* 3 — the prototypes repo. The one genuinely blocked step. */}
-      <StepRow n={3} state={state.repo}
-        title="A repository to keep prototypes in"
-        why="One repository, separate from the live site. Every prototype is a branch under a prefix, and every build is a commit you can read."
-        reason={state.repo === "blocked"
-          ? `Waiting on step 2. Prism cannot offer you a list of repositories it has no way to read — connect ${CODE_HOST.kind} and this list fills itself in.`
-          : undefined}>
-        {repo ? (
-          <p className="text-[13px] text-muted">
-            <span className="font-mono text-[12px] text-foreground">{repo}</span> · branches under
-            <span className="font-mono text-[12px]"> opmc/</span> · the built file each prototype must produce is
-            <span className="font-mono text-[12px]"> dist/variation.js</span>. Change any of this in Connections.
-          </p>
-        ) : hostConnected ? (
-          <div className="space-y-1.5">
-            {REPO_CANDIDATES.map((r) => (
-              <button key={r.name} onClick={() => { if (!r.ok) return; setRepo(r.name); logActivity(`Picked ${r.name} to keep prototypes in.`); }} disabled={!r.ok}
-                className={cn("w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left",
-                  r.ok ? "border-border bg-surface hover:border-border-strong" : "border-border bg-surface-2/40 cursor-not-allowed")}>
-                <span className={cn("w-4 h-4 rounded-full border-2 shrink-0", r.ok ? "border-border-strong" : "border-border")} />
-                <span className="font-mono text-[12.5px] min-w-0 truncate">{r.name}</span>
-                <span className={cn("text-[12px] ml-auto text-right", r.ok ? "text-muted-2" : "text-warn")}>{r.hint}</span>
-              </button>
+      {unready.map(({ site, steps, next }) => {
+        const done = steps.filter((x) => x.state === "done").length;
+        const open = only || site.id === picked;
+        if (!open) {
+          return (
+            <div key={site.id} className="flex items-center gap-3 px-5 py-3.5 border-b border-border last:border-0">
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-medium truncate">{site.domain}</div>
+                <div className="text-[12.5px] text-muted-2 mt-0.5 truncate">{next?.todo}</div>
+              </div>
+              <span className="text-[12.5px] text-muted-2 tabular-nums shrink-0">{done} of {steps.length}</span>
+              <Button size="sm" variant="outline" className="shrink-0"
+                onClick={() => next && onFix(site.id, next.room)}>Open →</Button>
+            </div>
+          );
+        }
+        return (
+          <div key={site.id} className="border-b border-border last:border-0">
+            {!only && (
+              <div className="flex items-center gap-3 px-5 pt-3.5 pb-1">
+                <div className="text-[14px] font-medium">{site.domain}</div>
+                <span className="ml-auto text-[12.5px] text-muted-2 tabular-nums">{done} of {steps.length}</span>
+              </div>
+            )}
+            {steps.map((st) => (
+              <StepRow key={st.key} n={st.n} state={st.state} title={st.title} why={st.why} reason={st.reason}>
+                {st.key === next?.key ? TEACHING[st.key] : undefined}
+              </StepRow>
             ))}
           </div>
-        ) : null}
-      </StepRow>
-
-      {/* 4 — Optimizely. Two facts, one step: the token, then the project it can see. */}
-      <StepRow n={4} state={state.opti}
-        title="An Optimizely token, and the project it should default to"
-        why="The token is how Prism reads your events and pushes a variation. The default project is which of them it means when you don&rsquo;t say."
-        reason={tokenValid ? undefined : "The project list stays empty until a token is in — Prism will not let you type a project ID it has never seen answer."}>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Personal access token" spellCheck={false}
-            className="h-9 w-[240px] px-3 rounded-lg border border-border bg-surface text-[13px] font-mono placeholder:font-sans placeholder:text-muted-2 focus:border-accent focus:outline-none" />
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={!tokenValid}
-            title={tokenValid ? "Projects this token can see" : "Paste a token first"}
-            className="h-9 px-2.5 rounded-lg border border-border bg-surface text-[13px] text-muted disabled:opacity-50 focus:border-accent focus:outline-none">
-            <option value="">Default project…</option>
-            {OPTI_PROJECTS.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.id}</option>)}
-          </select>
-          {tokenValid && (
-            <span className="text-[12.5px] text-ok tabular-nums">Token accepted — it can see {OPTI_PROJECTS.length} projects</span>
-          )}
-        </div>
-
-        {project && (
-          <div className="mt-3 rounded-lg border border-warn/40 bg-warn/5 px-3.5 py-3">
-            <Label>WHAT PRISM READ OUT OF {project.name.toUpperCase()}</Label>
-            <p className="text-[13.5px] text-muted max-w-[70ch] leading-relaxed">
-              <span className="text-foreground tabular-nums">{project.events} events</span>, and
-              {project.conversionEvent
-                ? " a conversion event to judge against."
-                : " not one of them records a conversion or revenue."} Prism will not stand a lookalike in for
-              one, so what you brief as the action that matters gets measured as the nearest step this project does
-              record, and labelled that way.
-              <span className="text-foreground tabular-nums"> {project.duplicateNames} display names</span> are used by more
-              than one event — one of them is the pair below, where only the first is attached to this experiment:
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {DUPLICATE_PAIR.map((d) => (
-                <span key={d.key} className="inline-flex items-center gap-1.5">
-                  <Mono>{d.key}</Mono>
-                  <span className={cn("text-[11.5px]", d.attached ? "text-ok" : "text-warn")}>{d.attached ? "attached" : "not attached"}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </StepRow>
-
-      {/* 5 — the loader. The step nobody can tick by hand. */}
-      <StepRow n={5} state={state.loader}
-        title="The tag has reported in at least once"
-        why="This one cannot be ticked by hand and there is no button that says &ldquo;installed&rdquo;. It ticks when a page carrying the tag loads and the tag says so itself."
-        reason={beaconSeen ? undefined : `Nothing has reported in yet. Listening since 09:02 HST · ${checks} re-checks · the tag belongs in <head> on ${prod?.host ?? "your site"} and on prep.`}>
-        {beaconSeen ? (
-          <div className="space-y-2.5">
-            <Receipt title="FIRST REPORT — RECORDED AS IT ARRIVED" rows={[
-              ["arrived", LOADER_BEACON.at],
-              ["from", LOADER_BEACON.url],
-              ["tag", `${LOADER_BEACON.tag} · ${LOADER_BEACON.env}`],
-              ["version", LOADER_BEACON.loader],
-              ["client", LOADER_BEACON.client],
-            ]} />
-            <p className="text-[13px] text-muted-2 max-w-[70ch] leading-relaxed">
-              That is one page on one environment — enough to prove the tag works, and no proof at all about the page a
-              prototype targets. Per-page proof is Injection proof, and it is a different question.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            <CodeBlock label="THE TAG — LAST THING IN <HEAD>" lines={TAG_LINES(prod?.tag ?? "")} />
-            <Button size="sm" variant="outline" onClick={() => { setChecks((c) => c + 1); if (checks >= 1) setBeaconSeen(true); }}>
-              Check again
-            </Button>
-          </div>
-        )}
-      </StepRow>
+        );
+      })}
     </Section>
   );
 }

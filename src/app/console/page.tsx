@@ -258,7 +258,8 @@ export default function Console() {
 
       <main className="flex-1 min-w-0 flex flex-col">
         {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); rememberSite(site); setSessionSites((ss) => [...ss.filter((x) => x.domain !== site.domain), site]); setFlow(null); setSiteFilter(site.id); setNav("Setup"); }} />}
-        {!flow && nav === "Overview" && <OverviewView open={openExp} rows={scoped} fresh={fresh} />}
+        {!flow && nav === "Overview" && <OverviewView open={openExp} rows={scoped} sites={rows} picked={siteFilter}
+              onFix={(id, room) => { setSiteFilter(id); setNav(room); }} />}
         {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Ideas" && fresh && <FreshEmpty title="Ideas" pick={() => setSwitcher(true)} />}
         {!flow && nav === "Readouts" && fresh && <FreshEmpty title="Readouts" pick={() => setSwitcher(true)} />}

@@ -10,10 +10,10 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/ui/cn";
-import { EXPERIMENTS, ME, SITE_ROWS, authoredByMe, STATUS, TROUBLE, needsMe, type Experiment } from "@/lib/console/fake";
+import { EXPERIMENTS, ME, SITE_ROWS, authoredByMe, STATUS, TROUBLE, needsMe, type Experiment, type Site } from "@/lib/console/fake";
 import { Badge, Chip, Meta, PageHeader, Pill, Section, StageRail, Th, Toolbar } from "./ui";
 import { StagePanel } from "./stages";
-import { SetupChecklist } from "./setup";
+import { SiteReadiness } from "./setup";
 import { Readout } from "./readout";
 import { logActivity } from "./config";
 import { STAGES, type Stage } from "@/lib/console/fake";
@@ -29,7 +29,11 @@ const goDecision = (expId: string) => {
 
 /* ── Overview ──────────────────────────────────────────────────────── */
 
-export function OverviewView({ open, rows = EXPERIMENTS, fresh }: { open: (id: string) => void; rows?: Experiment[]; fresh?: boolean }) {
+export function OverviewView({ open, rows = EXPERIMENTS, sites = [], picked = null, onFix }: {
+  open: (id: string) => void; rows?: Experiment[];
+  sites?: Site[]; picked?: string | null;
+  onFix: (siteId: string, room: "Setup" | "Understanding") => void;
+}) {
   const mine = rows.filter(needsMe);
   const running = rows.filter((e) => e.status === "running");
   return (
@@ -37,8 +41,11 @@ export function OverviewView({ open, rows = EXPERIMENTS, fresh }: { open: (id: s
       <PageHeader title="Overview" />
       <div className="flex-1 overflow-auto p-6 space-y-4">
         {/* Derives its own completion and disappears — so it only appears for an
-            account whose setup is genuinely unfinished, never for one that is done. */}
-        {fresh && <SetupChecklist environments={[]} />}
+            account whose setup is genuinely unfinished, never for one that is done.
+            NOT gated on `fresh` any more: that made the one surface telling an owner
+            what to do next render only for an account created in this session and
+            entered through a support session. A customer's own Owner never saw it. */}
+        <SiteReadiness sites={sites} picked={picked} onFix={onFix} />
         <Section title={`Waiting on you — ${mine.length}`}>
           {mine.length === 0 ? (
             <p className="px-5 py-6 text-[14px] text-muted text-center">Nothing needs you right now.</p>

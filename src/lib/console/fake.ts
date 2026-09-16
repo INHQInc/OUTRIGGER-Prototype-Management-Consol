@@ -369,6 +369,101 @@ export const buildBlockers = (site: Site | undefined): string[] => {
 
 export const canBuild = (site: Site | undefined) => buildBlockers(site).length === 0;
 
+/* ── What a site still needs ─────────────────────────────────────────────
+   ONE definition, so the Overview row, the readiness card and the Setup
+   banner cannot disagree about it. The three BUILD gates are buildBlockers()
+   itself — imported, never re-derived (D14). The other three are the jobs
+   that are not build gates but are still the work: an environment to look
+   at, a site Prism has read and a person has checked, and a tag that has
+   reported in on its own. */
+
+export type SiteStepKey = "env" | "host" | "source" | "repo" | "understanding" | "tag";
+/** ready = yours to do · blocked = waiting on an earlier step · listening = nobody can tick it. */
+export type SiteStepState = "done" | "ready" | "blocked" | "listening";
+
+export interface SiteStep {
+  key: SiteStepKey;
+  n: number;
+  /** Names the thing, for a step row. */
+  title: string;
+  /** Names the DOING of it, for a one-line row that needs a verb. */
+  todo: string;
+  why: string;
+  state: SiteStepState;
+  /** Only when blocked — the sentence buildBlockers gave, never a re-wording. */
+  reason?: string;
+  /** The room that owns the fix. A row links here; it never fixes anything itself. */
+  room: "Setup" | "Understanding";
+  /** True when canBuild() fails BECAUSE of this step. */
+  blocksBuild: boolean;
+}
+
+/** `understanding` is passed in because it is session state living in a client
+ *  module, and this file imports nothing. See understandingOf() in customer-context. */
+export const siteSteps = (
+  site: Site | undefined,
+  understanding: { label: string; tone: "ok" | "warn" | "muted" },
+): SiteStep[] => {
+  const blockers = buildBlockers(site);
+  const noHost = !site?.codeHost;
+  const hostBlocker = blockers[0];
+  return [
+    {
+      key: "env", n: 1, room: "Setup", blocksBuild: false,
+      title: "An environment to work against",
+      todo: "Add an environment to work against",
+      why: "An address Prism can look at, plus one bit: whether real visitors can reach it.",
+      state: (site?.envs.length ?? 0) > 0 ? "done" : "ready",
+    },
+    {
+      key: "host", n: 2, room: "Setup", blocksBuild: true,
+      title: "A code host Prism can read",
+      todo: "Connect the host this site's code lives on",
+      why: "This site names its own — another site on this account can be somewhere else entirely, and often is. Prism reaches only the organisation you name.",
+      // No `reason`: this step IS the missing host, and printing buildBlockers'
+      // sentence under its own title says the same thing twice. The two steps
+      // WAITING on it below are where that sentence earns its place.
+      state: noHost ? "ready" : "done",
+    },
+    {
+      key: "source", n: 3, room: "Setup", blocksBuild: true,
+      title: "The site's own code, to build against",
+      todo: "Connect the read-only source",
+      why: "Its real stylesheets and components. Without it anything built is written from the outside of a page rather than from the system behind it.",
+      state: site?.source ? "done" : noHost ? "blocked" : "ready",
+      reason: noHost ? hostBlocker : undefined,
+    },
+    {
+      key: "repo", n: 4, room: "Setup", blocksBuild: true,
+      title: "A repository to keep prototypes in",
+      todo: "Name the repository builds go into",
+      why: "Separate from the live site. Every prototype is a branch under a prefix, and every build is a commit you can read.",
+      state: site?.repo ? "done" : noHost ? "blocked" : "ready",
+      reason: noHost ? hostBlocker : undefined,
+    },
+    {
+      key: "understanding", n: 5, room: "Understanding", blocksBuild: false,
+      title: "Prism has read the site, and you have checked what it wrote",
+      todo: "Check what Prism wrote about this site",
+      why: `${understanding.label}. A build does not wait on this — but what gets built is only as good as it.`,
+      state: understanding.tone === "ok" ? "done" : "ready",
+    },
+    {
+      key: "tag", n: 6, room: "Setup", blocksBuild: false,
+      title: "The tag has reported in at least once",
+      todo: "Get the tag onto the site",
+      why: "Nobody can tick this and there is no button that says installed. It ticks when a page carrying the tag loads and the tag says so itself.",
+      state: site?.envs.some((e) => e.script === "verified") ? "done" : "listening",
+    },
+  ];
+};
+
+/** The one step a row should name. Null when the site is ready. */
+export const firstUnmet = (steps: SiteStep[]): SiteStep | null =>
+  steps.find((s) => s.state !== "done") ?? null;
+
+export const siteReady = (steps: SiteStep[]) => steps.every((s) => s.state === "done");
+
 /* ── Measurement ────────────────────────────────────────────────────────
    Real event keys from Optimizely project 24138040550, including the real
    duplicate display names — which are the reason the planner has to ask. */
