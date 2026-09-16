@@ -210,3 +210,23 @@ Fast orientation if this comes back:
   If the property is at **50/50 event-scoped custom dimensions**, dimensions stop
   populating — events still arrive, the parameter goes empty, every experiment report
   goes blank, and it happens on an arbitrary date with no change on your side.
+
+## The board is full of cards that aren't doing anything
+
+**DIAGNOSED 2026-09-16, not fixed** — see
+[`investigations/BOARD-PIPELINE-2026-09.md`](investigations/BOARD-PIPELINE-2026-09.md).
+
+- `derivePipeline` runs **two** derivations of "is there work left": a `primaryAction`
+  ladder that tests "finished?" ninth, and an eight-rule alert block restating it. Six of
+  nine ambers on the live board are literal duplicates of the card's own `Next:` line.
+- **Handoff is the one column not derived.** `stageShipped` reads a stored field, and the
+  board's drag-to-Handoff PATCHes `status:"shipped"` with no verification. That is how a
+  card with outstanding work ends up in the terminal column still saying "Cut a new
+  version".
+- **Do not "simplify" by moving alerts into step statuses.** On a card those render only
+  as the tooltip on a 1.5px dot. The information disappears.
+- **Do not delete the push-behind alert.** For a *running* experiment the Experimentation
+  step is already `done`, so that amber is the only signal that Optimizely is serving a
+  stale cut.
+- Re-syncing moves `headSha` without touching the build, so `cutFresh` goes false and the
+  card demands a new cut the moment you obey it. Known loop.
