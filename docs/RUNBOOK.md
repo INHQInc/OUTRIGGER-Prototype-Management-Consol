@@ -197,6 +197,15 @@ Fast orientation if this comes back:
 - "Is GA4 actually receiving it?" is answered by **Admin → Events → Recent events**
   (28-day window) or DebugView. Realtime's event card is top-N and hides low-volume
   events.
+- **Collection is probably fine.** Admin → Events → Recent events lists
+  `experience_impression` with its stream active, and re-pulling the Optimizely project
+  daily shows experiments still taking samples. If both are true, the fault is in
+  ATTRIBUTION, not collection, and consent/accounts/tokens are all the wrong tree.
+- **"There was an error loading Google Audiences" is a different fault** on a feature
+  that is OFF at project level, and does not mean you must build an audience in GA4
+  first — the export creates them. Leave it off; it also spends the 100-audience quota.
+- **Optimizely's "Manage" link cannot switch accounts.** It opens Google's Linked apps
+  page, which only revokes, and only for the account the browser is signed into.
 - First check, and the current best hypothesis: GA4 → Admin → Custom definitions.
   If the property is at **50/50 event-scoped custom dimensions**, dimensions stop
   populating — events still arrive, the parameter goes empty, every experiment report

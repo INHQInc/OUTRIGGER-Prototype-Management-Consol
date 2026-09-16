@@ -336,6 +336,43 @@ precisely BECAUSE renaming a key is not: `key` is the primary key, referenced by
 the branch, and `deletePrototype` cascades to versions and promotions. Showing
 the key costs a table cell; changing it costs an ordered migration.
 
+## 8 · Adding a site, and where you pick it back up — DONE
+
+**Status: built 15 Sep 2026.** Prompted by Bryan walking the owner journey: *"this is
+widely difficult to follow"*, *"I find the screens right now very complicated"*, and on
+the wizard *"maybe its a wizard to start and then you can bail but pick back on on the
+overview page."*
+
+Four designs were written and judged independently; all three judges picked the
+wizard-then-Overview shape. The full decision is **D17** in
+[`architecture/DECISIONS.md`](architecture/DECISIONS.md).
+
+What shipped:
+
+- **A site is committed at its address.** The wizard is two steps — address, then the
+  code host — and the site is written the moment the address validates. "Nothing is
+  lost" became a fact about a row in the selector rather than a promise no draft map
+  was keeping. `onboarding.tsx` went 342 → 167 lines.
+- **`siteSteps()` in `fake.ts`** — one definition of what a site still needs, whose
+  three build gates *are* `buildBlockers()` (D14). Six steps; **reading the site is
+  step 5**, the first time that job has appeared on any checklist.
+- **"What each site still needs" on Overview**, per site, ungated. It replaced a
+  checklist that rendered behind `{fresh && …}` and so had **never been seen by a
+  customer's own Owner**. `setup.tsx` lost 326 lines and seven Outrigger-hardcoded
+  fixtures.
+- **`CodeHostCard`** — the wizard and the Setup room now render the same control.
+- **"Remove this site"** — required by commit-at-address; the console previously had no
+  site-removal control at all.
+- The Setup banner calls `buildBlockers()` instead of re-deriving it, and the sidebar's
+  understanding dot was dropped (a colour with no sentence).
+
+Net: the console is **136 lines smaller**.
+
+**Left open:** every new site still gets Outrigger's draft prose and fixtures (the
+de-verticalisation theme), the site picker keeps its selection across support sessions,
+and the two-segment step bar is close to the point where the console's one hand-rolled
+control stops earning its keep.
+
 ## Open questions
 
 - **Demo accounts across verticals.** The back office lists four accounts and
