@@ -19,7 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/ui/cn";
-import { AB_TOOLS, ME, OTHER_CONNECTIONS, PROJECT_EVENTS, SITE_ROWS, type CodeHost, type Connection, type Site } from "@/lib/console/fake";
+import { AB_TOOLS, ME, OTHER_CONNECTIONS, PROJECT_EVENTS, SITE_ROWS, buildBlockers, type CodeHost, type Connection, type Site } from "@/lib/console/fake";
 import { Empty, Meta, PageHeader, Pill, Section, Th, Toolbar } from "./ui";
 import { SkillsPanel } from "./skills";
 import { UnderstandingPill } from "./customer-context";
@@ -140,6 +140,9 @@ export function SiteDetail({ s }: { s: Site }) {
   const [sourcePick, setSourcePick] = useState(SOURCE_REPOS[0]);
   const [source, setSource] = useState<string | undefined>(edits?.source ?? s.source);
   const [host, setHost] = useState<CodeHost | undefined>(edits?.codeHost ?? s.codeHost);
+  // Fed from the live local state rather than resolveSite, so the banner corrects
+  // itself the instant a host is connected — same definition, current facts.
+  const blockers = buildBlockers({ ...s, codeHost: host, source, repo });
   const [connectingHost, setConnectingHost] = useState(false);
   const [hostKind, setHostKind] = useState<CodeHost["kind"]>("GitHub");
   const [hostOrg, setHostOrg] = useState("");
@@ -182,15 +185,16 @@ export function SiteDetail({ s }: { s: Site }) {
       </header>
 
       <div className="flex-1 overflow-auto p-6 space-y-4">
-        {(!repo || !source) && (
+        {/* THE GATE HAS ONE DEFINITION (D14). This banner used to re-derive it as
+            (!repo || !source), which meant it never mentioned the code host — the
+            thing buildBlockers checks FIRST and short-circuits on. A site with no
+            host was told it needed a source and a repository, three inches above a
+            panel saying Prism could not reach its code at all. It asks now. */}
+        {blockers.length > 0 && (
           <div className="rounded-xl border border-warn/40 bg-warn/[0.06] px-4 py-3">
             <div className="text-[13.5px] font-semibold text-warn mb-1">Nothing can be built for this site yet</div>
             <p className="text-[13px] text-muted leading-relaxed">
-              {!source && !repo
-                ? "It has neither a source to build from nor a repository to build into. Both are required."
-                : !source
-                  ? "Prism builds from the site's own stylesheets and components. Without a read-only source there is nothing to build against — anything written would guess at the system from the outside of a page."
-                  : "There is nowhere to put a build. Every experiment is a branch in a repository Prism writes to."}{" "}
+              It has {blockers.join(", and ")}.{" "}
               Reading the site and answering its questions still work; building does not.
             </p>
           </div>
