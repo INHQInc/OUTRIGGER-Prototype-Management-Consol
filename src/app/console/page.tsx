@@ -26,7 +26,7 @@ import { ActivityView, ConnectionsView, GuardrailsView, PeopleView, SiteDetail, 
 import { SiteProfile } from "./customer-context";
 import { ExperimentDetail, ExperimentsView, IdeasView, OverviewView, ReadoutsView } from "./work";
 import { NewExperiment } from "./new-experiment";
-import { UnderstandSite, UnderstandingPill, markRead, understandingOf } from "./customer-context";
+import { UnderstandSite, UnderstandingPill, markRead } from "./customer-context";
 import { SiteOnboarding } from "./onboarding";
 import { BackOffice, CUSTOMERS, SupportBanner } from "./operator";
 import { VerdictPicker } from "./verdict";
@@ -229,12 +229,11 @@ export default function Console() {
                       <span className="ml-auto text-[11px] font-bold text-accent-fg bg-accent rounded-full px-1.5 tabular-nums">{waiting}</span>
                     )}
                     {count[label] !== undefined && <span className="ml-auto text-[11px] font-semibold text-muted-2 tabular-nums">{count[label]}</span>}
-                    {label === "Understanding" && picked && (
-                      <span className="ml-auto shrink-0" title={understandingOf(picked.id).label}>
-                        <span className={cn("block w-1.5 h-1.5 rounded-full",
-                          understandingOf(picked.id).tone === "ok" ? "bg-ok" : understandingOf(picked.id).tone === "warn" ? "bg-warn" : "bg-border-strong")} />
-                      </span>
-                    )}
+                    {/* No understanding dot here. That fact now has three homes —
+                        the selector row's pill, the readiness step on Overview, and
+                        the Understanding room itself — and this was the only one of
+                        the four that was a colour with no sentence: a status you
+                        cannot act on from where you see it (§6). */}
                   </button>
                 );
               })}
@@ -280,7 +279,10 @@ export default function Console() {
         {!flow && nav === "Ideas" && !fresh && <IdeasView promote={() => openExp("room-compare")} write={() => { setNav("Experiments"); setCreating(true); }} />}
         {!flow && nav === "Readouts" && !fresh && <ReadoutsView rows={scoped} />}
         {!flow && nav === "Setup" && (picked
-          ? <SiteDetail s={picked} />
+          ? <SiteDetail s={picked} onRemoved={(site) => {
+              setSessionSites((ss) => ss.filter((x) => x.domain !== site.domain));
+              setSiteFilter(null); setNav("Overview");
+            }} />
           : <FreshEmpty title="Setup" pick={() => setSwitcher(true)} />)}
         {!flow && nav === "Understanding" && (
           learning ? (

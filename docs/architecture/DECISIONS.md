@@ -434,3 +434,70 @@ states are in the demo on purpose.
 If a customer's sites live in different Optimizely projects — likely, on the same
 argument as above — that is the same mistake one layer along. Not yet decided.
 
+
+## D17 · A site is committed at its address, and what it still needs has one home
+
+**Why.** Bryan, 15 Sep 2026, walking the owner journey: *"this is widely difficult
+to follow"* and *"I find the screens right now very complicated"*, then — on the
+site wizard — *"maybe its a wizard to start and then you can bail but pick back on
+on the overview page."*
+
+Three things were wrong at once. **Add a site was a four-step wizard that discarded
+everything if you left**, while its shell showed a "Saved" pill and the line "You
+can stop here and come back — nothing is lost" and offered "Save & close". It wrote
+no draft at all: `grep -c DRAFTS onboarding.tsx` was 0 against 7 in
+`customer-context.tsx`. **Its steps 2–4 were a second copy of the Setup room**,
+which has always owned environments, the two repositories and the install
+instructions durably. And **the one surface that tells an owner what to do next
+rendered behind `{fresh && …}`** in work.tsx, where `fresh` is set true only by
+entering a back-office support session or by un-archiving — so a customer's own
+Owner had never seen it once.
+
+**Decision.**
+
+1. **A site is written the moment its address validates**, not at the end of a
+   flow. "Nothing is lost" becomes a property of the data — a row in the site
+   selector — rather than a promise an in-memory map has to keep. There is
+   therefore nothing to *resume*: reopening "Add a site" always starts a new one.
+   The rejected alternative was giving the wizard a real draft map; it makes a
+   second durable editor for five facts that already have a home.
+2. **What a site still needs has ONE definition** — `siteSteps()` in `fake.ts`,
+   beside the gate it shares. Its three build gates **are** `buildBlockers()`,
+   imported and never re-derived — the rule D14 set, now stated for the wider
+   list. The other three are work that is not a build gate: an environment, a site
+   read and checked, and a tag that reports in on its own.
+3. **The account Overview carries exactly one readiness card, per site**, and it
+   is the only resume surface. Per site because D16 makes an account-level code
+   host untrue at the second site. A row is collapsed to its own first unmet step
+   as a sentence with a verb; the site the selector is scoped to expands; only the
+   first not-done step opens into teaching prose, so the list stays a list.
+4. **Reading a site is step 5.** Read · Ask · Correct is the product's whole point
+   and had appeared on no checklist anywhere — its only signpost was 12px grey text
+   on the last screen of a wizard nobody reopens. It says plainly that a build does
+   not wait on it, but that what gets built is only as good as it.
+5. **Committing at the address obliges a way back out.** "Remove this site" in the
+   Setup room, offered only for a site added this session with no experiments. A
+   typo would otherwise be a permanent row nagging from the readiness card.
+
+**What it changes.** The wizard is two steps — address, then the host — and step 2
+renders `CodeHostCard`, the *same* component the Setup room renders, writing through
+one `rememberEdit()`. Leaving lands on Understanding rather than Setup. Deleted:
+wizard steps 3 and 4, the reads-from and writes-to halves of step 2, the
+account-level checklist's host/repository/Optimizely steps, seven Outrigger-
+hardcoded fixtures, the dead `Sites → the site` route, and the `fresh` gate.
+`onboarding.tsx` went from 342 lines to 167; `setup.tsx` lost 326.
+
+**The known price of D12.** The site selector is the only site control, so any
+per-site "fix this" button on an account-scoped screen must re-scope the sidebar,
+Experiments and Readouts as a side effect of being pressed. Accepted, and written
+down here so the next session does not rediscover it as a bug.
+
+**Understanding state now has three homes, not four.** The selector row's pill, the
+readiness step, and the Understanding room. The sidebar dot was dropped: it was the
+only one of the four that was a colour with no sentence — a status you cannot act on
+from where you see it.
+
+**Open.** When every site is ready the card removes itself and says so first, so
+"is my newest site set up?" has no answer on Overview once it is. Accepted: a
+permanent "ready" row would be a status nobody can act on. Revisit if anyone looks
+for it.

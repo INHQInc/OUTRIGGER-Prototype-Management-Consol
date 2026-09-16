@@ -40,6 +40,12 @@ const SITE_EDITS = new Map<string, { envs?: Site["envs"]; repo?: string; branchP
  *  fixture keys sites by slug ("outrigger") and both wizards key them by hostname. */
 const SESSION_SITES = new Map<string, Site>();
 export const rememberSite = (s: Site) => SESSION_SITES.set(s.domain, s);
+/** Undo for a site added this session. Committing at the address (see
+ *  SiteOnboarding) means a typo becomes a real row that nags from the readiness
+ *  card forever, so the console has to be able to drop one again. Fixture sites
+ *  are not removable — they are not this session's to remove. */
+export const addedThisSession = (domain: string) => SESSION_SITES.has(domain);
+export const forgetSite = (site: Site) => { SESSION_SITES.delete(site.domain); SITE_EDITS.delete(site.id); };
 /** The one writer for a site's session edits, so CodeHostCard and SiteDetail
  *  cannot hold separate ideas of what this site's code host is. */
 export const rememberEdit = (siteId: string, patch: { envs?: Site["envs"]; repo?: string; branchPrefix?: string; source?: string; codeHost?: CodeHost }) =>
@@ -199,7 +205,7 @@ export function CodeHostCard({ site, onChange }: { site: Site; onChange?: (h: Co
   );
 }
 
-export function SiteDetail({ s }: { s: Site }) {
+export function SiteDetail({ s, onRemoved }: { s: Site; onRemoved?: (site: Site) => void }) {
   const edits = SITE_EDITS.get(s.id);
   const [envs, setEnvs] = useState<Site["envs"]>(edits?.envs ?? s.envs);
   const [repo, setRepo] = useState<string | undefined>(edits?.repo ?? s.repo);
@@ -210,6 +216,10 @@ export function SiteDetail({ s }: { s: Site }) {
   const [envLabel, setEnvLabel] = useState("");
   const [envUrl, setEnvUrl] = useState("");
   const [envProd, setEnvProd] = useState(false);
+
+  const [removing, setRemoving] = useState(false);
+  // Only a site this session added, and only while nothing has been built on it.
+  const removable = addedThisSession(s.domain) && s.experiments === 0;
 
   const [sending, setSending] = useState<number | null>(null);
   const [sendTo, setSendTo] = useState("");
@@ -255,6 +265,7 @@ export function SiteDetail({ s }: { s: Site }) {
             <div className="text-[13px] text-muted-2 mt-1">{s.domain} · {s.label} · {s.experiments} experiment{s.experiments === 1 ? "" : "s"}</div>
           </div>
           <div className="ml-auto flex gap-2">
+            {removable && <Button size="sm" variant="ghost" onClick={() => setRemoving(true)}>Remove this site</Button>}
             <Button size="sm" onClick={() => setAddingEnv(true)}>Add an environment</Button>
           </div>
         </div>
@@ -365,6 +376,23 @@ export function SiteDetail({ s }: { s: Site }) {
         </div>
 
       </div>
+
+      <Dialog open={removing} onOpenChange={setRemoving}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove {s.domain}?</DialogTitle>
+            <DialogDescription>
+              It was added this session and nothing has been built on it. The address, its environments and
+              what Prism read about it are dropped. Prism never touched the site itself, so there is nothing
+              to undo out there.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRemoving(false)}>Keep it</Button>
+            <Button onClick={() => { forgetSite(s); setRemoving(false); logActivity(`Removed ${s.domain}.`); onRemoved?.(s); }}>Remove it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addingEnv} onOpenChange={setAddingEnv}>
         <DialogContent>
