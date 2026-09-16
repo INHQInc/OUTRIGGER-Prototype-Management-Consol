@@ -40,6 +40,10 @@ const SITE_EDITS = new Map<string, { envs?: Site["envs"]; repo?: string; branchP
  *  fixture keys sites by slug ("outrigger") and both wizards key them by hostname. */
 const SESSION_SITES = new Map<string, Site>();
 export const rememberSite = (s: Site) => SESSION_SITES.set(s.domain, s);
+/** The one writer for a site's session edits, so CodeHostCard and SiteDetail
+ *  cannot hold separate ideas of what this site's code host is. */
+export const rememberEdit = (siteId: string, patch: { envs?: Site["envs"]; repo?: string; branchPrefix?: string; source?: string; codeHost?: CodeHost }) =>
+  SITE_EDITS.set(siteId, { ...(SITE_EDITS.get(siteId) ?? {}), ...patch });
 
 /** A site as it stands THIS SESSION — the fixture, or one added since, with anything
  *  changed here applied. Every surface that gates on a site's code must ask this, not
@@ -120,12 +124,87 @@ const SCRIPT_TAG = '<script src="https://tag.prism.build/opmc.js" data-tag="…"
 /** SETUP — the site's infrastructure: where it runs, where its code is, whether the
  *  script is on. What Prism UNDERSTANDS about it is its own room (customer-context.tsx):
  *  a different job, done by a different person, at a different time. */
+
+/** WHERE THE CODE LIVES — one control, rendered in two frames: this room, and
+ *  step 2 of Add-a-site. It writes through SITE_EDITS either way, so a host
+ *  connected in the wizard is already connected when the room mounts. Extracted
+ *  because two copies of one dialog is how two surfaces drift apart. */
+export function CodeHostCard({ site, onChange }: { site: Site; onChange?: (h: CodeHost) => void }) {
+  const [host, setHost] = useState<CodeHost | undefined>(SITE_EDITS.get(site.id)?.codeHost ?? site.codeHost);
+  const [connecting, setConnecting] = useState(false);
+  const [kind, setKind] = useState<CodeHost["kind"]>("GitHub");
+  const [org, setOrg] = useState("");
+  return (
+    <>
+              {/* 1 · THE HOST. Nothing about a site's code works without it, and it belongs
+                  to the site: ten sites can be ten different arrangements (D16). */}
+              <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">WHERE THE CODE LIVES</div>
+              {host ? (
+                <>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Pill tone="ok">{host.kind}</Pill>
+                    <span className="font-mono text-[12.5px]">{host.org}</span>
+                    {host.selfHosted && <span className="text-[12.5px] text-muted-2">· self-hosted at <span className="font-mono">{host.selfHosted}</span></span>}
+                  </div>
+                  <p className="text-[12.5px] text-muted-2 mt-2 leading-relaxed">
+                    {host.repos} repositories readable · connected by {host.connectedBy}. Prism reaches {host.org} and nothing else on that host.
+                  </p>
+                  <Button size="sm" variant="ghost" className="px-0 mt-1" onClick={() => setConnecting(true)}>Change it</Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13px] text-muted leading-relaxed mb-2.5">
+                    Not connected. Prism cannot reach this site&rsquo;s code at all — not to read it, and not to put a build anywhere.
+                    Whoever looks after this site may use something different from your other sites; connect whichever one they use.
+                  </p>
+                  <Button size="sm" onClick={() => setConnecting(true)}>Connect a code host</Button>
+                </>
+              )}
+      <Dialog open={connecting} onOpenChange={setConnecting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Where does {site.domain}&rsquo;s code live?</DialogTitle>
+            <DialogDescription>
+              This site&rsquo;s own host — another site can be somewhere else entirely, and often is. Prism reaches only the organisation you name here.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="mb-2" id="host-kind">Host</Label>
+              <RadioGroup aria-labelledby="host-kind" value={kind} onValueChange={(v) => setKind(v as CodeHost["kind"])} className="grid-cols-2">
+                {(["GitHub", "GitLab", "Bitbucket", "Azure DevOps"] as const).map((k) => (
+                  <Label key={k} htmlFor={`host-${k}`} className={cn("gap-3 rounded-xl border px-4 py-2.5 cursor-pointer font-normal text-foreground", kind === k ? "border-accent bg-accent/5" : "border-border")}>
+                    <RadioGroupItem id={`host-${k}`} value={k} /><span className="text-[13.5px]">{k}</span>
+                  </Label>
+                ))}
+              </RadioGroup>
+            </div>
+            <div>
+              <Label htmlFor="host-org" className="mb-1.5">Organisation or group</Label>
+              <Input id="host-org" value={org} onChange={(e) => setOrg(e.target.value)} placeholder="kaimana-digital/kona" spellCheck={false} />
+              <p className="text-[12.5px] text-muted-2 mt-2">Prism can see repositories here and nowhere else on that host. If this site is built by an agency, it is usually theirs, not yours.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConnecting(false)}>Cancel</Button>
+            <Button disabled={org.trim().length < 2}
+              onClick={() => { const h: CodeHost = { kind: kind, org: org.trim(), repos: 12, connectedBy: ME.name };
+                setHost(h); onChange?.(h); rememberEdit(site.id, { codeHost: h }); setConnecting(false); logActivity(`Connected ${kind} on ${org.trim()} for ${site.domain}.`); }}>
+              Connect it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export function SiteDetail({ s }: { s: Site }) {
   const edits = SITE_EDITS.get(s.id);
   const [envs, setEnvs] = useState<Site["envs"]>(edits?.envs ?? s.envs);
   const [repo, setRepo] = useState<string | undefined>(edits?.repo ?? s.repo);
   const [branchPrefix, setBranchPrefix] = useState(edits?.branchPrefix ?? s.branchPrefix ?? "prototype/");
-  const remember = (patch: { envs?: Site["envs"]; repo?: string; branchPrefix?: string; source?: string; codeHost?: CodeHost }) => SITE_EDITS.set(s.id, { ...(SITE_EDITS.get(s.id) ?? {}), ...patch });
+  const remember = (patch: Parameters<typeof rememberEdit>[1]) => rememberEdit(s.id, patch);
 
   const [addingEnv, setAddingEnv] = useState(false);
   const [envLabel, setEnvLabel] = useState("");
@@ -143,9 +222,6 @@ export function SiteDetail({ s }: { s: Site }) {
   // Fed from the live local state rather than resolveSite, so the banner corrects
   // itself the instant a host is connected — same definition, current facts.
   const blockers = buildBlockers({ ...s, codeHost: host, source, repo });
-  const [connectingHost, setConnectingHost] = useState(false);
-  const [hostKind, setHostKind] = useState<CodeHost["kind"]>("GitHub");
-  const [hostOrg, setHostOrg] = useState("");
   const [pick, setPick] = useState(REPOS[0]);
   const [prefix, setPrefix] = useState("prototype/");
 
@@ -236,30 +312,7 @@ export function SiteDetail({ s }: { s: Site }) {
           <Section title="Code" className="flex-1"
             action={<span className="text-[12.5px] text-muted-2">This site&rsquo;s own — a different site can be somewhere else entirely</span>}>
             <div className="p-5">
-              {/* 1 · THE HOST. Nothing about a site's code works without it, and it belongs
-                  to the site: ten sites can be ten different arrangements (D16). */}
-              <div className="text-[10.5px] font-semibold tracking-[0.07em] text-muted-2 mb-2">WHERE THE CODE LIVES</div>
-              {host ? (
-                <>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Pill tone="ok">{host.kind}</Pill>
-                    <span className="font-mono text-[12.5px]">{host.org}</span>
-                    {host.selfHosted && <span className="text-[12.5px] text-muted-2">· self-hosted at <span className="font-mono">{host.selfHosted}</span></span>}
-                  </div>
-                  <p className="text-[12.5px] text-muted-2 mt-2 leading-relaxed">
-                    {host.repos} repositories readable · connected by {host.connectedBy}. Prism reaches {host.org} and nothing else on that host.
-                  </p>
-                  <Button size="sm" variant="ghost" className="px-0 mt-1" onClick={() => setConnectingHost(true)}>Change it</Button>
-                </>
-              ) : (
-                <>
-                  <p className="text-[13px] text-muted leading-relaxed mb-2.5">
-                    Not connected. Prism cannot reach this site&rsquo;s code at all — not to read it, and not to put a build anywhere.
-                    Whoever looks after this site may use something different from your other sites; connect whichever one they use.
-                  </p>
-                  <Button size="sm" onClick={() => setConnectingHost(true)}>Connect a code host</Button>
-                </>
-              )}
+              <CodeHostCard site={s} onChange={setHost} />
 
               {/* 2 · WHAT IT BUILDS AGAINST — required (D14), so it leads the two repositories. */}
               <div className="mt-4 pt-4 border-t border-border">
@@ -366,41 +419,6 @@ export function SiteDetail({ s }: { s: Site }) {
       </Dialog>
 
       {/* A code host belongs to ONE site. Connecting one here reaches that org and no other. */}
-      <Dialog open={connectingHost} onOpenChange={setConnectingHost}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Where does {s.domain}&rsquo;s code live?</DialogTitle>
-            <DialogDescription>
-              This site&rsquo;s own host — another site can be somewhere else entirely, and often is. Prism reaches only the organisation you name here.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="mb-2" id="host-kind">Host</Label>
-              <RadioGroup aria-labelledby="host-kind" value={hostKind} onValueChange={(v) => setHostKind(v as CodeHost["kind"])} className="grid-cols-2">
-                {(["GitHub", "GitLab", "Bitbucket", "Azure DevOps"] as const).map((k) => (
-                  <Label key={k} htmlFor={`host-${k}`} className={cn("gap-3 rounded-xl border px-4 py-2.5 cursor-pointer font-normal text-foreground", hostKind === k ? "border-accent bg-accent/5" : "border-border")}>
-                    <RadioGroupItem id={`host-${k}`} value={k} /><span className="text-[13.5px]">{k}</span>
-                  </Label>
-                ))}
-              </RadioGroup>
-            </div>
-            <div>
-              <Label htmlFor="host-org" className="mb-1.5">Organisation or group</Label>
-              <Input id="host-org" value={hostOrg} onChange={(e) => setHostOrg(e.target.value)} placeholder="kaimana-digital/kona" spellCheck={false} />
-              <p className="text-[12.5px] text-muted-2 mt-2">Prism can see repositories here and nowhere else on that host. If this site is built by an agency, it is usually theirs, not yours.</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConnectingHost(false)}>Cancel</Button>
-            <Button disabled={hostOrg.trim().length < 2}
-              onClick={() => { const h: CodeHost = { kind: hostKind, org: hostOrg.trim(), repos: 12, connectedBy: ME.name };
-                setHost(h); remember({ codeHost: h }); setConnectingHost(false); logActivity(`Connected ${hostKind} on ${hostOrg.trim()} for ${s.domain}.`); }}>
-              Connect it
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={connectingSource} onOpenChange={setConnectingSource}>
         <DialogContent>

@@ -257,7 +257,16 @@ export default function Console() {
       </nav>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        {flow === "site" && <SiteOnboarding onClose={() => setFlow(null)} onDone={(site) => { markRead(site.id); rememberSite(site); setSessionSites((ss) => [...ss.filter((x) => x.domain !== site.domain), site]); setFlow(null); setSiteFilter(site.id); setNav("Setup"); }} />}
+        {flow === "site" && (
+          <SiteOnboarding
+            // The site is real from step 1, so everything that makes it real
+            // fires there — not in a finish handler that leaving would skip.
+            onCreate={(site) => { markRead(site.id); rememberSite(site); setSessionSites((ss) => [...ss.filter((x) => x.domain !== site.domain), site]); setSiteFilter(site.id); }}
+            // Leaving lands on the READ, not on a restatement of what is missing:
+            // markRead set `unseen`, so the receipt plays, and the first thing the
+            // product shows about a new site is that it has already read it.
+            onLeave={() => { setFlow(null); setNav("Understanding"); }} />
+        )}
         {!flow && nav === "Overview" && <OverviewView open={openExp} rows={scoped} sites={rows} picked={siteFilter}
               onFix={(id, room) => { setSiteFilter(id); setNav(room); }} />}
         {!flow && nav === "Experiments" && fresh && <FreshEmpty title="Experiments" pick={() => setSwitcher(true)} />}
