@@ -93,6 +93,28 @@ Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (cr
 - **`data.md`** — embedded JSON data globals (shape + sample) and inferred DOM↔data join keys. CMS pages embed their data, so this is static parsing — no headless browser.
 - **`design-tokens.md`** — `@font-face`, CSS custom properties, overlay z-index ladder, pulled from the page's own stylesheets (same-origin **and** CDN).
 
+### Supporting files on the brief (2026-09-17)
+
+`brief.attachments[]` — a PDF, a spreadsheet, a content doc. Bytes go into the
+content-addressed asset store (`putAsset`, the shelf evidence screenshots use)
+and are committed to **`.opmc/attachments/<name>`** on the next Re-sync.
+
+- **No server-side text extraction, deliberately.** The agent has its own tools
+  for a PDF or a sheet; an extracted copy is a second version of the truth that
+  goes stale the moment the file is replaced. Hand over the real file.
+- **Named in `brief.md` with their note.** "Read everything in that folder" is
+  the instruction that gets ignored on a busy branch. `a.note` is the one field
+  here written for the agent, not the human.
+- **In `contentHashOf`** (asset + filename), so adding or removing one marks the
+  branch out of sync exactly as editing the brief does. They are build inputs.
+- 15 MB cap — these bytes go into git and git never forgets them. Allow-list of
+  types: an executable or an archive in a build input is a supply-chain problem.
+- **DELETE detaches, never erases.** Content-addressed and shared: another
+  prototype may hold the same file.
+- `POST|GET|DELETE /api/prototypes/brief-files`. The POST writes the record
+  itself, so any client holding a local brief must take the returned
+  `attachments` — otherwise its next save drops the file just added.
+
 `context.json` also carries `referenceRepos` (read-only production source: identity + notes only — the local path is machine-specific and lives in the init command) and `fonts`.
 
 ## Loader truth (2026-07-23)

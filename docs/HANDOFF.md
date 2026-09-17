@@ -56,12 +56,19 @@ exact sequence (harness pattern in the session scratchpad): edit brief → ONE
 alert, re-sync → ZERO. Drag was proven by driving the live site in Chrome, not
 by reading the source.
 
+### Supporting files on the brief — shipped 2026-09-17
+
+`brief.attachments[]`, uploaded in the Brief room next to the links. The
+decision that shaped it: the file has to reach the AGENT, so it is stored and
+committed to `.opmc/attachments/` rather than linked — a SharePoint link is
+something the agent cannot open. No extraction step; Claude Code reads the real
+PDF. Each file is listed in `.opmc/brief.md` with its note, and attachments are
+part of `contentHashOf` so changing them marks the branch out of sync.
+
 ### Open
 
 Losing-experiment semantics beyond "archive it" · whether Handoff should be
-renamed now Deployed exists · **supporting files on the brief** (PDFs,
-spreadsheets — `brief.references` exists but is URL-only, so uploads-vs-links is
-undecided) · the 9 Phase-1 backlog stubs still have no `metrics.primary` on
+renamed now Deployed exists · the 9 Phase-1 backlog stubs still have no `metrics.primary` on
 purpose (setting it completes the brief and moves them out of Backlog).
 
 ## ⚠ IN FLIGHT — READOUT MODEL EXTRACTION: email done, page mostly (2026-08-10)
