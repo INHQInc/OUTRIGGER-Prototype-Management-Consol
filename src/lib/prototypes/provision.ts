@@ -8,6 +8,7 @@
 import { createHash } from "node:crypto";
 import { load } from "cheerio";
 import { getContentStore } from "../content/store";
+import { getBriefAttachment } from "./attachments";
 import { getGitClientForOrg } from "../git/connection";
 import { GitError, friendlyGitError } from "../git/github";
 import { resolvePrototypeOrg } from "./org";
@@ -133,6 +134,12 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
     b.references?.length
       ? `## References (design intent — consult before building)\n${b.references.map((r) => `- **${r.kind}**${r.label ? ` — ${r.label}` : ""}: ${r.url}`).join("\n")}\n`
       : "",
+    // Named, with the reason each one is here. A file the agent does not know
+    // to open is the same as no file, and "read everything in that folder" is
+    // the instruction that gets ignored on a busy branch.
+    b.attachments?.length
+      ? `## Supporting files (on this branch — open them)\nThese were attached to the brief and committed alongside it. Read the ones that bear on what you are building.\n\n${b.attachments.map((a) => `- \`.opmc/attachments/${a.name}\` (${(a.bytes / 1024).toFixed(0)} KB)${a.note ? ` — ${a.note}` : ""}`).join("\n")}\n`
+      : "",
     (proto.hypothesis.change || proto.hypothesis.outcome)
       ? `## Hypothesis (frames the experiment)\nWe believe **${proto.hypothesis.change || "[change]"}** for **${proto.hypothesis.audience || "[audience]"}** will cause **${proto.hypothesis.outcome || "[outcome]"}**${proto.hypothesis.rationale ? ` because ${proto.hypothesis.rationale}` : ""}.\n`
       : "",
@@ -158,6 +165,11 @@ export function contentHashOf(proto: PrototypeRecord): string {
     hypothesis: proto.hypothesis,
     metrics: proto.metrics,
     targets: proto.targets.map((t) => t.url).sort(),
+    // Attachments are build inputs, so changing them makes the branch stale
+    // exactly as editing the brief does. Asset name + filename only: the bytes
+    // behind a content-addressed name never change, and the note is for the
+    // reader, not the build.
+    attachments: (proto.brief.attachments ?? []).map((a) => `${a.asset}:${a.name}`).sort(),
   });
   return createHash("sha256").update(canonical).digest("hex").slice(0, 16);
 }
@@ -285,6 +297,15 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     contentHash,
   };
   files.push({ path: ".opmc/context.json", content: Buffer.from(JSON.stringify(context, null, 2), "utf8") });
+
+  // SUPPORTING FILES GO ONTO THE BRANCH, NOT INTO A SUMMARY. The agent has its
+  // own tools for a PDF or a spreadsheet; handing it the real file beats any
+  // text we could extract server-side, and an extracted copy is a second
+  // version of the truth that goes stale the moment the file is replaced.
+  for (const a of proto.brief.attachments ?? []) {
+    const bytes = await getBriefAttachment(proto.siteKey, a.asset).then((f) => f?.bytes ?? null).catch(() => null);
+    if (bytes) files.push({ path: `.opmc/attachments/${a.name}`, content: bytes });
+  }
 
   // First provision only: reset the artifact so the served namespace matches
   // this prototype from minute one. Branches fork from `starter`, which carries

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
-import { normalizeStage, referenceKind, normalizeReferenceUrl, type PrototypeRecord, type PrototypeBrief, type BriefReference } from "@/lib/prototypes/types";
+import { normalizeStage, referenceKind, normalizeReferenceUrl, type PrototypeRecord, type PrototypeBrief, type BriefReference, type BriefAttachment } from "@/lib/prototypes/types";
 import { accessibleOrgIds, canAccessOrg, getActiveOrgId } from "@/lib/active-org";
 import { listOrgEnvironments } from "@/lib/environments";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
@@ -18,7 +18,7 @@ function prototypeBranch(input: string | undefined, key: string): string {
 }
 
 /** Sanitize + normalize a brief payload identically on create and update. */
-function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?: string; where?: string; constraints?: string; reference?: string; references?: { url?: string; label?: string }[] } | undefined): PrototypeBrief {
+function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?: string; where?: string; constraints?: string; reference?: string; references?: { url?: string; label?: string }[]; attachments?: BriefAttachment[] } | undefined): PrototypeBrief {
   const refs: BriefReference[] = [];
   for (const r of raw?.references ?? []) {
     const url = normalizeReferenceUrl(r?.url ?? ""); // drops non-URLs / javascript:/data:
@@ -34,6 +34,10 @@ function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?
     ...(raw?.constraints?.trim() ? { constraints: raw.constraints.trim() } : {}),
     ...(raw?.reference?.trim() ? { reference: raw.reference.trim() } : {}),
     ...(refs.length ? { references: refs } : {}),
+    // Attachments are written by the upload route, which is the only thing that
+    // can mint a valid asset name. PATCH carries them through untouched rather
+    // than re-deriving them — a brief edit must never silently drop a file.
+    ...(raw?.attachments?.length ? { attachments: raw.attachments.slice(0, 20) } : {}),
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { referenceKind, normalizeReferenceUrl, isBriefComplete, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind } from "@/lib/prototypes/types";
+import { referenceKind, normalizeReferenceUrl, isBriefComplete, type PrototypeBrief, type PrototypeHypothesis, type PrototypeMetrics, type BriefReference, type BriefReferenceKind, type BriefAttachment } from "@/lib/prototypes/types";
 import type { BriefDraft, BriefSection, BriefDriftReport } from "@/lib/ai/brief";
 import { TimeAgo } from "@/components/ui";
 
@@ -14,9 +14,100 @@ const REF_META: Record<BriefReferenceKind, { icon: string; label: string }> = {
   link: { icon: "🔗", label: "Link" },
 };
 
+const KB = (n: number) => (n < 1024 ? `${n} B` : n < 1_000_000 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1e6).toFixed(1)} MB`);
+const FILE_ICON = (ct: string) =>
+  ct === "application/pdf" ? "📕"
+  : ct.includes("spreadsheet") || ct.includes("excel") || ct === "text/csv" ? "📊"
+  : ct.includes("word") || ct.includes("document") ? "📝"
+  : ct.includes("presentation") ? "📽"
+  : ct.startsWith("image/") ? "🖼"
+  : "📎";
+
+/**
+ * SUPPORTING FILES — the audit PDF, the offer terms, the content doc.
+ *
+ * These are not links: the bytes are stored and committed into
+ * `.opmc/attachments/` on the prototype's branch, so the agent opens the real
+ * file with its own tools. That is why a note matters more than it looks — the
+ * agent reads the note in `.opmc/brief.md` to decide which files bear on what
+ * it is building, and "read everything in that folder" is the instruction that
+ * gets ignored on a busy branch.
+ */
+function AttachmentsEditor({ prototypeKey, attachments, onChange }: {
+  prototypeKey: string;
+  attachments: BriefAttachment[];
+  onChange: (next: BriefAttachment[]) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+
+  async function upload(file: File) {
+    setBusy(true); setErr(null);
+    try {
+      const dataUrl: string = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error("Couldn't read that file."));
+        r.readAsDataURL(file);
+      });
+      const r = await fetch("/api/prototypes/brief-files", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: prototypeKey, dataUrl, fileName: file.name, note: note.trim() || undefined }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(j.error ?? "Couldn't attach that file."); return; }
+      onChange(j.attachments as BriefAttachment[]);
+      setNote("");
+    } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't attach that file."); }
+    finally { setBusy(false); }
+  }
+
+  async function remove(asset: string) {
+    setBusy(true); setErr(null);
+    const r = await fetch(`/api/prototypes/brief-files?key=${encodeURIComponent(prototypeKey)}&asset=${encodeURIComponent(asset)}`, { method: "DELETE" }).catch(() => null);
+    const j = await r?.json().catch(() => ({}));
+    if (!r?.ok) setErr(j?.error ?? "Couldn't remove that file.");
+    else onChange(j.attachments as BriefAttachment[]);
+    setBusy(false);
+  }
+
+  const field = "rounded-lg bg-background border border-border px-3 py-2 text-[13px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none";
+  return (
+    <div className="space-y-2">
+      {attachments.length > 0 && (
+        <div className="space-y-1">
+          {attachments.map((a) => (
+            <div key={a.asset} className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/30 px-2.5 py-1.5">
+              <span className="shrink-0">{FILE_ICON(a.contentType)}</span>
+              <a href={`/api/prototypes/brief-files?key=${encodeURIComponent(prototypeKey)}&asset=${encodeURIComponent(a.asset)}`}
+                target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover truncate min-w-0 flex-1" title={a.note || a.name}>
+                {a.name}
+                {a.note && <span className="text-muted-2"> — {a.note}</span>}
+              </a>
+              <span className="text-[12px] text-muted-2 tabular-nums shrink-0">{KB(a.bytes)}</span>
+              <button onClick={() => remove(a.asset)} disabled={busy} className="text-[13px] text-muted-2 hover:text-danger shrink-0 disabled:opacity-50">Remove</button>
+            </div>
+          ))}
+          <div className="text-[12px] text-muted-2">Committed to the branch at <span className="font-mono">.opmc/attachments/</span> on the next Re-sync — the agent reads them there.</div>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <input value={note} onChange={(e) => setNote(e.target.value)} spellCheck={false}
+          placeholder="What is it for? (optional — the agent reads this)" className={`${field} flex-1 min-w-0`} />
+        <label className={`h-9 px-4 rounded-lg border border-border bg-surface text-[13px] font-semibold text-muted hover:text-foreground hover:border-accent shrink-0 inline-flex items-center cursor-pointer ${busy ? "opacity-50 pointer-events-none" : ""}`}>
+          {busy ? "Attaching…" : "Attach file"}
+          <input type="file" className="hidden" disabled={busy}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ""; }} />
+        </label>
+      </div>
+      {err && <div className="text-[12.5px] text-danger">{err}</div>}
+    </div>
+  );
+}
+
 /**
  * Supporting links on the brief — Figma, design files, screenshots, reference
- * pages. Links only (no upload — no blob store yet); a screenshot is added by
+ * pages. Links, not files (files are AttachmentsEditor above); a screenshot is added by
  * its URL. Each is typed from its URL so the building agent knows what it is.
  */
 function ReferencesEditor({ references, onAdd, onRemove }: {
@@ -241,6 +332,11 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   // change and saving brings the drafting drawer back (the natural start-over).
   const [savedComplete, setSavedComplete] = useState(() => isBriefComplete(initialBrief, initialMetrics));
   const refs = brief.references ?? [];
+  const files = brief.attachments ?? [];
+  // The upload route writes the record itself, so the local brief must follow
+  // it — otherwise the next Save PATCHes a brief whose attachments list is one
+  // step behind and quietly drops the file that was just added.
+  const setFiles = (next: BriefAttachment[]) => setBrief((b) => ({ ...b, attachments: next }));
   const addRef = (url: string, label?: string) => { setBrief((b) => ({ ...b, references: [...(b.references ?? []), { url, label, kind: referenceKind(url) }] })); setMsg(null); };
   const removeRef = (i: number) => { setBrief((b) => ({ ...b, references: (b.references ?? []).filter((_, j) => j !== i) })); setMsg(null); };
 
@@ -439,8 +535,10 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
           <textarea value={explain} onChange={(e) => setExplain(e.target.value)} rows={3} className={ta}
             placeholder="e.g. When people click a room card I want a rich overlay with the gallery, amenities and a booking button, instead of losing them to the detail page. Success is more availability checks." />
           <div className="space-y-1.5">
-            <div className="text-[13px] text-muted-2">Supporting files — Figma, designs, screenshots, reference pages. The AI reads these when drafting and may ask about them.</div>
+            <div className="text-[13px] text-muted-2">Supporting links — Figma, designs, screenshots, reference pages. The AI reads these when drafting and may ask about them.</div>
             <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
+            <div className="text-[13px] text-muted-2 pt-1">Supporting files — a PDF, a spreadsheet, a content doc. These are committed to the branch, so the agent opens the real file.</div>
+            <AttachmentsEditor prototypeKey={prototypeKey} attachments={files} onChange={setFiles} />
           </div>
           {(readiness != null || drafting) && <ReadinessMeter readiness={readiness} drafting={drafting} />}
           {questions.length > 0 && (

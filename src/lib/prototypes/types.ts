@@ -118,6 +118,26 @@ export function referenceKind(url: string): BriefReferenceKind {
   return "link";
 }
 
+/**
+ * A file that helps the build — a PDF of the audit, the offer terms as a
+ * spreadsheet, a content doc. Stored in the content-addressed asset store and
+ * written into `.opmc/attachments/` when the branch syncs, so the AGENT reads
+ * the real file with its own tools. That is the whole point: a link the agent
+ * cannot open is decoration, not a build input.
+ */
+export interface BriefAttachment {
+  /** Content-addressed name in the asset store. */
+  asset: string;
+  /** The filename as uploaded — what the human recognises, and the name on the branch. */
+  name: string;
+  contentType: string;
+  bytes: number;
+  addedAt: string;
+  addedBy?: string;
+  /** Why it is here. The agent reads this before deciding to open the file. */
+  note?: string;
+}
+
 export interface PrototypeBrief {
   problem: string;       // problem / opportunity
   change: string;        // what it changes
@@ -126,6 +146,7 @@ export interface PrototypeBrief {
   constraints?: string;  // guardrails / do-not-touch
   reference?: string;    // legacy free-text reference (superseded by references[])
   references?: BriefReference[]; // supporting links: Figma, design files, screenshots, pages
+  attachments?: BriefAttachment[]; // supporting FILES — synced to .opmc/attachments/
 }
 
 /** Canonical A/B hypothesis: "We believe [change] for [audience] will cause [outcome] because [rationale]." */
