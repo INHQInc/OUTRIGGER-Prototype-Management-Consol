@@ -4,6 +4,66 @@
 
 ---
 
+## BOARD + WORKFLOW REBUILD (2026-09-17) — shipped
+
+The user's verdict on the board was "the entire workflow has to be redone to be
+as simple and easy to use as humanly possible while preventing users from
+messing up". What follows is that work. All of it is on `main` and deployed.
+
+### What was actually wrong
+
+Not too many gates — **two competing derivations and a staleness treadmill.**
+
+1. Columns meant nothing. Cards with no experiment sat in Experimentation;
+   `status: shipped` was trusted even where `experimentId` was null (the old
+   drag-to-Handoff wrote it unverified), so Regional Map Display and Room
+   Compare sat in Handoff having never run.
+2. **The treadmill.** Fix the brief → "Re-sync" → re-sync writes `.opmc/**` and
+   COMMITS → "cut a new version" → cut → "QA is stale". Links 2 and 3 fired off
+   a commit that never touched the variation: they compared commits, not code.
+3. Every alert fired at once regardless of where the work was, so one edit lit
+   four tabs in sequence — six of nine ambers restated the card's own "Next:".
+4. Brief drift set Brief to `blocked — resolve before anything syncs`, which
+   blocked the re-sync that resolves it. The only exit was dismissing the audit.
+5. `synced` was missing from the primaryAction ladder, so an out-of-sync card
+   said "Verify the pages" while its alert said "Re-sync" — the card
+   contradicted itself.
+6. Certification said "Fix and re-cut", but only the agent changes code, so
+   re-cutting reproduced the verdict forever. room-compare holds v2/v3/v4 at one
+   sha as evidence.
+7. Nothing could be dragged anywhere. Handoff was a one-way door.
+
+### The rules now (all in AGENTS.md → pipeline & program board)
+
+Experimentation means a test that STARTED · prove staleness or stay quiet ·
+only the gate speaks · drift is a build fact not a brief block · the action
+agrees with the gate · certification is loud not a wall · a cut freezes code so
+identical code is the same cut · **the derived column is a ceiling, not a
+position** · Deployed is a claim not an observation · Archived is the exit a
+losing experiment never had.
+
+### Also landed
+
+- First column relabelled **Backlog** (the step is still Brief).
+- Table grouped by stage + 17-column CSV export.
+- `promote` fixed: child gets its own branch; `problem`/`doneLooksLike` blank.
+- `POST /api/prototypes/hold` and `POST /api/prototypes/deployed`, both audited.
+
+### Verified, not assumed
+
+Traced `derivePipeline` directly on a legacy-shaped record through the user's
+exact sequence (harness pattern in the session scratchpad): edit brief → ONE
+alert, re-sync → ZERO. Drag was proven by driving the live site in Chrome, not
+by reading the source.
+
+### Open
+
+Losing-experiment semantics beyond "archive it" · whether Handoff should be
+renamed now Deployed exists · **supporting files on the brief** (PDFs,
+spreadsheets — `brief.references` exists but is URL-only, so uploads-vs-links is
+undecided) · the 9 Phase-1 backlog stubs still have no `metrics.primary` on
+purpose (setting it completes the brief and moves them out of Backlog).
+
 ## ⚠ IN FLIGHT — READOUT MODEL EXTRACTION: email done, page mostly (2026-08-10)
 
 **Read [`docs/READOUT-MODEL.md`](READOUT-MODEL.md) first.** It holds the
