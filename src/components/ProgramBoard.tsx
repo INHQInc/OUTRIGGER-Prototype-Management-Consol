@@ -4,18 +4,13 @@ import Link from "next/link";
 import { Fragment, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState, SEVERITY_DOT } from "@/components/ui";
-import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
+import { BOARD_COLUMNS, COLUMN_RANK, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
 import { stepSeverity } from "@/lib/prototypes/severity";
 import type { Pipeline } from "@/lib/prototypes/pipeline";
 
-/** Why a cross-column drag bounces: the column is a fact, not an opinion. */
-const BOUNCE: Record<BoardColumn, string> = {
-  brief: "Backlog is where cards start — they move on when a build begins, not when they're dragged.",
-  build: "Build means a real build exists on the branch. It moves when the agent pushes one.",
-  review: "Review means the pages verify on the real site. Verify them and the card moves itself.",
-  experiment: "Experimentation means cut + certified + pushed. Do those and the card arrives on its own.",
-  handoff: "Handoff is a decision — drag here only from Experimentation, once the winner is chosen.",
-};
+/** A column's own name, for prose. */
+const LABEL = (id: BoardColumn) => BOARD_COLUMNS.find((c) => c.id === id)?.label ?? id;
+
 
 /** Pointer travel before a press becomes a drag rather than a click. */
 const DRAG_THRESHOLD = 5;
@@ -93,19 +88,26 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   }, []);
 
   const cardOf = (key: string | null) => (key ? cards.find((c) => c.key === key) ?? null : null);
-  /** A card can always be sent BACK into the pipeline; it can never be dragged
-   *  forward. The forward columns are observed facts — a build exists, the pages
-   *  verify, a test actually ran — so a forward drag would be a claim the board
-   *  cannot back up, and it would snap back on the next refresh. "Shipped" is the
-   *  one column that rests on a STORED claim, so leaving it is a real write and a
-   *  real drag. (Without this a mis-shipped card was stranded in Handoff forever,
-   *  which is how Regional Map Display ended up there with no experiment.) */
+  /** A CARD MAY SIT ANYWHERE AT OR BEHIND WHAT THE FACTS SUPPORT.
+   *
+   *  The pipeline reads the branch, the pages and the experiment, and that tells
+   *  it the furthest a card could honestly be — `derivedColumn`. What it cannot
+   *  read is whether anyone is FINISHED: a branch carrying a build looks the
+   *  same whether the work is done or halfway. So the derived column is a
+   *  ceiling, not a position. Drag anywhere at or below it and the board
+   *  remembers; drag past it and it bounces, because that would be claiming
+   *  progress nobody made. Experimentation -> Handoff is the exception: calling
+   *  a winner is a human decision, so it is allowed and it writes the claim. */
   const canLand = (card: BoardCard, col: BoardColumn) =>
     !card.locked && (
-      col === card.column
+      COLUMN_RANK[col] <= COLUMN_RANK[card.derivedColumn]
       || (col === "handoff" && card.column === "experiment")
-      || (card.column === "handoff" && col !== "handoff")
     );
+
+  const bounceReason = (card: BoardCard, col: BoardColumn) =>
+    card.locked
+      ? "The experiment is running — this card is locked until it isn't."
+      : `${LABEL(col)} is further than the work has actually got. ${LABEL(card.derivedColumn)} is as far as the facts support — ${card.pipeline.primaryAction?.label ?? "finish the current step"} to move it on. You can always drag it back.`;
 
   /** Hit-test the pointer against the live layout: which column, and which slot. */
   function targetAt(x: number, y: number, dragKey: string): { col: BoardColumn; idx: number } | null {
@@ -203,6 +205,26 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     router.refresh();
   }
 
+  /** Park a card in an earlier column, or release it back to where the facts
+   *  put it. Dropping it ON its derived column is the release — there is no
+   *  separate control to find, because "put it back" is the same gesture. */
+  async function park(card: BoardCard, to: BoardColumn) {
+    const from = card.column;
+    const releasing = to === card.derivedColumn;
+    setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: to, held: !releasing } : c)));
+    const res = await fetch("/api/prototypes/hold", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, column: releasing ? null : to }) })
+      .catch(() => null);
+    if (!res?.ok) {
+      setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: from, held: card.held } : c)));
+      say("Couldn't move it — try again.");
+      return;
+    }
+    say(releasing
+      ? `${card.name} released — back to ${LABEL(to)}, where the work actually is.`
+      : `${card.name} held at ${LABEL(to)}. Drag it to ${LABEL(card.derivedColumn)} to release it.`);
+    router.refresh();
+  }
+
   /** Undo a handoff. We write "review" rather than the column the pointer landed
    *  on, because the column is not ours to set — clearing the stored "shipped"
    *  claim is, and the pipeline then re-derives the true column from the facts.
@@ -239,10 +261,11 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     // look like.
     if (!target) { say("Dropped off the board — nothing moved."); return; }
     if (card.locked) { say("The experiment is running — this card is locked until it isn't."); return; }
-    if (!canLand(card, target.col)) { say(BOUNCE[target.col]); return; }
+    if (!canLand(card, target.col)) { say(bounceReason(card, target.col)); return; }
 
     if (target.col === "handoff" && card.column === "experiment") { void markShipped(card); return; }
     if (card.column === "handoff" && target.col !== "handoff") { void sendBack(card, target.col); return; }
+    if (target.col !== card.column) { void park(card, target.col); return; }
 
     const rest = cards.filter((c) => c.column === card.column && c.key !== card.key);
     const at = Math.max(0, Math.min(target.idx, rest.length));
@@ -455,6 +478,11 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                                 <span className="text-muted-2">Next: </span>{c.pipeline.primaryAction.label}
                               </>}
                             </div>
+                            {c.held && (
+                              <div className="text-[12.5px] text-muted-2 leading-tight" title={`The pipeline puts this at ${LABEL(c.derivedColumn)}; you are holding it here. Drag it to ${LABEL(c.derivedColumn)} to release it.`}>
+                                ✋ Held here — the build says {LABEL(c.derivedColumn)}
+                              </div>
+                            )}
                             {!c.locked && c.pipeline.steps.some((s) => s.state === "blocked") && (
                               <div className="text-[12.5px] text-danger leading-tight">⚠ {c.pipeline.steps.filter((s) => s.state === "blocked").map((s) => `${s.title}: ${s.status}`).join(" · ")}</div>
                             )}

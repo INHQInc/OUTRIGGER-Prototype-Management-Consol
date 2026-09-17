@@ -19,6 +19,7 @@ import { auditTargetCode } from "./brief-audit";
 import { getOptimizelyClientForOrg } from "../experimentation";
 import { normalizeStage, type PrototypeRecord } from "./types";
 
+import { COLUMN_RANK } from "./board-model";
 export { BOARD_COLUMNS } from "./board-model";
 export type { BoardColumn, BoardCard } from "./board-model";
 import type { BoardColumn, BoardCard } from "./board-model";
@@ -35,11 +36,12 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     const stage = normalizeStage(p.status);
     if (stage === "archived") return null;
 
-    const [source, versions, push, provisionFlagRaw, claudeSeenAt, briefDrift, coverage, verdict] = await Promise.all([
+    const [source, versions, push, provisionFlagRaw, holdRaw, claudeSeenAt, briefDrift, coverage, verdict] = await Promise.all([
       resolveRepoSource(p.key).catch(() => null),
       listArtifactVersions(p.key).catch(() => []),
       lastPush(p.key).catch(() => null),
       store.getFlag(`provision:${p.key}`).catch(() => null),
+      store.getFlag(`hold:${p.key}`).catch(() => null),
       store.getFlag(`claude:seen:${p.key}`).catch(() => null),
       getBriefDrift(p.key, p).catch(() => null),
       getCoverage(p.key).catch(() => null),
@@ -63,10 +65,21 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 
     // The column IS the canonical stage — shipped → handoff, running → experiment
     // (locked badge), all handled inside pipeline.stage.id. One source of truth.
-    const column: BoardColumn = pipeline.stage.id;
+    const derivedColumn: BoardColumn = pipeline.stage.id;
+    // A HOLD ONLY EVER PULLS A CARD BACK. The pipeline reads the facts, but the
+    // facts cannot tell "built" from "still being worked on" — a branch with a
+    // build on it looks finished whether or not anyone is done. So a human may
+    // park a card in an earlier column, and that placement is stored. It is
+    // clamped to the derived column, so a hold can never claim progress the
+    // facts do not support, and it evaporates on its own if the work falls
+    // back behind it. A running experiment ignores holds: it is locked.
+    const heldAt = holdRaw as BoardColumn | null;
+    const holdValid = Boolean(heldAt && heldAt in COLUMN_RANK && !locked
+      && COLUMN_RANK[heldAt] < COLUMN_RANK[derivedColumn]);
+    const column: BoardColumn = holdValid ? heldAt! : derivedColumn;
 
     return {
-      key: p.key, name: p.name, column, locked, experimentStatus, pipeline,
+      key: p.key, name: p.name, column, derivedColumn, held: holdValid, locked, experimentStatus, pipeline,
       metric: p.metrics.primary || undefined,
       guardrailCount: p.metrics.guardrails.length || undefined,
       hypothesis: p.hypothesis.change || undefined,

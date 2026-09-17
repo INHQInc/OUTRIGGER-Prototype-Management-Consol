@@ -22,10 +22,19 @@ export const BOARD_COLUMNS: { id: BoardColumn; label: string; hint: string }[] =
   { id: "handoff", label: "Handoff", hint: "winner → production code" },
 ];
 
+/** Pipeline order. A card may be placed at or before its derived column, never past it. */
+export const COLUMN_RANK: Record<BoardColumn, number> =
+  BOARD_COLUMNS.reduce((m, c, i) => ({ ...m, [c.id]: i }), {} as Record<BoardColumn, number>);
+
 export interface BoardCard {
   key: string;
   name: string;
+  /** Where the card SITS — the derived column, or an earlier one a human parked it in. */
   column: BoardColumn;
+  /** Where the FACTS put it. The ceiling for any drag: you can go back, never past this. */
+  derivedColumn: BoardColumn;
+  /** True when a human is holding it behind the facts (column !== derivedColumn). */
+  held?: boolean;
   locked: boolean;               // experiment running → immutable
   experimentStatus?: string;     // not_started | running | paused | archived
   pipeline: Pipeline;
