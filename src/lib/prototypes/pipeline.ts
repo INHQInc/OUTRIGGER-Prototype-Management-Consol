@@ -165,6 +165,13 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // before a flip to external must never raise a repo-shaped flag. Declared here
   // (not down at the Brief step) because the Build alert below reads it.
   const drifted = !external && Boolean(inp.briefDrifted);
+  // ONE GATE, ONE PLACE (D14). pushToOptimizely already refuses an uncertified
+  // push and owns the recorded override; blocking the Experimentation step too
+  // enforced the same rule a second time with NO exit, so a failed cut pinned
+  // the card red for good and its only instruction could never succeed. The
+  // failure is still loud — it is a danger alert, and the push still refuses
+  // without an explicit override. It just no longer walls the card in.
+  const certFailed = !external && Boolean(latest && cert && !cert.passed);
 
   const truth: GroundTruth = {
     servingSha: built ? source?.headSha : undefined,
@@ -189,7 +196,11 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   if (!external && !synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
   if (!external && synced && drifted) alerts.push({ level: "warn", text: "The build no longer matches the brief — re-sync and rebuild, or dismiss the audit if the brief is the thing that's wrong.", anchor: "build" });
   if (!external && problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
-  if (!external && latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
+  // "Fix and re-cut" was a dead end: certification judges the CODE, and nobody
+  // changes code from the console — the agent does. Re-cutting identical bytes
+  // reproduces the identical verdict, which is how room-compare ended up with
+  // v2/v3/v4 at one sha. Name the check, and name the move that actually works.
+  if (!external && latest && cert && !cert.passed) alerts.push({ level: "danger", text: `v${latest.version} failed certification: ${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}. Re-cutting won't change this — rebuild with the agent so the code changes, or push anyway with a recorded override.`, anchor: "build" });
   if (inp.adjudicationPending) alerts.push({ level: "warn", text: "The experiment run ended but its final verdict isn't stamped — close it out in the Results section.", anchor: "experiment" });
   if (!external && inp.qaFailing) alerts.push({ level: "danger", text: "QA has failing checks — fix and re-run the tests before shipping.", anchor: "review" });
   else if (!external && inp.qaStale) alerts.push({ level: "warn", text: "QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.", anchor: "review" });
@@ -232,7 +243,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // the agent last built, so what is on the branch answers an older question —
   // that is build work, and it belongs in the Build column rather than being a
   // footnote on a card parked further down the line.
-  const buildDone = provisioned && built && !problem && synced && !drifted;
+  const buildDone = provisioned && built && !problem && synced && !drifted && !certFailed;
   steps.push(external
     ? { id: "build", title: "Build", anchor: "build", state: "done", na: true, status: "n/a — built in Optimizely" }
     : {
@@ -262,7 +273,6 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // not-started version is still IN this stage (you must click Start), so it is
   // NOT done. (Marking it done here promoted Handoff to current and stranded
   // the card in the Handoff column, un-shippable.)
-  const certBlocked = !external && Boolean(latest && cert && !cert.passed);
   const expDone = Boolean(running || stageShipped);
   const ended = inp.experimentStatus === "concluded" || inp.experimentStatus === "archived";
   const expStatus = external
@@ -273,7 +283,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
       : "bound · plan measurement, then start it in Optimizely")
     : !latest ? "no version cut"
     : !cutFresh ? `v${latest.version} · the build changed — cut a new version`
-    : certBlocked ? `v${latest.version} · certification FAILED`
+    : certFailed ? `v${latest.version} · certification FAILED — rebuild, or push with an override`
     : !bound ? `v${latest.version}${certified ? " certified ✓" : ""} · no experiment bound`
     : !pushCurrent ? `v${latest.version}${certified ? " certified ✓" : ""} · not pushed`
     : running ? "live — prototype locked"
@@ -281,7 +291,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     : `v${lastPush?.version} pushed ✓ · start it in Optimizely`;
   steps.push({
     id: "experiment", title: "Experimentation", anchor: "experiment",
-    state: certBlocked ? "blocked" : expDone ? "done" : "todo",
+    state: expDone ? "done" : "todo",
     status: expStatus,
   });
 
@@ -364,7 +374,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   else if (!synced) primaryAction = { label: "Re-sync the branch", anchor: "build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "review" };
   else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "experiment" };
-  else if (certBlocked) primaryAction = { label: "Fix certification & re-cut", anchor: "experiment" };
+  else if (certFailed) primaryAction = { label: "Rebuild with the agent", anchor: "build" };
   else if (!bound) primaryAction = { label: "Bind the experiment", anchor: "experiment" };
   else if (!pushCurrent) primaryAction = { label: `Push v${latest!.version} to Optimizely`, anchor: "experiment" };
   else if (running) primaryAction = { label: "Running — watch results", anchor: "experiment" };

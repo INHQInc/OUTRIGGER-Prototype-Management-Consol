@@ -75,6 +75,20 @@ export async function cutArtifactVersionFromRepo(
   if (!src.found || !src.headSha || !src.variationJs) {
     throw new Error(src.error ?? "No built variation found on the prototype's branch.");
   }
+  // A CUT IS A SNAPSHOT OF CODE, SO IDENTICAL CODE IS THE SAME SNAPSHOT.
+  // Nothing stopped a re-cut of byte-identical code, and a card that kept
+  // demanding "cut a new version" got exactly that: room-compare holds v2, v3
+  // and v4 at one sha, minted minutes apart, each carrying the same failed
+  // certification — because re-cutting cannot change a verdict about code that
+  // did not change. Refuse, and say what would actually move it.
+  const priorVersions = await listArtifactVersions(prototypeKey);
+  const priorLatest = priorVersions[0];
+  if (priorLatest?.variationJs !== undefined && priorLatest.variationJs === src.variationJs) {
+    const verdict = priorLatest.certification && !priorLatest.certification.passed
+      ? ` It failed certification (${priorLatest.certification.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}), and cutting again cannot change that — the code has to change first. Rebuild with the agent, then cut.`
+      : "";
+    throw new Error(`The build hasn't changed since v${priorLatest.version} — that cut already froze this exact code.${verdict}`);
+  }
   const proto = await (await getContentStore()).getPrototype(prototypeKey);
   // SELF-AWARE GATE: a cut freezes briefSnapshot — never freeze a lie. If
   // this (build, brief) pair has never been judged, audit it NOW — forced
