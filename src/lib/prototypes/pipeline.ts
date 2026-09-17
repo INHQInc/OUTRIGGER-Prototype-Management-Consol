@@ -126,7 +126,18 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   const problem = artifactProblem(source?.variationJs ?? null);
   const cert = latest?.certification ?? null;
   const certified = latest ? (cert ? cert.passed : null) : null;
-  const cutFresh = Boolean(latest && source?.headSha && latest.gitSha === source.headSha);
+  // COMPARE THE CODE, NOT THE COMMIT. This asked `latest.gitSha === headSha`, so
+  // ANY commit staled the cut — including the one re-syncing makes itself, which
+  // writes .opmc/** and never touches dist/variation.js. That is the treadmill:
+  // re-sync because the brief moved, and the card immediately demands a new cut,
+  // then a push, then fresh QA — none of which the code needed. A version stores
+  // the compiled variation it shipped, so ask whether THAT changed.
+  const cutFresh = Boolean(latest && (
+    latest.variationJs !== undefined && source?.variationJs !== undefined
+      ? latest.variationJs === source.variationJs
+      // Legacy versions carry no code; fall back to the old commit pin.
+      : Boolean(source?.headSha && latest.gitSha === source.headSha)
+  ));
   const bound = Boolean(proto.experiment?.experimentId && proto.experiment?.variationId);
   const pushCurrent = Boolean(lastPush && latest && lastPush.version === latest.version && lastPush.verified);
   const running = inp.experimentStatus === "running";
@@ -251,7 +262,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
       : ended ? "concluded — close out the results"
       : "bound · plan measurement, then start it in Optimizely")
     : !latest ? "no version cut"
-    : !cutFresh ? `v${latest.version} · HEAD moved — cut a new version`
+    : !cutFresh ? `v${latest.version} · the build changed — cut a new version`
     : certBlocked ? `v${latest.version} · certification FAILED`
     : !bound ? `v${latest.version}${certified ? " certified ✓" : ""} · no experiment bound`
     : !pushCurrent ? `v${latest.version}${certified ? " certified ✓" : ""} · not pushed`
