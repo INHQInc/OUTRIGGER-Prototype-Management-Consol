@@ -2197,6 +2197,30 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       {o.points.length >= 3 && (
                         <span className="hidden md:block w-20 shrink-0 self-center text-muted-2"><MicroTrend trend={o.points} earned={o.earned} /></span>
                       )}
+                      {/* THE RATES ARE THE EVIDENCE, SO THEY GET A COLUMN.
+                          Trailing the metric name they were a footnote to it —
+                          read last, after a sentence of prose, and impossible to
+                          compare down the list because every row started them at
+                          a different x. In their own fixed column they line up,
+                          so scanning the rates IS scanning the experiment.
+                          Colour stays on the effect: the variant's number takes
+                          the earned tone, the control never does, and an
+                          unsettled metric stays neutral in both. */}
+                      <span className="w-40 md:w-56 shrink-0 tabular-nums leading-tight">
+                        <span className="block text-[15px]">
+                          <span className={`font-bold ${o.earned ? o.tone : "text-foreground/85"}`}>{o.focusRate}</span>
+                          {o.baseRate
+                            ? <span className="text-[13px] text-muted"> vs <span className="font-semibold text-foreground/70">{o.baseRate}</span> control</span>
+                            : <span className="text-[12.5px] text-muted-2"> &middot; none in control</span>}
+                        </span>
+                        {o.focusCount !== undefined && (
+                          <span className="block text-[12px] text-muted-2 font-normal">
+                            {o.focusCount.toLocaleString()}
+                            {o.baseCount !== undefined ? ` vs ${o.baseCount.toLocaleString()}` : ""} events
+                            {o.focusN ? ` · ${o.focusN.toLocaleString()} visitors` : ""}
+                          </span>
+                        )}
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="text-[14px] font-semibold">{o.label}</span>
                         {compositeFlag(key)}
@@ -2212,23 +2236,6 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                             decision metric
                           </span>
                         )}
-                        {/* The rates are the thing being compared, so they read
-                            like it. Colour stays on the effect: the variant's
-                            number takes the earned tone, the control never does,
-                            and an unsettled metric stays neutral in both. */}
-                        <span className="text-[13.5px] tabular-nums ml-2.5 whitespace-nowrap">
-                          <span className={`font-bold ${o.earned ? o.tone : "text-foreground/85"}`}>{o.focusRate}</span>
-                          {o.baseRate
-                            ? <span className="text-muted"> vs <span className="font-semibold text-foreground/70">{o.baseRate}</span> control</span>
-                            : <span className="text-muted-2"> &middot; nothing equivalent in the control</span>}
-                          {o.focusCount !== undefined && (
-                            <span className="text-muted-2 font-normal">
-                              {" "}&middot; {o.focusCount.toLocaleString()}
-                              {o.baseCount !== undefined ? ` vs ${o.baseCount.toLocaleString()}` : ""} events
-                              {o.focusN ? ` from ${o.focusN.toLocaleString()} visitors` : ""}
-                            </span>
-                          )}
-                        </span>
                         <span className="block text-[14px] text-foreground/85 leading-snug line-clamp-2">{o.gloss ?? o.computedLine}</span>
                         {o.gloss && o.trend && <span className="block text-[12.5px] text-muted-2 leading-snug mt-0.5">{o.trend}</span>}
                       </span>
@@ -2254,7 +2261,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                     </div>
 
                     {deepObs[key] && (
-                      <div className="hidden print:block print-legal-block mt-1.5 ml-[11.5rem] space-y-2">
+                      <div className="hidden print:block print-legal-block mt-1.5 ml-[25.5rem] space-y-2">
                         {deepObs[key].mechanism && (
                           <div>
                             <div className={`${ZH} mb-0.5 text-muted-2`}>Why</div>
@@ -2285,7 +2292,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
                       const cell = m?.cells.find((c) => c.variationId === statsEff?.focusVariationId);
                       const earned = Boolean(cell?.liftCi && cell.liftCi.lo * cell.liftCi.hi > 0);
                       return (
-                        <div className="mt-2 ml-[5.75rem] md:ml-[11.5rem] rounded-lg border border-border bg-background/50 px-5 py-4 space-y-3 print:hidden">
+                        <div className="mt-2 ml-[5.75rem] md:ml-[25.5rem] rounded-lg border border-border bg-background/50 px-5 py-4 space-y-3 print:hidden">
                           <MetricChart
                             days={rows}
                             focusName={live?.variations.find((v) => v.variationId === statsEff?.focusVariationId)?.name ?? "variant"}
