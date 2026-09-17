@@ -132,12 +132,17 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // re-sync because the brief moved, and the card immediately demands a new cut,
   // then a push, then fresh QA — none of which the code needed. A version stores
   // the compiled variation it shipped, so ask whether THAT changed.
-  const cutFresh = Boolean(latest && (
-    latest.variationJs !== undefined && source?.variationJs !== undefined
-      ? latest.variationJs === source.variationJs
-      // Legacy versions carry no code; fall back to the old commit pin.
-      : Boolean(source?.headSha && latest.gitSha === source.headSha)
-  ));
+  // PROVE IT OR SAY NOTHING. The commit fallback below used to read
+  // `latest.gitSha === source.headSha`, so a legacy version — one cut before
+  // versions stored their compiled code — was declared stale by ANY commit,
+  // including the .opmc/** commit that re-syncing makes itself. That is link 2
+  // of the treadmill: fix the brief, re-sync, and the card instantly demands a
+  // new cut for code that never moved. When we cannot compare the code we
+  // cannot know, and "we cannot know" must not be reported as "it is stale".
+  const cutStale = Boolean(latest
+    && latest.variationJs !== undefined && source?.variationJs !== undefined
+    && latest.variationJs !== source.variationJs);
+  const cutFresh = Boolean(latest) && !cutStale;
   const bound = Boolean(proto.experiment?.experimentId && proto.experiment?.variationId);
   const pushCurrent = Boolean(lastPush && latest && lastPush.version === latest.version && lastPush.verified);
   const running = inp.experimentStatus === "running";
@@ -156,6 +161,10 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // An externally-built test has no console run to check, so its stored status is
   // all there is; a console-built one must have actually run to have a winner.
   const stageShipped = storedShipped && (external || everRan);
+  // Repo drift is meaningless without a repo build — a record left over from
+  // before a flip to external must never raise a repo-shaped flag. Declared here
+  // (not down at the Brief step) because the Build alert below reads it.
+  const drifted = !external && Boolean(inp.briefDrifted);
 
   const truth: GroundTruth = {
     servingSha: built ? source?.headSha : undefined,
@@ -178,6 +187,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // agent that will never build again. A finished card says nothing.
   if (!stageShipped) {
   if (!external && !synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
+  if (!external && synced && drifted) alerts.push({ level: "warn", text: "The build no longer matches the brief — re-sync and rebuild, or dismiss the audit if the brief is the thing that's wrong.", anchor: "build" });
   if (!external && problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   if (!external && latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
   if (inp.adjudicationPending) alerts.push({ level: "warn", text: "The experiment run ended but its final verdict isn't stamped — close it out in the Results section.", anchor: "experiment" });
@@ -196,19 +206,19 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // change is in-progress, not done.
   const hasChange = Boolean(proto.brief.change?.trim());
   const briefDone = isBriefComplete(proto.brief, proto.metrics);
-  // Repo drift is meaningless without a repo build — a record left over from
-  // before a flip to external must never block the Brief step.
-  const drifted = !external && Boolean(inp.briefDrifted);
   const workStarted = !external && (provisioned || built);
+  // DRIFT IS A BUILD FACT, NOT A BRIEF BLOCK. This used to set Brief to
+  // "blocked — resolve before anything syncs", which is backwards: drift means
+  // the BUILT CODE no longer answers the brief, and the remedy is to re-sync and
+  // rebuild. Blocking Brief blocked that remedy, so the only exit was dismissing
+  // the audit. It now lands on Build, where the fix actually is.
   steps.push({
     id: "brief", title: "Brief", anchor: "brief",
-    state: drifted ? "blocked"         // the audit proved the brief wrong — resolve before anything syncs
-      : briefDone ? "done"
+    state: briefDone ? "done"
       : workStarted ? "blocked"        // building against an incomplete brief — must fix
       : hasChange ? "current"          // mid-brief: has the change, needs the metric
       : "todo",
-    status: drifted ? "brief ↔ build drift — update the brief or dismiss the audit"
-      : briefDone ? "described · metric set"
+    status: briefDone ? "described · metric set"
       : hasChange ? "needs a success metric — how do we know it worked?"
       : workStarted ? "missing — required before launch"
       : "what are we building?",
@@ -222,7 +232,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // the agent last built, so what is on the branch answers an older question —
   // that is build work, and it belongs in the Build column rather than being a
   // footnote on a card parked further down the line.
-  const buildDone = provisioned && built && !problem && synced;
+  const buildDone = provisioned && built && !problem && synced && !drifted;
   steps.push(external
     ? { id: "build", title: "Build", anchor: "build", state: "done", na: true, status: "n/a — built in Optimizely" }
     : {
@@ -307,6 +317,20 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
     : (held === "experiment" && !everRan) ? "review"
     : (held ?? (everRan ? "experiment" : "review"));
   const stageStep = steps.find((s) => s.id === stageId)!;
+
+  // ── ONLY THE GATE SPEAKS ──────────────────────────────────────
+  // A card holds at exactly ONE step. Every alert anchored past that gate
+  // describes work nobody can start yet — and firing them all at once is what
+  // turned a single brief edit into four tabs going orange one after another,
+  // each one "fixed" only for the next to light up. They stay computed, so the
+  // step you are standing on still reads its own detail; they just do not colour
+  // the card until the card reaches them. One card, one gate, one thing to do.
+  const GATE_ORDER: PipelineStep["id"][] = ["brief", "build", "review", "experiment", "handoff"];
+  const gateAt = GATE_ORDER.indexOf(held ?? stageId);
+  const live = gateAt < 0 ? alerts : alerts.filter((a) => {
+    const at = a.anchor ? GATE_ORDER.indexOf(a.anchor as PipelineStep["id"]) : -1;
+    return at < 0 || at <= gateAt; // unanchored alerts belong to the whole card
+  });
   const stage: PipelineStage = {
     id: stageId,
     label: stageStep.title,
@@ -329,10 +353,15 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // bottom of the chain, so `!latest || !cutFresh` answered first and every
   // handed-off prototype advertised "Cut a new version" from the terminal column.
   else if (stageShipped) primaryAction = { label: "Handed off", anchor: "handoff" };
-  else if (drifted) primaryAction = { label: "Resolve brief ↔ build drift", anchor: "brief" };
   else if (!briefDone) primaryAction = { label: hasChange ? "Add a success metric" : "Write the brief", anchor: "brief" };
   else if (!provisioned) primaryAction = { label: "Prepare the branch", anchor: "build" };
+  else if (drifted) primaryAction = { label: "Re-sync and rebuild", anchor: "build" };
   else if (!built || problem) primaryAction = { label: "Build with the agent", anchor: "build" };
+  // THE ACTION MUST AGREE WITH THE GATE. `synced` was missing from this ladder
+  // entirely, so an out-of-sync card held at Build told you to "Verify the
+  // pages" — a step past its own gate — while its one alert said Re-sync. The
+  // card contradicted itself, which is most of "I can't tell what's going on".
+  else if (!synced) primaryAction = { label: "Re-sync the branch", anchor: "build" };
   else if (!reviewDone) primaryAction = { label: "Verify the pages", anchor: "review" };
   else if (!latest || !cutFresh) primaryAction = { label: latest ? "Cut a new version" : "Cut a version", anchor: "experiment" };
   else if (certBlocked) primaryAction = { label: "Fix certification & re-cut", anchor: "experiment" };
@@ -351,12 +380,12 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   ];
   const checklist: ChecklistItem[] = ROOMS.map(({ step: sid, tab, label, pending }) => {
     const st = steps.find((s) => s.id === sid)!;
-    const severity = stepSeverity(st, alerts);
-    const targeting = alerts.filter((a) => a.anchor === st.anchor);
+    const severity = stepSeverity(st, live);
+    const targeting = live.filter((a) => a.anchor === st.anchor);
     const alert = targeting.find((a) => a.level === "danger") ?? targeting.find((a) => a.level === "warn");
     const description = alert?.text ?? (st.status && st.status !== "—" ? st.status : pending);
     return { tab, label, severity, description };
   });
 
-  return { steps, stage, checklist, primaryAction, alerts, truth };
+  return { steps, stage, checklist, primaryAction, alerts: live, truth };
 }

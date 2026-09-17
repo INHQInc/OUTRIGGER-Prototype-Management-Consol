@@ -166,17 +166,32 @@ export function coverageGate(spec: CoverageSpec | null): "none" | "unreviewed" |
  * re-sync commit moves the branch sha without touching dist/variation.js and
  * must not flag anything stale. Sha comparison is the legacy fallback only.
  */
-export function coverageStale(spec: CoverageSpec | null, currentSha?: string | null, currentCodeHash?: string | null): boolean {
+/**
+ * PROVE IT OR SAY NOTHING — the same rule the version cut uses.
+ *
+ * The commit fallback (`spec.builtSha !== currentSha`) declared QA stale on ANY
+ * new commit, and re-syncing writes .opmc/** and commits without touching the
+ * variation at all. That was link 3 of the treadmill: fix the brief → re-sync →
+ * cut → "QA is stale", for code that never changed. A spec written before
+ * code-hash keying simply cannot be compared, and an unanswerable question must
+ * not be reported as a problem. The next QA run stamps a code hash and the
+ * check becomes exact again, so this heals itself rather than nagging forever.
+ *
+ * `currentSha` is kept in the signature: callers pass it, and dropping the
+ * parameter would silently shift their positional arguments.
+ */
+export function coverageStale(spec: CoverageSpec | null, _currentSha?: string | null, currentCodeHash?: string | null): boolean {
   if (!spec) return false;
   if (spec.builtCodeHash && currentCodeHash) return spec.builtCodeHash !== currentCodeHash;
-  return Boolean(spec.builtSha && currentSha && spec.builtSha !== currentSha);
+  return false;
 }
 
-export function testCasesStale(spec: CoverageSpec | null, currentSha?: string | null, currentCodeHash?: string | null): boolean {
+/** Same rule as coverageStale: compare the code, or say nothing. */
+export function testCasesStale(spec: CoverageSpec | null, _currentSha?: string | null, currentCodeHash?: string | null): boolean {
   if (!spec) return false;
   if (spec.testsStale) return true; // scenarios regenerated — parents may have moved
   if (spec.testsBuiltCodeHash && currentCodeHash) return spec.testsBuiltCodeHash !== currentCodeHash;
-  return Boolean(spec.testsBuiltSha && currentSha && spec.testsBuiltSha !== currentSha);
+  return false;
 }
 
 /** Every CORE test case has a run (any status) on every one of its devices. */
