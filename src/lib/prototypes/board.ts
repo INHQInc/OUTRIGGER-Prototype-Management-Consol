@@ -34,14 +34,14 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 
   const cards = await Promise.all(protos.map(async (p): Promise<BoardCard | null> => {
     const stage = normalizeStage(p.status);
-    if (stage === "archived") return null;
 
-    const [source, versions, push, provisionFlagRaw, holdRaw, claudeSeenAt, briefDrift, coverage, verdict] = await Promise.all([
+    const [source, versions, push, provisionFlagRaw, holdRaw, deployedRaw, claudeSeenAt, briefDrift, coverage, verdict] = await Promise.all([
       resolveRepoSource(p.key).catch(() => null),
       listArtifactVersions(p.key).catch(() => []),
       lastPush(p.key).catch(() => null),
       store.getFlag(`provision:${p.key}`).catch(() => null),
       store.getFlag(`hold:${p.key}`).catch(() => null),
+      store.getFlag(`deployed:${p.key}`).catch(() => null),
       store.getFlag(`claude:seen:${p.key}`).catch(() => null),
       getBriefDrift(p.key, p).catch(() => null),
       getCoverage(p.key).catch(() => null),
@@ -65,7 +65,17 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 
     // The column IS the canonical stage — shipped → handoff, running → experiment
     // (locked badge), all handled inside pipeline.stage.id. One source of truth.
-    const derivedColumn: BoardColumn = pipeline.stage.id;
+    // THE TWO TERMINAL COLUMNS SIT PAST THE PIPELINE, so they are decided here
+    // rather than in derivePipeline — which has no step for either and should
+    // not grow one. Archived wins over everything: a closed-out prototype has
+    // no work left whatever its branch says. Deployed is a stored human claim,
+    // and it only counts once the thing was actually handed off — you cannot
+    // deploy a winner nobody picked.
+    const deployedAt = deployedRaw?.trim() || null;
+    const derivedColumn: BoardColumn =
+      stage === "archived" ? "archived"
+      : (deployedAt && pipeline.stage.id === "handoff") ? "deployed"
+      : pipeline.stage.id;
     // A HOLD ONLY EVER PULLS A CARD BACK. The pipeline reads the facts, but the
     // facts cannot tell "built" from "still being worked on" — a branch with a
     // build on it looks finished whether or not anyone is done. So a human may
@@ -80,6 +90,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 
     return {
       key: p.key, name: p.name, column, derivedColumn, held: holdValid, locked, experimentStatus, pipeline,
+      deployedAt: deployedAt ?? undefined,
       metric: p.metrics.primary || undefined,
       guardrailCount: p.metrics.guardrails.length || undefined,
       hypothesis: p.hypothesis.change || undefined,

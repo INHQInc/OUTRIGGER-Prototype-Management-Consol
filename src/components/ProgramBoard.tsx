@@ -65,6 +65,11 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   const [toast, setToast] = useState<string | null>(null);
   /** Where the card would land right now — the column under the pointer and the
    *  slot within it, counted over that column WITHOUT the card being dragged. */
+  /** ARCHIVED IS A DRAWER, NOT A COLUMN OF WORK. It grows without bound and
+   *  nothing in it needs doing, so it must not take a seventh of the width from
+   *  the five columns that do. Collapsed it is a spine with a count; it still
+   *  accepts a drop, because archiving has to stay one gesture. */
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [drag, setDrag] = useState<{ key: string; col: BoardColumn; idx: number } | null>(null);
   /** A card is held. Drives the window-level listeners that own the gesture. */
   const [pressing, setPressing] = useState(false);
@@ -101,7 +106,11 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   const canLand = (card: BoardCard, col: BoardColumn) =>
     !card.locked && (
       COLUMN_RANK[col] <= COLUMN_RANK[card.derivedColumn]
-      || (col === "handoff" && card.column === "experiment")
+      // The three moves that are DECISIONS rather than derivations, so they are
+      // allowed to go past the ceiling. Each writes the claim it asserts.
+      || (col === "handoff" && card.column === "experiment")   // we picked a winner
+      || (col === "deployed" && card.column === "handoff")     // the dev team shipped it
+      || col === "archived"                                    // we are done with it
     );
 
   const bounceReason = (card: BoardCard, col: BoardColumn) =>
@@ -205,6 +214,53 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     router.refresh();
   }
 
+  /** Close a prototype out. Archiving is allowed from anywhere except a running
+   *  experiment (canLand's !locked), because "we are done with this" is a
+   *  decision, not a derivation — and a LOSING experiment has no other exit. */
+  async function archive(card: BoardCard) {
+    const from = card.column;
+    setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: "archived" as BoardColumn } : c)));
+    const res = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, status: "archived" }) }).catch(() => null);
+    if (!res?.ok) {
+      setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: from } : c)));
+      say("Couldn't archive it — try again.");
+      return;
+    }
+    say(`${card.name} archived. Drag it out to reopen it.`);
+    router.refresh();
+  }
+
+  /** Reopen. The stage it held before archiving is not recorded, so this does
+   *  not guess one: it clears the archive and lets the pipeline place the card
+   *  from the facts, which is the only answer that cannot be wrong. */
+  async function unarchive(card: BoardCard) {
+    const from = card.column;
+    const res = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, status: "review" }) }).catch(() => null);
+    if (!res?.ok) {
+      setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: from } : c)));
+      say("Couldn't reopen it — try again.");
+      return;
+    }
+    say(`${card.name} reopened — the board will place it where the work actually is.`);
+    router.refresh();
+  }
+
+  /** Claim (or withdraw) that the winner is live in production. The console
+   *  cannot see another team's release train, so this is a stated fact with a
+   *  date on it, not an observation — and it is audited both ways. */
+  async function setDeployed(card: BoardCard, on: boolean) {
+    const from = card.column;
+    setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: (on ? "deployed" : "handoff") as BoardColumn } : c)));
+    const res = await fetch("/api/prototypes/deployed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, deployed: on }) }).catch(() => null);
+    if (!res?.ok) {
+      setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: from } : c)));
+      say(on ? "Couldn't mark it deployed — try again." : "Couldn't clear it — try again.");
+      return;
+    }
+    say(on ? `${card.name} marked live in production.` : `${card.name} is back at Handoff — the deployment claim is cleared.`);
+    router.refresh();
+  }
+
   /** Park a card in an earlier column, or release it back to where the facts
    *  put it. Dropping it ON its derived column is the release — there is no
    *  separate control to find, because "put it back" is the same gesture. */
@@ -263,6 +319,10 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     if (card.locked) { say("The experiment is running — this card is locked until it isn't."); return; }
     if (!canLand(card, target.col)) { say(bounceReason(card, target.col)); return; }
 
+    if (target.col === "archived") { void archive(card); return; }
+    if (card.column === "archived") { void unarchive(card); return; }
+    if (target.col === "deployed") { void setDeployed(card, true); return; }
+    if (card.column === "deployed") { void setDeployed(card, false); return; }
     if (target.col === "handoff" && card.column === "experiment") { void markShipped(card); return; }
     if (card.column === "handoff" && target.col !== "handoff") { void sendBack(card, target.col); return; }
     if (target.col !== card.column) { void park(card, target.col); return; }
@@ -386,9 +446,10 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
       {cards.length === 0 ? (
         <EmptyState title="No prototypes yet." hint="Create one — then build it with the agent and review it on the real site." />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 xl:flex xl:items-start">
           {BOARD_COLUMNS.map((col) => {
             const items = cards.filter((c) => c.column === col.id);
+            const shut = col.id === "archived" && !archiveOpen;
             const anyLocked = col.id === "experiment" && items.some((c) => c.locked);
             const over = drag?.col === col.id && dragging !== null;
             const welcome = over && canLand(dragging!, col.id);
@@ -425,20 +486,31 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
               <div
                 key={col.id}
                 ref={(el) => { if (el) colRefs.current.set(col.id, el); else colRefs.current.delete(col.id); }}
-                className={`rounded-xl border p-2 min-h-[9rem] transition-colors ${
+                className={`rounded-xl border p-2 min-h-[9rem] transition-colors xl:min-w-0 ${shut ? "xl:flex-none xl:w-[3.25rem]" : "xl:flex-1"} ${
                   welcome ? "border-accent bg-[color-mix(in_srgb,var(--accent)_6%,transparent)]"
                   : rejecting ? "border-danger/40"
                   : "border-border bg-surface/40"}`}
               >
-                <div className="px-1.5 pb-2 pt-0.5">
+                {shut ? (
+                  <button type="button" onClick={() => setArchiveOpen(true)}
+                    title={`${items.length} archived — click to open`}
+                    className="hidden xl:flex w-full flex-col items-center gap-2 py-2 text-muted-2 hover:text-foreground transition-colors">
+                    <span className="text-[12.5px] tabular-nums font-semibold">{items.length}</span>
+                    <span className="text-[12.5px] [writing-mode:vertical-rl] tracking-wider">{col.label}</span>
+                  </button>
+                ) : null}
+                <div className={`px-1.5 pb-2 pt-0.5 ${shut ? "xl:hidden" : ""}`}>
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-[13px] font-semibold ${col.id === "handoff" ? "text-ok" : ""}`}>{col.label}</span>
+                    <span className={`text-[13px] font-semibold ${col.id === "handoff" ? "text-ok" : col.id === "deployed" ? "text-ok" : ""}`}>{col.label}</span>
                     {anyLocked && <span className="text-[12.5px]" title="a running experiment is locked">🔒</span>}
                     <span className="text-[12.5px] text-muted-2 tabular-nums ml-auto">{items.length}</span>
+                    {col.id === "archived" && archiveOpen && (
+                      <button type="button" onClick={() => setArchiveOpen(false)} title="collapse" className="hidden xl:block text-[12.5px] text-muted-2 hover:text-foreground">×</button>
+                    )}
                   </div>
                   <div className="text-[12.5px] text-muted-2 leading-tight">{col.hint}</div>
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className={`flex flex-col gap-1.5 ${shut ? "xl:hidden" : ""}`}>
                   {items.map((c) => {
                     const isDragged = drag?.key === c.key;
                     const mark = showSlot && !isDragged && slot === drag!.idx;
@@ -478,6 +550,9 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                                 <span className="text-muted-2">Next: </span>{c.pipeline.primaryAction.label}
                               </>}
                             </div>
+                            {c.deployedAt && (
+                              <div className="text-[12.5px] text-ok leading-tight">✔ Live in production · {c.deployedAt.slice(0, 10)}</div>
+                            )}
                             {c.held && (
                               <div className="text-[12.5px] text-muted-2 leading-tight" title={`The pipeline puts this at ${LABEL(c.derivedColumn)}; you are holding it here. Drag it to ${LABEL(c.derivedColumn)} to release it.`}>
                                 ✋ Held here — the build says {LABEL(c.derivedColumn)}
@@ -519,7 +594,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
         </div>
       )}
 
-      {archivedCount > 0 && <p className="text-[12.5px] text-muted-2">{archivedCount} archived prototype{archivedCount === 1 ? "" : "s"} hidden.</p>}
+      {archivedCount > 0 && <p className="text-[12.5px] text-muted-2">{archivedCount} archived — in the Archived column at the end of the board.</p>}
 
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 rounded-lg border border-border-strong bg-surface px-4 py-2.5 text-[14px] text-foreground shadow-lg max-w-md">
