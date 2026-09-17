@@ -76,9 +76,18 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
     } catch { /* private window — Save will report it */ }
   }, [pathKey, sourceKey, repo?.fullName]);
 
-  const path = savedPath.trim();
+  // THE COMMAND IS ALWAYS THE ANSWER, SO IT IS ALWAYS ON SCREEN. The local
+  // folder lives in localStorage — per browser, per prototype — so a prototype
+  // worked on from another machine, or simply an older one, had never saved a
+  // path here and step 3 locked itself with "finish step 2 first". The command
+  // was hidden exactly when someone needed it: coming back to a prototype they
+  // had not touched in a while. A path is a suggestion until it is saved, not a
+  // prerequisite, so it falls back to a sensible default and says so.
+  const savedOk = savedPath.trim().length > 0;
+  const fallbackPath = `~/Projects/${prototypeKey}`;
+  const path = savedPath.trim() || fallbackPath;
   const src = savedSource.trim();
-  const pathOk = path.length > 0;
+  const pathOk = savedOk;
   const dirty = draftPath.trim() !== savedPath.trim() || draftSource.trim() !== savedSource.trim();
 
   function savePaths() {
@@ -170,7 +179,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
         <div className="space-y-3">
           <div className="space-y-1">
             <label className="block text-[13px] text-muted-2">Where the prototype clones to <span className="text-danger">*</span></label>
-            <input value={draftPath} onChange={(e) => { setDraftPath(e.target.value); setSaveMsg(null); }} spellCheck={false} placeholder="/Users/you/Projects/room-compare" className={inp} />
+            <input value={draftPath} onChange={(e) => { setDraftPath(e.target.value); setSaveMsg(null); }} spellCheck={false} placeholder={`/Users/you/Projects/${prototypeKey}`} className={inp} />
             <div className="text-[12.5px] text-muted-2 leading-relaxed">In Finder: right-click the folder → hold <span className="font-mono">⌥ Option</span> → &ldquo;Copy … as Pathname.&rdquo; The clone lands here; nothing else is touched.</div>
           </div>
           <div className="space-y-1">
@@ -192,9 +201,9 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
 
       {/* 3 · Start the agent — DONE from ground truth: the agent's check-in
           beacon, or a real build on the branch. Never eternally "active". */}
-      <Step n={3} title="Start the agent" state={!provisioned || !pathOk ? "locked" : agentStarted ? "done" : "active"}>
-        {!provisioned || !pathOk ? (
-          <div className="text-[13px] text-warn">Finish {[!provisioned ? "step 1" : null, !pathOk ? "step 2" : null].filter(Boolean).join(" and ")} first — then your clone + start command appears here.</div>
+      <Step n={3} title="Start the agent" state={!provisioned ? "locked" : agentStarted ? "done" : "active"}>
+        {!provisioned ? (
+          <div className="text-[13px] text-warn">Prepare the branch in step 1 first — there is nothing to clone until it exists.</div>
         ) : (
           <div className="space-y-3">
             {agentStarted && (
@@ -210,7 +219,7 @@ export function InitScript({ prototypeKey, repo, provisioned, previewUrl, buildS
               </div>
               <pre className="px-3 py-2.5 text-[13px] font-mono text-muted leading-relaxed overflow-x-auto">{cmds}</pre>
               <div className="px-3 pb-2.5 text-[12.5px] text-muted-2 border-t border-border/60 pt-2">
-                Clones into <span className="font-mono">{path}</span>, then launches the agent already tasked to read the brief and build — no coaching needed.{src ? <> It reads the real site source at <span className="font-mono">source-site/</span>.</> : null}
+                Clones into <span className="font-mono">{path}</span>{!savedOk && <span className="text-warn"> — a suggested folder; set your own in step 2 and this command follows it</span>}, then launches the agent already tasked to read the brief and build — no coaching needed.{src ? <> It reads the real site source at <span className="font-mono">source-site/</span>.</> : null}
               </div>
             </div>
             <div>
