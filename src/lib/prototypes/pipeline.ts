@@ -130,9 +130,21 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   const bound = Boolean(proto.experiment?.experimentId && proto.experiment?.variationId);
   const pushCurrent = Boolean(lastPush && latest && lastPush.version === latest.version && lastPush.verified);
   const running = inp.experimentStatus === "running";
+  // DID THIS EXPERIMENT EVER ACTUALLY RUN? Optimizely reports not_started for an
+  // experiment that exists but was never launched. Two columns depend on this and
+  // both were previously wrong without it:
+  //   · Experimentation means a test that STARTED — not one being prepared for.
+  //     Cut, certified, bound, even pushed: all of that is still being worked on.
+  //   · A winner cannot come out of a run that never happened, so `status:shipped`
+  //     on an experiment that never started is false data (it came from the board's
+  //     drag-to-Handoff, which wrote the field with no verification) and is ignored.
+  const everRan = Boolean(inp.experimentStatus && inp.experimentStatus !== "not_started");
   // normalizeStage, like every other reader — a legacy "handed-off" record must
   // say Shipped here AND on the board, or the one-vocabulary contract is a lie.
-  const stageShipped = normalizeStage(proto.status) === "shipped";
+  const storedShipped = normalizeStage(proto.status) === "shipped";
+  // An externally-built test has no console run to check, so its stored status is
+  // all there is; a console-built one must have actually run to have a winner.
+  const stageShipped = storedShipped && (external || everRan);
 
   const truth: GroundTruth = {
     servingSha: built ? source?.headSha : undefined,
@@ -149,6 +161,11 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   };
 
   // ── alerts (operational; each links to its fix) ───────────────
+  // NOT FOR A FINISHED PROTOTYPE. Every rule below describes work, and a
+  // handed-off prototype has none left — yet none of them carried a shipped
+  // guard, so Handoff cards sat there being told to re-sync a branch for an
+  // agent that will never build again. A finished card says nothing.
+  if (!stageShipped) {
   if (!external && !synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
   if (!external && problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   if (!external && latest && cert && !cert.passed) alerts.push({ level: "danger", text: `Certification failed on v${latest.version} (${cert.checks.filter((c) => c.level === "fail").map((c) => c.title).join(" · ")}). Fix and re-cut.`, anchor: "experiment" });
@@ -157,6 +174,8 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   else if (!external && inp.qaStale) alerts.push({ level: "warn", text: "QA is stale — the build moved past the spec. Regenerate the scenarios/test cases.", anchor: "review" });
   if (!external && lastPush && latest && lastPush.version < latest.version) alerts.push({ level: "warn", text: `Optimizely is running v${lastPush.version}; the latest cut is v${latest.version}. Push to update the experiment.`, anchor: "experiment" });
   if (!external && lastPush && lastPush.verified === false) alerts.push({ level: "danger", text: "The last push did not read-back verify — inspect the variation in Optimizely before publishing.", anchor: "experiment" });
+
+  }
 
   // ── steps ─────────────────────────────────────────────────────
   const steps: PipelineStep[] = [];
@@ -188,7 +207,11 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // One fact, one place; a banner here made the same sentence appear 5×.
 
   // 2 · Build
-  const buildDone = provisioned && built && !problem;
+  // A BRANCH THAT IS OUT OF SYNC IS NOT BUILT. The brief or the pages moved after
+  // the agent last built, so what is on the branch answers an older question —
+  // that is build work, and it belongs in the Build column rather than being a
+  // footnote on a card parked further down the line.
+  const buildDone = provisioned && built && !problem && synced;
   steps.push(external
     ? { id: "build", title: "Build", anchor: "build", state: "done", na: true, status: "n/a — built in Optimizely" }
     : {
@@ -264,9 +287,14 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   }
 
   // ── the one stage word (shared verbatim with the board column) ──
+  const held = steps.find((s) => s.state === "blocked" || s.state === "current")?.id;
   const stageId: PipelineStep["id"] = stageShipped ? (external ? "experiment" : "handoff")
     : running ? "experiment"
-    : (steps.find((s) => s.state === "blocked" || s.state === "current")?.id ?? "experiment");
+    // EXPERIMENTATION IS FOR TESTS THAT STARTED. A prototype whose experiment has
+    // not run is still being worked on, whatever else is true of it — so it holds
+    // at Review rather than parking in a column named after running tests.
+    : (held === "experiment" && !everRan) ? "review"
+    : (held ?? (everRan ? "experiment" : "review"));
   const stageStep = steps.find((s) => s.id === stageId)!;
   const stage: PipelineStage = {
     id: stageId,
@@ -286,6 +314,10 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
       : ended || inp.adjudicationPending ? { label: "Close out the results", anchor: "experiment" }
       : { label: "Plan measurement, then start it", anchor: "experiment" };
   }
+  // FINISHED IS THE FIRST QUESTION, NOT THE NINTH. This test used to sit at the
+  // bottom of the chain, so `!latest || !cutFresh` answered first and every
+  // handed-off prototype advertised "Cut a new version" from the terminal column.
+  else if (stageShipped) primaryAction = { label: "Handed off", anchor: "handoff" };
   else if (drifted) primaryAction = { label: "Resolve brief ↔ build drift", anchor: "brief" };
   else if (!briefDone) primaryAction = { label: hasChange ? "Add a success metric" : "Write the brief", anchor: "brief" };
   else if (!provisioned) primaryAction = { label: "Prepare the branch", anchor: "build" };
@@ -296,8 +328,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   else if (!bound) primaryAction = { label: "Bind the experiment", anchor: "experiment" };
   else if (!pushCurrent) primaryAction = { label: `Push v${latest!.version} to Optimizely`, anchor: "experiment" };
   else if (running) primaryAction = { label: "Running — watch results", anchor: "experiment" };
-  else if (!stageShipped) primaryAction = { label: "Start the experiment in Optimizely", anchor: "experiment" };
-  else primaryAction = { label: "Hand off the winner", anchor: "handoff" };
+  else primaryAction = { label: "Start the experiment in Optimizely", anchor: "experiment" };
 
   // ── the Overview checklist: one row per stage, in flow order ──
   const ROOMS: { step: PipelineStep["id"]; tab: string; label: string; pending: string }[] = [
