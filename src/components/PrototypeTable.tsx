@@ -39,6 +39,27 @@ const CSV_COLUMNS: { header: string; cell: (c: BoardCard, origin: string) => str
   { header: "URL", cell: (c, origin) => `${origin}/prototypes/${c.key}` },
 ];
 
+/**
+ * THE COLUMNS THAT EARN THEIR WIDTH. The CSV carries all seventeen fields
+ * because a spreadsheet is for slicing; a screen is for scanning, and a table
+ * wide enough to need two hands answers nothing faster than the board does.
+ * These nine are the ones you sort or triage by. Deliberately NOT here: key and
+ * URL (the row is a link), description and hypothesis (they sit under the name,
+ * where they are read rather than compared), stage detail and blocked (the
+ * Status chip already says both).
+ */
+const HEADERS: { label: string; right?: boolean }[] = [
+  { label: "Name" },
+  { label: "Status" },
+  { label: "Next action" },
+  { label: "Alerts" },
+  { label: "Primary metric" },
+  { label: "Versions", right: true },
+  { label: "Experiment" },
+  { label: "Owner" },
+  { label: "Priority", right: true },
+];
+
 /** RFC 4180: quote anything containing a comma, quote or newline; double the quotes. */
 const csvCell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 
@@ -123,18 +144,18 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
         <table className="w-full text-[13.5px] border-collapse">
           <thead>
             <tr className="border-b border-border">
-              {["Name", "Status", "Primary metric", "Versions", "Experiment"].map((h, i) => (
-                <th key={h} className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-muted-2 whitespace-nowrap ${i === 3 ? "text-right" : "text-left"}`}>{h}</th>
+              {HEADERS.map((h) => (
+                <th key={h.label} className={`px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-muted-2 whitespace-nowrap ${h.right ? "text-right" : "text-left"}`}>{h.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {groups.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-10 text-center text-[14px] text-muted-2">No prototypes match{q ? ` “${q}”` : ""}.</td></tr>
+              <tr><td colSpan={HEADERS.length} className="px-4 py-10 text-center text-[14px] text-muted-2">No prototypes match{q ? ` “${q}”` : ""}.</td></tr>
             ) : groups.map(({ col, rows }) => (
               <Fragment key={col.id}>
                 <tr className="bg-surface-2/40 border-y border-border">
-                  <td colSpan={5} className="px-4 py-2">
+                  <td colSpan={HEADERS.length} className="px-4 py-2">
                     <span className="text-[11.5px] font-semibold uppercase tracking-wider text-muted">{col.label}</span>
                     <span className="ml-2 text-[11.5px] tabular-nums text-muted-2">{rows.length}</span>
                     <span className="ml-3 text-[12px] text-muted-2 hidden sm:inline">{col.hint}</span>
@@ -146,13 +167,30 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                     <td className="px-4 py-3.5 align-top min-w-[16rem]">
                       <Link href={`/prototypes/${c.key}`} onClick={(e) => e.stopPropagation()} className="text-[14.5px] font-semibold text-accent hover:text-accent-hover">{c.name}</Link>
                       {c.description && <div className="text-[12.5px] text-muted-2 mt-0.5 max-w-[42ch] line-clamp-2">{c.description}</div>}
-                      {c.pipeline.primaryAction && <div className="text-[12px] text-muted mt-1">Next: {c.pipeline.primaryAction.label}</div>}
                       <StageStrip pipeline={c.pipeline} className="mt-2 max-w-[150px]" />
                     </td>
                     <td className="px-4 py-3.5 align-top whitespace-nowrap">
                       <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[12.5px] font-semibold ${chipTone(c)}`}>
                         <span className={`w-2 h-2 rounded-full ${dotTone(c)}`} />{label(c)}
                       </span>
+                      {c.deployedAt && <div className="text-[12px] text-ok mt-1">live {c.deployedAt.slice(0, 10)}</div>}
+                      {c.held && <div className="text-[12px] text-muted-2 mt-1">held · facts say {stageLabel(c.derivedColumn)}</div>}
+                    </td>
+                    <td className="px-4 py-3.5 align-top text-muted whitespace-nowrap">
+                      {c.pipeline.primaryAction?.label ?? "—"}
+                    </td>
+                    <td className="px-4 py-3.5 align-top whitespace-nowrap">
+                      {(() => {
+                        const as = c.pipeline.alerts;
+                        if (!as.length) return <span className="text-muted-2">—</span>;
+                        const bad = as.some((a) => a.level === "danger");
+                        return (
+                          <span title={as.map((a) => `${a.level === "danger" ? "✗" : "⚠"} ${a.text}`).join("\n\n")}
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[12px] font-semibold tabular-nums ${bad ? "border-danger/40 text-danger" : "border-warn/40 text-warn"}`}>
+                            {bad ? "✗" : "⚠"} {as.length}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3.5 align-top max-w-[24ch]">
                       {c.metric
@@ -168,6 +206,8 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                           </Link>
                         : <span className="text-muted-2 text-[13px]">not bound</span>}
                     </td>
+                    <td className="px-4 py-3.5 align-top whitespace-nowrap text-muted">{c.owner ?? <span className="text-muted-2">—</span>}</td>
+                    <td className="px-4 py-3.5 align-top text-right tabular-nums text-muted">{typeof c.priority === "number" ? c.priority : <span className="text-muted-2">—</span>}</td>
                   </tr>
                 ))}
               </Fragment>
