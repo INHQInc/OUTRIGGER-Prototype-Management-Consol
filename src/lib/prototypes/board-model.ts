@@ -54,6 +54,15 @@ export interface BoardCard {
   hypothesis?: string;
   /** The brief's change, one line — the table's description row. */
   description?: string;
+  /** Where on the page it goes (brief.where) — the tracker's "Website Area". */
+  where?: string;
+  /** The hypothesis in full, so the table can read like the plan it came from. */
+  audience?: string;
+  outcome?: string;
+  /** The guardrails themselves, not just how many. */
+  guardrails?: string[];
+  /** Supporting files on the brief — a build input, so it belongs in the list. */
+  attachmentCount?: number;
   versionCount?: number;
   owner?: string;
   priority?: number;

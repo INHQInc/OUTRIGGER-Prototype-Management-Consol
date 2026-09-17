@@ -28,9 +28,11 @@ const CSV_COLUMNS: { header: string; cell: (c: BoardCard, origin: string) => str
   { header: "Name", cell: (c) => c.name },
   { header: "Key", cell: (c) => c.key },
   { header: "Description", cell: (c) => c.description ?? "" },
-  { header: "Hypothesis", cell: (c) => c.hypothesis ?? "" },
+  { header: "Website area", cell: (c) => c.where ?? "" },
+  { header: "Hypothesis", cell: (c) => hypothesisOf(c) },
   { header: "Primary metric", cell: (c) => c.metric ?? "" },
-  { header: "Guardrails", cell: (c) => (c.guardrailCount ? String(c.guardrailCount) : "") },
+  { header: "Supporting KPIs", cell: (c) => (c.guardrails ?? []).join(" · ") },
+  { header: "Files", cell: (c) => (c.attachmentCount ? String(c.attachmentCount) : "") },
   { header: "Versions", cell: (c) => (c.versionCount ? String(c.versionCount) : "0") },
   { header: "Experiment", cell: (c) => c.experimentStatus?.replace("_", " ") ?? "not bound" },
   { header: "Locked", cell: (c) => (c.locked ? "yes" : "no") },
@@ -39,23 +41,39 @@ const CSV_COLUMNS: { header: string; cell: (c: BoardCard, origin: string) => str
   { header: "URL", cell: (c, origin) => `${origin}/prototypes/${c.key}` },
 ];
 
+/** The hypothesis as one sentence, the way the plan and the tracker state it. */
+function hypothesisOf(c: BoardCard): string {
+  if (!c.hypothesis && !c.outcome) return "";
+  return `We believe ${c.hypothesis || "[change]"}${c.audience ? ` for ${c.audience}` : ""}${c.outcome ? ` will cause ${c.outcome}` : ""}.`;
+}
+
 /**
- * THE COLUMNS THAT EARN THEIR WIDTH. The CSV carries all seventeen fields
- * because a spreadsheet is for slicing; a screen is for scanning, and a table
- * wide enough to need two hands answers nothing faster than the board does.
- * These nine are the ones you sort or triage by. Deliberately NOT here: key and
- * URL (the row is a link), description and hypothesis (they sit under the name,
- * where they are read rather than compared), stage detail and blocked (the
- * Status chip already says both).
+ * THE TRACKER'S SHAPE. This view is the SharePoint Pipeline Tracker's columns
+ * against live data — Description, Website area, Hypothesis and Supporting
+ * KPIs are the substance people actually read, and keeping them out meant the
+ * console could not answer a question the spreadsheet could.
+ *
+ * It is deliberately wide and scrolls sideways: prose columns wrap to a width
+ * cap rather than truncating, because a hypothesis cut off at one line is worse
+ * than no hypothesis. The board stays the scanning view; this is the reading one.
+ *
+ * Tracker columns Prism has no field for — Effort, Target Qtr., Start and Est.
+ * End Date — are absent rather than faked. Still not here: key and URL (the row
+ * is a link), stage detail and blocked (the Status chip says both).
  */
 const HEADERS: { label: string; right?: boolean }[] = [
-  { label: "Name" },
-  { label: "Status" },
-  { label: "Next action" },
-  { label: "Alerts" },
-  { label: "Primary metric" },
-  { label: "Versions", right: true },
   { label: "Experiment" },
+  { label: "Status" },
+  { label: "Description" },
+  { label: "Website area" },
+  { label: "Hypothesis" },
+  { label: "Primary KPI" },
+  { label: "Supporting KPIs" },
+  { label: "Next step" },
+  { label: "Alerts" },
+  { label: "Versions", right: true },
+  { label: "Optimizely" },
+  { label: "Files", right: true },
   { label: "Owner" },
   { label: "Priority", right: true },
 ];
@@ -166,7 +184,6 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                     className="border-b border-border/60 last:border-0 hover:bg-surface-2/40 cursor-pointer transition-colors">
                     <td className="px-4 py-3.5 align-top min-w-[16rem]">
                       <Link href={`/prototypes/${c.key}`} onClick={(e) => e.stopPropagation()} className="text-[14.5px] font-semibold text-accent hover:text-accent-hover">{c.name}</Link>
-                      {c.description && <div className="text-[12.5px] text-muted-2 mt-0.5 max-w-[42ch] line-clamp-2">{c.description}</div>}
                       <StageStrip pipeline={c.pipeline} className="mt-2 max-w-[150px]" />
                     </td>
                     <td className="px-4 py-3.5 align-top whitespace-nowrap">
@@ -176,8 +193,14 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                       {c.deployedAt && <div className="text-[12px] text-ok mt-1">live {c.deployedAt.slice(0, 10)}</div>}
                       {c.held && <div className="text-[12px] text-muted-2 mt-1">held · facts say {stageLabel(c.derivedColumn)}</div>}
                     </td>
-                    <td className="px-4 py-3.5 align-top text-muted whitespace-nowrap">
-                      {c.pipeline.primaryAction?.label ?? "—"}
+                    <td className="px-4 py-3.5 align-top text-muted-2 min-w-[22ch] max-w-[34ch] whitespace-normal leading-snug">
+                      {c.description ?? <span className="text-muted-2">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 align-top text-muted-2 min-w-[14ch] max-w-[22ch] whitespace-normal leading-snug">
+                      {c.where ?? <span className="text-muted-2">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 align-top text-muted-2 min-w-[26ch] max-w-[40ch] whitespace-normal leading-snug">
+                      {hypothesisOf(c) || <span className="text-muted-2">—</span>}
                     </td>
                     <td className="px-4 py-3.5 align-top whitespace-nowrap">
                       {(() => {
@@ -192,10 +215,18 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                         );
                       })()}
                     </td>
-                    <td className="px-4 py-3.5 align-top max-w-[24ch]">
+                    <td className="px-4 py-3.5 align-top min-w-[18ch] max-w-[28ch]">
                       {c.metric
-                        ? <><div className="text-foreground/90 truncate">{c.metric}</div>{c.guardrailCount ? <div className="text-[12px] text-muted-2">{c.guardrailCount} guardrail{c.guardrailCount === 1 ? "" : "s"}</div> : null}</>
+                        ? <div className="text-foreground/90 whitespace-normal leading-snug">{c.metric}</div>
                         : <span className="text-warn text-[13px]">needs a success metric</span>}
+                    </td>
+                    <td className="px-4 py-3.5 align-top text-muted-2 min-w-[18ch] max-w-[30ch] whitespace-normal leading-snug">
+                      {c.guardrails?.length
+                        ? <ul className="space-y-0.5">{c.guardrails.map((g, i) => <li key={i}>· {g}</li>)}</ul>
+                        : <span className="text-muted-2">—</span>}
+                    </td>
+                    <td className="px-4 py-3.5 align-top text-muted min-w-[16ch] whitespace-normal leading-snug">
+                      {c.pipeline.primaryAction?.label ?? "—"}
                     </td>
                     <td className="px-4 py-3.5 align-top text-right tabular-nums font-semibold">{c.versionCount ?? "—"}</td>
                     <td className="px-4 py-3.5 align-top whitespace-nowrap">
@@ -206,6 +237,7 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                           </Link>
                         : <span className="text-muted-2 text-[13px]">not bound</span>}
                     </td>
+                    <td className="px-4 py-3.5 align-top text-right tabular-nums text-muted" title="supporting files committed to the branch">{c.attachmentCount ? `📎 ${c.attachmentCount}` : <span className="text-muted-2">—</span>}</td>
                     <td className="px-4 py-3.5 align-top whitespace-nowrap text-muted">{c.owner ?? <span className="text-muted-2">—</span>}</td>
                     <td className="px-4 py-3.5 align-top text-right tabular-nums text-muted">{typeof c.priority === "number" ? c.priority : <span className="text-muted-2">—</span>}</td>
                   </tr>
