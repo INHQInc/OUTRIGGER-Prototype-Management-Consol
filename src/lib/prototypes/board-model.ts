@@ -7,10 +7,15 @@
 import type { Pipeline } from "./pipeline";
 
 // The ONE canonical stage list — identical to the pipeline steps and the tabs.
+// NOTE: the first column's ID stays `brief` and the STEP is still called Brief
+// everywhere else (the workspace room, the tab, the checklist, the alert
+// anchors). Only the board column is labelled Backlog, because a column is a
+// queue — the work waiting to be written — while the step is the thing you
+// write. Renaming the id would rename the room too, which is not the ask.
 export type BoardColumn = "brief" | "build" | "review" | "experiment" | "handoff";
 
 export const BOARD_COLUMNS: { id: BoardColumn; label: string; hint: string }[] = [
-  { id: "brief", label: "Brief", hint: "what & why being written" },
+  { id: "brief", label: "Backlog", hint: "waiting on a brief — what & why" },
   { id: "build", label: "Build", hint: "agent at work in the repo" },
   { id: "review", label: "Review", hint: "verifying on the real site" },
   { id: "experiment", label: "Experimentation", hint: "cut · push · run (locked when live)" },

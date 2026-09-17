@@ -10,7 +10,7 @@ import type { Pipeline } from "@/lib/prototypes/pipeline";
 
 /** Why a cross-column drag bounces: the column is a fact, not an opinion. */
 const BOUNCE: Record<BoardColumn, string> = {
-  brief: "Brief is where cards start — they move on when a build begins, not when they're dragged.",
+  brief: "Backlog is where cards start — they move on when a build begins, not when they're dragged.",
   build: "Build means a real build exists on the branch. It moves when the agent pushes one.",
   review: "Review means the pages verify on the real site. Verify them and the card moves itself.",
   experiment: "Experimentation means cut + certified + pushed. Do those and the card arrives on its own.",
