@@ -69,13 +69,33 @@ export async function POST(req: NextRequest) {
     // Where it is built follows the parent — a follow-up to an Optimizely-built
     // test is another Optimizely-built test.
     buildMode: parent.buildMode,
-    repo: parent.repo,
+    // THE CHILD GETS ITS OWN BRANCH. Copying parent.repo wholesale handed the
+    // follow-up the parent's branch, so the first build would have committed
+    // onto the branch carrying the parent's SHIPPED variation. The normal
+    // create path coerces this through prototypeBranch(); promote writes the
+    // record straight to the store and skipped it.
+    repo: parent.repo
+      ? { fullName: parent.repo.fullName, branch: `prototype/${key}`, ...(parent.repo.artifactPath ? { artifactPath: parent.repo.artifactPath } : {}) }
+      : undefined,
     status: "draft",
     // The pages carry over; the follow-up is a change to the same surfaces
     // unless someone says otherwise. Injection state does NOT carry — that is
     // ground truth about a build this prototype does not have yet.
     targets: parent.targets.map((t) => ({ url: t.url, source: t.source })),
-    brief: { ...parent.brief, change: (body.change ?? "").trim() || "" },
+    // CARRY THE SURFACE, NOT THE STORY. `where` and `constraints` describe the
+    // page and the rules, which a follow-up on the same surface inherits. The
+    // other two must not come across: the parent's `problem` is the one its own
+    // run just addressed — a follow-up exists because the problem MOVED — and
+    // its `doneLooksLike` is the acceptance criteria for a build that already
+    // ships. Inheriting either has the agent rebuild the parent. Blank is
+    // honest; the Brief room asks for them.
+    brief: {
+      problem: "",
+      change: (body.change ?? "").trim() || "",
+      doneLooksLike: "",
+      where: parent.brief.where ?? "",
+      constraints: parent.brief.constraints ?? "",
+    },
     hypothesis: {
       change: (body.change ?? "").trim() || "",
       audience: parent.hypothesis?.audience ?? "",
