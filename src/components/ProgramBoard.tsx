@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState, SEVERITY_DOT } from "@/components/ui";
-import { BOARD_COLUMNS, COLUMN_RANK, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
+import { BOARD_COLUMNS, COLUMN_RANK, armColor, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
 import { stepSeverity } from "@/lib/prototypes/severity";
 import type { Pipeline } from "@/lib/prototypes/pipeline";
 
@@ -539,8 +539,18 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                             href={`/prototypes/${c.key}`}
                             draggable={false}
                             onClick={(e) => { if (draggedRef.current) e.preventDefault(); }}
+                            style={c.arm ? { borderLeftColor: armColor(c.arm.groupId), borderLeftWidth: 3 } : undefined}
                             className={`block rounded-lg border px-3 py-2.5 bg-surface hover:border-border-strong transition-colors space-y-1.5 ${c.locked ? "border-warn/50" : "border-border cursor-grab active:cursor-grabbing"}`}
                           >
+                            {c.arm && (
+                              <div className="flex items-center gap-1.5 text-[11.5px] font-semibold leading-none"
+                                title={`${c.arm.groupName ?? c.arm.groupId} — an A/B/n test of ${c.arm.count} arms. They run as one experiment and are judged on one metric.`}>
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: armColor(c.arm.groupId) }} />
+                                <span className="truncate" style={{ color: armColor(c.arm.groupId) }}>{c.arm.groupName ?? c.arm.groupId}</span>
+                                <span className="text-muted-2 shrink-0 tabular-nums">arm {c.arm.index}/{c.arm.count}</span>
+                                {c.arm.split && <span className="text-danger shrink-0" title="These arms are bound to DIFFERENT Optimizely experiments — that is not one test.">⚠</span>}
+                              </div>
+                            )}
                             <div className="text-[14px] font-semibold leading-snug">{c.name}</div>
                             {c.hypothesis && <div className="text-[12.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
 

@@ -35,6 +35,25 @@ export const BOARD_COLUMNS: { id: BoardColumn; label: string; hint: string }[] =
 export const COLUMN_RANK: Record<BoardColumn, number> =
   BOARD_COLUMNS.reduce((m, c, i) => ({ ...m, [c.id]: i }), {} as Record<BoardColumn, number>);
 
+/**
+ * A TEST'S COLOUR, DERIVED FROM ITS ID. Arms of one A/B/n test land in
+ * different columns — one still building, one in review, one pushed — so they
+ * cannot be tied together by adjacency. A stable colour can do it across the
+ * whole board and down the table at once, and deriving it from the id means no
+ * palette to assign, no state to keep, and the same test is the same colour on
+ * every screen and after every reload.
+ *
+ * Hue only: saturation and lightness are fixed so every group sits at the same
+ * weight and none of them competes with the severity colours, which are the
+ * ones that actually mean something.
+ */
+export function armHue(groupId: string): number {
+  let h = 0;
+  for (let i = 0; i < groupId.length; i++) h = (h * 31 + groupId.charCodeAt(i)) % 360;
+  return h;
+}
+export const armColor = (groupId: string) => `hsl(${armHue(groupId)} 70% 62%)`;
+
 export interface BoardCard {
   key: string;
   name: string;
@@ -63,6 +82,17 @@ export interface BoardCard {
   guardrails?: string[];
   /** Supporting files on the brief — a build input, so it belongs in the list. */
   attachmentCount?: number;
+  /** A/B/n membership, resolved across the org so a card knows its own position. */
+  arm?: {
+    groupId: string;
+    groupName?: string;
+    /** 1-based, ordered the way the board orders anything: priority, then name. */
+    index: number;
+    count: number;
+    /** The arms disagree about which Optimizely experiment they belong to.
+     *  Two arms bound to different experiments is not an A/B/n test. */
+    split?: boolean;
+  };
   versionCount?: number;
   owner?: string;
   priority?: number;

@@ -145,6 +145,9 @@ export async function POST(req: NextRequest) {
       primary: b.metrics?.primary?.trim() ?? "",
       guardrails: (b.metrics?.guardrails ?? []).map((g) => g.trim()).filter(Boolean),
     },
+    // Set by /api/prototypes/arm, which is the only thing that validates a
+    // group id — carried through here so a plain save never drops it.
+    ...(existing?.arm ? { arm: existing.arm } : {}),
     owner: b.owner?.trim() || undefined,
     ticketUrl: b.ticketUrl?.trim() || undefined,
     priority: typeof b.priority === "number" ? b.priority : undefined,

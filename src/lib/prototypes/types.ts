@@ -206,6 +206,29 @@ export interface ArtifactVersion {
   coverageSnapshot?: import("./coverage").CoverageSpec;
 }
 
+/**
+ * AN A/B/n TEST — several prototypes that run as arms of ONE experiment.
+ *
+ * The tie has to exist BEFORE the Optimizely binding does. Six whole-page
+ * variations get built, reviewed and certified for weeks before anyone creates
+ * the experiment, and `experiment.experimentId` — the eventual real tie — is
+ * null for all of that time. So the group is DECLARED here and the binding
+ * later realises it; when every arm is bound they should agree, and a group
+ * whose arms point at different experiments is a mistake worth surfacing.
+ *
+ * Arms share one decision metric by definition. Five arms judged on five
+ * different metrics is five experiments wearing a trenchcoat.
+ */
+export interface PrototypeArm {
+  /** Stable id shared by every arm of the test. */
+  groupId: string;
+  /** What the test is called, e.g. "KBR Property Overview". Carried on each arm
+   *  so a single record still reads on its own. */
+  groupName?: string;
+  addedAt: string;
+  addedBy?: string;
+}
+
 /** Binding to the Optimizely experiment this prototype ships into.
  *  Set once from the Ship panel; the API push targets exactly this variation. */
 export interface PrototypeExperimentBinding {
@@ -251,6 +274,8 @@ export interface PrototypeRecord {
    *  without this the console holds a pile of results instead of a thread.
    *  Set once, at promote; never edited. */
   parentKey?: string;
+  /** A/B/n membership — several prototypes as arms of one experiment. */
+  arm?: PrototypeArm;
   owner?: string;
   ticketUrl?: string;
   priority?: number;     // ICE/PIE-style 1–100

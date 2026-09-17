@@ -31,6 +31,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
   const protos = all.filter((_, i) => orgIds[i] === orgId);
 
   const client = await getOptimizelyClientForOrg(orgId).catch(() => null);
+  const protoByKey = new Map(protos.map((p) => [p.key, p]));
 
   const cards = await Promise.all(protos.map(async (p): Promise<BoardCard | null> => {
     const stage = normalizeStage(p.status);
@@ -108,6 +109,33 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 
   const clean = cards.filter((c): c is BoardCard => c !== null)
     .sort((a, b) => (a.priority ?? 1e9) - (b.priority ?? 1e9) || a.name.localeCompare(b.name));
+
+  // ── A/B/n: an arm only means something next to its siblings ────────────────
+  // Resolved here, after the sort, so "arm 3 of 6" counts in the same order the
+  // board shows. A group of ONE is not a test — a prototype left holding a
+  // group id after its siblings were archived should read as an ordinary
+  // prototype, not as a one-armed experiment.
+  const byGroup = new Map<string, typeof clean>();
+  for (const c of clean) {
+    const gid = protoByKey.get(c.key)?.arm?.groupId;
+    if (!gid) continue;
+    (byGroup.get(gid) ?? byGroup.set(gid, []).get(gid)!).push(c);
+  }
+  for (const [groupId, members] of byGroup) {
+    if (members.length < 2) continue;
+    // Bound arms must agree on the experiment. Unbound ones say nothing yet.
+    const boundIds = new Set(members.map((m) => protoByKey.get(m.key)?.experiment?.experimentId).filter(Boolean));
+    const split = boundIds.size > 1;
+    members.forEach((m, i) => {
+      m.arm = {
+        groupId,
+        groupName: protoByKey.get(m.key)?.arm?.groupName,
+        index: i + 1,
+        count: members.length,
+        ...(split ? { split: true } : {}),
+      };
+    });
+  }
   return {
     cards: clean,
     archivedCount: protos.filter((p) => normalizeStage(p.status) === "archived").length,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { BOARD_COLUMNS, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
+import { BOARD_COLUMNS, armColor, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
 import { StageStrip } from "@/components/StageStrip";
 
 type Filter = "all" | "blocked" | BoardColumn;
@@ -20,6 +20,7 @@ const isBlocked = (c: BoardCard) => c.pipeline.steps.some((s) => s.state === "bl
  * order, rather than mirroring the five visible columns.
  */
 const CSV_COLUMNS: { header: string; cell: (c: BoardCard, origin: string) => string }[] = [
+  { header: "Test", cell: (c) => (c.arm ? `${c.arm.groupName ?? c.arm.groupId} (arm ${c.arm.index}/${c.arm.count})` : "") },
   { header: "Stage", cell: (c) => stageLabel(c.column) },
   { header: "Stage detail", cell: (c) => c.pipeline.stage.status ?? "" },
   { header: "Blocked", cell: (c) => (isBlocked(c) ? "yes" : "no") },
@@ -62,6 +63,7 @@ function hypothesisOf(c: BoardCard): string {
  * is a link), stage detail and blocked (the Status chip says both).
  */
 const HEADERS: { label: string; right?: boolean }[] = [
+  { label: "Test" },
   { label: "Experiment" },
   { label: "Status" },
   { label: "Description" },
@@ -98,8 +100,12 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
     return cards
       .filter((c) => (filter === "all" ? true : filter === "blocked" ? isBlocked(c) : c.column === filter))
       .filter((c) => !needle || c.name.toLowerCase().includes(needle) || (c.description ?? "").toLowerCase().includes(needle))
+      // Inside a stage, arms of one test sit together and in arm order — a test
+      // split across four rows that are not adjacent is not "tied together".
       .sort((a, b) =>
         STAGE_ORDER.indexOf(a.column) - STAGE_ORDER.indexOf(b.column)
+        || (a.arm?.groupId ?? "~").localeCompare(b.arm?.groupId ?? "~")
+        || (a.arm ? a.arm.index - (b.arm?.index ?? 0) : 0)
         || (a.priority ?? 1e9) - (b.priority ?? 1e9)
         || a.name.localeCompare(b.name));
   }, [cards, q, filter]);
@@ -182,6 +188,19 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                 {rows.map((c) => (
                   <tr key={c.key} onClick={() => router.push(`/prototypes/${c.key}`)}
                     className="border-b border-border/60 last:border-0 hover:bg-surface-2/40 cursor-pointer transition-colors">
+                    <td className="px-4 py-3.5 align-top whitespace-nowrap"
+                      style={c.arm ? { borderLeft: `3px solid ${armColor(c.arm.groupId)}` } : undefined}>
+                      {c.arm ? (
+                        <span title={`${c.arm.groupName ?? c.arm.groupId} — an A/B/n test of ${c.arm.count} arms, run as one experiment on one metric.`}>
+                          <span className="block text-[12.5px] font-semibold truncate max-w-[16ch]" style={{ color: armColor(c.arm.groupId) }}>
+                            {c.arm.groupName ?? c.arm.groupId}
+                          </span>
+                          <span className="block text-[12px] text-muted-2 tabular-nums">
+                            arm {c.arm.index}/{c.arm.count}{c.arm.split ? " ⚠" : ""}
+                          </span>
+                        </span>
+                      ) : <span className="text-muted-2">—</span>}
+                    </td>
                     <td className="px-4 py-3.5 align-top min-w-[16rem]">
                       <Link href={`/prototypes/${c.key}`} onClick={(e) => e.stopPropagation()} className="text-[14.5px] font-semibold text-accent hover:text-accent-hover">{c.name}</Link>
                       <StageStrip pipeline={c.pipeline} className="mt-2 max-w-[150px]" />
