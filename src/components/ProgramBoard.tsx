@@ -93,8 +93,19 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   }, []);
 
   const cardOf = (key: string | null) => (key ? cards.find((c) => c.key === key) ?? null : null);
+  /** A card can always be sent BACK into the pipeline; it can never be dragged
+   *  forward. The forward columns are observed facts — a build exists, the pages
+   *  verify, a test actually ran — so a forward drag would be a claim the board
+   *  cannot back up, and it would snap back on the next refresh. "Shipped" is the
+   *  one column that rests on a STORED claim, so leaving it is a real write and a
+   *  real drag. (Without this a mis-shipped card was stranded in Handoff forever,
+   *  which is how Regional Map Display ended up there with no experiment.) */
   const canLand = (card: BoardCard, col: BoardColumn) =>
-    !card.locked && (col === card.column || (col === "handoff" && card.column === "experiment"));
+    !card.locked && (
+      col === card.column
+      || (col === "handoff" && card.column === "experiment")
+      || (card.column === "handoff" && col !== "handoff")
+    );
 
   /** Hit-test the pointer against the live layout: which column, and which slot. */
   function targetAt(x: number, y: number, dragKey: string): { col: BoardColumn; idx: number } | null {
@@ -192,6 +203,25 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     router.refresh();
   }
 
+  /** Undo a handoff. We write "review" rather than the column the pointer landed
+   *  on, because the column is not ours to set — clearing the stored "shipped"
+   *  claim is, and the pipeline then re-derives the true column from the facts.
+   *  So the card may well settle somewhere other than where it was dropped; the
+   *  toast says so rather than letting that look like a bug. */
+  async function sendBack(card: BoardCard, to: BoardColumn) {
+    const from = card.column;
+    setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: to } : c)));
+    const res = await fetch("/api/prototypes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: card.key, status: "review" }) })
+      .catch(() => null);
+    if (!res?.ok) {
+      setCards((cs) => cs.map((c) => (c.key === card.key ? { ...c, column: from } : c)));
+      say("Couldn't send it back — try again.");
+      return;
+    }
+    say(`${card.name} sent back — the board will place it where the work actually is.`);
+    router.refresh();
+  }
+
   /** Did this gesture ever propose a different home than the card already had? */
   function moved(target: { col: BoardColumn; idx: number } | null, card: BoardCard) {
     if (!target) return true; // off the board — say so rather than navigate
@@ -212,6 +242,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     if (!canLand(card, target.col)) { say(BOUNCE[target.col]); return; }
 
     if (target.col === "handoff" && card.column === "experiment") { void markShipped(card); return; }
+    if (card.column === "handoff" && target.col !== "handoff") { void sendBack(card, target.col); return; }
 
     const rest = cards.filter((c) => c.column === card.column && c.key !== card.key);
     const at = Math.max(0, Math.min(target.idx, rest.length));
