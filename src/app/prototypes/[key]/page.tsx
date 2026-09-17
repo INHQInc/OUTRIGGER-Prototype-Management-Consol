@@ -38,6 +38,7 @@ import { StageSelect } from "@/components/StageSelect";
 import { BriefComposer } from "@/components/BriefComposer";
 import { TargetPages } from "@/components/TargetPages";
 import { InitScript } from "@/components/InitScript";
+import { ArmPanel } from "@/components/ArmPanel";
 import { SkillSelector } from "@/components/SkillSelector";
 import { SourcePanel } from "@/components/SourcePanel";
 import { OptimizelyBundle } from "@/components/OptimizelyBundle";
@@ -486,6 +487,12 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         {tab === "experiment" && (
           <Room title="Experiment" sub={external ? "Built in Optimizely: attach this prototype to its Optimizely experiment — everything else lives in Analytics." : "The release: freeze an immutable cut (certification runs at cut), bind the Optimizely experiment, push by API (read-back verified), start it in Optimizely. Running locks everything. Measurement and results live in Analytics."}>
             {!external && <SourcePanel prototypeKey={key} versions={versions} compact />}
+            {/* BEFORE the binding, because that is the order the work happens
+                in: arms are built and certified for weeks before anyone creates
+                the Optimizely experiment. */}
+            <Section id="arms" title="A/B/n test" sub="Several prototypes as arms of one experiment — judged together, on one metric, with one winner.">
+              <ArmPanel prototypeKey={key} prototypeName={p.name} initialArm={p.arm ?? null} metric={p.metrics.primary ?? ""} />
+            </Section>
             <Section id="ship" title={external ? "Bind the experiment" : "Ship to Optimizely"} sub={external ? "Pick the experiment built in Optimizely — measurement, results, and the verdict read from it." : "Bind or create the experiment, then push the frozen cut. Starting traffic stays a human act."}>
               <ShipPanel
                 prototypeKey={key}
