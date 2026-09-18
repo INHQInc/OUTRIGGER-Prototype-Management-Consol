@@ -44,7 +44,10 @@ function normalizeBrief(
   raw: { problem?: string; change?: string; doneLooksLike?: string; where?: string; constraints?: string; reference?: string; references?: { url?: string; label?: string; note?: string }[]; attachments?: BriefAttachment[] } | undefined,
   prev?: PrototypeBrief,
 ): PrototypeBrief {
-  const given = (k: string) => raw !== undefined && Object.prototype.hasOwnProperty.call(raw, k);
+  // `!= null`, not `!== undefined`: a body carrying `"brief": null` reached
+  // hasOwnProperty.call(null, …) and threw a TypeError out as an unhandled 500.
+  // A null brief means "no fields given" — inherit, exactly like an absent one.
+  const given = (k: string) => raw != null && Object.prototype.hasOwnProperty.call(raw, k);
   const refs: BriefReference[] = [];
   for (const r of (given("references") ? raw!.references ?? [] : prev?.references ?? [])) {
     const url = normalizeReferenceUrl(r?.url ?? ""); // drops non-URLs / javascript:/data:
@@ -76,11 +79,23 @@ function normalizeBrief(
    * delete that file by saving a stale array. Removal has one door, the
    * DELETE route, which is the one the UI already uses.
    */
-  const incomingNotes = new Map(
-    (given("attachments") ? raw!.attachments ?? [] : []).map((a) => [a?.asset, typeof a?.note === "string" ? a.note.trim() || undefined : undefined]),
-  );
+  //
+  // Keyed on asset AND name, and only for entries that actually carry a `note`
+  // key. Two reasons, both reachable:
+  //   · `asset` is the sha1 of the BYTES, so the same file uploaded under two
+  //     names is two entries sharing one asset. Keying on asset alone wrote one
+  //     note onto both.
+  //   · An entry sent WITHOUT a note key meant "clear the note" — so any client
+  //     echoing the attachments array it already had, minus the note field,
+  //     silently wiped every note and moved the content hash with it.
+  const key = (a: { asset: string; name: string }) => `${a.asset}\u0000${a.name}`;
+  const incomingNotes = new Map<string, string | undefined>();
+  for (const a of given("attachments") ? raw!.attachments ?? [] : []) {
+    if (!a || !Object.prototype.hasOwnProperty.call(a, "note")) continue;
+    incomingNotes.set(key(a), typeof a.note === "string" ? a.note.trim() || undefined : undefined);
+  }
   const attachments = (prev?.attachments ?? []).slice(0, 20).map((a) =>
-    incomingNotes.has(a.asset) ? { ...a, note: incomingNotes.get(a.asset) } : a);
+    incomingNotes.has(key(a)) ? { ...a, note: incomingNotes.get(key(a)) } : a);
   return {
     problem: raw?.problem?.trim() ?? "",
     change: raw?.change?.trim() ?? "",
@@ -186,7 +201,10 @@ export async function POST(req: NextRequest) {
       ? { fullName: b.repo.fullName.trim(), branch: prototypeBranch(b.repo.branch, key), ...(b.repo.artifactPath?.trim() ? { artifactPath: b.repo.artifactPath.trim() } : {}) }
       : undefined,
     targets: (b.targets ?? []).filter((t) => t.url?.trim()).map((t) => ({ url: t.url.trim(), source: t.source === "live" ? "live" : "clone" })),
-    brief: normalizeBrief(b.brief),
+    // `existing?.brief` matters: POST is documented as "create (no key) or
+    // update (key present)", and without it the update branch resolved
+    // attachments from an undefined `prev` and dropped every file on the brief.
+    brief: normalizeBrief(b.brief, existing?.brief),
     hypothesis: {
       change: b.hypothesis?.change?.trim() ?? "",
       audience: b.hypothesis?.audience?.trim() ?? "",

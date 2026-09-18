@@ -28,7 +28,7 @@ const SECTIONS: BriefSection[] = ["change", "where", "doneLooksLike", "hypothesi
  * A refinement is logged (brief.correction) as a feedback signal for tuning.
  */
 export async function POST(req: NextRequest) {
-  let body: { key?: string; text?: string; answers?: string; references?: { url?: string; label?: string; note?: string }[]; refine?: { section?: string; correction?: string; current?: BriefDraft; references?: { url?: string; label?: string; note?: string }[] } };
+  let body: { key?: string; text?: string; answers?: string; attachmentNotes?: { asset?: string; name?: string; note?: string }[]; references?: { url?: string; label?: string; note?: string }[]; refine?: { section?: string; correction?: string; current?: BriefDraft; references?: { url?: string; label?: string; note?: string }[] } };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const g = await guardPrototypeAccess(body.key ?? null, req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
@@ -46,7 +46,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (!body.text?.trim()) return NextResponse.json({ error: "Explain the experiment first — a couple of sentences is plenty." }, { status: 400 });
-    const draft = await draftBrief({ orgId: g.orgId, proto: g.proto, userText: body.text, answers: body.answers, references: cleanRefs(body.references) });
+    const draft = await draftBrief({
+      orgId: g.orgId, proto: g.proto, userText: body.text, answers: body.answers,
+      references: cleanRefs(body.references),
+      // Notes as they are on screen. Identity still comes from the stored
+      // record — these only override the note text, never which files exist.
+      attachmentNotes: (body.attachmentNotes ?? [])
+        .filter((a): a is { asset: string; name: string; note?: string } => typeof a?.asset === "string" && typeof a?.name === "string")
+        .map((a) => ({ asset: a.asset, name: a.name, note: typeof a.note === "string" ? a.note : undefined })),
+    });
     return NextResponse.json({ draft });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });

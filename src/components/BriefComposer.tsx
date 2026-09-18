@@ -38,7 +38,7 @@ function AttachmentsEditor({ prototypeKey, attachments, onChange, onNote }: {
   attachments: BriefAttachment[];
   onChange: (next: BriefAttachment[]) => void;
   /** Edit a stored file's note. Local; the brief's Save persists it. */
-  onNote: (asset: string, note: string) => void;
+  onNote: (asset: string, name: string, note: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -94,7 +94,7 @@ function AttachmentsEditor({ prototypeKey, attachments, onChange, onNote }: {
                   Brief↔Build drift verdict and bills a fresh LLM audit on the
                   next page view — per-keystroke saving would do that on every
                   character typed. */}
-              <NoteField value={a.note ?? ""} onCommit={(v) => onNote(a.asset, v)}
+              <NoteField value={a.note ?? ""} onCommit={(v) => onNote(a.asset, a.name, v)}
                 placeholder="What should the agent take from this file?" />
             </div>
           ))}
@@ -378,7 +378,6 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   // the whole document — a destructive action once the brief has matured.
   // Refine + the drift audit are the evolution tools from then on. Clearing the
   // change and saving brings the drafting drawer back (the natural start-over).
-  const [savedComplete, setSavedComplete] = useState(() => isBriefComplete(initialBrief, initialMetrics));
   /**
    * DOES A SAVED BRIEF EXIST? This is what retires the drafting card, and it
    * reads the SAVED brief deliberately. `hasContent` reads live state and flips
@@ -401,7 +400,24 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   // The upload route writes the record itself, so the local brief must follow
   // it — otherwise the next Save PATCHes a brief whose attachments list is one
   // step behind and quietly drops the file that was just added.
-  const setFiles = (next: BriefAttachment[]) => setBrief((b) => ({ ...b, attachments: next }));
+  /**
+   * Mirror the upload route's authoritative list into the local brief — while
+   * KEEPING note edits that have not been saved yet.
+   *
+   * The route returns the stored list, which cannot know about a note typed
+   * into the panel thirty seconds ago and not yet PATCHed. Assigning its
+   * response wholesale meant attaching a second file, or removing any file,
+   * silently reverted every pending note on the others. Notes are matched on
+   * asset AND name, because the asset is a hash of the bytes and the same file
+   * under two names shares one.
+   */
+  const setFiles = (next: BriefAttachment[]) => setBrief((b) => {
+    const pending = new Map((b.attachments ?? []).map((a) => [`${a.asset}\u0000${a.name}`, a.note]));
+    return { ...b, attachments: next.map((a) => {
+      const k = `${a.asset}\u0000${a.name}`;
+      return pending.has(k) && pending.get(k) !== a.note ? { ...a, note: pending.get(k) } : a;
+    }) };
+  });
   const addRef = (url: string, label?: string) => { setBrief((b) => ({ ...b, references: [...(b.references ?? []), { url, label, kind: referenceKind(url) }] })); setMsg(null); };
   const removeRef = (i: number) => { setBrief((b) => ({ ...b, references: (b.references ?? []).filter((_, j) => j !== i) })); setMsg(null); };
   /** Edit a link's note in place. Local only — the existing Save PATCHes it. */
@@ -417,8 +433,11 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
    * attachments array, so the note rides along with the next Save — no new
    * route, and the server pins everything except the note.
    */
-  const setFileNote = (asset: string, note: string) => {
-    setBrief((b) => ({ ...b, attachments: (b.attachments ?? []).map((a) => (a.asset === asset ? { ...a, note: note.trim() || undefined } : a)) }));
+  const setFileNote = (asset: string, name: string, note: string) => {
+    // asset is the sha1 of the BYTES, so two uploads of one file under
+    // different names share it — matching on asset alone wrote the note onto
+    // both rows at once.
+    setBrief((b) => ({ ...b, attachments: (b.attachments ?? []).map((a) => (a.asset === asset && a.name === name ? { ...a, note: note.trim() || undefined } : a)) }));
     setMsg(null);
   };
 
@@ -542,7 +561,10 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
     try {
       const res = await fetch("/api/prototypes/brief-draft", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: prototypeKey, text: explain, answers: answers || undefined, references: refs }),
+        body: JSON.stringify({ key: prototypeKey, text: explain, answers: answers || undefined, references: refs,
+        // Unsaved note edits ride along — the route reads file IDENTITY from the
+        // record, so these can only change what a note says, never which files exist.
+        attachmentNotes: files.map((a) => ({ asset: a.asset, name: a.name, note: a.note })) }),
       });
       const data = await res.json();
       if (!res.ok) { setAiErr(data.error ?? "Drafting failed"); return; }
@@ -568,8 +590,11 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       const data = await res.json();
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
       setSaved(JSON.stringify({ brief, hyp, metrics }));
-      setSavedComplete(isBriefComplete(brief, metrics));
       setSavedHasContent(Boolean(brief.change?.trim()));
+      // The redraft is over the moment it is saved. Without this the card stays
+      // open for the rest of the session — nothing else ever clears the flag —
+      // so it reads as though the save did not take.
+      setRedrafting(false);
       // Saved EXACTLY the audit's applied suggestion? Close the loop
       // deterministically: the pair is recorded judged-in-sync (the server
       // re-verifies against the drift record before marking). Any edit

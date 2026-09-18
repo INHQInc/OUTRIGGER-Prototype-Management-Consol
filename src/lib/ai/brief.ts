@@ -83,34 +83,70 @@ const DRAFT_TOOL = {
  * Bounded on purpose: the cap keeps one enormous PDF from crowding out the
  * brief itself, and what got dropped is stated rather than quietly truncated.
  */
-const READABLE_AS_BLOCK = (ct: string) => ct === "application/pdf" || /^image\/(png|jpe?g|gif|webp)$/.test(ct);
-const MAX_INLINE_FILES = 4;
-const MAX_INLINE_BYTES = 8 * 1024 * 1024;
+const IS_PDF = (ct: string) => ct === "application/pdf";
+const IS_IMAGE = (ct: string) => /^image\/(png|jpe?g|gif|webp)$/.test(ct);
+/** Sent as plain text. Not "extraction" — these files ARE text; refusing to
+ *  read a CSV of offer terms while claiming to read the brief's files is a
+ *  distinction only the code understood. */
+const IS_TEXT = (ct: string) => /^text\//.test(ct) || ct === "application/json";
 
-async function attachmentBlocks(proto: PrototypeRecord): Promise<{ blocks: Anthropic.ContentBlockParam[]; lines: string[] }> {
+/** Every Anthropic size limit is measured on the ENCODED payload, and base64
+ *  inflates by 4/3. Budgeting on raw bytes let a 7.8 MB PNG through as ~10.4 MB
+ *  and the API rejected the whole request — so one oversized file failed the
+ *  draft outright instead of quietly not being shown. */
+const b64size = (bytes: number) => Math.ceil(bytes / 3) * 4;
+const MAX_INLINE_FILES = 4;
+const MAX_TOTAL_B64 = 6 * 1024 * 1024;   // well inside the request ceiling
+const MAX_ONE_IMAGE_B64 = 4.5 * 1024 * 1024; // per-image API limit is 5 MB encoded
+const MAX_TEXT_CHARS = 40_000;
+
+async function attachmentBlocks(
+  proto: PrototypeRecord,
+  /** Notes as they are on screen right now, which may not be saved yet. */
+  noteOverride?: Map<string, string | undefined>,
+): Promise<{ blocks: Anthropic.ContentBlockParam[]; lines: string[] }> {
   const all = proto.brief.attachments ?? [];
   if (!all.length) return { blocks: [], lines: [] };
   const blocks: Anthropic.ContentBlockParam[] = [];
   const lines: string[] = [];
-  let budget = MAX_INLINE_BYTES;
+  let budget = MAX_TOTAL_B64;
+  /** asset → the name it was already sent under. The asset is a hash of the
+   *  BYTES, so the same file uploaded twice under different names would
+   *  otherwise be sent twice — double-billed, and eating the budget a
+   *  genuinely different file needed. */
+  const sentBytes = new Map<string, string>();
+
   for (const a of all) {
-    const note = a.note ? ` — the team says: ${a.note}` : "";
-    if (!READABLE_AS_BLOCK(a.contentType)) {
-      lines.push(`- ${a.name} (${a.contentType}) — NOT SHOWN to you; ask about it if it matters${note}`);
+    const note = noteOverride?.has(`${a.asset}\u0000${a.name}`) ? noteOverride.get(`${a.asset}\u0000${a.name}`) : a.note;
+    const says = note ? ` — the team says: ${note}` : "";
+    const already = sentBytes.get(a.asset);
+    if (already) { lines.push(`- ${a.name} — identical to ${already}, already attached${says}`); continue; }
+    if (!IS_PDF(a.contentType) && !IS_IMAGE(a.contentType) && !IS_TEXT(a.contentType)) {
+      lines.push(`- ${a.name} (${a.contentType}) — NOT SHOWN to you; ask about it if it matters${says}`);
       continue;
     }
-    if (blocks.length >= MAX_INLINE_FILES || a.bytes > budget) {
-      lines.push(`- ${a.name} — not shown (over the size/count budget); ask about it if it matters${note}`);
+    const enc = b64size(a.bytes);
+    if (blocks.length >= MAX_INLINE_FILES || enc > budget || (IS_IMAGE(a.contentType) && enc > MAX_ONE_IMAGE_B64)) {
+      lines.push(`- ${a.name} — NOT SHOWN (too large or over the per-draft budget); ask about it if it matters${says}`);
       continue;
     }
     const found = await getBriefAttachment(proto.siteKey, a.asset).catch(() => null);
-    if (!found?.bytes) { lines.push(`- ${a.name} — could not be read from the store${note}`); continue; }
-    const data = Buffer.from(found.bytes).toString("base64");
-    budget -= a.bytes;
-    lines.push(`- ${a.name} — ATTACHED BELOW, read it${note}`);
-    blocks.push(a.contentType === "application/pdf"
-      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data }, title: a.name, ...(a.note ? { context: a.note } : {}) }
-      : { type: "image", source: { type: "base64", media_type: a.contentType as "image/png" | "image/jpeg" | "image/gif" | "image/webp", data } });
+    if (!found?.bytes) { lines.push(`- ${a.name} — could not be read from the store${says}`); continue; }
+    const buf = Buffer.from(found.bytes);
+    budget -= enc;
+    sentBytes.set(a.asset, a.name);
+    lines.push(`- ${a.name} — ATTACHED to this message, read it${says}`);
+    // A LABEL BEFORE EACH FILE. Images carry no filename of their own, so
+    // without this the model sees two unlabelled screenshots and cannot say
+    // which is current and which is proposed.
+    blocks.push({ type: "text", text: `File: ${a.name}${note ? ` — what to take from it: ${note}` : ""}` });
+    if (IS_TEXT(a.contentType)) {
+      blocks.push({ type: "text", text: `"""\n${buf.toString("utf8").slice(0, MAX_TEXT_CHARS)}\n"""` });
+    } else if (IS_PDF(a.contentType)) {
+      blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") }, title: a.name, ...(note ? { context: note } : {}) });
+    } else {
+      blocks.push({ type: "image", source: { type: "base64", media_type: a.contentType as "image/png" | "image/jpeg" | "image/gif" | "image/webp", data: buf.toString("base64") } });
+    }
   }
   return { blocks, lines };
 }
@@ -121,6 +157,10 @@ export async function draftBrief(opts: {
   userText: string;
   answers?: string; // follow-up answers to clarifying questions, if regenerating
   references?: BriefReference[]; // current (possibly unsaved) supporting links
+  /** Notes as they are ON SCREEN — the composer saves them with the brief, so
+   *  without this a note typed and then drafted (before Save) is invisible to
+   *  the model it was written for. */
+  attachmentNotes?: { asset: string; name: string; note?: string }[];
 }): Promise<BriefDraft> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables to enable AI brief drafting.");
@@ -148,14 +188,34 @@ export async function draftBrief(opts: {
     : `\n\nDraft the complete brief now, then score your readiness honestly. If readiness is below ${READY} you are NOT sure enough to build without guessing — you MUST return 1–2 clarifying_questions naming exactly what is holding your confidence down. Return an empty clarifying_questions array ONLY when readiness is ${READY}+.`;
 
   const client = new Anthropic();
-  const files = await attachmentBlocks(opts.proto);
+  const notes = opts.attachmentNotes?.length
+    ? new Map(opts.attachmentNotes.map((a) => [`${a.asset}\u0000${a.name}`, a.note?.trim() || undefined]))
+    : undefined;
+  const files = await attachmentBlocks(opts.proto, notes);
   const filesLine = files.lines.length
     ? `\n\nSupporting FILES on this brief — these are build inputs, not decoration. Read the attached ones and let them inform the brief; for any marked not shown, ask rather than assume:\n${files.lines.join("\n")}`
     : "";
   // The files go FIRST: a document block placed ahead of the instruction that
   // refers to it is the ordering the model reads most reliably.
   const prose = `${context}${filesLine}\n\nThe team explains the experiment in their own words:\n"""\n${opts.userText.trim()}\n"""${closing}`;
-  const draft = await runDraft(client, system, files.blocks.length ? [...files.blocks, { type: "text", text: prose }] : prose);
+  let draft: BriefDraft;
+  if (!files.blocks.length) {
+    draft = await runDraft(client, system, prose);
+  } else {
+    try {
+      draft = await runDraft(client, system, [...files.blocks, { type: "text", text: prose }]);
+    } catch (e) {
+      // A PAYLOAD THE API REFUSES MUST NOT COST THE WHOLE DRAFT. Size caps are
+      // computed from the RECORD's byte counts and the encoded-size limits move;
+      // if we are wrong by a margin the honest answer is a brief written without
+      // the files, saying so, rather than an error where a draft should be.
+      if (!(e instanceof Anthropic.APIError) || e.status !== 413) throw e;
+      const withoutFiles = prose.replace(
+        "Supporting FILES on this brief",
+        "Supporting FILES on this brief (TOO LARGE TO ATTACH — you have NOT seen any of them; ask rather than assume)");
+      draft = await runDraft(client, system, withoutFiles);
+    }
+  }
 
   draft.clarifying_questions = finalPass ? [] : (draft.clarifying_questions ?? []).slice(0, 2);
   draft.readiness = clampReadiness(draft.readiness);
@@ -255,7 +315,16 @@ export async function refineBrief(opts: {
   const context = [
     `Prototype name: ${opts.proto.name}`,
     opts.proto.targets.length ? `Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ")}` : "Target pages: none set yet",
-    refs.length ? `Supporting references: ${refs.map((r) => `${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}`).join("; ")}` : "",
+    refs.length ? `Supporting references:\n${refs.map((r) => `- ${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}${r.note ? ` — the team says: ${r.note}` : ""}`).join("\n")}` : "",
+    // REFINE MUST SEE THE SAME MATERIAL THE DRAFT DID. It was told nothing about
+    // the brief's files — not the bytes, not the names, not even that any
+    // existed — so "the audience is wrong, see the audit" landed on a model with
+    // no audit and nothing to say it was missing one. The names and notes are
+    // cheap; the bytes are not re-sent, and the line says so rather than letting
+    // the model assume it has read them.
+    (opts.proto.brief.attachments ?? []).length
+      ? `Supporting FILES attached to this brief (you are NOT being shown their contents in this correction — if one of them decides the answer, say so in the field rather than guessing):\n${(opts.proto.brief.attachments ?? []).map((a) => `- ${a.name}${a.note ? ` — the team says: ${a.note}` : ""}`).join("\n")}`
+      : "",
   ].filter(Boolean).join("\n");
 
   const { clarifying_questions: _q, ...briefNoQ } = opts.current;
