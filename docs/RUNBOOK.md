@@ -173,3 +173,21 @@ Fix: push anything (an empty commit works: `git commit --allow-empty -m
   it in Optimizely IS the human sign-off. No override flag exists on purpose.
 - **"Certification failed … the push is gated"**: fix and re-cut, or use the
   explicit recorded override in the Launch card if you accept the risk.
+
+## Optimizely → GA4: experiment attribution stopped (OPEN)
+
+Opened 15 Sep 2026, still open. Optimizely ticket **#1933756**.
+
+**Read [`investigations/GA4-OPTIMIZELY-2026-09.md`](investigations/GA4-OPTIMIZELY-2026-09.md)
+before touching this.** Several plausible causes were found and then demoted by
+evidence, and two of our own tests returned confident false results. The doc separates
+what is *verified* from what is *ruled out* from what is still *hypothesis*.
+
+The short version: the browser side works — Optimizely pushes `experience_impression`,
+GTM tag 989 fires it, GA4 collects it. What stopped is the **attribution**. Leading
+hypothesis is the GA4 property sitting at 50/50 event-scoped custom dimensions, and
+the decisive test (`exp_variant_string` daily over 60 days in Explore) is still unrun.
+
+Two traps recorded there, both of which cost real time: replaying a dataLayer event
+does NOT re-fire the tag (trigger groups fire once per page), and GA4 Realtime's event
+card is top-N so a healthy low-volume event is simply absent from it.
