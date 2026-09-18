@@ -4,6 +4,97 @@
 
 ---
 
+## PRIORITISATION (2026-09-18) — shipped
+
+The board could say where every prototype *was* and never which one *mattered*.
+`priority` was a single number that meant two contradictory things: its comment
+claimed "ICE/PIE-style 1–100", its only writer was the board's drag-reorder
+writing 10/20/30, and every reader sorted it ascending. One field, two models.
+
+### What shipped
+
+**`lib/prototypes/score.ts` — one derivation, like `derivePipeline`.** RICE:
+`(Reach × Impact × Confidence) ÷ Effort`. Every surface reads `derivePriority()`;
+nothing recomputes a piece of it.
+
+Why RICE and not ICE, PIE or PXL — the two reasons are specific to this
+programme, not general taste:
+
+- It has a **denominator in real units**. "Three times the value per dev-day"
+  survives a client conversation; "it scored 7.2" does not. The Verndale
+  Pipeline Tracker already carries an Effort column, so the input exists.
+- **Reach is a lookup, not an opinion.** ICE's failure mode is that all three
+  inputs are feelings and feelings converge on 8.
+
+**Confidence is derived, never typed** — that is PXL's real contribution grafted
+on. Six evidence boxes (named in an audit · backed by analytics · backed by
+research · a prior test moved it · above the fold · adds or removes an element);
+0 ticked → 20%, 1–2 → 50%, 3–4 → 80%, 5+ → 100%. There is no field a hopeful
+person can set to 100, and an idea nobody can justify sinks on its own.
+
+**Bands, not numbers.** Reach S/M/L/XL, Impact 0.25–3, Effort 1/2/3/5/8 days,
+picked from menus. Exact figures are more precise and nobody fills them in for
+thirty backlog items — a scoring model with no scores is strictly worse than a
+coarse one that is populated.
+
+### The part no prioritisation framework has
+
+ICE, PIE, PXL and RICE all rank how much you **want** the answer. None asks
+whether the traffic can **give** you one. `derivePriority` computes weeks to a
+readable result from reach, effect size, baseline rate and **arm count** (an
+A/B/n splits traffic N ways, so a five-arm test needs far longer than an A/B at
+the same reach — exactly the KBR situation). Past `MAX_RUNNABLE_WEEKS` = 8 the
+card is flagged **underpowered**: not low priority, *not an A/B test*, and it
+should leave the queue rather than sit in it forever.
+
+This is the only part of priority that takes a warning colour, because it is a
+fact about whether the test can run, not a preference about whether it should.
+And it only appears when a real baseline rate is supplied — a run length
+computed from a guessed conversion rate would be believed. Absent beats
+fabricated.
+
+### Visual — no third colour
+
+The board already spends both colour channels: severity (§1b) and the arm hue
+that ties an A/B/n test together. So priority reads as **weight and position**:
+a `ScoreBadge` whose fill deepens by band (Now / Next / Later / Someday), queue
+numerals in Backlog, and a `⇅` where a hand-ordering disagrees with the score —
+overriding the model is fine, overriding it without noticing is the thing worth
+catching.
+
+### Sorting — one list of definitions, both views
+
+`BOARD_SORTS` in `board-model.ts`: Priority · Score · Quickest · Needs you ·
+Stalest · Newest · Name. The board's sort bar and the table's clickable headers
+consume the same comparators, so "Score" cannot come to mean two things.
+
+- **"Priority" is the default and the only draggable sort** — your hand-order
+  where you set one, the score everywhere else. A drop under a computed sort
+  bounces with the reason instead of writing ranks the next render discards.
+- **`sortCards()` keeps arms adjacent and in arm order under every sort.** A
+  group takes its best arm's position; four arms scattered down a list by
+  individual score is not "tied together".
+- The table gained a **Group by stage** toggle. Grouped answers "where is
+  everything?"; flat answers "what is worth doing next?".
+
+### Fixed in passing
+
+**The table's headers were off by one for four columns.** Cells ran description
+→ hypothesis → *alerts* → metric → guardrails → next step while the headers read
+Primary KPI → Supporting KPIs → Next step → Alerts. The alert count was sitting
+under "Primary KPI". Rows are now a `Row` component in header order, which is
+also why the defect surfaced.
+
+### Not done
+
+- No backfill: every existing prototype is **unscored** until someone picks its
+  three bands. Unscored sorts last on purpose — "not judged yet" is a different
+  statement from "scored badly".
+- Baseline rates are per-prototype and hand-entered. Pulling them from GA4 would
+  make the power gate automatic; nothing reads GA4 for this yet.
+
+---
+
 ## BOARD + WORKFLOW REBUILD (2026-09-17) — shipped
 
 The user's verdict on the board was "the entire workflow has to be redone to be

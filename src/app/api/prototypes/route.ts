@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { normalizeStage, referenceKind, normalizeReferenceUrl, type PrototypeRecord, type PrototypeBrief, type BriefReference, type BriefAttachment } from "@/lib/prototypes/types";
+import { normalizeScore, derivePriority, formatRice } from "@/lib/prototypes/score";
 import { accessibleOrgIds, canAccessOrg, getActiveOrgId } from "@/lib/active-org";
 import { listOrgEnvironments } from "@/lib/environments";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
@@ -221,6 +222,14 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.owner !== undefined) { updated.owner = body.owner?.trim() || undefined; changes.push("owner"); }
   if (body.priority !== undefined) { updated.priority = typeof body.priority === "number" && isFinite(body.priority) ? body.priority : undefined; changes.push("priority"); }
+  if (body.score !== undefined) {
+    const next = normalizeScore(body.score);
+    // Stamped only when something is actually stored: a cleared score should
+    // not leave a "set by Bryan just now" behind it.
+    updated.score = next ? { ...next, setAt: new Date().toISOString(), setBy: (await currentUser())?.name ?? undefined } : undefined;
+    const d = derivePriority(updated.score, {});
+    changes.push(next ? `score ${d.scored ? formatRice(d.rice) : "(incomplete)"}` : "score cleared");
+  }
   if (body.ticketUrl !== undefined) { updated.ticketUrl = body.ticketUrl?.trim() || undefined; changes.push("ticket"); }
   await store.putPrototype(updated);
   const user = await currentUser();

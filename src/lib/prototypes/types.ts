@@ -11,6 +11,9 @@
  * docs/LIFECYCLE-ARCHITECTURE.md). The `status` field holds this. Advances
  * draft → review → live → shipped, or ends archived.
  */
+import type { PrototypeScore } from "./score";
+export type { PrototypeScore } from "./score";
+
 export type PrototypeStage = "draft" | "review" | "live" | "shipped" | "archived";
 export const PROTOTYPE_STAGES: PrototypeStage[] = ["draft", "review", "live", "shipped", "archived"];
 
@@ -278,7 +281,17 @@ export interface PrototypeRecord {
   arm?: PrototypeArm;
   owner?: string;
   ticketUrl?: string;
-  priority?: number;     // ICE/PIE-style 1–100
+  /**
+   * MANUAL RANK inside a board column, written by drag-to-reorder as 10, 20,
+   * 30… Lower is earlier. This is NOT a score — the comment here used to claim
+   * "ICE/PIE-style 1–100" while the only writer was the board's reorder and
+   * every reader sorted it ascending, so one field carried two contradictory
+   * meanings. The score lives in `score` and is derived; this is a human
+   * overriding it, which is allowed and is worth being able to see.
+   */
+  priority?: number;
+  /** RICE inputs — see lib/prototypes/score.ts. Derived with derivePriority(). */
+  score?: PrototypeScore;
   createdAt: string;
   updatedAt: string;
 }

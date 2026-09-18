@@ -4,9 +4,17 @@ import Link from "next/link";
 import { Fragment, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState, SEVERITY_DOT } from "@/components/ui";
-import { BOARD_COLUMNS, COLUMN_RANK, armColor, type BoardCard, type BoardColumn } from "@/lib/prototypes/board-model";
+import { BOARD_COLUMNS, COLUMN_RANK, BOARD_SORTS, sortCards, sortCompare, armColor, type BoardCard, type BoardColumn, type SortId } from "@/lib/prototypes/board-model";
+import { ScoreBadge } from "@/components/ScorePanel";
 import { stepSeverity } from "@/lib/prototypes/severity";
 import type { Pipeline } from "@/lib/prototypes/pipeline";
+
+/** 1st, 2nd, 3rd — for saying a queue position in words a tooltip can use. */
+function ordinal(n: number): string {
+  const t = n % 100;
+  const suffix = t >= 11 && t <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
 
 /** A column's own name, for prose. */
 const LABEL = (id: BoardColumn) => BOARD_COLUMNS.find((c) => c.id === id)?.label ?? id;
@@ -70,6 +78,19 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
    *  the five columns that do. Collapsed it is a spine with a count; it still
    *  accepts a drop, because archiving has to stay one gesture. */
   const [archiveOpen, setArchiveOpen] = useState(false);
+  /** HOW THE COLUMNS ARE ORDERED. "priority" — your hand-ordering where you set
+   *  one, the RICE score everywhere else — is the default and the only sort
+   *  that can be dragged, because dragging IS setting the hand-ordering. The
+   *  others are read-only lenses, and a drop inside a column says so rather
+   *  than writing an order the next render would throw away. */
+  const [sort, setSort] = useState<SortId>("priority");
+  useEffect(() => {
+    try { const v = localStorage.getItem("opmc.board.sort"); if (v && BOARD_SORTS.some((s) => s.id === v)) setSort(v as SortId); } catch { /* private mode */ }
+  }, []);
+  const pickSort = (id: SortId) => {
+    setSort(id);
+    try { localStorage.setItem("opmc.board.sort", id); } catch { /* private mode */ }
+  };
   const [drag, setDrag] = useState<{ key: string; col: BoardColumn; idx: number } | null>(null);
   /** A card is held. Drives the window-level listeners that own the gesture. */
   const [pressing, setPressing] = useState(false);
@@ -93,6 +114,12 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   }, []);
 
   const cardOf = (key: string | null) => (key ? cards.find((c) => c.key === key) ?? null : null);
+  /** A COLUMN IN THE ORDER IT IS ON SCREEN — the one definition. Render, hit
+   *  testing and the commit all read this, because a drop computed against a
+   *  different order than the one the eye sees lands in the wrong slot. */
+  const ordered = useCallback(
+    (col: BoardColumn) => sortCards(cards.filter((c) => c.column === col), sort),
+    [cards, sort]);
   /** A CARD MAY SIT ANYWHERE AT OR BEHIND WHAT THE FACTS SUPPORT.
    *
    *  The pipeline reads the branch, the pages and the experiment, and that tells
@@ -144,7 +171,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     // Counted over the column minus the dragged card — it keeps its slot in the
     // layout while dragging (so the rects we measure stay still), but it is not
     // one of the places the card can go.
-    const rest = cards.filter((c) => c.column === col && c.key !== dragKey);
+    const rest = ordered(col).filter((c) => c.key !== dragKey);
     let idx = rest.length;
     for (let i = 0; i < rest.length; i++) {
       const el = cardRefs.current.get(rest[i].key);
@@ -304,9 +331,9 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
   function moved(target: { col: BoardColumn; idx: number } | null, card: BoardCard) {
     if (!target) return true; // off the board — say so rather than navigate
     if (target.col !== card.column) return true;
-    const rest = cards.filter((c) => c.column === card.column && c.key !== card.key);
+    const rest = ordered(card.column).filter((c) => c.key !== card.key);
     const at = Math.max(0, Math.min(target.idx, rest.length));
-    const before = cards.filter((c) => c.column === card.column);
+    const before = ordered(card.column);
     const next = [...rest.slice(0, at), card, ...rest.slice(at)];
     return !before.every((c, i) => c.key === next[i]?.key);
   }
@@ -327,13 +354,26 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
     if (card.column === "handoff" && target.col !== "handoff") { void sendBack(card, target.col); return; }
     if (target.col !== card.column) { void park(card, target.col); return; }
 
-    const rest = cards.filter((c) => c.column === card.column && c.key !== card.key);
+    // A HAND-ORDER UNDER A COMPUTED SORT IS A LIE. Under "Score" or "Stalest"
+    // the column's order comes from the data, so a drop here would write ranks
+    // the very next render ignores — the card would visibly snap back and look
+    // broken. Say what to do instead.
+    if (sort !== "priority") {
+      say(`Sorted by ${BOARD_SORTS.find((s) => s.id === sort)?.label ?? sort} — switch to Priority to hand-order a column.`);
+      return;
+    }
+    const rest = ordered(card.column).filter((c) => c.key !== card.key);
     const at = Math.max(0, Math.min(target.idx, rest.length));
-    const before = cards.filter((c) => c.column === card.column);
+    const before = ordered(card.column);
     const next = [...rest.slice(0, at), card, ...rest.slice(at)];
     if (before.every((c, i) => c.key === next[i]?.key)) return; // already there
-    setCards((cs) => [...cs.filter((c) => c.column !== card.column), ...next]);
-    void persistPriorities(next, before);
+    // Stamp the new ranks LOCALLY as well as on the server. The column renders
+    // from `priority`, not from array order, so without this the optimistic
+    // move would be re-sorted away on the very next render and the drag would
+    // look like it did nothing.
+    const ranked = next.map((c, i) => ({ ...c, priority: (i + 1) * 10 }));
+    setCards((cs) => [...cs.filter((c) => c.column !== card.column), ...ranked]);
+    void persistPriorities(ranked, before);
   }
 
   // ── the press → drag → release sequence ────────────────────────────────────
@@ -443,12 +483,40 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
 
   return (
     <div className="space-y-4">
+      {cards.length > 0 && (
+        // ONE ROW, AND IT EXPLAINS ITSELF. The hint belongs to the ACTIVE sort
+        // rather than sitting on every button, so the bar answers "what am I
+        // looking at" without a tooltip — and there is nowhere else on the
+        // board that this fact appears (§1).
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[12.5px] text-muted-2 shrink-0">Sort</span>
+          {BOARD_SORTS.map((s) => (
+            <button key={s.id} type="button" onClick={() => pickSort(s.id)} title={s.hint}
+              className={`rounded-md px-2 py-0.5 text-[12.5px] transition-colors ${
+                sort === s.id ? "bg-surface-2 text-foreground font-semibold" : "text-muted-2 hover:text-foreground"}`}>
+              {s.label}
+            </button>
+          ))}
+          <span className="text-[12.5px] text-muted-2 ml-1.5 min-w-0 truncate">
+            — {BOARD_SORTS.find((s) => s.id === sort)?.hint}
+          </span>
+        </div>
+      )}
       {cards.length === 0 ? (
         <EmptyState title="No prototypes yet." hint="Create one — then build it with the agent and review it on the real site." />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 xl:flex xl:items-start">
           {BOARD_COLUMNS.map((col) => {
-            const items = cards.filter((c) => c.column === col.id);
+            const items = ordered(col.id);
+            // THE QUEUE'S POSITION IS THE QUEUE'S POINT, so Backlog numbers its
+            // cards. And where a hand-ordering disagrees with the score, the
+            // card says so — quietly, next to the number. Overriding the model
+            // is allowed; overriding it without noticing is the thing worth
+            // catching, and a ranking nobody can see themselves departing from
+            // is just a number that gets ignored.
+            const isQueue = col.id === "brief";
+            const byScore = isQueue ? [...items].sort(sortCompare("score")) : [];
+            const scoreSeat = new Map(byScore.map((c, i) => [c.key, i]));
             const shut = col.id === "archived" && !archiveOpen;
             const anyLocked = col.id === "experiment" && items.some((c) => c.locked);
             const over = drag?.col === col.id && dragging !== null;
@@ -511,8 +579,10 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                   <div className="text-[12.5px] text-muted-2 leading-tight">{col.hint}</div>
                 </div>
                 <div className={`flex flex-col gap-1.5 ${shut ? "xl:hidden" : ""}`}>
-                  {items.map((c) => {
+                  {items.map((c, i) => {
                     const isDragged = drag?.key === c.key;
+                    // Hand-ranked into a seat the score disagrees with.
+                    const offScore = isQueue && c.priority != null && scoreSeat.get(c.key) !== i;
                     const mark = showSlot && !isDragged && slot === drag!.idx;
                     if (!isDragged) slot++;
                     return (
@@ -551,7 +621,18 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                                 {c.arm.split && <span className="text-danger shrink-0" title="These arms are bound to DIFFERENT Optimizely experiments — that is not one test.">⚠</span>}
                               </div>
                             )}
-                            <div className="text-[14px] font-semibold leading-snug">{c.name}</div>
+                            <div className="flex items-start gap-2">
+                              {isQueue && (
+                                <span className="text-[12.5px] tabular-nums text-muted-2 shrink-0 pt-[3px] leading-none"
+                                  title={offScore
+                                    ? `You put this ${ordinal(i + 1)} in the queue; the score puts it ${ordinal((scoreSeat.get(c.key) ?? 0) + 1)}. Both are fine — the score is advice, the order is yours.`
+                                    : `${ordinal(i + 1)} in the queue.`}>
+                                  {i + 1}{offScore && <span className="text-muted-2/70"> ⇅</span>}
+                                </span>
+                              )}
+                              <div className="text-[14px] font-semibold leading-snug flex-1 min-w-0">{c.name}</div>
+                              {c.score && <ScoreBadge d={c.score} className="mt-[1px]" />}
+                            </div>
                             {c.hypothesis && <div className="text-[12.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
 
                             <MiniPipeline pipeline={c.pipeline} />

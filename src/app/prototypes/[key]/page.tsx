@@ -39,6 +39,7 @@ import { BriefComposer } from "@/components/BriefComposer";
 import { TargetPages } from "@/components/TargetPages";
 import { InitScript } from "@/components/InitScript";
 import { ArmPanel } from "@/components/ArmPanel";
+import { ScorePanel } from "@/components/ScorePanel";
 import { SkillSelector } from "@/components/SkillSelector";
 import { SourcePanel } from "@/components/SourcePanel";
 import { OptimizelyBundle } from "@/components/OptimizelyBundle";
@@ -127,6 +128,14 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
     // parallel 404 per view there — bounded by the gated setup poll).
     readIntegrationPackage(p, orgId).catch(() => ({ found: false as const, state: "unreadable" as const })),
   ]);
+
+  // How many arms this test has. It belongs to priority, not decoration: an
+  // A/B/n splits its traffic N ways, so a six-arm test needs three times the
+  // run length of an A/B at the same reach — and the run length is what
+  // decides whether the test can produce an answer at all.
+  const armCount = p.arm?.groupId
+    ? Math.max(2, (await store.listPrototypes().catch(() => [])).filter((x) => x.arm?.groupId === p.arm!.groupId).length)
+    : 2;
   const briefDrift = await getBriefDrift(key, p).catch(() => null);
   const coverage = await getCoverage(key).catch(() => null);
   const verdict = await getVerdict(key).catch(() => null);
@@ -455,6 +464,9 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
         {tab === "brief" && (
           <Room title="Brief" sub="What are we building, and how do we know it worked? The brief is the gate — it becomes the agent's instructions and the experiment's description.">
             <BriefComposer prototypeKey={key} initialBrief={p.brief} initialHypothesis={p.hypothesis} initialMetrics={p.metrics} buildAvailable={Boolean(buildStatus.found) || versions.some((v) => Boolean(v.variationJs))} initialDrift={briefDrift ? { report: briefDrift.report, builtSha: briefDrift.builtSha } : null} initialAudit={briefAudit ? { inSync: briefAudit.inSync, builtSha: briefAudit.builtSha, checkedAt: briefAudit.checkedAt, checkedBy: briefAudit.checkedBy, current: !briefAuditNeeded(briefAudit, auditTarget.codeHash, briefFingerprint(p)) } : null} />
+            <Section id="priority" title="Priority" sub="Why this one before the others. RICE — reach × impact × confidence ÷ effort — where confidence is counted from evidence rather than typed, so an idea nobody can justify sinks on its own.">
+              <ScorePanel prototypeKey={key} initial={p.score ?? null} arms={armCount} />
+            </Section>
           </Room>
         )}
 

@@ -5,6 +5,7 @@
  * into the client bundle and the build fails.)
  */
 import type { Pipeline } from "./pipeline";
+import type { DerivedPriority } from "./score";
 
 // The ONE canonical stage list — identical to the pipeline steps and the tabs.
 // NOTE: the first column's ID stays `brief` and the STEP is still called Brief
@@ -95,5 +96,85 @@ export interface BoardCard {
   };
   versionCount?: number;
   owner?: string;
+  /** MANUAL RANK inside the column — what drag-to-reorder writes. Lower first. */
   priority?: number;
+  /** RICE, derived once in score.ts. Every surface reads this; none recompute it. */
+  score?: DerivedPriority;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ── SORTING — one list of definitions, both views ──────────────────────────
+//
+// The board's sort menu and the table's clickable headers were always going to
+// drift apart if each owned its own comparators, and two screens that disagree
+// about what "most urgent" means is exactly the confusion the score exists to
+// remove. So the orders live here, once, as data.
+
+export type SortId = "priority" | "score" | "effort" | "alerts" | "stale" | "newest" | "name";
+
+const riceOf = (c: BoardCard) => c.score?.rice ?? null;
+/** Highest score first; an UNSCORED card sorts last rather than as a zero —
+ *  "we have not judged this yet" is a different statement from "it scored badly". */
+const byScore = (a: BoardCard, b: BoardCard) => {
+  const x = riceOf(a), y = riceOf(b);
+  if (x === null && y === null) return 0;
+  if (x === null) return 1;
+  if (y === null) return -1;
+  return y - x;
+};
+const byName = (a: BoardCard, b: BoardCard) => a.name.localeCompare(b.name);
+const blocked = (c: BoardCard) => c.pipeline.steps.some((s) => s.state === "blocked");
+const warnCount = (c: BoardCard) => c.pipeline.alerts.filter((a) => a.level === "warn").length;
+
+export const BOARD_SORTS: { id: SortId; label: string; hint: string; compare: (a: BoardCard, b: BoardCard) => number }[] = [
+  {
+    id: "priority", label: "Priority", hint: "your order where you set one, the score everywhere else",
+    // THE DEFAULT, AND THE ONE THAT KEEPS DRAG WORKING. A hand-dragged column
+    // has a rank on every card and keeps the order a person chose; a column
+    // nobody has touched has no ranks at all and falls through to the score.
+    // A new card joining a hand-ordered column lands at the bottom until it is
+    // dragged, which is how every board behaves and is the only placement that
+    // cannot silently reshuffle somebody's decision.
+    compare: (a, b) => (a.priority ?? 1e9) - (b.priority ?? 1e9) || byScore(a, b) || byName(a, b),
+  },
+  { id: "score",  label: "Score",      hint: "RICE, highest first — ignores hand-ordering", compare: (a, b) => byScore(a, b) || byName(a, b) },
+  { id: "effort", label: "Quickest",   hint: "least build effort first — the Friday afternoon list",
+    compare: (a, b) => (a.score?.effortDays ?? 1e9) - (b.score?.effortDays ?? 1e9) || byScore(a, b) || byName(a, b) },
+  { id: "alerts", label: "Needs you",  hint: "blocked first, then warnings",
+    compare: (a, b) => Number(blocked(b)) - Number(blocked(a)) || warnCount(b) - warnCount(a) || byScore(a, b) || byName(a, b) },
+  { id: "stale",  label: "Stalest",    hint: "longest untouched first — what the programme forgot",
+    compare: (a, b) => (a.updatedAt ?? "").localeCompare(b.updatedAt ?? "") || byName(a, b) },
+  { id: "newest", label: "Newest",     hint: "most recently created first",
+    compare: (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "") || byName(a, b) },
+  { id: "name",   label: "Name",       hint: "A–Z", compare: byName },
+];
+
+export const sortCompare = (id: SortId) =>
+  (BOARD_SORTS.find((s) => s.id === id) ?? BOARD_SORTS[0]).compare;
+
+/**
+ * ARMS OF ONE TEST STAY TOGETHER, WHATEVER THE SORT. Scattering four arms of a
+ * six-way test down a list by their individual scores is not "tied together" —
+ * and arms share one decision metric, so they are one queue item, not four.
+ * The group takes its best arm's position and the arms follow in arm order.
+ */
+export function sortCards(cards: BoardCard[], id: SortId): BoardCard[] {
+  const cmp = sortCompare(id);
+  const best = new Map<string, BoardCard>();
+  for (const c of cards) {
+    const g = c.arm?.groupId;
+    if (!g) continue;
+    const held = best.get(g);
+    if (!held || cmp(c, held) < 0) best.set(g, c);
+  }
+  // A card's sort position is its group's leader (itself, when it is solo).
+  const lead = (c: BoardCard) => (c.arm?.groupId ? best.get(c.arm.groupId) ?? c : c);
+  return [...cards].sort((a, b) => {
+    const la = lead(a), lb = lead(b);
+    if (la.key !== lb.key) return cmp(la, lb);
+    // Same group → arm order, which is the only order inside a test that means
+    // anything.
+    return (a.arm?.index ?? 0) - (b.arm?.index ?? 0);
+  });
 }

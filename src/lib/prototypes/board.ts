@@ -19,7 +19,8 @@ import { auditTargetCode } from "./brief-audit";
 import { getOptimizelyClientForOrg } from "../experimentation";
 import { normalizeStage, type PrototypeRecord } from "./types";
 
-import { COLUMN_RANK } from "./board-model";
+import { derivePriority } from "./score";
+import { COLUMN_RANK, sortCards } from "./board-model";
 export { BOARD_COLUMNS } from "./board-model";
 export type { BoardColumn, BoardCard } from "./board-model";
 import type { BoardColumn, BoardCard } from "./board-model";
@@ -32,6 +33,16 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
 
   const client = await getOptimizelyClientForOrg(orgId).catch(() => null);
   const protoByKey = new Map(protos.map((p) => [p.key, p]));
+
+  // Arm counts come FIRST because the priority derivation needs them: a test
+  // splits its traffic across its arms, so a six-way test needs three times the
+  // run length of an A/B at the same reach. Scoring every card as a two-arm
+  // test would flatter exactly the experiments most at risk of never reading.
+  const armSize = new Map<string, number>();
+  for (const p of protos) {
+    const g = p.arm?.groupId;
+    if (g) armSize.set(g, (armSize.get(g) ?? 0) + 1);
+  }
 
   const cards = await Promise.all(protos.map(async (p): Promise<BoardCard | null> => {
     const stage = normalizeStage(p.status);
@@ -104,11 +115,15 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       versionCount: versions.length || undefined,
       owner: p.owner,
       priority: p.priority,
+      score: derivePriority(p.score, { arms: p.arm?.groupId ? armSize.get(p.arm.groupId) ?? 2 : 2 }),
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
     };
   }));
 
-  const clean = cards.filter((c): c is BoardCard => c !== null)
-    .sort((a, b) => (a.priority ?? 1e9) - (b.priority ?? 1e9) || a.name.localeCompare(b.name));
+  // The DEFAULT order — your hand-ordering where you set one, the RICE score
+  // everywhere else. One definition, shared with the table (board-model.ts).
+  const clean = sortCards(cards.filter((c): c is BoardCard => c !== null), "priority");
 
   // ── A/B/n: an arm only means something next to its siblings ────────────────
   // Resolved here, after the sort, so "arm 3 of 6" counts in the same order the
