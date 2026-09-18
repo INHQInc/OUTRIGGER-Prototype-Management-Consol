@@ -6,12 +6,12 @@ import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 
 /** Sanitize inbound references the same way the brief PATCH does. */
-function cleanRefs(raw: { url?: string; label?: string }[] | undefined): BriefReference[] {
+function cleanRefs(raw: { url?: string; label?: string; note?: string }[] | undefined): BriefReference[] {
   const out: BriefReference[] = [];
   for (const r of raw ?? []) {
     const url = normalizeReferenceUrl(r?.url ?? "");
     if (!url) continue;
-    out.push({ url, label: r?.label?.trim() || undefined, kind: referenceKind(url) });
+    out.push({ url, label: r?.label?.trim() || undefined, kind: referenceKind(url), note: r?.note?.trim() || undefined });
     if (out.length >= 20) break;
   }
   return out;
@@ -28,7 +28,7 @@ const SECTIONS: BriefSection[] = ["change", "where", "doneLooksLike", "hypothesi
  * A refinement is logged (brief.correction) as a feedback signal for tuning.
  */
 export async function POST(req: NextRequest) {
-  let body: { key?: string; text?: string; answers?: string; references?: { url?: string; label?: string }[]; refine?: { section?: string; correction?: string; current?: BriefDraft; references?: { url?: string; label?: string }[] } };
+  let body: { key?: string; text?: string; answers?: string; references?: { url?: string; label?: string; note?: string }[]; refine?: { section?: string; correction?: string; current?: BriefDraft; references?: { url?: string; label?: string; note?: string }[] } };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   const g = await guardPrototypeAccess(body.key ?? null, req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });

@@ -351,7 +351,13 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       where: db.where || undefined,
       constraints: db.constraints || undefined,
       reference: b.reference,
-      references: b.references, // links are the user's, never rewritten by a draft
+      // SUPPORTING MATERIAL IS THE USER'S, NEVER REWRITTEN BY A DRAFT — and
+      // never dropped by one either. Omitting `attachments` here detached every
+      // uploaded file on the next Save, because the PATCH replaces the brief
+      // wholesale: attach a PDF, draft with AI, save, and the PDF was gone from
+      // the record and off the branch, with nothing on screen to explain it.
+      references: b.references,
+      attachments: b.attachments,
     }));
     setHyp(d.hypothesis ?? { change: "", audience: "", outcome: "", rationale: "" });
     setMetrics({ primary: d.metrics?.primary ?? "", guardrails: d.metrics?.guardrails ?? [] });

@@ -132,7 +132,7 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
     b.problem ? `## Problem / opportunity\n${b.problem}\n` : "",
     b.reference ? `## Reference\n${b.reference}\n` : "",
     b.references?.length
-      ? `## References (design intent — consult before building)\n${b.references.map((r) => `- **${r.kind}**${r.label ? ` — ${r.label}` : ""}: ${r.url}`).join("\n")}\n`
+      ? `## References (design intent — consult before building)\n${b.references.map((r) => `- **${r.kind}**${r.label ? ` — ${r.label}` : ""}: ${r.url}${r.note ? `\n  - **What to take from it:** ${r.note}` : ""}`).join("\n")}\n`
       : "",
     // Named, with the reason each one is here. A file the agent does not know
     // to open is the same as no file, and "read everything in that folder" is

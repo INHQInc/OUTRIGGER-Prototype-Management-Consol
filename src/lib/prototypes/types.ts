@@ -83,6 +83,17 @@ export interface BriefReference {
   url: string;
   label?: string;
   kind: BriefReferenceKind;
+  /**
+   * WHAT TO TAKE FROM IT. A Figma URL on its own tells the building agent that
+   * a design exists, not which frame to follow, which states to honour, or
+   * which parts are out of scope — so `renderBriefMd` was listing links under
+   * "consult before building" with nothing to consult them FOR. The attachment
+   * side has had this since it shipped; links never did.
+   *
+   * Written LAST in normalizeBrief and left undefined when blank, so a link
+   * without a note hashes exactly as it did before this field existed.
+   */
+  note?: string;
 }
 
 /**

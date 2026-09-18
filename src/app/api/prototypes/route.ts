@@ -18,15 +18,47 @@ function prototypeBranch(input: string | undefined, key: string): string {
   return b && b !== "starter" ? b : `prototype/${key}`;
 }
 
-/** Sanitize + normalize a brief payload identically on create and update. */
-function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?: string; where?: string; constraints?: string; reference?: string; references?: { url?: string; label?: string }[]; attachments?: BriefAttachment[] } | undefined): PrototypeBrief {
+/**
+ * Sanitize + normalize a brief payload identically on create and update.
+ *
+ * ── ABSENT IS NOT EMPTY ────────────────────────────────────────────────────
+ *
+ * PATCH replaces the brief WHOLESALE (`updated.brief = normalizeBrief(...)`),
+ * so every field this function omits is a field the record loses. That made
+ * the old behaviour a data-loss bug with a comment promising the opposite: a
+ * payload that simply did not MENTION references or attachments had them
+ * dropped, silently, with no error.
+ *
+ * Two callers hit that every day. `opmc-prototype` tells the building agent to
+ * PATCH "the full brief object (unset fields are cleared)" and enumerates only
+ * the six prose fields — so an agent keeping the brief honest deleted every
+ * supporting link and every attached file, and the next Re-sync removed them
+ * from the branch too. And `applyDraft` in the composer rebuilt the brief
+ * without attachments, so Draft with AI → Save detached the lot.
+ *
+ * So: a key that is ABSENT inherits from `prev`; a key that is PRESENT AND
+ * EMPTY clears. That keeps "the user removed their last link and saved"
+ * working while making "this caller didn't know the field existed" harmless.
+ */
+function normalizeBrief(
+  raw: { problem?: string; change?: string; doneLooksLike?: string; where?: string; constraints?: string; reference?: string; references?: { url?: string; label?: string; note?: string }[]; attachments?: BriefAttachment[] } | undefined,
+  prev?: PrototypeBrief,
+): PrototypeBrief {
+  const given = (k: string) => raw !== undefined && Object.prototype.hasOwnProperty.call(raw, k);
   const refs: BriefReference[] = [];
-  for (const r of raw?.references ?? []) {
+  for (const r of (given("references") ? raw!.references ?? [] : prev?.references ?? [])) {
     const url = normalizeReferenceUrl(r?.url ?? ""); // drops non-URLs / javascript:/data:
     if (!url) continue;
-    refs.push({ url, label: r?.label?.trim() || undefined, kind: referenceKind(url) });
+    // `note` LAST, and undefined when blank. contentHashOf JSON.stringifies the
+    // whole brief and JSON.stringify is key-order sensitive while omitting
+    // undefined values — so a reference with no note hashes byte-identically to
+    // one written before this field existed. Insert it any earlier and every
+    // prototype holding a link gets a new hash on deploy, and the whole fleet
+    // reports "the brief changed — re-sync" at once.
+    refs.push({ url, label: r?.label?.trim() || undefined, kind: referenceKind(url), note: r?.note?.trim() || undefined });
     if (refs.length >= 20) break;
   }
+  const attachments = (given("attachments") ? raw!.attachments ?? [] : prev?.attachments ?? []).slice(0, 20);
   return {
     problem: raw?.problem?.trim() ?? "",
     change: raw?.change?.trim() ?? "",
@@ -35,10 +67,7 @@ function normalizeBrief(raw: { problem?: string; change?: string; doneLooksLike?
     ...(raw?.constraints?.trim() ? { constraints: raw.constraints.trim() } : {}),
     ...(raw?.reference?.trim() ? { reference: raw.reference.trim() } : {}),
     ...(refs.length ? { references: refs } : {}),
-    // Attachments are written by the upload route, which is the only thing that
-    // can mint a valid asset name. PATCH carries them through untouched rather
-    // than re-deriving them — a brief edit must never silently drop a file.
-    ...(raw?.attachments?.length ? { attachments: raw.attachments.slice(0, 20) } : {}),
+    ...(attachments.length ? { attachments } : {}),
   };
 }
 
@@ -209,7 +238,7 @@ export async function PATCH(req: NextRequest) {
     changes.push("targets");
   }
   if (body.brief !== undefined) {
-    updated.brief = normalizeBrief(body.brief);
+    updated.brief = normalizeBrief(body.brief, proto.brief);
     changes.push("brief");
   }
   if (body.hypothesis !== undefined) {
