@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState, useRef, useEffect, useCallback } from "react";
+import { Fragment, useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState, SEVERITY_DOT } from "@/components/ui";
 import { BOARD_COLUMNS, COLUMN_RANK, BOARD_SORTS, sortCards, sortCompare, armColor, type BoardCard, type BoardColumn, type SortId } from "@/lib/prototypes/board-model";
@@ -20,6 +20,31 @@ function ordinal(n: number): string {
 /** A column's own name, for prose. */
 const LABEL = (id: BoardColumn) => BOARD_COLUMNS.find((c) => c.id === id)?.label ?? id;
 
+
+// ── the remembered board sort, as an external store ───────────────────────
+const SORT_KEY = "opmc.board.sort";
+const sortListeners = new Set<() => void>();
+let sortCache: SortId | null = null;
+/** Must return a STABLE value between writes — useSyncExternalStore re-renders
+ *  on every change of identity, and a fresh read each call would never settle. */
+function readSort(): SortId {
+  if (sortCache) return sortCache;
+  try {
+    const v = localStorage.getItem(SORT_KEY);
+    sortCache = v && BOARD_SORTS.some((s) => s.id === v) ? (v as SortId) : "priority";
+  } catch { sortCache = "priority"; } // private mode
+  return sortCache;
+}
+const serverSort = (): SortId => "priority";
+function writeSort(id: SortId) {
+  sortCache = id;
+  try { localStorage.setItem(SORT_KEY, id); } catch { /* private mode */ }
+  for (const f of sortListeners) f();
+}
+function subscribeSort(f: () => void) {
+  sortListeners.add(f);
+  return () => { sortListeners.delete(f); };
+}
 
 /** Pointer travel before a press becomes a drag rather than a click. */
 const DRAG_THRESHOLD = 5;
@@ -84,14 +109,14 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
    *  that can be dragged, because dragging IS setting the hand-ordering. The
    *  others are read-only lenses, and a drop inside a column says so rather
    *  than writing an order the next render would throw away. */
-  const [sort, setSort] = useState<SortId>("priority");
-  useEffect(() => {
-    try { const v = localStorage.getItem("opmc.board.sort"); if (v && BOARD_SORTS.some((s) => s.id === v)) setSort(v as SortId); } catch { /* private mode */ }
-  }, []);
-  const pickSort = (id: SortId) => {
-    setSort(id);
-    try { localStorage.setItem("opmc.board.sort", id); } catch { /* private mode */ }
-  };
+  // The remembered sort is EXTERNAL state (it lives in localStorage and must
+  // survive SSR), so it is subscribed to rather than copied into React state by
+  // an effect. Seeding it with `useEffect` + `setSort` rendered the board once
+  // with the default and again with the stored value on every mount, which is
+  // the cascading-render pattern React lints against; the server snapshot below
+  // keeps hydration honest instead of guessing at a value the server cannot see.
+  const sort = useSyncExternalStore(subscribeSort, readSort, serverSort);
+  const pickSort = writeSort;
   const [drag, setDrag] = useState<{ key: string; col: BoardColumn; idx: number } | null>(null);
   /** A card is held. Drives the window-level listeners that own the gesture. */
   const [pressing, setPressing] = useState(false);
