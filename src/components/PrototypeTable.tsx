@@ -137,7 +137,12 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
     const needle = q.trim().toLowerCase();
     const matched = cards
       .filter((c) => (filter === "all" ? true : filter === "blocked" ? isBlocked(c) : c.column === filter))
-      .filter((c) => !needle || c.name.toLowerCase().includes(needle) || (c.description ?? "").toLowerCase().includes(needle));
+      // Search the whole row's prose, not two fields of it. Description now
+      // carries the PROBLEM rather than the change, so a filter that only read
+      // name + description would stop matching the words people actually
+      // remember a test by — which are the words of the change.
+      .filter((c) => !needle || [c.name, c.description, c.hypothesis, c.outcome, c.where, c.metric]
+        .some((v) => (v ?? "").toLowerCase().includes(needle)));
     // sortCards keeps arms of one test adjacent and in arm order whatever the
     // sort — a test split across four non-adjacent rows is not "tied together".
     const inOrder = sortCards(matched, sort);
@@ -173,7 +178,7 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
     <div className="rounded-xl border border-border bg-surface overflow-hidden">
       {/* Toolbar — search · status · export */}
       <div className="px-4 py-3 border-b border-border flex items-center gap-2.5 flex-wrap">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by name or description"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by name, problem, hypothesis, area or metric"
           className="flex-1 min-w-[200px] max-w-sm rounded-lg bg-background border border-border px-3 py-2 text-[14px] text-foreground placeholder:text-muted-2 focus:border-accent focus:outline-none" />
         <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}
           className="rounded-lg bg-surface border border-border px-2.5 py-2 text-[13.5px] text-muted focus:border-accent focus:outline-none">

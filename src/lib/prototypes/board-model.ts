@@ -72,7 +72,8 @@ export interface BoardCard {
   metric?: string;
   guardrailCount?: number;
   hypothesis?: string;
-  /** The brief's change, one line — the table's description row. */
+  /** The brief's PROBLEM — the table's Description column, and the tracker's.
+   *  Not the change: that is already inside the composed hypothesis. */
   description?: string;
   /** Where on the page it goes (brief.where) — the tracker's "Website Area". */
   where?: string;

@@ -108,7 +108,14 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
       hypothesis: p.hypothesis.change || undefined,
       audience: p.hypothesis.audience || undefined,
       outcome: p.hypothesis.outcome || undefined,
-      description: p.brief.change || undefined,
+      // THE PROBLEM, NOT THE CHANGE. This column used to carry `brief.change`,
+      // which is the same sentence the Hypothesis column already composes ("We
+      // believe <change> for <audience> will cause <outcome>") — so the grid
+      // printed one fact twice in adjacent columns and had no room left for the
+      // only part of the brief that says WHY. `problem` is also what the
+      // tracker's Description column means. Blank where nobody wrote one, which
+      // is worth seeing rather than papering over with the change again.
+      description: p.brief.problem || undefined,
       where: p.brief.where || undefined,
       guardrails: p.metrics.guardrails.length ? p.metrics.guardrails : undefined,
       attachmentCount: p.brief.attachments?.length || undefined,
