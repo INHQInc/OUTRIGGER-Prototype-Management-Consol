@@ -79,7 +79,7 @@ export function ScorePanel({ prototypeKey, initial, arms }: {
     <div className="rounded-xl border border-border bg-surface p-4 space-y-5">
       {/* THE ANSWER FIRST. Everything under it is the working. */}
       <div className="flex items-start gap-4 flex-wrap">
-        <ScoreBadge d={d} large />
+        <ScoreBadge d={d} size="lg" />
         <div className="min-w-[14rem] flex-1 text-[12.5px] leading-snug">
           {d.scored ? (
             <>
@@ -224,40 +224,69 @@ function Choice({ label, hint, options, value, onPick, busy }: {
  * row all render this component, so the chip cannot mean one thing in one
  * place and another somewhere else.
  *
- * NO NEW COLOUR. The board already spends its two colour channels: severity
- * (red/amber/green, §1b) and the arm hue that ties an A/B/n test together. A
- * third ramp would collide with both, so priority reads as WEIGHT — a fill
- * that deepens with the band — and the numeral does the rest. The only part of
- * priority that takes a warning colour is "underpowered", because that is a
- * fact about whether the test can run, not a preference about whether it should.
+ * ── Why this is a WEIGHT ladder and not a colour ramp ──────────────────────
+ *
+ * The board already spends both of its colour channels: severity (red / amber
+ * / green, §1b) and the arm hue that ties an A/B/n test together. A third ramp
+ * would collide with both, so priority is expressed as INK — how much of the
+ * card the chip takes over:
+ *
+ *   Now     solid ink, card colour reversed out of it  (16:1 in both themes)
+ *   Next    a filled chip with a strong border
+ *   Later   an outline
+ *   Someday text, barely there — which is the correct amount of attention
+ *
+ * The first version of this built that ladder out of `color-mix` at 5–15% of
+ * `--foreground`, which is not a ladder, it is four shades of nothing: the
+ * user's verdict was "hard to even read priority in the kanban, it's just too
+ * hidden/faint". Weight only works if the top of the ladder is genuinely loud.
+ * It is now the strongest contrast the palette can produce.
+ *
+ * THE BAND WORD LEADS, the number follows. A board is scanned, and "NOW" lands
+ * in one fixation where "27" has to be compared against every other card to
+ * mean anything. The number is still there for the sort you just applied, and
+ * carries the full arithmetic in its tooltip.
  */
-export function ScoreBadge({ d, large, className = "" }: {
-  d: ReturnType<typeof derivePriority>; large?: boolean; className?: string;
+export function ScoreBadge({ d, size = "sm", className = "" }: {
+  d: ReturnType<typeof derivePriority>; size?: "sm" | "md" | "lg"; className?: string;
 }) {
-  const weight: Record<string, string> = {
-    now:     "bg-[color-mix(in_srgb,var(--foreground)_15%,transparent)] text-foreground border-[color-mix(in_srgb,var(--foreground)_28%,transparent)]",
-    next:    "bg-[color-mix(in_srgb,var(--foreground)_9%,transparent)] text-foreground border-[color-mix(in_srgb,var(--foreground)_18%,transparent)]",
-    later:   "bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] text-muted border-border",
-    someday: "bg-transparent text-muted-2 border-border",
+  const ladder: Record<string, string> = {
+    now:     "bg-foreground text-background border-foreground",
+    next:    "bg-surface-2 text-foreground border-border-strong",
+    later:   "bg-transparent text-muted border-border",
+    someday: "bg-transparent text-muted-2 border-transparent",
   };
-  const cls = d.band ? weight[d.band] : "bg-transparent text-muted-2 border-dashed border-border";
   const title = d.scored
-    ? `RICE ${formatRice(d.rice)} — ${BAND_LABEL[d.band!]}. (${(d.reachPerMonth! / 1000).toFixed(0)}k reach × ${d.impactFactor} impact × ${Math.round(d.confidence * 100)}% confidence) ÷ ${d.effortDays} days.${d.powerNote ? `\n\n⚠ ${d.powerNote}` : ""}`
-    : `Unscored — no ${d.missing.join(", ")} set yet. Sorts last.`;
+    ? `${BAND_LABEL[d.band!]} — RICE ${formatRice(d.rice)}. (${(d.reachPerMonth! / 1000).toFixed(0)}k reach × ${d.impactFactor} impact × ${Math.round(d.confidence * 100)}% confidence) ÷ ${d.effortDays} ${d.effortDays === 1 ? "day" : "days"}.${d.powerNote ? `\n\n⚠ ${d.powerNote}` : ""}`
+    : `Not scored yet — no ${d.missing.join(", ")} set. Unscored cards sort last, because "not judged" is not the same as "judged badly".`;
+
+  if (!d.scored) {
+    return (
+      <span title={title}
+        className={`inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong text-muted-2 shrink-0 ${
+          size === "lg" ? "px-3 py-2 text-[13px]" : "px-2 py-1 text-[11px]"} font-semibold uppercase tracking-[0.06em] leading-none ${className}`}>
+        Unscored
+      </span>
+    );
+  }
+
+  const pad = size === "lg" ? "px-3 py-2" : size === "md" ? "px-2 py-1" : "px-2 py-1";
   return (
     <span title={title}
-      className={`inline-flex items-center gap-1.5 rounded-lg border shrink-0 tabular-nums ${cls} ${
-        large ? "px-3 py-2" : "px-1.5 py-0.5"} ${className}`}>
-      <span className={large ? "text-[22px] font-semibold leading-none" : "text-[12.5px] font-semibold leading-none"}>
-        {d.scored ? formatRice(d.rice) : "—"}
+      className={`inline-flex items-center gap-1.5 rounded-md border shrink-0 ${ladder[d.band!]} ${pad} ${className}`}>
+      <span className={`${size === "lg" ? "text-[13px]" : "text-[11px]"} font-bold uppercase tracking-[0.06em] leading-none`}>
+        {BAND_LABEL[d.band!]}
       </span>
-      {d.band && (
-        <span className={`${large ? "text-[12.5px]" : "text-[11px]"} uppercase tracking-wide opacity-70 leading-none`}>
-          {BAND_LABEL[d.band]}
-        </span>
-      )}
+      <span className={`${size === "lg" ? "text-[22px]" : "text-[12.5px]"} font-semibold tabular-nums leading-none`}>
+        {formatRice(d.rice)}
+      </span>
+      {/* The ONE part of priority that takes a colour, because it is a fact
+          about whether the test can run rather than a preference about whether
+          it should. It has to survive the inverted fill, so it carries its own
+          ground rather than relying on the chip's. */}
       {d.underpowered && (
-        <span className="text-warn leading-none" title={d.powerNote ?? undefined} aria-label="may not reach a decision">⚠</span>
+        <span title={d.powerNote ?? undefined} aria-label="may not reach a decision"
+          className="ml-0.5 -mr-0.5 rounded px-1 py-0.5 bg-warn text-background text-[10px] font-bold leading-none">⚠</span>
       )}
     </span>
   );

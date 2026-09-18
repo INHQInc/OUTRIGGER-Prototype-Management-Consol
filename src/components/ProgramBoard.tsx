@@ -621,18 +621,30 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                                 {c.arm.split && <span className="text-danger shrink-0" title="These arms are bound to DIFFERENT Optimizely experiments — that is not one test.">⚠</span>}
                               </div>
                             )}
-                            <div className="flex items-start gap-2">
-                              {isQueue && (
-                                <span className="text-[12.5px] tabular-nums text-muted-2 shrink-0 pt-[3px] leading-none"
-                                  title={offScore
-                                    ? `You put this ${ordinal(i + 1)} in the queue; the score puts it ${ordinal((scoreSeat.get(c.key) ?? 0) + 1)}. Both are fine — the score is advice, the order is yours.`
-                                    : `${ordinal(i + 1)} in the queue.`}>
-                                  {i + 1}{offScore && <span className="text-muted-2/70"> ⇅</span>}
-                                </span>
-                              )}
-                              <div className="text-[14px] font-semibold leading-snug flex-1 min-w-0">{c.name}</div>
-                              {c.score && <ScoreBadge d={c.score} className="mt-[1px]" />}
-                            </div>
+                            {/* PRIORITY GETS ITS OWN LINE, ABOVE THE NAME.
+                                Sharing the title's row made it whatever width
+                                the name left over — which on a long name is
+                                nothing — and buried the one thing the column
+                                is now ordered by. On its own line it is read
+                                before the name, which is the order you want
+                                when you are scanning a queue rather than
+                                looking for a prototype you already know. */}
+                            {(isQueue || c.score?.scored) && (
+                              <div className="flex items-center gap-2">
+                                {isQueue && (
+                                  <span
+                                    title={offScore
+                                      ? `You put this ${ordinal(i + 1)} in the queue; the score puts it ${ordinal((scoreSeat.get(c.key) ?? 0) + 1)}. Both are fine — the score is advice, the order is yours.`
+                                      : `${ordinal(i + 1)} in the queue.`}
+                                    className="inline-flex items-center gap-0.5 shrink-0 text-[13px] font-bold tabular-nums text-foreground leading-none">
+                                    {i + 1}
+                                    {offScore && <span className="text-[11px] font-normal text-muted-2" aria-label="you moved this against the score">⇅</span>}
+                                  </span>
+                                )}
+                                {c.score && <ScoreBadge d={c.score} />}
+                              </div>
+                            )}
+                            <div className="text-[14px] font-semibold leading-snug">{c.name}</div>
                             {c.hypothesis && <div className="text-[12.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
 
                             <MiniPipeline pipeline={c.pipeline} />
