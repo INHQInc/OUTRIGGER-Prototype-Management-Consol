@@ -76,8 +76,14 @@ function hypothesisOf(c: BoardCard): string {
  * End Date — are absent rather than faked. Still not here: key and URL (the row
  * is a link), stage detail and blocked (the Status chip says both).
  */
+// NO "TEST" COLUMN. A/B/n membership is a flag on a handful of rows, not a
+// dimension of every row — as a column it reserved the leftmost, most prominent
+// width in the table and spent it on an em dash for everything ungrouped. It
+// rides on the Experiment cell now, exactly as the board card renders it: same
+// dot, same colour, same "arm 2/5". One grammar in both views. The CSV keeps
+// its Test column, because a spreadsheet DOES want it as a field.
 const HEADERS: { label: string; right?: boolean; sort?: SortId; hint?: string }[] = [
-  { label: "Test" },
+  { label: "#", right: true, sort: "priority", hint: "position in this list under the current sort — your hand-ordering where you set one" },
   { label: "Experiment", sort: "name" },
   { label: "Status" },
   { label: "Score", right: true, sort: "score", hint: "RICE — (reach × impact × confidence) ÷ effort" },
@@ -97,7 +103,6 @@ const HEADERS: { label: string; right?: boolean; sort?: SortId; hint?: string }[
   { label: "Optimizely" },
   { label: "Files", right: true },
   { label: "Owner" },
-  { label: "Rank", right: true, sort: "priority", hint: "your hand-ordering on the board" },
 ];
 
 /**
@@ -265,9 +270,9 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                     <span className="ml-3 text-[12px] text-muted-2 hidden sm:inline">{col.hint}</span>
                   </td>
                 </tr>
-                {rows.map((c) => <Row key={c.key} c={c} router={router} onPeek={(f) => setPeek({ card: c, field: f })} />)}
+                {rows.map((c, i) => <Row key={c.key} c={c} n={i + 1} router={router} onPeek={(f) => setPeek({ card: c, field: f })} />)}
               </Fragment>
-            )) : shown.map((c) => <Row key={c.key} c={c} router={router} onPeek={(f) => setPeek({ card: c, field: f })} />)}
+            )) : shown.map((c, i) => <Row key={c.key} c={c} n={i + 1} router={router} onPeek={(f) => setPeek({ card: c, field: f })} />)}
           </tbody>
         </table>
       </div>
@@ -381,7 +386,7 @@ function ProsePeek({ card, field, onClose }: { card: BoardCard; field: string; o
  * Alerts. Four columns were sitting under the wrong headings, so the alert
  * count was labelled "Primary KPI". The order below matches HEADERS exactly.
  */
-function Row({ c, router, onPeek }: { c: BoardCard; router: ReturnType<typeof useRouter>; onPeek: (field: string) => void }) {
+function Row({ c, n, router, onPeek }: { c: BoardCard; n: number; router: ReturnType<typeof useRouter>; onPeek: (field: string) => void }) {
   const d = c.score;
   const reach = REACH.find((r) => r.perMonth === d?.reachPerMonth);
   const impact = IMPACT.find((i) => i.factor === d?.impactFactor);
@@ -389,23 +394,32 @@ function Row({ c, router, onPeek }: { c: BoardCard; router: ReturnType<typeof us
   return (
     <tr onClick={() => router.push(`/prototypes/${c.key}`)}
       className="border-b border-border/60 last:border-0 hover:bg-surface-2/40 cursor-pointer transition-colors">
-      {/* Test */}
-      <td className="px-4 py-3.5 align-top whitespace-nowrap"
-        style={c.arm ? { borderLeft: `3px solid ${armColor(c.arm.groupId)}` } : undefined}>
-        {c.arm ? (
-          <span title={`${c.arm.groupName ?? c.arm.groupId} — an A/B/n test of ${c.arm.count} arms, run as one experiment on one metric.`}>
-            <span className="block text-[12.5px] font-semibold truncate max-w-[16ch]" style={{ color: armColor(c.arm.groupId) }}>
-              {c.arm.groupName ?? c.arm.groupId}
-            </span>
-            <span className="block text-[12px] text-muted-2 tabular-nums">
-              arm {c.arm.index}/{c.arm.count}{c.arm.split ? " ⚠" : ""}
-            </span>
-          </span>
-        ) : <Nil />}
+      {/* # — WHERE THIS ROW SITS, not what is stored against it.
+          The stored `priority` is only written when somebody drags a card on
+          the board, so printing it here would have made the new first column a
+          wall of em dashes for everything nobody has hand-ordered — exactly the
+          problem the Test column had. The position is always true, always
+          present, and it is the same numeral the board puts on its queue. The
+          stored rank is still the thing a mark and the tooltip talk about. */}
+      <td className="px-4 py-3.5 align-top text-right tabular-nums text-muted-2 w-[4ch]"
+        title={typeof c.priority === "number"
+          ? `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"} here. You hand-ordered this one on the board (seat ${c.priority / 10} in its column).`
+          : `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"} here, by the current sort. Never hand-ordered — it sits where the score puts it.`}>
+        {n}{typeof c.priority === "number" && <span className="text-muted-2/60"> ⇅</span>}
       </td>
 
-      {/* Experiment */}
-      <td className="px-4 py-3.5 align-top min-w-[16rem]">
+      {/* Experiment — and, above the name, the test it is an arm of. */}
+      <td className="px-4 py-3.5 align-top min-w-[16rem]"
+        style={c.arm ? { borderLeft: `3px solid ${armColor(c.arm.groupId)}` } : undefined}>
+        {c.arm && (
+          <div className="flex items-center gap-1.5 text-[11.5px] font-semibold leading-none mb-1"
+            title={`${c.arm.groupName ?? c.arm.groupId} — an A/B/n test of ${c.arm.count} arms, run as one experiment and judged on one metric.`}>
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: armColor(c.arm.groupId) }} />
+            <span className="truncate max-w-[14ch]" style={{ color: armColor(c.arm.groupId) }}>{c.arm.groupName ?? c.arm.groupId}</span>
+            <span className="text-muted-2 shrink-0 tabular-nums">arm {c.arm.index}/{c.arm.count}</span>
+            {c.arm.split && <span className="text-danger shrink-0" title="These arms are bound to DIFFERENT Optimizely experiments — that is not one test.">⚠</span>}
+          </div>
+        )}
         <Link href={`/prototypes/${c.key}`} onClick={(e) => e.stopPropagation()} className="text-[14.5px] font-semibold text-accent hover:text-accent-hover">{c.name}</Link>
         <StageStrip pipeline={c.pipeline} className="mt-2 max-w-[150px]" />
       </td>
@@ -511,12 +525,6 @@ function Row({ c, router, onPeek }: { c: BoardCard; router: ReturnType<typeof us
         {c.attachmentCount ? `📎 ${c.attachmentCount}` : <Nil />}
       </td>
       <td className="px-4 py-3.5 align-top whitespace-nowrap text-muted">{c.owner ?? <Nil />}</td>
-      {/* Rank — the hand-ordering, shown as the seat number a person would
-          recognise (1, 2, 3) rather than the 10/20/30 the board stores. */}
-      <td className="px-4 py-3.5 align-top text-right tabular-nums text-muted"
-        title={typeof c.priority === "number" ? "Where you dragged it in its board column." : "Never hand-ordered — it sits where the score puts it."}>
-        {typeof c.priority === "number" ? c.priority / 10 : <Nil />}
-      </td>
     </tr>
   );
 }
