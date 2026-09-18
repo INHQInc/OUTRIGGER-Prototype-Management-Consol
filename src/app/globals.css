@@ -22,6 +22,19 @@
   --danger: #C42B2B;         /* 5.5:1 */
   --warn: #B45309;
   --ok: #067A55;             /* 5.2:1 */
+
+  /* PRIORITY — a ramp of its own, deliberately NOT the status vocabulary.
+     Red/amber/green mean blocked/attention/good everywhere in this app (§1b),
+     so priority cannot borrow them: a red card would read as broken rather
+     than urgent. Violet→blue→slate is outside that vocabulary entirely, runs
+     hot-to-cold the way a queue does, and stays legible against both grounds.
+     White sits on the first three at 7:1 or better; Someday is an outline,
+     because a pale fill could not carry text and should not shout anyway. */
+  --prio-now: #6D28D9;
+  --prio-next: #1D4ED8;
+  --prio-later: #475569;
+  --prio-someday: #5D6B7E;
+  --prio-fg: #FFFFFF;
 }
 
 html[data-theme="dark"] {
@@ -39,6 +52,12 @@ html[data-theme="dark"] {
   --danger: #FF7A70;
   --warn: #FFC554;
   --ok: #3FDE9C;
+
+  --prio-now: #A78BFA;
+  --prio-next: #6C9BFF;
+  --prio-later: #7C8AA0;
+  --prio-someday: #8593A6;
+  --prio-fg: #0D1117;
 }
 
 @theme inline {
@@ -56,6 +75,11 @@ html[data-theme="dark"] {
   --color-danger: var(--danger);
   --color-warn: var(--warn);
   --color-ok: var(--ok);
+  --color-prio-now: var(--prio-now);
+  --color-prio-next: var(--prio-next);
+  --color-prio-later: var(--prio-later);
+  --color-prio-someday: var(--prio-someday);
+  --color-prio-fg: var(--prio-fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

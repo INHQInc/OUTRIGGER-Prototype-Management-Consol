@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BOARD_COLUMNS, BOARD_SORTS, sortCards, armColor, type BoardCard, type BoardColumn, type SortId } from "@/lib/prototypes/board-model";
-import { ScoreBadge } from "@/components/ScorePanel";
+import { ScoreBadge, PriorityDot } from "@/components/ScorePanel";
 import { REACH, IMPACT, EFFORT, BAND_LABEL, formatRice, formatWeeks } from "@/lib/prototypes/score";
 import { StageStrip } from "@/components/StageStrip";
 
@@ -401,11 +401,12 @@ function Row({ c, n, router, onPeek }: { c: BoardCard; n: number; router: Return
           problem the Test column had. The position is always true, always
           present, and it is the same numeral the board puts on its queue. The
           stored rank is still the thing a mark and the tooltip talk about. */}
-      <td className="px-4 py-3.5 align-top text-right tabular-nums text-muted-2 w-[4ch]"
-        title={typeof c.priority === "number"
-          ? `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"} here. You hand-ordered this one on the board (seat ${c.priority / 10} in its column).`
-          : `${n}${n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th"} here, by the current sort. Never hand-ordered — it sits where the score puts it.`}>
-        {n}{typeof c.priority === "number" && <span className="text-muted-2/60"> ⇅</span>}
+      <td className="px-4 py-3.5 align-top w-[4ch]">
+        {/* The same coloured seat the board draws, so the two views read alike. */}
+        <PriorityDot d={c.score} n={n}
+          title={typeof c.priority === "number"
+            ? `${n} here. You hand-ordered this one on the board (seat ${c.priority / 10} in its column).`
+            : `${n} here, by the current sort. Never hand-ordered — it sits where the score puts it.`} />
       </td>
 
       {/* Experiment — and, above the name, the test it is an arm of. */}

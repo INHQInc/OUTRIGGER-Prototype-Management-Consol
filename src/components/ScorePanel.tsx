@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   REACH, IMPACT, EFFORT, EVIDENCE, BAND_LABEL, MAX_RUNNABLE_WEEKS,
   derivePriority, formatRice, formatWeeks,
-  type PrototypeScore, type ReachBand, type ImpactBand, type EffortBand,
+  type PrototypeScore, type ReachBand, type ImpactBand, type EffortBand, type PriorityBand,
 } from "@/lib/prototypes/score";
 
 /**
@@ -216,6 +216,67 @@ function Choice({ label, hint, options, value, onPick, busy }: {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Band → its fill. One map, so the dot, the legend and anything later agree. */
+export const BAND_FILL: Record<PriorityBand, string> = {
+  now: "bg-prio-now text-prio-fg border-prio-now",
+  next: "bg-prio-next text-prio-fg border-prio-next",
+  later: "bg-prio-later text-prio-fg border-prio-later",
+  someday: "bg-transparent text-prio-someday border-prio-someday",
+};
+
+/**
+ * PRIORITY AS A COLOURED SEAT NUMBER.
+ *
+ * Two earlier attempts at this were weight-only — a fill built from 5–15% of
+ * the foreground, then a solid-ink ladder — on the reasoning that severity and
+ * the arm hue already spend the board's colour channels. Both were called
+ * unreadable, and twice is the answer: on a dense board, weight alone does not
+ * survive next to a headline, a status dot and an arm stripe.
+ *
+ * So priority gets a hue, but NOT one of the status hues. Red, amber and green
+ * mean blocked / attention / good everywhere in this app, and a red card would
+ * read as broken rather than urgent. Violet → blue → slate sits outside that
+ * vocabulary, runs hot-to-cold the way a queue does, and carries white text at
+ * 6.7:1 or better in both themes.
+ *
+ * The circle holds the card's POSITION rather than the score, because a RICE
+ * value ranges from 0.01 to 300 and will not fit in a disc — and position is
+ * the thing a queue is actually asking you to read. The colour carries the
+ * band, the legend on the sort bar says what the colours mean, and the score
+ * itself sits beside it for anyone who wants the number.
+ */
+export function PriorityDot({ d, n, title, className = "" }: {
+  d?: ReturnType<typeof derivePriority>;
+  n: number;
+  title?: string;
+  className?: string;
+}) {
+  const cls = d?.band ? BAND_FILL[d.band] : "bg-transparent text-muted-2 border-dashed border-border-strong";
+  const label = d?.band
+    ? `${BAND_LABEL[d.band]} — RICE ${formatRice(d.rice)}.`
+    : "Not scored yet — sorts last.";
+  return (
+    <span title={title ?? `${n} in this column. ${label}`}
+      className={`inline-flex items-center justify-center shrink-0 w-[1.45rem] h-[1.45rem] rounded-full border text-[12px] font-bold tabular-nums leading-none ${cls} ${className}`}>
+      {n}
+    </span>
+  );
+}
+
+/** The key for the colours above — four dots and their names. */
+export function PriorityLegend({ className = "" }: { className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-2 ${className}`}>
+      {(Object.keys(BAND_LABEL) as PriorityBand[]).map((b) => (
+        <span key={b} className="inline-flex items-center gap-1 text-[12px] text-muted-2">
+          <span className={`w-2.5 h-2.5 rounded-full border ${BAND_FILL[b]}`} />
+          {BAND_LABEL[b]}
+        </span>
+      ))}
+    </span>
   );
 }
 

@@ -5,7 +5,8 @@ import { Fragment, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState, SEVERITY_DOT } from "@/components/ui";
 import { BOARD_COLUMNS, COLUMN_RANK, BOARD_SORTS, sortCards, sortCompare, armColor, type BoardCard, type BoardColumn, type SortId } from "@/lib/prototypes/board-model";
-import { ScoreBadge } from "@/components/ScorePanel";
+import { PriorityDot, PriorityLegend } from "@/components/ScorePanel";
+import { BAND_LABEL, formatRice } from "@/lib/prototypes/score";
 import { stepSeverity } from "@/lib/prototypes/severity";
 import type { Pipeline } from "@/lib/prototypes/pipeline";
 
@@ -500,6 +501,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
           <span className="text-[12.5px] text-muted-2 ml-1.5 min-w-0 truncate">
             — {BOARD_SORTS.find((s) => s.id === sort)?.hint}
           </span>
+          <PriorityLegend className="ml-auto shrink-0" />
         </div>
       )}
       {cards.length === 0 ? (
@@ -514,9 +516,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
             // is allowed; overriding it without noticing is the thing worth
             // catching, and a ranking nobody can see themselves departing from
             // is just a number that gets ignored.
-            const isQueue = col.id === "brief";
-            const byScore = isQueue ? [...items].sort(sortCompare("score")) : [];
-            const scoreSeat = new Map(byScore.map((c, i) => [c.key, i]));
+            const scoreSeat = new Map([...items].sort(sortCompare("score")).map((c, i) => [c.key, i]));
             const shut = col.id === "archived" && !archiveOpen;
             const anyLocked = col.id === "experiment" && items.some((c) => c.locked);
             const over = drag?.col === col.id && dragging !== null;
@@ -582,7 +582,7 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                   {items.map((c, i) => {
                     const isDragged = drag?.key === c.key;
                     // Hand-ranked into a seat the score disagrees with.
-                    const offScore = isQueue && c.priority != null && scoreSeat.get(c.key) !== i;
+                    const offScore = c.priority != null && scoreSeat.get(c.key) !== i;
                     const mark = showSlot && !isDragged && slot === drag!.idx;
                     if (!isDragged) slot++;
                     return (
@@ -629,21 +629,22 @@ export function ProgramBoard({ cards: initial, archivedCount }: { cards: BoardCa
                                 before the name, which is the order you want
                                 when you are scanning a queue rather than
                                 looking for a prototype you already know. */}
-                            {(isQueue || c.score?.scored) && (
-                              <div className="flex items-center gap-2">
-                                {isQueue && (
-                                  <span
-                                    title={offScore
-                                      ? `You put this ${ordinal(i + 1)} in the queue; the score puts it ${ordinal((scoreSeat.get(c.key) ?? 0) + 1)}. Both are fine — the score is advice, the order is yours.`
-                                      : `${ordinal(i + 1)} in the queue.`}
-                                    className="inline-flex items-center gap-0.5 shrink-0 text-[13px] font-bold tabular-nums text-foreground leading-none">
-                                    {i + 1}
-                                    {offScore && <span className="text-[11px] font-normal text-muted-2" aria-label="you moved this against the score">⇅</span>}
-                                  </span>
-                                )}
-                                {c.score && <ScoreBadge d={c.score} />}
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                              <PriorityDot d={c.score} n={i + 1}
+                                title={offScore
+                                  ? `${ordinal(i + 1)} here — you put it there. The score puts it ${ordinal((scoreSeat.get(c.key) ?? 0) + 1)}. Both are fine: the score is advice, the order is yours.`
+                                  : c.score?.scored
+                                    ? `${ordinal(i + 1)} here. ${BAND_LABEL[c.score.band!]} — RICE ${formatRice(c.score.rice)}.`
+                                    : `${ordinal(i + 1)} here. Not scored yet — score it in the Brief room and it joins the ranking.`} />
+                              {c.score?.scored
+                                ? <span className="text-[12.5px] tabular-nums text-muted-2 leading-none">{formatRice(c.score.rice)}</span>
+                                : <span className="text-[12.5px] text-muted-2/70 leading-none">unscored</span>}
+                              {offScore && <span className="text-[11px] text-muted-2 leading-none" title="You moved this against the score.">⇅</span>}
+                              {c.score?.underpowered && (
+                                <span className="rounded px-1 py-0.5 bg-warn text-background text-[10px] font-bold leading-none"
+                                  title={c.score.powerNote ?? undefined}>⚠</span>
+                              )}
+                            </div>
                             <div className="text-[14px] font-semibold leading-snug">{c.name}</div>
                             {c.hypothesis && <div className="text-[12.5px] text-muted-2 leading-snug line-clamp-2">{c.hypothesis}</div>}
 
