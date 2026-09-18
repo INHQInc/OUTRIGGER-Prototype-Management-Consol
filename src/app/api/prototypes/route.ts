@@ -58,7 +58,29 @@ function normalizeBrief(
     refs.push({ url, label: r?.label?.trim() || undefined, kind: referenceKind(url), note: r?.note?.trim() || undefined });
     if (refs.length >= 20) break;
   }
-  const attachments = (given("attachments") ? raw!.attachments ?? [] : prev?.attachments ?? []).slice(0, 20);
+  /**
+   * ATTACHMENT IDENTITY IS THE SERVER'S; ONLY THE NOTE IS THE CLIENT'S.
+   *
+   * The stored list is the base and a PATCH may edit exactly one field of it.
+   * Everything else — asset, name, contentType, bytes, addedAt, addedBy — is
+   * copied from the record, and an incoming entry whose `asset` the record
+   * does not know is ignored outright, because only the upload route can mint
+   * one.
+   *
+   * Two bugs close here. `name` is written straight into a git path at
+   * provision.ts (`.opmc/attachments/${a.name}`) and `safeFileName` runs only
+   * on upload, so a PATCHed name containing `../` escaped the attachments
+   * directory on the committed branch — and `brief` is token-writable, so an
+   * API token could drive it. And because the list can no longer SHRINK here,
+   * a composer that loaded before a file was uploaded in another tab can't
+   * delete that file by saving a stale array. Removal has one door, the
+   * DELETE route, which is the one the UI already uses.
+   */
+  const incomingNotes = new Map(
+    (given("attachments") ? raw!.attachments ?? [] : []).map((a) => [a?.asset, typeof a?.note === "string" ? a.note.trim() || undefined : undefined]),
+  );
+  const attachments = (prev?.attachments ?? []).slice(0, 20).map((a) =>
+    incomingNotes.has(a.asset) ? { ...a, note: incomingNotes.get(a.asset) } : a);
   return {
     problem: raw?.problem?.trim() ?? "",
     change: raw?.change?.trim() ?? "",

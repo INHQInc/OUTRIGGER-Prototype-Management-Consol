@@ -33,10 +33,12 @@ const FILE_ICON = (ct: string) =>
  * it is building, and "read everything in that folder" is the instruction that
  * gets ignored on a busy branch.
  */
-function AttachmentsEditor({ prototypeKey, attachments, onChange }: {
+function AttachmentsEditor({ prototypeKey, attachments, onChange, onNote }: {
   prototypeKey: string;
   attachments: BriefAttachment[];
   onChange: (next: BriefAttachment[]) => void;
+  /** Edit a stored file's note. Local; the brief's Save persists it. */
+  onNote: (asset: string, note: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -77,15 +79,23 @@ function AttachmentsEditor({ prototypeKey, attachments, onChange }: {
       {attachments.length > 0 && (
         <div className="space-y-1">
           {attachments.map((a) => (
-            <div key={a.asset} className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/30 px-2.5 py-1.5">
-              <span className="shrink-0">{FILE_ICON(a.contentType)}</span>
-              <a href={`/api/prototypes/brief-files?key=${encodeURIComponent(prototypeKey)}&asset=${encodeURIComponent(a.asset)}`}
-                target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover truncate min-w-0 flex-1" title={a.note || a.name}>
-                {a.name}
-                {a.note && <span className="text-muted-2"> — {a.note}</span>}
-              </a>
-              <span className="text-[12px] text-muted-2 tabular-nums shrink-0">{KB(a.bytes)}</span>
-              <button onClick={() => remove(a.asset)} disabled={busy} className="text-[13px] text-muted-2 hover:text-danger shrink-0 disabled:opacity-50">Remove</button>
+            <div key={a.asset} className="rounded-lg border border-border bg-surface-2/30 px-2.5 py-1.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0">{FILE_ICON(a.contentType)}</span>
+                <a href={`/api/prototypes/brief-files?key=${encodeURIComponent(prototypeKey)}&asset=${encodeURIComponent(a.asset)}`}
+                  target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover truncate min-w-0 flex-1" title={a.name}>
+                  {a.name}
+                </a>
+                <span className="text-[12px] text-muted-2 tabular-nums shrink-0">{KB(a.bytes)}</span>
+                <button onClick={() => remove(a.asset)} disabled={busy} className="text-[13px] text-muted-2 hover:text-danger shrink-0 disabled:opacity-50">Remove</button>
+              </div>
+              {/* EDITABLE, and on blur rather than per keystroke. Every brief
+                  write moves briefFingerprint, which auto-clears an unresolved
+                  Brief↔Build drift verdict and bills a fresh LLM audit on the
+                  next page view — per-keystroke saving would do that on every
+                  character typed. */}
+              <NoteField value={a.note ?? ""} onCommit={(v) => onNote(a.asset, v)}
+                placeholder="What should the agent take from this file?" />
             </div>
           ))}
           <div className="text-[12px] text-muted-2">Committed to the branch at <span className="font-mono">.opmc/attachments/</span> on the next Re-sync — the agent reads them there.</div>
@@ -93,7 +103,7 @@ function AttachmentsEditor({ prototypeKey, attachments, onChange }: {
       )}
       <div className="flex items-center gap-2">
         <input value={note} onChange={(e) => setNote(e.target.value)} spellCheck={false}
-          placeholder="What is it for? (optional — the agent reads this)" className={`${field} flex-1 min-w-0`} />
+          placeholder="What is it for? (optional — editable after)" className={`${field} flex-1 min-w-0`} />
         <label className={`h-9 px-4 rounded-lg border border-border bg-surface text-[13px] font-semibold text-muted hover:text-foreground hover:border-accent shrink-0 inline-flex items-center cursor-pointer ${busy ? "opacity-50 pointer-events-none" : ""}`}>
           {busy ? "Attaching…" : "Attach file"}
           <input type="file" className="hidden" disabled={busy}
@@ -106,14 +116,48 @@ function AttachmentsEditor({ prototypeKey, attachments, onChange }: {
 }
 
 /**
+ * A NOTE ON ONE PIECE OF SUPPORTING MATERIAL — what to take from it.
+ *
+ * Commits on blur (or Enter), never per keystroke. Every write to the brief
+ * moves `briefFingerprint`, which clears an unresolved Brief↔Build drift
+ * verdict a human never answered and bills a fresh LLM audit on the next page
+ * view; a per-keystroke save would do both on every character.
+ *
+ * Module-level, and it holds its own draft text, so a parent re-render cannot
+ * remount it mid-sentence.
+ */
+function NoteField({ value, onCommit, placeholder }: {
+  value: string;
+  onCommit: (v: string) => void;
+  placeholder: string;
+}) {
+  const [text, setText] = useState(value);
+  // Re-seed when the stored value changes underneath (a draft, a reload) — but
+  // not while this field is the one being edited.
+  const [seed, setSeed] = useState(value);
+  if (seed !== value) { setSeed(value); setText(value); }
+  return (
+    <input
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => { if (text.trim() !== value.trim()) onCommit(text); }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+      placeholder={placeholder}
+      className="w-full rounded bg-background/60 border border-border/60 px-2 py-1 text-[12.5px] text-muted placeholder:text-muted-2/70 focus:border-accent focus:text-foreground focus:outline-none"
+    />
+  );
+}
+
+/**
  * Supporting links on the brief — Figma, design files, screenshots, reference
  * pages. Links, not files (files are AttachmentsEditor above); a screenshot is added by
  * its URL. Each is typed from its URL so the building agent knows what it is.
  */
-function ReferencesEditor({ references, onAdd, onRemove }: {
+function ReferencesEditor({ references, onAdd, onRemove, onNote }: {
   references: BriefReference[];
   onAdd: (url: string, label?: string) => void;
   onRemove: (i: number) => void;
+  onNote: (i: number, note: string) => void;
 }) {
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
@@ -136,11 +180,15 @@ function ReferencesEditor({ references, onAdd, onRemove }: {
           {references.map((r, i) => {
             const m = REF_META[r.kind] ?? REF_META.link;
             return (
-              <div key={`${r.url}-${i}`} className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/30 px-2.5 py-1.5">
-                <span className="shrink-0" title={m.label}>{m.icon}</span>
-                <span className="text-[12px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 font-medium shrink-0">{m.label}</span>
-                <a href={r.url} target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover truncate min-w-0 flex-1">{r.label || r.url}</a>
-                <button onClick={() => onRemove(i)} className="text-[13px] text-muted-2 hover:text-danger shrink-0">Remove</button>
+              <div key={`${r.url}-${i}`} className="rounded-lg border border-border bg-surface-2/30 px-2.5 py-1.5 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0" title={m.label}>{m.icon}</span>
+                  <span className="text-[12px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 font-medium shrink-0">{m.label}</span>
+                  <a href={r.url} target="_blank" rel="noreferrer" className="text-[13px] text-accent hover:text-accent-hover truncate min-w-0 flex-1">{r.label || r.url}</a>
+                  <button onClick={() => onRemove(i)} className="text-[13px] text-muted-2 hover:text-danger shrink-0">Remove</button>
+                </div>
+                <NoteField value={r.note ?? ""} onCommit={(v) => onNote(i, v)}
+                  placeholder="What should the agent take from this link? e.g. follow frame 3, ignore the old palette" />
               </div>
             );
           })}
@@ -331,6 +379,23 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   // Refine + the drift audit are the evolution tools from then on. Clearing the
   // change and saving brings the drafting drawer back (the natural start-over).
   const [savedComplete, setSavedComplete] = useState(() => isBriefComplete(initialBrief, initialMetrics));
+  /**
+   * DOES A SAVED BRIEF EXIST? This is what retires the drafting card, and it
+   * reads the SAVED brief deliberately. `hasContent` reads live state and flips
+   * on the first keystroke in the change field — gating on it would collapse
+   * the drafting card out from under someone mid-sentence.
+   *
+   * It is also not `savedComplete`, which is what the gate used to be:
+   * completeness additionally requires a primary metric, so a prototype with a
+   * full change, hypothesis and where — but no KPI yet — was still being
+   * offered "Draft with AI" over the top of a brief somebody had written by
+   * hand. Two different questions were sharing one condition: "can we build
+   * from this?" (needs a metric) and "would redrafting destroy work?" (needs
+   * only that words exist). This answers the second.
+   */
+  const [savedHasContent, setSavedHasContent] = useState(() => Boolean(initialBrief.change?.trim()));
+  /** Explicitly reopened to start over — a redraft replaces the document. */
+  const [redrafting, setRedrafting] = useState(false);
   const refs = brief.references ?? [];
   const files = brief.attachments ?? [];
   // The upload route writes the record itself, so the local brief must follow
@@ -339,6 +404,23 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
   const setFiles = (next: BriefAttachment[]) => setBrief((b) => ({ ...b, attachments: next }));
   const addRef = (url: string, label?: string) => { setBrief((b) => ({ ...b, references: [...(b.references ?? []), { url, label, kind: referenceKind(url) }] })); setMsg(null); };
   const removeRef = (i: number) => { setBrief((b) => ({ ...b, references: (b.references ?? []).filter((_, j) => j !== i) })); setMsg(null); };
+  /** Edit a link's note in place. Local only — the existing Save PATCHes it. */
+  const setRefNote = (i: number, note: string) => {
+    setBrief((b) => ({ ...b, references: (b.references ?? []).map((r, j) => (j === i ? { ...r, note: note.trim() || undefined } : r)) }));
+    setMsg(null);
+  };
+  /**
+   * Edit a FILE's note in place. Also local-then-Save, which is the whole
+   * reason this is possible at all: brief-files POST only accepts a note at
+   * upload time and dedupes on asset+name, so re-uploading to correct a note
+   * silently keeps the old one. The prototypes PATCH already carries the
+   * attachments array, so the note rides along with the next Save — no new
+   * route, and the server pins everything except the note.
+   */
+  const setFileNote = (asset: string, note: string) => {
+    setBrief((b) => ({ ...b, attachments: (b.attachments ?? []).map((a) => (a.asset === asset ? { ...a, note: note.trim() || undefined } : a)) }));
+    setMsg(null);
+  };
 
   /** Fold a returned draft into the split state. Defensive: the server already
    *  normalizes, but a missing field must never crash the render (black screen). */
@@ -487,6 +569,7 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       if (!res.ok) { setMsg({ ok: false, text: data.error ?? "Save failed" }); return; }
       setSaved(JSON.stringify({ brief, hyp, metrics }));
       setSavedComplete(isBriefComplete(brief, metrics));
+      setSavedHasContent(Boolean(brief.change?.trim()));
       // Saved EXACTLY the audit's applied suggestion? Close the loop
       // deterministically: the pair is recorded judged-in-sync (the server
       // re-verifies against the drift record before marking). Any edit
@@ -531,21 +614,36 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
       {/* AI on-ramp — the drafting phase only. Once a complete brief is SAVED
           it retires (a redraft would clobber the matured document); Refine and
           the drift audit take over. */}
-      {!savedComplete && (
+      {savedHasContent && !redrafting && (
+        // THE WAY BACK, AND IT HAS TO BE FINDABLE. Hiding the drafting card
+        // outright left "clear the change and save" as the only route to a
+        // redraft, which nobody would ever discover. Refine is the everyday
+        // tool; this is the rarer, destructive one, so it is one quiet line
+        // that says what it does before you click it.
+        <div className="flex items-center gap-2 px-1 text-[13px] text-muted-2">
+          <span>Brief written — use <span className="text-muted">Refine ✎</span> on any section to change it.</span>
+          <button onClick={() => setRedrafting(true)} className="text-accent hover:text-accent-hover font-medium">
+            Start over with AI
+          </button>
+        </div>
+      )}
+      {(!savedHasContent || redrafting) && (
       <div className="rounded-xl border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_4%,transparent)]">
         <div className="px-3.5 py-2.5 flex items-center gap-2">
           <span className="text-[14px] font-semibold">✦ Draft with AI</span>
           <span className="text-[13px] text-muted-2">explain it in your own words — AI writes the structured brief</span>
+          {redrafting && (
+            <button onClick={() => setRedrafting(false)} className="ml-auto text-[13px] text-muted-2 hover:text-foreground shrink-0">Cancel</button>
+          )}
         </div>
+        {redrafting && (
+          <div className="mx-3.5 mb-1 rounded-lg border border-warn/40 bg-[color-mix(in_srgb,var(--warn)_7%,transparent)] px-3 py-2 text-[13px] text-warn">
+            This replaces the whole brief — hypothesis, change, where and done-looks-like. Your links and files are untouched. To change one part instead, cancel and use Refine ✎.
+          </div>
+        )}
         <div className="px-3.5 pb-3.5 space-y-2.5">
           <textarea value={explain} onChange={(e) => setExplain(e.target.value)} rows={3} className={ta}
             placeholder="e.g. When people click a room card I want a rich overlay with the gallery, amenities and a booking button, instead of losing them to the detail page. Success is more availability checks." />
-          <div className="space-y-1.5">
-            <div className="text-[13px] text-muted-2">Supporting links — Figma, designs, screenshots, reference pages. The AI reads these when drafting and may ask about them.</div>
-            <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} />
-            <div className="text-[13px] text-muted-2 pt-1">Supporting files — a PDF, a spreadsheet, a content doc. These are committed to the branch, so the agent opens the real file.</div>
-            <AttachmentsEditor prototypeKey={prototypeKey} attachments={files} onChange={setFiles} />
-          </div>
           {(readiness != null || drafting) && <ReadinessMeter readiness={readiness} drafting={drafting} />}
           {questions.length > 0 && (
             <div className="rounded-lg border border-warn/30 bg-surface-2/30 px-3 py-2.5 space-y-3">
@@ -630,6 +728,41 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
         </div>
       )}
 
+      {/* ── SUPPORTING MATERIAL — permanent, not part of drafting ─────────
+          These two editors used to live INSIDE the Draft-with-AI card, which
+          made them as temporary as it was: retiring drafting would have taken
+          the links and files off the screen with it, and while drafting was
+          showing they sat above the brief as though they were a step in
+          writing one.
+
+          They are neither. A Figma link or an audit PDF gets attached at any
+          point in a prototype's life, and every Re-sync rewrites them onto the
+          branch for the agent to read. So they are their own part of the brief
+          document, always here, before the prose they inform.
+
+          Rendered as PLAIN JSX rather than a component declared in this
+          function: a nested component identity changes on every parent render,
+          React remounts it, and the editors' internal state — the half-typed
+          URL, the note you were writing — is wiped on each keystroke. The same
+          bug is recorded above SectionHead.
+
+          The two persist DIFFERENTLY and the copy has to say so. A file is
+          written the moment it is chosen; a link only exists once you Save. */}
+      <div className="rounded-xl border border-border bg-surface p-3.5 space-y-3">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className="text-[14px] font-semibold">Supporting material</span>
+          <span className="text-[13px] text-muted-2">what the agent reads alongside the brief — attach a note saying what to take from each one</span>
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[13px] text-muted-2">Links — Figma, designs, screenshots, reference pages. Saved with the brief.</div>
+          <ReferencesEditor references={refs} onAdd={addRef} onRemove={removeRef} onNote={setRefNote} />
+        </div>
+        <div className="space-y-1.5">
+          <div className="text-[13px] text-muted-2">Files — a PDF, a spreadsheet, a content doc. Committed to the branch, so the agent opens the real file. Attached immediately.</div>
+          <AttachmentsEditor prototypeKey={prototypeKey} attachments={files} onChange={setFiles} onNote={setFileNote} />
+        </div>
+      </div>
+
       {/* THE BRIEF — a document first, a form only on request. Each section is
           its own card so they read as independent parts, not one flowing page. */}
       {!editing && hasContent ? (
@@ -697,23 +830,6 @@ export function BriefComposer({ prototypeKey, initialBrief, initialHypothesis, i
               <p className="text-[14px] text-muted-2">No metric set yet — add the one event that decides this experiment.</p>
             )}
           </div>
-          {refs.length > 0 && (
-            <div className={card}>
-              <div className="text-[12.5px] font-semibold uppercase tracking-wider text-muted-2 mb-1.5">References</div>
-              <div className="space-y-1">
-                {refs.map((r, i) => {
-                  const m = REF_META[r.kind] ?? REF_META.link;
-                  return (
-                    <a key={`${r.url}-${i}`} href={r.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[13px] hover:opacity-80">
-                      <span>{m.icon}</span>
-                      <span className="text-[12px] px-1.5 py-0.5 rounded bg-surface-2 text-muted-2 font-medium shrink-0">{m.label}</span>
-                      <span className="text-accent truncate">{r.label || r.url}</span>
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           {saveBar}
         </div>
       ) : (
