@@ -10,6 +10,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { getSkill, parseFrontmatter } from "../skills/skills";
+import { getBriefAttachment } from "../prototypes/attachments";
 import { ensureSkillsSeeded } from "../skills/seed";
 import type { PrototypeRecord, BriefReference } from "../prototypes/types";
 
@@ -61,6 +62,59 @@ const DRAFT_TOOL = {
   },
 };
 
+/**
+ * THE FILES, AS FILES — not as a list of filenames.
+ *
+ * The drafting model used to receive supporting FILES not at all: `references`
+ * (links) were flattened into one line of prompt text and `attachments` were
+ * never passed, never mentioned, and absent from the route's body type. So a
+ * team could attach the audit PDF the whole experiment came out of, watch the
+ * composer show it directly under the "AI reads these" copy, and get a draft
+ * written from the paragraph they typed and nothing else.
+ *
+ * PDFs and images go in as real document/image blocks the model can read.
+ * Everything else — spreadsheets, .docx — cannot be sent as a block and would
+ * need server-side extraction, which this codebase deliberately does not do;
+ * those are NAMED with their note instead, so the model can ask about them
+ * rather than silently assume it has seen them. The prompt says which is which,
+ * because a model that thinks it read a spreadsheet it never saw will invent
+ * its contents.
+ *
+ * Bounded on purpose: the cap keeps one enormous PDF from crowding out the
+ * brief itself, and what got dropped is stated rather than quietly truncated.
+ */
+const READABLE_AS_BLOCK = (ct: string) => ct === "application/pdf" || /^image\/(png|jpe?g|gif|webp)$/.test(ct);
+const MAX_INLINE_FILES = 4;
+const MAX_INLINE_BYTES = 8 * 1024 * 1024;
+
+async function attachmentBlocks(proto: PrototypeRecord): Promise<{ blocks: Anthropic.ContentBlockParam[]; lines: string[] }> {
+  const all = proto.brief.attachments ?? [];
+  if (!all.length) return { blocks: [], lines: [] };
+  const blocks: Anthropic.ContentBlockParam[] = [];
+  const lines: string[] = [];
+  let budget = MAX_INLINE_BYTES;
+  for (const a of all) {
+    const note = a.note ? ` — the team says: ${a.note}` : "";
+    if (!READABLE_AS_BLOCK(a.contentType)) {
+      lines.push(`- ${a.name} (${a.contentType}) — NOT SHOWN to you; ask about it if it matters${note}`);
+      continue;
+    }
+    if (blocks.length >= MAX_INLINE_FILES || a.bytes > budget) {
+      lines.push(`- ${a.name} — not shown (over the size/count budget); ask about it if it matters${note}`);
+      continue;
+    }
+    const found = await getBriefAttachment(proto.siteKey, a.asset).catch(() => null);
+    if (!found?.bytes) { lines.push(`- ${a.name} — could not be read from the store${note}`); continue; }
+    const data = Buffer.from(found.bytes).toString("base64");
+    budget -= a.bytes;
+    lines.push(`- ${a.name} — ATTACHED BELOW, read it${note}`);
+    blocks.push(a.contentType === "application/pdf"
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data }, title: a.name, ...(a.note ? { context: a.note } : {}) }
+      : { type: "image", source: { type: "base64", media_type: a.contentType as "image/png" | "image/jpeg" | "image/gif" | "image/webp", data } });
+  }
+  return { blocks, lines };
+}
+
 export async function draftBrief(opts: {
   orgId: string | null;
   proto: PrototypeRecord;
@@ -79,7 +133,7 @@ export async function draftBrief(opts: {
   const context = [
     `Prototype name: ${opts.proto.name}`,
     opts.proto.targets.length ? `Target page(s): ${opts.proto.targets.map((t) => t.url).join(", ")}` : "Target pages: none set yet",
-    refs.length ? `Supporting references the team attached (design intent — factor them into the brief; if one clearly implies something the text doesn't cover, note the assumption or ask): ${refs.map((r) => `${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}`).join("; ")}` : "",
+    refs.length ? `Supporting references the team attached (design intent — factor them into the brief; if one clearly implies something the text doesn't cover, note the assumption or ask):\n${refs.map((r) => `- ${r.kind}: ${r.label ? `${r.label} (${r.url})` : r.url}${r.note ? ` — the team says: ${r.note}` : ""}`).join("\n")}` : "",
     opts.proto.brief.change ? `Existing brief (improve, don't discard what's right): ${JSON.stringify(opts.proto.brief)}` : "",
     opts.proto.metrics.primary ? `Existing primary metric: ${opts.proto.metrics.primary}` : "",
   ].filter(Boolean).join("\n");
@@ -94,7 +148,14 @@ export async function draftBrief(opts: {
     : `\n\nDraft the complete brief now, then score your readiness honestly. If readiness is below ${READY} you are NOT sure enough to build without guessing — you MUST return 1–2 clarifying_questions naming exactly what is holding your confidence down. Return an empty clarifying_questions array ONLY when readiness is ${READY}+.`;
 
   const client = new Anthropic();
-  const draft = await runDraft(client, system, `${context}\n\nThe team explains the experiment in their own words:\n"""\n${opts.userText.trim()}\n"""${closing}`);
+  const files = await attachmentBlocks(opts.proto);
+  const filesLine = files.lines.length
+    ? `\n\nSupporting FILES on this brief — these are build inputs, not decoration. Read the attached ones and let them inform the brief; for any marked not shown, ask rather than assume:\n${files.lines.join("\n")}`
+    : "";
+  // The files go FIRST: a document block placed ahead of the instruction that
+  // refers to it is the ordering the model reads most reliably.
+  const prose = `${context}${filesLine}\n\nThe team explains the experiment in their own words:\n"""\n${opts.userText.trim()}\n"""${closing}`;
+  const draft = await runDraft(client, system, files.blocks.length ? [...files.blocks, { type: "text", text: prose }] : prose);
 
   draft.clarifying_questions = finalPass ? [] : (draft.clarifying_questions ?? []).slice(0, 2);
   draft.readiness = clampReadiness(draft.readiness);
@@ -144,7 +205,7 @@ function normalizeDraft(d: unknown): BriefDraft {
   };
 }
 
-async function runDraft(client: Anthropic, system: string, content: string): Promise<BriefDraft> {
+async function runDraft(client: Anthropic, system: string, content: string | Anthropic.ContentBlockParam[]): Promise<BriefDraft> {
   const res = await client.messages.create({
     model: "claude-opus-4-8",
     max_tokens: 3000,
