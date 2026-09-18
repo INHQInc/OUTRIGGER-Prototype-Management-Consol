@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BOARD_COLUMNS, BOARD_SORTS, sortCards, armColor, type BoardCard, type BoardColumn, type SortId } from "@/lib/prototypes/board-model";
 import { ScoreBadge } from "@/components/ScorePanel";
@@ -100,6 +100,25 @@ const HEADERS: { label: string; right?: boolean; sort?: SortId; hint?: string }[
   { label: "Rank", right: true, sort: "priority", hint: "your hand-ordering on the board" },
 ];
 
+/**
+ * THE ROW'S PROSE, IN ONE LIST. Every long-text column reads from here, and so
+ * does the overlay — so the cell you clicked and the panel that opens cannot
+ * disagree about what the field is called or where its text comes from.
+ */
+const PROSE: { id: string; label: string; get: (c: BoardCard) => string }[] = [
+  { id: "description", label: "Description", get: (c) => c.description ?? "" },
+  { id: "where", label: "Website area", get: (c) => c.where ?? "" },
+  { id: "hypothesis", label: "Hypothesis", get: (c) => hypothesisOf(c) },
+  { id: "metric", label: "Primary KPI", get: (c) => c.metric ?? "" },
+  { id: "guardrails", label: "Supporting KPIs", get: (c) => (c.guardrails ?? []).join(" · ") },
+  { id: "next", label: "Next step", get: (c) => c.pipeline.primaryAction?.label ?? "" },
+];
+
+/** Past this many characters a cell cannot show its text on one line, so it
+ *  gets the "more" affordance. A length test, not a measurement: it is stable
+ *  across zoom and column resize, and it never flickers on a re-render. */
+const LONG = 58;
+
 const chipTone = (c: BoardCard) =>
   isBlocked(c) ? "border-danger/40 text-danger bg-[color-mix(in_srgb,var(--danger)_6%,transparent)]"
   : c.locked || c.column === "handoff" ? "border-ok/40 text-ok bg-[color-mix(in_srgb,var(--ok)_7%,transparent)]"
@@ -132,6 +151,8 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
    *  worth doing next?". Both are real questions and they want different
    *  shapes, so this is a toggle rather than a decision made for you. */
   const [grouped, setGrouped] = useState(true);
+  /** Which row's prose is open, and which field it was opened from. */
+  const [peek, setPeek] = useState<{ card: BoardCard; field: string } | null>(null);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -244,18 +265,109 @@ export function PrototypeTable({ cards }: { cards: BoardCard[] }) {
                     <span className="ml-3 text-[12px] text-muted-2 hidden sm:inline">{col.hint}</span>
                   </td>
                 </tr>
-                {rows.map((c) => <Row key={c.key} c={c} router={router} />)}
+                {rows.map((c) => <Row key={c.key} c={c} router={router} onPeek={(f) => setPeek({ card: c, field: f })} />)}
               </Fragment>
-            )) : shown.map((c) => <Row key={c.key} c={c} router={router} />)}
+            )) : shown.map((c) => <Row key={c.key} c={c} router={router} onPeek={(f) => setPeek({ card: c, field: f })} />)}
           </tbody>
         </table>
       </div>
+
+      {peek && <ProsePeek card={peek.card} field={peek.field} onClose={() => setPeek(null)} />}
     </div>
   );
 }
 
 /** An em dash in the muted tone — the table's one way of saying "nothing here". */
 const Nil = () => <span className="text-muted-2">—</span>;
+
+/**
+ * ONE LINE, AND AN HONEST WAY TO SEE THE REST.
+ *
+ * These cells used to wrap to their full height. A single Description carrying
+ * an audit quotation made one row 600px tall, which pushed every other row off
+ * screen and cost the grid the only thing it is for — comparing rows at a
+ * glance. Wrapping was a deliberate earlier choice ("a hypothesis cut off at
+ * one line is worse than no hypothesis"); the answer to that is not to wrap,
+ * it is to make the full text one click away and obviously so.
+ *
+ * The "more" chip is ALWAYS visible, never hover-only: the row is itself a link
+ * to the prototype, so without a permanent marker there is nothing to
+ * distinguish a cell that opens a panel from one that navigates away. It is
+ * shown on a character count rather than a measured overflow — stable across
+ * zoom and column width, and it cannot flicker during a re-render.
+ */
+function Prose({ text, onOpen }: { text: string; onOpen: () => void }) {
+  if (!text.trim()) return <Nil />;
+  if (text.length <= LONG) return <span className="leading-snug">{text}</span>;
+  return (
+    <button type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen(); }}
+      title="Show the full text"
+      className="group w-full text-left flex items-baseline gap-1.5 min-w-0 rounded hover:bg-surface-2/60 -mx-1 px-1 py-0.5 transition-colors">
+      <span className="truncate min-w-0 flex-1 group-hover:text-foreground transition-colors">{text}</span>
+      <span className="shrink-0 text-[11px] font-semibold rounded px-1 py-0.5 border border-accent/40 text-accent group-hover:bg-accent group-hover:text-accent-fg transition-colors">
+        more
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The whole row's prose, opened from whichever cell you clicked.
+ *
+ * It shows the clicked field first and the rest beneath it, because the
+ * question behind "what does that say?" is almost never about one cell — you
+ * noticed something in the Description and now you want the hypothesis and the
+ * metric next to it. One click, the whole story, without losing your place in
+ * the table.
+ */
+function ProsePeek({ card, field, onClose }: { card: BoardCard; field: string; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+
+  const first = PROSE.find((f) => f.id === field);
+  const rest = PROSE.filter((f) => f.id !== field && f.get(card).trim());
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`${card.name} — ${first?.label ?? "details"}`}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto bg-background/70 backdrop-blur-[2px]">
+      <div onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl my-auto rounded-xl border border-border-strong bg-surface shadow-lg">
+        <div className="flex items-start gap-3 px-5 py-3.5 border-b border-border">
+          <div className="min-w-0">
+            <div className="text-[12.5px] uppercase tracking-wider font-semibold text-muted-2">{first?.label}</div>
+            <div className="text-[15px] font-semibold leading-snug truncate">{card.name}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close"
+            className="ml-auto shrink-0 h-7 w-7 rounded-lg border border-border text-muted-2 hover:text-foreground hover:border-border-strong transition-colors">✕</button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-[14px] leading-relaxed whitespace-pre-wrap">
+            {first?.get(card).trim() || <span className="text-muted-2">Nothing written here yet.</span>}
+          </p>
+          {rest.length > 0 && (
+            <div className="pt-3 border-t border-border/60 space-y-3">
+              {rest.map((f) => (
+                <div key={f.id}>
+                  <div className="text-[12.5px] uppercase tracking-wider font-semibold text-muted-2 mb-0.5">{f.label}</div>
+                  <p className="text-[13.5px] text-muted leading-snug whitespace-pre-wrap">{f.get(card)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="px-5 py-3 border-t border-border">
+          <Link href={`/prototypes/${card.key}`} className="text-[13.5px] font-semibold text-accent hover:text-accent-hover">
+            Open {card.name} →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * ONE ROW, IN HEADER ORDER.
@@ -269,7 +381,7 @@ const Nil = () => <span className="text-muted-2">—</span>;
  * Alerts. Four columns were sitting under the wrong headings, so the alert
  * count was labelled "Primary KPI". The order below matches HEADERS exactly.
  */
-function Row({ c, router }: { c: BoardCard; router: ReturnType<typeof useRouter> }) {
+function Row({ c, router, onPeek }: { c: BoardCard; router: ReturnType<typeof useRouter>; onPeek: (field: string) => void }) {
   const d = c.score;
   const reach = REACH.find((r) => r.perMonth === d?.reachPerMonth);
   const impact = IMPACT.find((i) => i.factor === d?.impactFactor);
@@ -313,37 +425,35 @@ function Row({ c, router }: { c: BoardCard; router: ReturnType<typeof useRouter>
       </td>
 
       {/* Description */}
-      <td className="px-4 py-3.5 align-top text-muted-2 min-w-[22ch] max-w-[34ch] whitespace-normal leading-snug">
-        {c.description ?? <Nil />}
+      <td className="px-4 py-3.5 align-top text-muted-2 w-[30ch] max-w-[30ch]">
+        <Prose text={c.description ?? ""} onOpen={() => onPeek("description")} />
       </td>
 
       {/* Website area */}
-      <td className="px-4 py-3.5 align-top text-muted-2 min-w-[14ch] max-w-[22ch] whitespace-normal leading-snug">
-        {c.where ?? <Nil />}
+      <td className="px-4 py-3.5 align-top text-muted-2 w-[22ch] max-w-[22ch]">
+        <Prose text={c.where ?? ""} onOpen={() => onPeek("where")} />
       </td>
 
       {/* Hypothesis */}
-      <td className="px-4 py-3.5 align-top text-muted-2 min-w-[26ch] max-w-[40ch] whitespace-normal leading-snug">
-        {hypothesisOf(c) || <Nil />}
+      <td className="px-4 py-3.5 align-top text-muted-2 w-[32ch] max-w-[32ch]">
+        <Prose text={hypothesisOf(c)} onOpen={() => onPeek("hypothesis")} />
       </td>
 
       {/* Primary KPI */}
-      <td className="px-4 py-3.5 align-top min-w-[18ch] max-w-[28ch]">
+      <td className="px-4 py-3.5 align-top w-[24ch] max-w-[24ch]">
         {c.metric
-          ? <div className="text-foreground/90 whitespace-normal leading-snug">{c.metric}</div>
+          ? <div className="text-foreground/90"><Prose text={c.metric} onOpen={() => onPeek("metric")} /></div>
           : <span className="text-warn text-[13px]">needs a success metric</span>}
       </td>
 
-      {/* Supporting KPIs */}
-      <td className="px-4 py-3.5 align-top text-muted-2 min-w-[18ch] max-w-[30ch] whitespace-normal leading-snug">
-        {c.guardrails?.length
-          ? <ul className="space-y-0.5">{c.guardrails.map((g, i) => <li key={i}>· {g}</li>)}</ul>
-          : <Nil />}
+      {/* Supporting KPIs — joined on one line; the panel shows them apart. */}
+      <td className="px-4 py-3.5 align-top text-muted-2 w-[24ch] max-w-[24ch]">
+        <Prose text={(c.guardrails ?? []).join(" · ")} onOpen={() => onPeek("guardrails")} />
       </td>
 
       {/* Next step */}
-      <td className="px-4 py-3.5 align-top text-muted min-w-[16ch] whitespace-normal leading-snug">
-        {c.pipeline.primaryAction?.label ?? "—"}
+      <td className="px-4 py-3.5 align-top text-muted w-[20ch] max-w-[20ch]">
+        <Prose text={c.pipeline.primaryAction?.label ?? ""} onOpen={() => onPeek("next")} />
       </td>
 
       {/* Alerts */}
