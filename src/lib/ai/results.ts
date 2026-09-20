@@ -408,6 +408,29 @@ function normFigure(s: string): string {
  */
 export const HEADLINE_MAX = 140;
 
+/**
+ * THE PROSE CAPS — A TARGET, NOT A GATE.
+ *
+ * Same lesson as HEADLINE_MAX above, learned again on the paragraphs. The
+ * executive summary and the lede were capped at 900 characters and a cap was
+ * FATAL: one character over and `clean` returned "", the analyst's whole
+ * paragraph was discarded, and the readout rendered "partial structure ·
+ * executive: over 900 chars (1031)" with no summary at all. Re-reading did not
+ * help — the model writes the length the facts need, so it produced a
+ * thousand-character summary again, and again, and the readout stayed partial.
+ *
+ * Room Detail Overlay sat like that: a complete, correct four-sentence summary
+ * thrown away for being 131 characters long, on a page whose whole job is to
+ * carry that summary to someone who reads nothing else.
+ *
+ * So these are the number the model is ASKED to aim at. Going over is not a
+ * fault worth losing the sentence for — `clean` keeps prose that is merely
+ * long, and still rejects the things that are genuinely wrong with it (digits,
+ * statistics vocabulary, markup, a metric key where a sentence should be).
+ */
+export const EXECUTIVE_TARGET = 900;
+export const LEDE_TARGET = 900;
+
 const STAT_NOTATION = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bFDR\b|\bconfidence interval\b|\bstatistically significant\b/i;
 
 //
@@ -472,7 +495,7 @@ const readingTool = {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
-      executive: { type: "string" as const, description: "<=900 chars, FOUR TO SIX SENTENCES, NO DIGITS. THE EXECUTIVE SUMMARY, for a senior leader who will read this and nothing else. Tell the WHOLE story, and build it from the decision metric AND the supporting metrics - walk the chain: what the change did to the surface it touched, where that behaviour went next (name the actual surfaces from the supporting metrics), where it stopped, what it cost, and what that means for the outcome the business cares about. Then say what decision is in front of them - ship, keep running, stop, or fix something. A two-line summary of a run with a dozen metrics is a wasted page: the supporting metrics are where the mechanism is visible, so use them. No statistics vocabulary: never 'significant', 'confidence', 'p-value', 'power', 'underpowered'; say 'beyond what luck explains'. Concrete and unhedged about what is known, explicit about what is not." },
+      executive: { type: "string" as const, description: "aim for about 900 chars, FOUR TO SIX SENTENCES, NO DIGITS. THE EXECUTIVE SUMMARY, for a senior leader who will read this and nothing else. Tell the WHOLE story, and build it from the decision metric AND the supporting metrics - walk the chain: what the change did to the surface it touched, where that behaviour went next (name the actual surfaces from the supporting metrics), where it stopped, what it cost, and what that means for the outcome the business cares about. Then say what decision is in front of them - ship, keep running, stop, or fix something. A two-line summary of a run with a dozen metrics is a wasted page: the supporting metrics are where the mechanism is visible, so use them. No statistics vocabulary: never 'significant', 'confidence', 'p-value', 'power', 'underpowered'; say 'beyond what luck explains'. Concrete and unhedged about what is known, explicit about what is not." },
       effect: { type: "object" as const, properties: {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it." },
         measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
@@ -489,7 +512,7 @@ const readingTool = {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. AGAINST THE PREDICTION — what the brief claimed, which half is settled, and which half is not." },
         measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
       }, required: ["text", "measure"] },
-      lede: { type: "string" as const, description: "<=900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what guests are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary." },
+      lede: { type: "string" as const, description: "aim for about 900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what guests are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary." },
       beats: {
         // Bounds are set at call time from the team's supporting set — this
         // pair is only the shape for a run with nothing marked.
@@ -973,15 +996,28 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
   // formatting slip. Peel known scaffolding first; only reject if a tag
   // survives, which means the value is genuinely not prose.
     const rejected: string[] = [];
-  const clean = (v: unknown, cap: number, field?: string) => {
+  // `lengthIsAdvisory` belongs to the PARAGRAPHS. A headline over its cap is a
+  // paragraph wearing a headline's clothes and the layout genuinely cannot take
+  // it; a summary over its target is just a summary, and the reader would far
+  // rather have a long one than none. So for those fields a length overage is
+  // re-checked with the cap lifted: if nothing else is wrong, the prose is
+  // kept, and only a real fault still costs the sentence.
+  const clean = (v: unknown, cap: number, field?: string, lengthIsAdvisory = false) => {
     const why = rejectReason(v, cap);
-    if (why) { if (field && why !== "empty") rejected.push(`${field}: ${why}`); return ""; }
-    return normaliseProse(v);
+    if (!why) return normaliseProse(v);
+    if (lengthIsAdvisory && why.startsWith("over ")) {
+      const realFault = rejectReason(v, Number.MAX_SAFE_INTEGER);
+      if (!realFault) return normaliseProse(v);
+      if (field) rejected.push(`${field}: ${realFault}`);
+      return "";
+    }
+    if (field && why !== "empty") rejected.push(`${field}: ${why}`);
+    return "";
   };
 
   let headline = clean(raw.headline, HEADLINE_MAX, "headline");
-  let executive = clean(raw.executive, 900, "executive");
-  let lede = clean(raw.lede, 900, "lede");
+  let executive = clean(raw.executive, EXECUTIVE_TARGET, "executive", true);
+  let lede = clean(raw.lede, LEDE_TARGET, "lede", true);
   // A digit or an over-long sentence used to swap the analyst's paragraph for
   // a generic template silently. Ask once for a repair, in the same call
   // shape, before settling for the computed story.
@@ -994,7 +1030,7 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
         messages: [
           { role: "user", content: res.content.map((c) => (c.type === "text" ? c.text : "")).join("") || "(see below)" },
           { role: "assistant", content: JSON.stringify({ headline: raw.headline, executive: raw.executive, lede: raw.lede }) },
-          { role: "user", content: `${[!headline && "headline", !executive && "executive", !lede && "lede"].filter(Boolean).join(", ")} rejected. Rules: NO DIGITS anywhere in the words, headline <=80 characters, executive <=900 characters and four to six sentences telling the whole chain from the change through the supporting metrics to the decision metric, lede <=900 characters, no statistics vocabulary anywhere (never "significant", "confidence", "power", "underpowered"). The executive summary is for a senior leader who reads nothing else: what the change did in business language, whether it reached the outcome the business cares about, and what decision is now in front of them. Rewrite about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "executive": "...", "lede": "..."}` },
+          { role: "user", content: `${[!headline && "headline", !executive && "executive", !lede && "lede"].filter(Boolean).join(", ")} rejected. Rules: NO DIGITS anywhere in the words, headline at most ${HEADLINE_MAX} characters, executive about ${EXECUTIVE_TARGET} characters and four to six sentences telling the whole chain from the change through the supporting metrics to the decision metric, lede about ${LEDE_TARGET} characters, no statistics vocabulary anywhere (never "significant", "confidence", "power", "underpowered"). The executive summary is for a senior leader who reads nothing else: what the change did in business language, whether it reached the outcome the business cares about, and what decision is now in front of them. Rewrite about THESE facts, naming the actual surfaces:\n${whatMoved}\n\nReturn only JSON: {"headline": "...", "executive": "...", "lede": "..."}` },
         ],
       });
       const txt = fix.content.map((c) => (c.type === "text" ? c.text : "")).join("");
@@ -1002,8 +1038,8 @@ When nothing is settled yet, SAY THAT plainly — do not manufacture a story out
       if (m) {
         const parsed = JSON.parse(m[0]) as { headline?: string; executive?: string; lede?: string };
         headline = headline || clean(parsed.headline, HEADLINE_MAX, "headline(repair)");
-        executive = executive || clean(parsed.executive, 900, "executive(repair)");
-        lede = lede || clean(parsed.lede, 900, "lede(repair)");
+        executive = executive || clean(parsed.executive, EXECUTIVE_TARGET, "executive(repair)", true);
+        lede = lede || clean(parsed.lede, LEDE_TARGET, "lede(repair)", true);
       }
     } catch { /* the computed story is the floor */ }
   }
