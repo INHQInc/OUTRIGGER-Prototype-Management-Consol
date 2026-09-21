@@ -184,6 +184,13 @@ measurement to trust.
   list with sparklines. Both are the same live experiment, captured after the
   prose-cap fix, so their numbers differ from the older email captures. The email
   screenshots stay in the repo, marked superseded.
+- **A wide screenshot needs a different mobile treatment from a tall one.** These
+  two are 1600px wide and carry their body copy inside the image. Fitted to a
+  351px phone column they rendered that copy at about 3px. Below 760px each one
+  now sits in a pannable frame at a 900px minimum, with a visible hint, so the
+  text stays at 56% of native instead of becoming a smudge. Desktop and print are
+  untouched. The portrait email captures never had this problem, which is why the
+  swap needed the extra rule.
 
 ### The PDF had been mojibake all along
 
