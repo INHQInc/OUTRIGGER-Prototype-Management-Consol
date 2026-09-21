@@ -179,7 +179,22 @@ measurement to trust.
 - Assets settled: `docs/pitch/onesheet-assets/web/` and the two readout emails
   are committed (about 2.8 MB); the full-resolution PNGs and `kbr-mockup-*.jpg`
   originals are git-ignored and stay local.
-- One screenshot is still missing: the metric-by-metric sparklines view.
+- The results section now shows **Prism's own readout screen**, not the email: the
+  narrative view (headline plus four explanation columns) above the metric-by-metric
+  list with sparklines. Both are the same live experiment, captured after the
+  prose-cap fix, so their numbers differ from the older email captures. The email
+  screenshots stay in the repo, marked superseded.
+
+### The PDF had been mojibake all along
+
+The file carried **no charset declaration**, so served standalone it decoded as
+windows-1252 and every em dash and curly apostrophe printed as `a-circumflex euro`.
+The artifact was always fine, because the artifact service injects `utf-8` itself,
+which is exactly why this survived: the version everyone looked at on screen was
+correct and only the forwarded PDF was wrong. A `<meta charset="utf-8">` as the
+first line fixes the whole document.
+
+**Check the PDF, not the page, when the PDF is the thing being sent.**
 
 ---
 

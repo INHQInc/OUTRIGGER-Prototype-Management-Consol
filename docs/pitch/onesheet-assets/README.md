@@ -15,8 +15,11 @@ from the prototype and not worth the repo weight.
 | `before-` | The production destination selector, before |
 | `ds-` | The destination-selector prototype: grid, map states, a property card, mobile |
 | `kbr-` | The KBR mockup arms, showing the scale of change one brief can carry |
-| `readout-email-` | Prism's own readout email, as the results section shows it |
+| `readout-narrative` | The readout's headline and four explanation columns, in `web/` |
+| `readout-metrics` | The same result metric by metric, with sparklines, in `web/` |
+| `readout-email-` | The readout as an email. **Superseded** on the page by the two above, kept as a record of the email format |
 | `traditional-` | A traditional agency spec document, for the old-way lane |
 
-Still missing: the metric-by-metric sparklines view from a Prism readout. That
-one needs a signed-in capture.
+The metric-by-metric view is now captured (`web/readout-metrics.jpg`). Both readout
+screens are the same live Outrigger experiment, taken after the prose-cap fix, so
+their numbers differ slightly from the older email captures.
