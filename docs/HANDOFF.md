@@ -152,10 +152,30 @@ the stylesheet or equal-specificity overrides lose on source order. And the
 browser pane reported a 980px viewport while set to the mobile preset, so mobile
 checks were re-run in Playwright at a real 390px.
 
-### Open
+### The workstream chart — fixed 2026-09-21
 
-- **The workstream chart still clips its labels at some narrow widths.** A
-  different presentation for that graphic is the open question.
+It was clipping its own labels, and not only when narrow: **ten of fifteen bars
+were cut at 1000px and four even at 1440px**. The cause was structural, so no
+breakpoint could have fixed it — a bar's width is its duration, and a two-day
+bar is about 30px, which cannot hold a word.
+
+The bars now carry a **numeral**, which fits at any width, and a numbered key
+under each lane carries the names. The key was already rendering on screen: a
+`@media screen` block had been nested inside `@media print`, a combination that
+can never match, so the step list every lane was supposed to hide on desktop had
+been visible the whole time. Numbering it removed a duplicate rather than adding
+one. The 880px minimum width went too, so the chart no longer scrolls sideways
+between 761px and 880px.
+
+Measured at 390, 820, 1000 and 1440: zero clipped bars, zero clipped key items,
+no horizontal page overflow. Artifact version 13; the Desktop PDF is regenerated.
+
+**Headless Chrome lied about the mobile render** the same way the browser pane
+did — `--window-size=390` laid the page out wider and cropped the screenshot, so
+it looked broken when it was not. Playwright at a real 390px viewport is the
+measurement to trust.
+
+### Open
 - Assets settled: `docs/pitch/onesheet-assets/web/` and the two readout emails
   are committed (about 2.8 MB); the full-resolution PNGs and `kbr-mockup-*.jpg`
   originals are git-ignored and stay local.
