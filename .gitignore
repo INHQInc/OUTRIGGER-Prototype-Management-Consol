@@ -14,3 +14,8 @@ snapshots/
 
 # TS incremental build cache — generated, not source
 tsconfig.tsbuildinfo
+
+# One-sheet source captures — full-resolution originals stay local.
+# The downscaled web/ set and the readout emails are committed.
+docs/pitch/onesheet-assets/*.png
+docs/pitch/onesheet-assets/kbr-mockup-*.jpg

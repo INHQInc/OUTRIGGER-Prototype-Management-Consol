@@ -1,6 +1,165 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-08-10. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+*Updated: 2026-09-20. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+
+---
+
+## READOUT PROSE CAPS (2026-09-20) — shipped
+
+A finished readout rendered `partial structure · executive: over 900 chars
+(1031)` and showed no executive summary. The model had written a correct
+1,031-character summary; `clean()` threw it away for being 131 characters long
+and reported the discard as a structural fault. Re-reading could never clear it,
+because every re-read produced prose of about the same length and hit the same
+cap.
+
+### The rule
+
+**A length cap on a paragraph is a target, not a gate.** `clean()` now takes
+`lengthIsAdvisory`. When an over-length value is otherwise clean — no digits, no
+statistics vocabulary, right shape — it is kept as written and nothing is
+recorded against it. Length is re-checked against `Number.MAX_SAFE_INTEGER` so a
+value that is *both* too long *and* genuinely malformed still reports the real
+fault, not the length.
+
+`EXECUTIVE_TARGET` and `LEDE_TARGET` (900) are named for what they now are.
+`HEADLINE_MAX` stays a hard gate at 140 — a headline is laid out in a fixed box,
+a paragraph flows.
+
+### Second time, same lesson
+
+`HEADLINE_MAX` had already been raised 80 to 140 for this exact reason, with a
+comment saying so twenty lines above the code that then discarded the executive
+summary. The repair prompt was still telling the model the headline cap was 80
+while the constant read 140, so the repair path was being sent to rewrite
+against a limit that no longer existed. Both are fixed.
+
+**If a check can silently delete correct work, it is the wrong check.** Prefer
+keeping the content and flagging it over dropping it and flagging the drop.
+
+### Still to do
+
+Other readouts written before this fix may carry the same stuck badge. They
+clear on re-read now; **Home Page Hero No Offer** is the known one.
+
+---
+
+## BRIEF — SUPPORTING MATERIAL (2026-09-18) — shipped
+
+Links and files were trapped in the *Draft with AI* card. They were drafting
+inputs rather than parts of the brief, so once a brief existed you could not add
+a reference, and the drafting AI was never actually sent the files the UI showed
+it attaching. Fixing that surfaced two live data-loss paths.
+
+### Two ways the brief was losing your work
+
+1. **`applyDraft` dropped `attachments`.** Accepting an AI draft rewrote the
+   brief without them.
+2. **`normalizeBrief` treated absent as empty.** Any PATCH that did not mention
+   `references` / `attachments` deleted them — and the `opmc-prototype` skill
+   told agents to PATCH the whole brief object, so agents were doing exactly
+   that.
+
+**Absent is not empty is now the rule.** `normalizeBrief(raw, prev)` uses
+`hasOwnProperty` per key: a key you did not send keeps `prev`'s value, a key you
+sent as an empty array clears it. Both PATCH and POST pass `prev`.
+
+### Content hashes are byte-sensitive — verified, not assumed
+
+`contentHashOf()` is `JSON.stringify` of the whole brief and `briefFingerprint()`
+covers it too, so **any** key-order or shape change invalidates every stored
+hash, clears unresolved drift verdicts and bills a fresh LLM audit across the
+estate. The new `note` field is therefore appended **last** and set to
+`undefined` (not the empty string) when blank, so `JSON.stringify` omits it
+entirely. Verified empirically before commit: existing references hash
+byte-identically; only actually writing a note moves the hash.
+
+### Attachment identity is the server's
+
+A client can send a `note` for an attachment and nothing else. The list itself
+comes from `prev`, matched on the asset plus name pair. A client cannot
+introduce, rename or re-point an attachment, which closes the path-traversal
+shape where a crafted `asset` could have named any file.
+
+### The drafting AI now sees the files
+
+`attachmentBlocks()` in `lib/ai/brief.ts` sends PDFs and images as document and
+image content blocks, inlines text files, and names anything it cannot show as
+NOT SHOWN so the model never silently pretends to have read it. Budgets are
+measured in **base64 size**, which is the mistake the first version made: a
+7.8 MB PNG passed an 8 MB raw check and arrived at about 10.4 MB, failing the
+whole draft. Limits are 4 inline files, 6 MB total, 4.5 MB per image. A 413
+degrades to a no-files draft rather than erroring.
+
+Both skills were taught about this: `opmc-prototype` gained
+`.opmc/attachments/` in the branch inventory and **"Never send `references` or
+`attachments`"**; `opmc-brief-author` gained a Supporting material section.
+
+### The review fleet caught my own regression
+
+A 21-agent review (4 dimensions, then adversarial verification) confirmed 16
+findings, one of which was a same-day regression I had shipped: pinning
+attachment identity to `prev` made `prev` the only source, and I had wired it
+into PATCH and not POST. One-argument fix. **Reviewing your own work in the same
+session is worth the tokens.**
+
+---
+
+## THE GRID (2026-09-18) — shipped
+
+Three changes to `PrototypeTable.tsx`, all about a table you can actually scan.
+
+**Description shows the problem, not the change.** It was rendering
+`brief.change` — what we are doing — under a heading that promises what is
+wrong. It reads `brief.problem` now.
+
+**One line per cell, full text one click away.** Long prose fields collapse to a
+single clamped line with a **more** chip; clicking opens a `ProsePeek` overlay
+with the whole value. The chip only renders past 58 characters, so short cells
+are not decorated with an affordance that does nothing.
+
+**Position leads; the Test column is gone.** The unlabelled first column was an
+A/B/n test marker duplicating what the Experiment cell already said. It was
+removed and the queue position took the first slot, carrying a `PriorityDot` so
+rank and priority band read together.
+
+Rows are now a `Row` component built in header order — 20 headers, 20 cells,
+checked. That structure is what exposed the four-column header and cell
+misalignment recorded under PRIORITISATION.
+
+---
+
+## EXEC ONE-SHEET (2026-09-20) — delivered, not in the repo
+
+A pitch one-sheet for Prism, authored by BrandGraphAI with Outrigger as the
+case study. Published as a Claude artifact at
+`https://claude.ai/artifact/7zZ1ZjzS8ubrkDzGFsKAmG` (version 12, link-shared).
+PDF at `~/Desktop/Prism-by-BrandGraphAI.pdf` — 10 pages, letter, about 2.9 MB,
+rendered with headless Chrome.
+
+Sections run cover, how it works (a two-lane workstream chart), integrates with
+any stack, the destination-selector use case, how that one got made, the scale
+of change, brand understanding, reading the results, the handoff, and what it
+did for the programme.
+
+Voice is governed by the `outrigger-geo-voice` skill: no kickers, no
+negation-first openings, no narrator signposting, every number carries a noun.
+**Every auditable figure was deliberately stripped** — the reader is a CEO who
+will hold someone to any number on the page.
+
+Two mechanical traps worth remembering. Print rules must sit at the **end** of
+the stylesheet or equal-specificity overrides lose on source order. And the
+browser pane reported a 980px viewport while set to the mobile preset, so mobile
+checks were re-run in Playwright at a real 390px.
+
+### Open
+
+- **The workstream chart still clips its labels at some narrow widths.** A
+  different presentation for that graphic is the open question.
+- Assets settled: `docs/pitch/onesheet-assets/web/` and the two readout emails
+  are committed (about 2.8 MB); the full-resolution PNGs and `kbr-mockup-*.jpg`
+  originals are git-ignored and stay local.
+- One screenshot is still missing: the metric-by-metric sparklines view.
 
 ---
 
@@ -53,14 +212,35 @@ And it only appears when a real baseline rate is supplied — a run length
 computed from a guessed conversion rate would be believed. Absent beats
 fabricated.
 
-### Visual — no third colour
+### Visual — the colour it ended up with
 
-The board already spends both colour channels: severity (§1b) and the arm hue
-that ties an A/B/n test together. So priority reads as **weight and position**:
-a `ScoreBadge` whose fill deepens by band (Now / Next / Later / Someday), queue
-numerals in Backlog, and a `⇅` where a hand-ordering disagrees with the score —
-overriding the model is fine, overriding it without noticing is the thing worth
-catching.
+This started as **weight and position only**, on the reasoning that the board
+already spends both colour channels: severity and the arm hue that ties an
+A/B/n test together. That version shipped and could not be read. The bands were
+built from `color-mix` at 5–15% of `--foreground`, which is four shades of
+nothing on both themes.
+
+Priority now has its own ramp: `--prio-now` violet, `--prio-next` blue,
+`--prio-later` and `--prio-someday` slate, defined for light and dark in
+`globals.css`. The dark pair was **validated, not eyeballed** — the first
+attempt put slate and blue at a colourblind separation of 13.9, a hard fail, and
+was replaced.
+
+It reads three ways, all from `ScorePanel.tsx`:
+
+- **`PriorityDot`** — the queue numeral sits *inside* a filled circle, so rank
+  and band are one mark rather than two things to correlate. This is the first
+  column of the table and the seat number on a board card.
+- **`ScoreBadge`** — the band with its score, on the card and in the panel.
+- **`PriorityLegend`** — four dots and their names, because a colour nobody has
+  been told the meaning of is decoration.
+
+A `⇅` still marks where a hand-ordering disagrees with the score. Overriding the
+model is fine; overriding it without noticing is the thing worth catching.
+
+**The remembered sort is `useSyncExternalStore`, not an effect.** Seeding board
+state from `localStorage` in a `useEffect` and calling `setSort` renders twice
+and trips the lint rule. External store, read synchronously, one render.
 
 ### Sorting — one list of definitions, both views
 
