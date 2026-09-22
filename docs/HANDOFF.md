@@ -101,6 +101,10 @@ console holding customer data publicly reachable. Use the generated URL.
 
 ### Still outstanding
 
+Step-by-step, in order, for a human: **`docs/STAGING-CHECKLIST.md`**. Start at
+step 0 — whether the right Neon project was copied is unproven, because the
+connection password is not readable.
+
 - Production redeploy (arms the ownership guard).
 - Neon branch for staging, then `DATABASE_URL` + `ANTHROPIC_API_KEY` on the
   staging environment. Leave `CRON_SECRET` unset — both crons fail closed
