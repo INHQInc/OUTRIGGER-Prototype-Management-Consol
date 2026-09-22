@@ -1,4 +1,5 @@
 import type { RepoInfo, PullRequestResult } from "./types";
+import { assertOutwardAllowed } from "../deploy/outward";
 
 /**
  * Minimal GitHub REST client (raw fetch, no SDK dependency — same approach as
@@ -37,6 +38,14 @@ export class GitHubClient {
   constructor(private token: string) {}
 
   private async gh<T>(path: string, init?: RequestInit): Promise<T> {
+    // A WRITE REACHES THE SHARED PROTOTYPES REPO. `code-write` was declared an
+    // outward effect and permitted under both modes, but nothing ever asserted
+    // it — only Optimizely and email were guarded, so a second deployment could
+    // still create `prototype/<key>` and commit into the repo the operational
+    // one is using. Guarded at the one choke point every call passes through,
+    // mirroring optimizely/api.ts, so a future write method inherits the check
+    // rather than having to remember it.
+    if ((init?.method ?? "GET").toUpperCase() !== "GET") assertOutwardAllowed("code-write");
     const res = await fetch(`${BASE}${path}`, {
       ...init,
       headers: {
