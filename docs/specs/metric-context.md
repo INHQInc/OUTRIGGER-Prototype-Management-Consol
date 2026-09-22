@@ -238,9 +238,41 @@ That answers grandfathering without a banner on every historical readout: the
 provenance is recorded and available where someone asks how a line was arrived
 at, rather than announced over prose nobody is questioning.
 
-## Open questions
+## How the gate presents
 
-- **What does the gate say when it blocks?** "The primary metric needs a
-  definition" is accurate and useless. It should show the metric, show what the
-  planner already inferred, and let the human accept or rewrite it. A blocked
-  arming should cost one edit, not a context switch into another screen.
+Decided against `docs/DESIGN-PRINCIPLES.md` rather than invented, and the
+principles overrule the obvious instinct in one place.
+
+**It is a queue item, not a modal.** Principle 1 puts gates and problems in the
+command rail — "THE RAIL IS THE CHECKLIST … the queue replaced the single CTA +
+gate line, its first item IS the gate, with its why." A dialog in front of the
+arm button would be a second place where a gate lives, and there is only one.
+
+**It holds position; it does not send you backwards.** Principle 5: gates block,
+they never teleport. Arming stays where it is, blocked and badged. The work does
+not get moved back to the measurement plan as though it were unfinished.
+
+**It links to its fix.** Principle 6: status you cannot act on from where you see
+it is decoration. The queue item deep-links (`?tab=…`) to the room that owns the
+metric, which is where the edit happens — the same shape as a drift refusal
+resolving in the Brief room wherever it surfaced.
+
+**It arrives pre-filled, and this is the important part.** Principle 15 —
+compute the caveat, never ask for it. The planner already inferred what the
+metric captures; making a human compose a sentence from nothing, at the moment
+they are trying to launch, is how a gate becomes a thing people learn to resent
+and then to game. So the field is presented already containing the planner's
+inference, attributed as such, and the human's job is to accept or correct it.
+One reading, one keystroke if it is right.
+
+That is also what keeps the CHARACTERIZED claim honest. Accepting an inference
+is a human settling it — the same act as typing it, and recorded the same way.
+What must never happen is the inference being used without anyone looking, which
+is exactly what the gate prevents.
+
+**No bypass.** Principle 5 again: "A running experiment locks the prototype — no
+UI may offer a bypass." The same holds here. There is no "skip for now", because
+after go-live the window is shut and the skip would be permanent.
+
+Open for tweaking later: the wording of the queue line itself, and whether
+guardrail metrics get the same pre-filled treatment or only the primary.
