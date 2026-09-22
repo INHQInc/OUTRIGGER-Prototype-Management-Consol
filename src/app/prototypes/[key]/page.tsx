@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { after } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
+import { brandBasis } from "@/lib/prototypes/customer-context";
 import { resolvePrototypeRepo } from "@/lib/prototypes/repo";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
@@ -216,8 +217,12 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
   const qaStaleNow = coverageStale(coverage, buildStatus.headSha, auditTarget.codeHash)
     || testCasesStale(coverage, buildStatus.headSha, auditTarget.codeHash);
   const adjPending = adjudicationPending(verdict, experimentStatus);
+  // The branch carries `.opmc/customer.md`, resolved from the brand profile, so
+  // a corrected profile stales it exactly as an edited brief does. One shared
+  // derivation — every content-hash surface must agree or the warning sticks.
+  const brandRev = await brandBasis(orgId);
   const pipeline = derivePipeline({
-    proto: p, provisionFlagRaw: provisionFlag, source, versions,
+    proto: p, brandRev, provisionFlagRaw: provisionFlag, source, versions,
     lastPush: push, claudeSeenAt: claudeSeen, experimentStatus,
     briefDrifted: Boolean(briefDrift),
     qaFailing: coverageGate(coverage) === "failing",

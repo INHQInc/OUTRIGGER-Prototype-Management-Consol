@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
 import { contentHashOf } from "@/lib/prototypes/provision";
+import { brandBasis } from "@/lib/prototypes/customer-context";
 import { enabledSkillsForPrototype } from "@/lib/skills/skills";
 import { ensureSkillsSeeded } from "@/lib/skills/seed";
 
@@ -40,6 +41,10 @@ export async function GET(req: NextRequest) {
   if (!proto) return NextResponse.json({ error: "Unknown prototype" }, { status: 404, headers: CORS });
 
   const orgId = await resolvePrototypeOrg(proto);
+  // The branch is written in the customer's words, so a corrected profile
+  // stales it exactly as an edited brief does. Resolved through the one
+  // derivation every hash call site shares — see `brandBasis`.
+  const brandRev = await brandBasis(orgId);
   await ensureSkillsSeeded(orgId);
   const skills = await enabledSkillsForPrototype(orgId, key).catch(() => []);
 
@@ -53,7 +58,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     key,
     // Compare with .opmc/context.json → contentHash
-    contentHash: contentHashOf(proto),
+    contentHash: contentHashOf(proto, brandRev),
     // Compare with .opmc/skills.json → managed[]
     skills: skills.map((s) => s.id).sort(),
     stage: proto.status,

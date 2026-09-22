@@ -8,6 +8,7 @@
  */
 import { getContentStore } from "../content/store";
 import { resolvePrototypeOrg } from "./org";
+import { brandBasis } from "./customer-context";
 import { resolveRepoSource } from "./source";
 import { listArtifactVersions } from "./versions";
 import { lastPush } from "./ship";
@@ -32,6 +33,9 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
   const protos = all.filter((_, i) => orgIds[i] === orgId);
 
   const client = await getOptimizelyClientForOrg(orgId).catch(() => null);
+  // ONCE for the whole board: every card belongs to this org, and the profile
+  // revision is a property of the customer, not of a prototype.
+  const brandRev = await brandBasis(orgId);
   const protoByKey = new Map(protos.map((p) => [p.key, p]));
 
   // Arm counts come FIRST because the priority derivation needs them: a test
@@ -69,7 +73,7 @@ export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; a
     // workspace passes, so table strip / board / rail dots always agree.
     const qaCodeHash = auditTargetCode(source, versions[0]).codeHash;
     const pipeline = derivePipeline({
-      proto: p, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt, experimentStatus, briefDrifted: Boolean(briefDrift),
+      proto: p, brandRev, provisionFlagRaw, source, versions, lastPush: push, claudeSeenAt, experimentStatus, briefDrifted: Boolean(briefDrift),
       qaFailing: coverageGate(coverage) === "failing",
       qaStale: coverageStale(coverage, source?.headSha, qaCodeHash) || testCasesStale(coverage, source?.headSha, qaCodeHash),
       adjudicationPending: adjudicationPending(verdict, experimentStatus),

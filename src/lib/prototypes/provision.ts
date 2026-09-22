@@ -21,6 +21,8 @@ import { deriveDataGlobals, deriveDesignTokens, fetchPageHtml, type FontRef } fr
 import { listReferenceRepos } from "../git/reference-repos";
 import { enabledSkillsForPrototype } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
+import { isTaxonomyUnavailable } from "../brand/profile";
+import { brandBasis, customerContextFor, renderCustomerMd } from "./customer-context";
 import { injectionPasses, isBriefComplete, type PrototypeRecord, type PrototypeTarget } from "./types";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
@@ -148,6 +150,7 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
     ``,
     `> Prototype key: \`${proto.key}\` · stage: ${proto.status} · provisioned ${provisionedAt}`,
     `> Console record: ${consoleUrl}/prototypes/${proto.key}`,
+    `> **Read \`.opmc/customer.md\` before you write a word of copy** — it carries this customer’s own vocabulary, resolved from the console, not a default.`,
     ``,
     `## What to build`,
     b.change ? b.change : "_(no change described yet — see the console record)_",
@@ -183,13 +186,19 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
   ].filter(Boolean).join("\n");
 }
 
-export function contentHashOf(proto: PrototypeRecord): string {
+export function contentHashOf(proto: PrototypeRecord, brandRev: string | null): string {
   // ONLY what the agent builds against: brief/pages/identity. The lifecycle
   // stage is deliberately NOT here — advancing Review → live used to re-flag
   // "the brief or pages changed since the last sync" when neither had, and
   // the agent doesn't need stage freshness to build correctly.
   const canonical = JSON.stringify({
     name: proto.name,
+    // WHICH REVISION OF THE CUSTOMER this branch was written from. `.opmc/customer.md`
+    // is resolved at provision time, so correcting a customer’s vocabulary has to
+    // stale every branch still carrying the old words. Resolve it through
+    // `brandBasis()` — two surfaces deriving it two ways make the "Re-sync"
+    // warning permanently un-clearable, which is why the parameter is required.
+    brandRev,
     brief: proto.brief,
     hypothesis: proto.hypothesis,
     metrics: proto.metrics,
@@ -230,6 +239,17 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   }
   const orgId = await resolvePrototypeOrg(proto);
   if (!orgId) throw new Error("This prototype has no owning customer.");
+  // THE CUSTOMER GATE, and it is deliberately before the branch is touched.
+  // A prototype writes copy onto the customer's live page; provisioning it
+  // without the customer's own words means the agent writes in a template's
+  // voice under their name. `requireTaxonomy` already refuses to do that for
+  // prose ABOUT the page — this is the same rule for the page itself.
+  const customer = await customerContextFor(orgId).catch((e: unknown) => {
+    if (isTaxonomyUnavailable(e)) {
+      throw new Error(`This customer has no usable brand profile, so there are no words to build in. ${e.message} Fix it in the console (or seed it: \`npx tsx docs/dev/seed-taxonomy.mts <org> --dry\`), then re-sync.`);
+    }
+    throw e;
+  });
   const repoRef = await resolvePrototypeRepo(proto, orgId);
   if (!repoRef?.fullName) throw new Error("No prototypes repo registered — add one in Settings → Repositories.");
   const [owner, repo] = repoRef.fullName.split("/");
@@ -302,10 +322,12 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     }
   }
 
-  const contentHash = contentHashOf(proto);
+  const contentHash = contentHashOf(proto, customer.profileRev);
 
   // Human brief + machine twin.
   files.push({ path: ".opmc/brief.md", content: Buffer.from(renderBriefMd(proto, envByOrigin, consoleUrl, provisionedAt), "utf8") });
+  // The customer, resolved. Everything a visitor will read is written from this.
+  files.push({ path: ".opmc/customer.md", content: Buffer.from(renderCustomerMd(customer, provisionedAt), "utf8") });
   const context = {
     schemaVersion: 1,
     key: proto.key,
@@ -315,6 +337,10 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     consoleRecordUrl: `${consoleUrl}/prototypes/${proto.key}`,
     tokenNote: "The OPMC_API_TOKEN is NEVER committed here — it comes from your shell env, and only WRITE-BACK (cut version) needs it. Building + review need no token.",
     repo: { fullName: repoRef.fullName, branch, artifactPath: repoRef.artifactPath || DEFAULT_ARTIFACT },
+    // The customer as structured data, next to `.opmc/customer.md` which is the
+    // same facts as prose. Resolved per org from the brand profile — there is no
+    // neutral default behind these words; a missing profile refuses above.
+    customer: { orgId: customer.orgId, name: customer.name, profileRev: customer.profileRev, taxonomy: customer.taxonomy, sections: customer.sections },
     targets: proto.targets.map((t) => {
       let origin = ""; try { origin = new URL(t.url).origin; } catch { /* */ }
       const env = envByOrigin.get(origin);

@@ -91,6 +91,14 @@ export interface Pipeline {
 
 export interface PipelineInputs {
   proto: PrototypeRecord;
+  /**
+   * Which revision of the customer's brand profile the branch should be
+   * written from (`brandBasis(orgId)`). REQUIRED, and required on purpose: the
+   * content hash is compared across three surfaces, and a surface that omits
+   * this computes a different hash for the same branch — which shows as a
+   * "Re-sync" warning nothing can clear.
+   */
+  brandRev: string | null;
   provisionFlagRaw: string | null;
   source: RepoSource | null;
   versions: ArtifactVersion[];
@@ -121,7 +129,7 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   let provisionHash: string | null = null;
   try { provisionHash = inp.provisionFlagRaw ? (JSON.parse(inp.provisionFlagRaw).contentHash as string) : null; } catch { /* legacy flag */ }
   const provisioned = Boolean(inp.provisionFlagRaw);
-  const synced = !provisioned || provisionHash === null || provisionHash === contentHashOf(proto);
+  const synced = !provisioned || provisionHash === null || provisionHash === contentHashOf(proto, inp.brandRev);
   const built = Boolean(source?.found && source.variationJs);
   const problem = artifactProblem(source?.variationJs ?? null);
   const cert = latest?.certification ?? null;

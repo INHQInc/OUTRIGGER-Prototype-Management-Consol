@@ -14,12 +14,33 @@
  * yesterday's "renders nothing here" forever, which is worse than silence
  * because it is confidently wrong.
  *
- * Pure: no database, no network. `contentHashOf` is a function of the record.
+ * The second half of the file covers the CUSTOMER seam: `provision.ts` imported
+ * nothing from `../brand` until 22 Sep, so the surface that writes words onto a
+ * customer's live page had none of the customer's words.
+ *
+ * Writes throwaway rows under a throwaway org, in its own sandbox. Refuses to
+ * run against a database.
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+if (process.env.DATABASE_URL) {
+  console.error("\nRefusing to run: DATABASE_URL is set. This suite writes throwaway rows.\n" +
+    "Run it as:  env -u DATABASE_URL npx tsx docs/dev/builder-context-smoke.mts\n");
+  process.exit(2);
+}
+const SANDBOX = mkdtempSync(join(tmpdir(), "prism-builder-"));
+process.chdir(SANDBOX);
+process.on("exit", () => rmSync(SANDBOX, { recursive: true, force: true }));
 
 const { contentHashOf } = await import("../../src/lib/prototypes/provision");
+const { customerContextFor, renderCustomerMd, brandBasis } = await import("../../src/lib/prototypes/customer-context");
+const { isTaxonomyUnavailable } = await import("../../src/lib/brand/profile");
+const { getContentStore } = await import("../../src/lib/content/store");
+const { EMPTY_OBSERVED } = await import("../../src/lib/brand/types");
 type PrototypeRecord = import("../../src/lib/prototypes/types").PrototypeRecord;
+type SiteProfile = import("../../src/lib/brand/types").SiteProfile;
 
 let failures = 0;
 const ok = (label: string, cond: boolean, detail?: string) => {
@@ -40,15 +61,18 @@ function proto(targets: PrototypeRecord["targets"]): PrototypeRecord {
   } as unknown as PrototypeRecord;
 }
 
+/** One brand revision held fixed, so sections 1–2 measure the record alone. */
+const hash = (p: PrototypeRecord) => contentHashOf(p, "org:1");
+
 console.log("\n1. fixing a missing loader tag stales the branch");
 {
   const url = "https://example.com/a";
   const absent = proto([{ url, source: "live", injection: { state: "absent", at: "2026-01-01T00:00:00.000Z" } }]);
   const present = proto([{ url, source: "live", injection: { state: "present", at: "2026-01-01T00:00:00.000Z" } }]);
   const unchecked = proto([{ url, source: "live" }]);
-  ok("absent ≠ present", contentHashOf(absent) !== contentHashOf(present));
-  ok("unchecked ≠ present", contentHashOf(unchecked) !== contentHashOf(present));
-  ok("same state is stable", contentHashOf(absent) === contentHashOf(proto([{ url, source: "live", injection: { state: "absent", at: "2026-06-06T00:00:00.000Z" } }])),
+  ok("absent ≠ present", hash(absent) !== hash(present));
+  ok("unchecked ≠ present", hash(unchecked) !== hash(present));
+  ok("same state is stable", hash(absent) === hash(proto([{ url, source: "live", injection: { state: "absent", at: "2026-06-06T00:00:00.000Z" } }])),
     "only the STATE is a build input — re-checking and finding the same answer must not churn the branch");
 }
 
@@ -56,10 +80,10 @@ console.log("\n2. the page list still decides staleness on its own");
 {
   const a = proto([{ url: "https://example.com/a", source: "live" }]);
   const b = proto([{ url: "https://example.com/b", source: "live" }]);
-  ok("a different page ≠ same page", contentHashOf(a) !== contentHashOf(b));
-  ok("order does not matter", contentHashOf(proto([
+  ok("a different page ≠ same page", hash(a) !== hash(b));
+  ok("order does not matter", hash(proto([
     { url: "https://example.com/a", source: "live" }, { url: "https://example.com/b", source: "live" },
-  ])) === contentHashOf(proto([
+  ])) === hash(proto([
     { url: "https://example.com/b", source: "live" }, { url: "https://example.com/a", source: "live" },
   ])));
 }
@@ -81,6 +105,66 @@ console.log("\n4. the check timestamp is deliberately NOT delivered");
   // reading. If this fails, someone added it back: the console holds recency.
   const ctxBlock = SRC.slice(SRC.indexOf("injection: { state:"), SRC.indexOf("injection: { state:") + 240);
   ok("no `at` in the delivered payload", !/\bat\s*:/.test(ctxBlock), ctxBlock.slice(0, 120));
+}
+
+console.log("\n5. correcting the customer's words stales every branch written in the old ones");
+{
+  const t = proto([{ url: "https://example.com/a", source: "live" }]);
+  ok("a new profile revision ≠ the old one", contentHashOf(t, "org:1") !== contentHashOf(t, "org:2"));
+  ok("no profile ≠ some profile", contentHashOf(t, null) !== contentHashOf(t, "org:1"));
+  ok("the same revision is stable", contentHashOf(t, "org:2") === contentHashOf(t, "org:2"));
+}
+
+console.log("\n6. an undescribed customer cannot be provisioned at all");
+{
+  let refused = false, kind = "";
+  try { await customerContextFor("nobody-here"); } catch (e) { refused = isTaxonomyUnavailable(e); kind = (e as Error).message; }
+  ok("refuses rather than defaulting", refused, kind.slice(0, 100));
+  ok("it refuses BEFORE the branch is touched",
+    SRC.indexOf("customerContextFor(orgId)") < SRC.indexOf("client.getBranchSha("),
+    "failing after createBranch leaves a half-provisioned branch behind");
+  ok("the refusal names the fix", /seed-taxonomy|brand profile/.test(SRC.slice(SRC.indexOf("customerContextFor(orgId)"), SRC.indexOf("customerContextFor(orgId)") + 700)));
+}
+
+console.log("\n7. a described customer gets its own words, never the neutral defaults");
+{
+  const store = await getContentStore();
+  const now = "2026-09-22T00:00:00.000Z";
+  await store.addSiteProfile({
+    id: "cust-org-star-r1", orgId: "cust-org", siteId: "*", rev: 1, status: "approved",
+    taxonomy: { visitorNoun: "rider", visitorNounPlural: "riders", offeringNoun: "route",
+      offeringNounPlural: "routes", primaryAction: "book a ride", conversionSurface: "ride sheet",
+      entityKinds: ["trail", "clinic"] },
+    sections: { voice: "Plain, specific, never breathless." },
+    observed: { ...EMPTY_OBSERVED }, sources: { urls: [], derivedAt: now, crawler: "test" },
+    corrections: [], createdAt: now, approvedAt: now,
+  } as SiteProfile);
+
+  const c = await customerContextFor("cust-org");
+  const md = renderCustomerMd(c, now);
+  ok("the customer's nouns are in the file", md.includes("rider") && md.includes("route") && md.includes("ride sheet"));
+  ok("its entity kinds reach the builder", md.includes("trail") && md.includes("clinic"));
+  ok("the approved voice is delivered verbatim", md.includes("never breathless"));
+  // THE WHOLE POINT. If any of these appear, a neutral default leaked into a
+  // file that decides what a real customer's page says.
+  for (const generic of ["visitor", "product", "checkout", "convert"]) {
+    ok(`no neutral "${generic}" leaked in`, !md.toLowerCase().includes(generic));
+  }
+  ok("the revision is recorded next to the words", md.includes("org:1") && c.profileRev === "org:1");
+  ok("brandBasis agrees with the delivered revision", (await brandBasis("cust-org")) === c.profileRev,
+    "the hash and the file must describe the same revision or Re-sync never clears");
+}
+
+console.log("\n8. an uncharacterized section still carries an instruction");
+{
+  // Silence reads as freedom, and a model with freedom and no voice description
+  // writes generic marketing copy — which is the failure this whole line of
+  // work exists to remove. So a gap points at the evidence on the page.
+  const c = await customerContextFor("cust-org");
+  const md = renderCustomerMd(c, "2026-09-22T00:00:00.000Z");
+  ok("the missing audience section is named as missing", md.includes("Not characterized yet"));
+  ok("and says what to do instead", /brief.s audience line/.test(md));
+  ok("a section that IS written gets no gap text", !md.split("## How it sounds")[1]?.startsWith("\nNot characterized"));
 }
 
 console.log(failures ? `\n${failures} FAILED\n` : "\nall good\n");
