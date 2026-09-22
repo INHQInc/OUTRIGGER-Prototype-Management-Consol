@@ -196,6 +196,68 @@ not exist.
 
 ---
 
+## The builder is brand-blind — see `BUILDER-CONTEXT.md`
+
+Everything above concerns the READOUT. A second trace on 22 Sep asked the other
+half: what does the engine that BUILDS prototypes receive? The answer reframes
+the whole effort.
+
+**`src/lib/prototypes/provision.ts` imports nothing from `../brand`.** Verified
+by hand. The entire three-layer context model — Taxonomy, SiteProfile,
+ObservedFacts, BrandFact — reaches exactly one consumer: the readout.
+
+So the inversion we have built, without meaning to:
+
+> The surface that writes prose **about** the page now refuses to run without the
+> customer's vocabulary. The surface that writes words **onto** the customer's
+> live page gets none of it.
+
+The readout can say "room" while the variation it describes says "accommodation",
+and nothing would notice.
+
+**Onboarding captures almost nothing about the customer as a subject.**
+`Org` is `{id, name, createdAt}`. `Environment` is `{label, url, kind}`. A
+customer can be fully onboarded and the system will not know what business they
+are in, who visits, what they call their visitors, or what their site is built
+out of. Every one of those is then guessed by the builder, per prototype, from
+whichever page it happens to target.
+
+**`earnedDigest()` has zero callers** — the function whose own docstring says it
+"should be the loudest thing in the builder's context".
+
+### Two live contradictions, not gaps
+
+Both verified by hand, both shipped today.
+
+**The builder is told to instrument and blocked for instrumenting.**
+`MeasurementPanel.tsx:122` hands the human a line to paste at the builder —
+*"Instrument these in the variation…"* — when the measurement plan has gaps.
+`certify.ts:87-90` FAILS the certification and blocks the push if the artefact
+contains `dataLayer.push(`, `gtag(`, `_satellite` or `adobeDataLayer`: *"A
+variation must never add measurement the platform doesn't know about."* The two
+instructions cannot both be followed. The safe move is not to instrument, which
+guarantees the primary composite has no both-arms event — so the experiment gets
+built, bound, run, and is **undecidable**.
+
+**The builder cannot see whether the page is even tagged.** `TargetInjection`
+records per page whether the loader is present (`types.ts:57-63`). The context
+mapper at `provision.ts:286-290` emits `{url, source, reviewUrl, env, snapshot}`
+and drops it. On an untagged environment the review URL shows nothing, status
+looks healthy, and the builder debugs its own correct code. The console knew.
+
+### The recommended first cut
+
+Customer tier first, because every prototype ships copy and the taxonomy half is
+already finished — but **the first commit is the delivery seam, not a field**:
+`provision.ts` must import from `../brand`, write the context to the branch, and
+add it to `contentHashOf()` — otherwise the branch never learns the context
+changed and the console reports it current forever.
+
+Full reasoning, the three-tier table, the counter-argument and the
+already-modelled-and-unused ranking are in `docs/plans/BUILDER-CONTEXT.md`.
+
+---
+
 ## What is left, in order
 
 1. **`results.ts` (19).** The customer-facing readout. Threading is cheap —
