@@ -229,6 +229,15 @@ an incident, that the thing they actually needed was a deploy history.
   cautionary tale: ~20k insertions across 107 files, diverged far enough that it
   became something to read ideas from rather than something to merge. A branch
   that outlives the work stops being a branch and becomes a fork.
+- **RELEASE FREEZE — do not push to `main` (decided 22 Sep 2026).** Staging is
+  the build environment until the batch release NEXT WEEK; everything lands there
+  first and ships to production together. `main` auto-deploys production, so a
+  push to `main` is a production release whatever the commit message says — that
+  is the whole reason this rule is written down rather than remembered.
+  Work goes to a feature branch and to `staging`; the release candidate is
+  `phase1/taxonomy-injection`. Lift this line when the release ships.
+  - The push rights below still stand for every other branch. The freeze is
+    about `main` only, and about timing, not trust.
 - **The agent commits, pushes and merges — including to `main`.** Granted
   22 Sep 2026, replacing "you push, I don't". Do not stage a command and wait to
   be told to run it; that habit turned a day's work into a queue of round trips.
@@ -249,17 +258,22 @@ an incident, that the thing they actually needed was a deploy history.
 
 ## Deployment tiers (decided 2026-09-22 — only Production exists today)
 
-**Status: Production is still the only tier that runs.** Verified 2026-09-22
-against the Vercel project `outrigger-prototype-management-consol`. Every commit
-pushed to `main` lands in the console people do real customer work in.
+**Status: all three tiers run.** Verified 22 Sep 2026 by behaviour, not by
+reading the config: each deployment CAS-writes its own claim into whatever
+database it actually reaches, and `content_meta.db-owner` reads `prod`,
+`staging` and `preview` on the three Neon branches respectively.
 
-Partly built: the Vercel environment `staging` exists and tracks the branch
-`staging`, and a Neon branch `staging` exists — but nothing has deployed to it,
-because it has no `DATABASE_URL` yet. Preview builds run but now have **no
-database at all**, since `DATABASE_URL` was narrowed to Production only on
-22 Sep; they will error on any page that needs one until a `preview` Neon branch
-is wired up. Current state and next actions: `docs/STAGING-CHECKLIST.md`. Check
-Vercel before believing this section.
+Staging is fully live — its own Neon branch, its own eight environment
+variables, its own workspace-scoped `ANTHROPIC_API_KEY`, and readouts that
+generate against real Optimizely data. `docs/STAGING-CHECKLIST.md` carries the
+detail, including the two Vercel traps and the fact that **pushing the `staging`
+branch does not deploy to the staging environment** — that needs an explicit
+`target: "staging"` deployment.
+
+An earlier version of this section said staging had never deployed and had no
+`DATABASE_URL`. It was stale for half a day and would have sent a session
+looking for a problem that no longer existed. Check Vercel and Neon before
+believing any status written here.
 
 | Tier | Trigger | Database | Acts on |
 |---|---|---|---|
