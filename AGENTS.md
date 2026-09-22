@@ -298,6 +298,13 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   is handed to previews too. Set `PRISM_DB_OWNER` on production — unset is
   "legacy" and deliberately unguarded (`lib/content/db-owner.ts`) — and give each
   preview its own Neon branch.
+- **Pushing `staging` does not deploy to staging.** The push builds, goes READY,
+  and lands as an ordinary preview — `branchMatcher` is configured correctly and
+  does not route. Only a `POST /v13/deployments` with `target: "staging"` is
+  assigned the staging alias, which is the URL anyone actually opens. After
+  pushing the branch, trigger the deployment and confirm the **alias**, not just
+  the `target` field. Exact call in `docs/STAGING-CHECKLIST.md`. It went
+  unnoticed through twelve commits on 22 Sep because every signal looked green.
 - **Schema changes are additive and forward-only.** New tables, new nullable
   columns. NEVER drop or repurpose a column in the release that stops writing it;
   split it across two releases with the read removed first. Code rolls back in
