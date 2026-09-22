@@ -698,6 +698,64 @@ export function templateStory(opts: {
 
 
 /**
+ * WHICH METRIC EACH OF THE FOUR MOVEMENTS IS ABOUT — decided HERE, not by the
+ * model.
+ *
+ * The readout prints a movement's sentences with a metric's live value bolted
+ * above them. While the analyst chose that pairing, it could choose one that
+ * contradicted its own prose: a run shipped "a settled gain in engagement
+ * rather than noise" under a decision metric reading -4.1% and flagged too
+ * early. The words were right and the number above them was a different
+ * metric's. Two runs of the same data also disagreed about which movement the
+ * decision metric belonged to, so the leftmost column did not mean the same
+ * thing twice.
+ *
+ * This is the rule the file already states for the beats row — "the analyst
+ * contributes WORDING; the membership and the order are the console's" — and
+ * the four movements were simply never brought under it.
+ *
+ * EACH METRIC IS CLAIMED AT MOST ONCE, so a reader never meets the same number
+ * in two places. Order of claim is the order of certainty about what the slot
+ * means:
+ *   prediction — the decision metric. The brief made a claim; this is the
+ *                number that adjudicates it.
+ *   effect     — the biggest rise left: the surface the change actually touched.
+ *   shift      — the next rise along the path: where that behaviour went.
+ *   cost       — the biggest fall left: what softened.
+ * A slot with nothing honest left to name gets undefined, and renders as prose
+ * with no figure, which is the existing behaviour for a missing measure.
+ */
+export function movementMeasures(opts: {
+  results: ExperimentResults;
+  stats: StatsReport | null;
+  supporting: string[];
+}): { effect?: string; shift?: string; cost?: string; prediction?: string } {
+  const { stats, supporting } = opts;
+  const focusId = stats?.focusVariationId;
+  const metricOf = (k: string) => stats?.metrics.find((m) => m.key === k);
+  const liftOf = (k: string) => metricOf(k)?.cells.find((c) => c.variationId === focusId)?.lift;
+
+  const decision = stats?.primaryKey ?? (optiPrimaryKeyOf(opts.results) || undefined);
+  const claimed = new Set<string>();
+  const claim = (k?: string) => {
+    if (!k || claimed.has(k)) return undefined;
+    claimed.add(k);
+    return k;
+  };
+
+  // A one-armed metric has no comparison, so it can never evidence a movement.
+  const eligible = supporting.filter((k) => !metricOf(k)?.featureOnly && liftOf(k) !== undefined);
+  const byLift = [...eligible].sort((a, b) => (liftOf(b) ?? 0) - (liftOf(a) ?? 0));
+
+  const prediction = claim(decision && eligible.includes(decision) ? decision : decision);
+  const effect = claim(byLift.find((k) => !claimed.has(k) && (liftOf(k) ?? 0) > 0)) ?? claim(byLift.find((k) => !claimed.has(k)));
+  const shift = claim(byLift.find((k) => !claimed.has(k) && (liftOf(k) ?? 0) > 0)) ?? claim(byLift.find((k) => !claimed.has(k)));
+  const cost = claim([...byLift].reverse().find((k) => !claimed.has(k) && (liftOf(k) ?? 0) < 0));
+
+  return { effect, shift, cost, prediction };
+}
+
+/**
  * THE READOUT'S STRUCTURE, derived once — what the team said this experiment
  * is ABOUT, and the arithmetic between those metrics.
  *
@@ -792,6 +850,18 @@ export async function generateReading(opts: {
     available: allKeys,
   });
   const supportingSet = new Set(supporting);
+
+  // WHICH METRIC EACH MOVEMENT IS ABOUT — settled before the model is asked,
+  // so the prose is written about a known number rather than the number being
+  // chosen to fit prose already written.
+  const movements = movementMeasures({ results: opts.results, stats: opts.stats, supporting });
+  const movementLabel = (k?: string) => (k ? opts.stats?.metrics.find((m) => m.key === k)?.label ?? k : undefined);
+  const movementBlock = (["effect", "shift", "cost", "prediction"] as const)
+    .map((slot) => {
+      const key = movements[slot];
+      return key ? `· ${slot} — write about: ${movementLabel(key)} (${key})` : `· ${slot} — no metric qualifies; write the movement in words and name no metric`;
+    })
+    .join("\n");
   // A HIDDEN row is not part of the story: out of THE PATH, out of WHAT MOVED,
   // out of the beat menu. It stays in RAW NUMBERS, which is the numeric table
   // of record, and its risks still reach the analyst through the computed
@@ -971,7 +1041,14 @@ Each section is at most 420 characters and carries NO DIGITS — a section that 
 · cost — what softened, what is being traded, or where intent is leaking. If nothing measurably gave way, say that rather than inventing a cost.
 · prediction — what the brief claimed, which half is settled and which isn't.
 Each is one or two sentences and stands on its own: a reader scanning only "cost" must get a complete thought without having read the others.
-EVERY MOVEMENT ALSO NAMES THE ONE METRIC THAT EVIDENCES IT. The page prints that metric's live value beside your words, so never type a number yourself — pick the metric whose movement your sentences are actually about.
+EACH MOVEMENT HAS ALREADY BEEN ASSIGNED ITS METRIC — you are not choosing. The
+page prints that metric's live value directly above your sentences, so write
+each movement ABOUT the metric named for it here and about no other:
+${movementBlock}
+Never type a number yourself. If the metric you were given does not support the
+point you wanted to make in that slot, make the point the metric supports —
+prose that describes one metric under another metric's figure is the one thing
+this readout must never do.
 
 THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
 
@@ -1132,28 +1209,28 @@ Return only JSON, an OBJECT per section with its text AND the metric key that ev
       }
     } catch { /* whatever survived is what renders */ }
   }
-  // A SECTION WITHOUT ITS NUMBER IS HALF A SECTION. A section can arrive as a
-  // bare string (no `measure` at all) or name a metric outside the enum, and
-  // either way the movement rendered as prose with nothing above it. Rather
-  // than leave the slot empty, pair it with the metric the movement is BY
-  // DEFINITION about — and where no metric honestly qualifies, leave it empty
-  // rather than attach a number the sentence was not written about.
+  // THE FIGURE IS THE CONSOLE'S, NOT THE ANALYST'S. `movements` decided which
+  // metric each slot is about before the model was asked, and that decision is
+  // what renders — whatever key came back is overwritten here.
+  //
+  // This used to be a fallback that only fired when `measure` was MISSING, so
+  // a present-but-wrong key sailed through: one run printed a -4.1% decision
+  // metric, flagged too early, above a sentence calling it "a settled gain in
+  // engagement rather than noise". Nothing failed; the page just contradicted
+  // itself. Two runs of identical data also put the decision metric in
+  // different columns, so the leftmost slot did not mean the same thing twice.
+  //
+  // A disagreement is still worth knowing about — it means the prompt and the
+  // assignment have drifted apart — so it is logged rather than swallowed.
   if (read) {
-    const cellOf = (k: string) => opts.stats?.metrics.find((m) => m.key === k)?.cells.find((c) => c.variationId === opts.stats?.focusVariationId);
-    const headKeyForRead = opts.stats?.primaryKey ?? (optiPrimaryKeyOf(opts.results) || undefined);
-    const others = supporting.filter((k) => k !== headKeyForRead && !opts.stats?.metrics.find((m) => m.key === k)?.featureOnly);
-    const byLift = [...others].sort((a, b) => (cellOf(b)?.lift ?? 0) - (cellOf(a)?.lift ?? 0));
-    const biggestRise = byLift.find((k) => (cellOf(k)?.lift ?? 0) > 0);
-    const biggestFall = [...byLift].reverse().find((k) => (cellOf(k)?.lift ?? 0) < 0);
-    const fallback: Record<string, string | undefined> = {
-      effect: headKeyForRead,
-      shift: biggestRise ?? headKeyForRead,
-      cost: biggestFall,
-      prediction: headKeyForRead,
-    };
     for (const k of ["effect", "shift", "cost", "prediction"] as const) {
       const sect = read[k];
-      if (sect && !sect.measureKey && fallback[k]) sect.measureKey = fallback[k];
+      if (!sect) continue;
+      const assigned = movements[k];
+      if (sect.measureKey && assigned && sect.measureKey !== assigned) {
+        console.warn(`[reading] ${k}: analyst named ${sect.measureKey}, console assigned ${assigned} — using the console's`);
+      }
+      sect.measureKey = assigned;
     }
   }
 
