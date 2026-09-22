@@ -146,6 +146,40 @@ Which sharpens the recommendation above: block **starting the experiment** until
 the primary metric has a definition — not `confirmed`, which a team may set
 while still iterating on the binding. Arming is the last responsible moment.
 
+### The window CLOSES. That is what makes the guarantee total.
+
+**Metrics cannot be added once the experiment is live.** A prototype under test
+is locked. So the window does not merely narrow at go-live — it shuts.
+
+The codebase already enforces the identical principle one layer down, for code:
+
+> "This experiment is RUNNING. Pushing would change the live variation mid-test
+> and corrupt results — pause it in Optimizely first, then push."
+> — `lib/prototypes/ship.ts`, under the comment *"a running experiment is
+> immutable. No override."*
+
+Metrics deserve the same rule for the same reason: a measure introduced
+mid-flight has no data before the moment it was added, so it cannot be compared
+across the whole test without lying about the denominator.
+
+Three consequences, and they are the reason this gate is worth building:
+
+1. **The guarantee is assertable, not aspirational.** "Every metric in this
+   experiment was described by a human before anything was measured" becomes a
+   property of the system rather than a habit people are asked to keep.
+2. **There is no late-addition case to design for.** An earlier draft of this
+   spec asked whether a metric appearing mid-flight should be marked exploratory
+   and kept out of the verdict. The question is void: it cannot appear.
+3. **The drift audit's signal gets stronger.** A results name absent from `known`
+   stops being ambiguous between "someone added a metric later" and "something
+   is wrong upstream". Only the second remains, so the audit can say so plainly
+   rather than hedging.
+
+The one thing the gate cannot fix is the past: the nine existing metrics with no
+definition are already live and therefore already locked. They are not a
+migration, they are a cohort — grandfathered, and worth labelling as such so a
+readout never implies a human described something nobody did.
+
 ## Open questions
 
 - **Does the definition override or inform?** If a human wrote `captures`, should
@@ -154,7 +188,7 @@ while still iterating on the binding. Arming is the last responsible moment.
 - **Backfill.** Nine existing metrics have no definition. Do their readouts stay
   as they are, or does the gate apply retroactively and make live experiments
   unreadable until someone types?
-- **What about a metric added after go-live?** Optimizely allows it, and the
-  drift audit already detects a results name absent from `known`. A metric that
-  appears mid-flight has missed the window entirely — does it get a definition
-  retroactively, or is it marked exploratory and excluded from the verdict?
+- **How are the nine grandfathered metrics labelled?** They are live and locked,
+  so the gate can never reach them. A readout over them should not imply a human
+  described what a model inferred — but saying so on every historical readout may
+  be noisier than it is worth.
