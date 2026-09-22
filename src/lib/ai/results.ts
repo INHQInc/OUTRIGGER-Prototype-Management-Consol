@@ -194,7 +194,7 @@ export async function defineCustomMetric(opts: {
   requireKey();
   if (!opts.eventNames.length) throw new Error("No events reporting yet — custom metrics need live results first.");
   const client = new Anthropic();
-  const { system } = await analystSkill(opts.orgId);
+  const { system, taxonomy: t } = await analystSkill(opts.orgId);
   const res = await client.messages.create({
     model: "claude-opus-4-8",
     max_tokens: 1500,
@@ -208,7 +208,7 @@ THEIR DESCRIPTION: ${opts.description.slice(0, 600)}
 AVAILABLE EVENTS (a custom metric can ONLY sum these):
 ${opts.eventNames.map((n) => `- ${n}`).join("\n")}
 
-Define it via the tool. Action-total semantics (a guest firing two member events counts twice). If the description needs anything these events can't express — segments, revenue arithmetic, per-session windows — set feasible=false and say what's missing; NEVER approximate silently.`,
+Define it via the tool. Action-total semantics (a ${t.visitorNoun} firing two member events counts twice). If the description needs anything these events can't express — segments, revenue arithmetic, per-session windows — set feasible=false and say what's missing; NEVER approximate silently.`,
     }],
     tools: [defineTool(opts.eventNames)],
     tool_choice: { type: "tool", name: "define_custom_metric" },
@@ -309,7 +309,7 @@ function renderStats(s: StatsReport | null): string {
 }
 
 /** Compact, model-readable rendering of the raw numbers (composites first). */
-function renderContext(results: ExperimentResults, map: MetricMap | null): string {
+function renderContext(results: ExperimentResults, map: MetricMap | null, t: Taxonomy): string {
   const lines: string[] = [];
   lines.push(`Visitors: ${results.variations.map((v) => `${v.name}=${v.visitors.toLocaleString()}`).join(" · ")}${results.totalVisitors ? ` (total ${results.totalVisitors.toLocaleString()})` : ""}`);
   const fmt = (r: { name: string; conversions: number; rate?: number; lift?: number; significance?: number; isBaseline?: boolean }) =>
@@ -321,7 +321,7 @@ function renderContext(results: ExperimentResults, map: MetricMap | null): strin
       : map.confirmed
         ? `CONFIRMED by ${map.confirmedBy ?? "a human"}`
         : "PROPOSED by Claude, NOT human-confirmed — treat the mapping itself as provisional";
-    lines.push(`\nCOMPOSITE METRICS (${provenance}; summed ACTION totals, not unique visitors — a guest converting on two member events counts twice, so rates are actions-per-visitor and can exceed 100%):`);
+    lines.push(`\nCOMPOSITE METRICS (${provenance}; summed ACTION totals, not unique ${t.visitorNounPlural} — a ${t.visitorNoun} converting on two member events counts twice, so rates are actions-per-visitor and can exceed 100%):`);
     for (const c of map.composites) {
       // PER-COMPOSITE provenance. One sentence for the whole block described
       // Optimizely's own declared primary as "proposed by Claude", which is
@@ -514,16 +514,29 @@ export const rejectReason = (v: unknown, cap: number): string | null => {
   return null;
 };
 
-const readingTool = {
+/**
+ * The reading tool, RESOLVED PER CUSTOMER.
+ *
+ * It was a module constant, which is the same mistake `observation.ts` made: a
+ * tool schema IS a prompt. Every `description` below is read by the model as an
+ * instruction, and the worked examples inside them named one customer's people
+ * and one customer's conversion surface — teaching those nouns to every
+ * customer, from a place nobody thinks to look for prose.
+ *
+ * EVERY description here is a TEMPLATE LITERAL on purpose. A `${…}` inside a
+ * double-quoted string is dead text that typechecks, which is exactly how a
+ * fix shipped on 22 Sep that changed nothing.
+ */
+const readingToolFor = (t: Taxonomy) => ({
   name: "give_reading",
   description: "The story a leader reads: an executive summary, one headline, one short paragraph, then the numbers as beats. The words carry no numbers; a beat names the metric it is about.",
   input_schema: {
     type: "object" as const,
     properties: {
-      headline: { type: "string" as const, description: "<=80 chars, NO DIGITS. The story in one line, e.g. 'Guests engage far more - but the booking path moved'. Not the verdict (the console already prints that) - what actually happened." },
+      headline: { type: "string" as const, description: `<=80 chars, NO DIGITS. The story in one line, e.g. 'Far more ${t.visitorNounPlural} engage - but the path to the ${t.conversionSurface} moved'. Not the verdict (the console already prints that) - what actually happened.` },
       executive: { type: "string" as const, description: "aim for about 900 chars, FOUR TO SIX SENTENCES, NO DIGITS. THE EXECUTIVE SUMMARY, for a senior leader who will read this and nothing else. Tell the WHOLE story, and build it from the decision metric AND the supporting metrics - walk the chain: what the change did to the surface it touched, where that behaviour went next (name the actual surfaces from the supporting metrics), where it stopped, what it cost, and what that means for the outcome the business cares about. Then say what decision is in front of them - ship, keep running, stop, or fix something. A two-line summary of a run with a dozen metrics is a wasted page: the supporting metrics are where the mechanism is visible, so use them. No statistics vocabulary: never 'significant', 'confidence', 'p-value', 'power', 'underpowered'; say 'beyond what luck explains'. Concrete and unhedged about what is known, explicit about what is not." },
       effect: { type: "object" as const, properties: {
-        text: { type: "string" as const, description: "<=420 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how guests responded to it." },
+        text: { type: "string" as const, description: `<=420 chars, NO DIGITS. WHAT THE CHANGE DID to the thing it was aimed at — the surface you altered and how ${t.visitorNounPlural} responded to it.` },
         measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
       }, required: ["text", "measure"] },
       shift: { type: "object" as const, properties: {
@@ -538,7 +551,7 @@ const readingTool = {
         text: { type: "string" as const, description: "<=420 chars, NO DIGITS. AGAINST THE PREDICTION — what the brief claimed, which half is settled, and which half is not." },
         measure: { type: "string" as const, description: "REQUIRED. The ONE metric that evidences this movement — the page prints its live value beside these words, and a movement with no metric renders as words with no number." },
       }, required: ["text", "measure"] },
-      lede: { type: "string" as const, description: "aim for about 900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what guests are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary." },
+      lede: { type: "string" as const, description: `aim for about 900 chars, three to five sentences, NO DIGITS. THE OBSERVATION: what ${t.visitorNounPlural} are doing differently (named by surface), where that behaviour arrives or stops along the chain to the decision metric, and what that implies about the mechanism. Not a status report — a sentence that would be true of any experiment is a failed lede. No statistics vocabulary.` },
       beats: {
         // Bounds are set at call time from the team's supporting set — this
         // pair is only the shape for a run with nothing marked.
@@ -572,14 +585,14 @@ const readingTool = {
           type: "object" as const,
           properties: {
             measure: { type: "string" as const, description: "a metric from the SUPPORTING list — you may not observe anything else" },
-            note: { type: "string" as const, description: "<=180 chars, NO DIGITS. A CLAIM WITH ITS TENSION, in the shape 'More visitors reach the booking step, but the gap is still too faint to lean on' — say what happened AND what qualifies it, in one sentence. Never a status line like 'guests behave about the same'. Answer the only question the business is asking: WHAT DOES THIS TELL US? What guests are doing differently on this surface, and what it means for the booking path — where intent is being created, where it is leaking, what it implies about the next move. Name the surface in the reader's words. e.g. 'Guests reach for availability far more often once the overlay puts it in front of them — the intent was there, the old layout was burying it.' NEVER write about significance, sample size, confidence, or how long the test needs." },
+            note: { type: "string" as const, description: `<=180 chars, NO DIGITS. A CLAIM WITH ITS TENSION, in the shape 'More ${t.visitorNounPlural} reach the ${t.conversionSurface}, but the gap is still too faint to lean on' — say what happened AND what qualifies it, in one sentence. Never a status line like '${t.visitorNounPlural} behave about the same'. Answer the only question the business is asking: WHAT DOES THIS TELL US? What ${t.visitorNounPlural} are doing differently on this surface, and what it means for the path to the ${t.conversionSurface} — where intent is being created, where it is leaking, what it implies about the next move. Name the surface in the reader's words. e.g. 'Far more ${t.visitorNounPlural} open the ${t.offeringNoun} list once the overlay puts it in front of them — the intent was there, the old layout was burying it.' NEVER write about significance, sample size, confidence, or how long the test needs.` },
           },
           // The property is `measure` — requiring a `metric` that does not
           // exist in the schema invited the model to emit the wrong field
           // name, and every observation carrying it was silently dropped.
           required: ["measure", "note"],
         },
-        description: "ONE LINE FOR EVERY supporting metric listed — do not skip any. Each says WHAT THAT METRIC CAPTURES in guest behaviour, as a definition. What HAPPENED to it is written elsewhere. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.",
+        description: `ONE LINE FOR EVERY supporting metric listed — do not skip any. Each says WHAT THAT METRIC CAPTURES in ${t.visitorNoun} behaviour, as a definition. What HAPPENED to it is written elsewhere. The console prints the numbers, the direction and the certainty itself; your job is what the business should take from it.`,
       },
       trend: { type: "string" as const, description: "<=64 chars, a caption for the day-by-day picture" },
       question: { type: "string" as const, description: "<=80 chars, at most one PREFERENCE question for the team" },
@@ -587,7 +600,8 @@ const readingTool = {
     },
     required: ["headline", "executive", "effect", "shift", "cost", "prediction", "beats"],
   },
-};
+});
+type ReadingTool = ReturnType<typeof readingToolFor>;
 
 /** The deterministic story — day one, a failed call, or a model that broke
  *  the format all land here. The zone is never empty and never a spinner. */
@@ -774,7 +788,10 @@ export function readoutStructure(opts: {
   results: ExperimentResults;
   map: MetricMap | null;
   stats: StatsReport | null;
+  /** THE CHAIN is prose the analyst reads back, not an internal label. */
+  taxonomy: Taxonomy;
 }): { supporting: string[]; decisionLabel: string; supportingBlock: string; chain: string } {
+  const t = opts.taxonomy;
   const allKeys = (opts.stats?.metrics ?? []).map((m) => m.key);
   const supporting = supportingKeys({
     map: opts.map,
@@ -808,7 +825,7 @@ export function readoutStructure(opts: {
       const gap = u.lift - decisionRow.lift;
       const read =
         u.lift > 0 && decisionRow.lift <= 0
-          ? "guests take this step MORE and the outcome is still flat or down — intent is being created and then lost before it arrives"
+          ? `${t.visitorNounPlural} take this step MORE and the outcome is still flat or down — intent is being created and then lost before it arrives`
           : u.lift > 0 && gap > 0.1
             ? `this step runs FAR ahead of the outcome (a gap of ${pct(gap)}) — the interest is real but most of it is not arriving`
             : u.lift > 0 && gap > 0
@@ -841,7 +858,7 @@ export async function generateReading(opts: {
 }): Promise<{ reading: Reading; dataWishes: string[] }> {
   requireKey();
   const client = new Anthropic();
-  const { system } = await analystSkill(opts.orgId);
+  const { system, taxonomy: t } = await analystSkill(opts.orgId);
   // The metrics a beat may name, with what each reads right now. Shown so
   // the analyst picks the right one — never copied into the words.
   // THE SUPPORTING SET — the team's own answer to "what is this readout
@@ -923,7 +940,7 @@ export async function generateReading(opts: {
 
   // The beat menu is the SUPPORTING SET ONLY — showing the analyst metrics it
   // is not allowed to name would be an invitation to argue with the enum.
-  const { chain } = readoutStructure({ results: opts.results, map: opts.map, stats: opts.stats ?? null });
+  const { chain } = readoutStructure({ results: opts.results, map: opts.map, stats: opts.stats ?? null, taxonomy: t });
 
   const measureMenu = supporting.map((k) => {
     const m = narratable.find((x) => x.key === k);
@@ -937,7 +954,7 @@ export async function generateReading(opts: {
   const codes = opts.attention.filter((a) => a.severity !== "good").map((a) => a.id);
 
   // CALL-TIME ENUMS: an unknown risk id or metric key is unemittable.
-  const tool = JSON.parse(JSON.stringify(readingTool)) as typeof readingTool & { input_schema: { properties: Record<string, unknown> } };
+  const tool = JSON.parse(JSON.stringify(readingToolFor(t))) as ReadingTool & { input_schema: { properties: Record<string, unknown> } };
   if (codes.length) {
     (tool.input_schema.properties.riskNotes as { items: { properties: { code: Record<string, unknown> } } }).items.properties.code = {
       type: "string", enum: codes, description: "the risk you are glossing",
@@ -1006,9 +1023,9 @@ ${renderVerdict(opts.verdict)}
 ${renderStats(opts.stats)}
 
 RAW NUMBERS:
-${renderContext(opts.results, opts.map)}
+${renderContext(opts.results, opts.map, t)}
 
-${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones that support the hypothesis. Write ONE observation for EVERY metric below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are guests doing differently on that surface, where is intent being created or lost along the booking path, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
+${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones that support the hypothesis. Write ONE observation for EVERY metric below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are ${t.visitorNounPlural} doing differently on that surface, where is intent being created or lost along the path to the ${t.conversionSurface}, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
   const m = opts.stats?.metrics.find((x) => x.key === k);
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
@@ -1058,13 +1075,13 @@ this readout must never do.
 
 THE STORY IS ABOUT THE HEADLINE METRIC named above — the headline and the lede are its story, and every other metric is there to support, explain or qualify it. Do not lead with a different metric because it moved more.
 
-THE TEAM CHOSE WHAT THIS READOUT IS ABOUT. The supporting metrics are the steps they believe lead to the headline metric, so the lede's job is to CHAIN THEM: what guests do first, what that produces next, and where it does or does not arrive at the outcome. A CONTEXT-ONLY metric may be raised once, and only as a caution that something is moving against the story — never as the subject of a sentence and never in a beat. A metric that is absent from THE PATH and from WHAT MOVED has been taken off this readout by the team — it may still appear in the raw tables above, and you must not write about it at all.
+THE TEAM CHOSE WHAT THIS READOUT IS ABOUT. The supporting metrics are the steps they believe lead to the headline metric, so the lede's job is to CHAIN THEM: what ${t.visitorNounPlural} do first, what that produces next, and where it does or does not arrive at the outcome. A CONTEXT-ONLY metric may be raised once, and only as a caution that something is moving against the story — never as the subject of a sentence and never in a beat. A metric that is absent from THE PATH and from WHAT MOVED has been taken off this readout by the team — it may still appear in the raw tables above, and you must not write about it at all.
 
-TRACE THE PATH TO IT. The experiment's own hypothesis names the steps: clicks lead somewhere, that somewhere leads to the outcome. So say where guests are being gained and where they are being lost ALONG THAT PATH, and finish on what it means for the headline metric — "the shortcut wins the click, the click is not reaching the booking engine" is the shape. A metric marked MISNAMED is a BROKEN DEFINITION, not a result: the console cannot compute it because the event name in the plan does not match anything Optimizely reports. Say exactly that — "the plan's version of this step names an event that isn't reporting under that name" — and if ANOTHER metric on the path measures the same step and IS reporting, say so and read that one instead. NEVER describe a metric as unwired when it is reporting numbers: check the path above before making that claim. If a guardrail is dropping, name it — the team said in advance it must not.
+TRACE THE PATH TO IT. The experiment's own hypothesis names the steps: clicks lead somewhere, that somewhere leads to the outcome. So say where ${t.visitorNounPlural} are being gained and where they are being lost ALONG THAT PATH, and finish on what it means for the headline metric — "the shortcut wins the click, the click is not reaching the ${t.conversionSurface}" is the shape. A metric marked MISNAMED is a BROKEN DEFINITION, not a result: the console cannot compute it because the event name in the plan does not match anything Optimizely reports. Say exactly that — "the plan's version of this step names an event that isn't reporting under that name" — and if ANOTHER metric on the path measures the same step and IS reporting, say so and read that one instead. NEVER describe a metric as unwired when it is reporting numbers: check the path above before making that claim. If a guardrail is dropping, name it — the team said in advance it must not.
 
 THE LEDE IS THE WHOLE POINT, AND IT IS AN OBSERVATION — NOT A STATUS REPORT.
-A status report says "the two versions are close and nothing is settled". Nobody needs you for that; the console prints it. An OBSERVATION says WHAT GUESTS ARE DOING DIFFERENTLY and WHERE THAT BEHAVIOUR IS GOING. Build it from THE CHAIN above, in this shape:
-1. What changed in guest behaviour, named by surface — what are they reaching for that they weren't before.
+A status report says "the two versions are close and nothing is settled". Nobody needs you for that; the console prints it. An OBSERVATION says WHAT ${t.visitorNounPlural.toUpperCase()} ARE DOING DIFFERENTLY and WHERE THAT BEHAVIOUR IS GOING. Build it from THE CHAIN above, in this shape:
+1. What changed in ${t.visitorNoun} behaviour, named by surface — what are they reaching for that they weren't before.
 2. WHERE IT GOES, or where it stops. This is the sentence that matters: the chain tells you whether the extra intent is arriving at the outcome, leaking before it, or simply moving from one surface to another. Say which, and name the step where it stops.
 3. What that implies — the mechanism a person could act on ("the modal is winning the click and then handing off to a page that isn't converting it"), not a recommendation and not a summary of the numbers.
 If the outcome is still unsettled, that is a fact about the OUTCOME, not the whole story: an unsettled decision metric sitting behind a large, settled gain upstream is itself the finding — say so, and say what it means.
@@ -1401,11 +1418,12 @@ export async function analyzeResults(opts: {
 }): Promise<AnalystAnswer> {
   requireKey();
   const client = new Anthropic();
-  const { system } = await analystSkill(opts.orgId);
+  const { system, taxonomy: t } = await analystSkill(opts.orgId);
   // The SAME structure the standing reading is built from. Without it the ask
   // box got an undifferentiated pile of metrics, so asking the analyst a
   // question produced a worse answer than not asking one.
   const { supportingBlock, chain, decisionLabel } = readoutStructure({
+    taxonomy: t,
     results: opts.results, map: opts.map, stats: opts.stats ?? null,
   });
   const res = await client.messages.create({
@@ -1424,7 +1442,7 @@ ${renderVerdict(opts.verdict ?? null)}
 ${renderStats(opts.stats ?? null)}
 
 RAW NUMBERS:
-${renderContext(opts.results, opts.map)}
+${renderContext(opts.results, opts.map, t)}
 
 ${opts.stance === "challenge"
   ? `CHALLENGE THIS RESULT. Argue the strongest honest case that the current call is WRONG, from these same numbers. Name the weakest link in the chain, what would have to be true for the reading to be mistaken, and what evidence would settle it. Do not invent numbers, do not manufacture doubt where the data is genuinely clean — if the call holds up, say plainly which part is actually solid and where the remaining exposure is.${opts.question?.trim() ? `\nThe reader also asked: ${opts.question.trim().slice(0, 600)}` : ""}`
