@@ -46,7 +46,12 @@ import { EMPTY_OBSERVED, DEFAULT_TAXONOMY, type Taxonomy, type SiteProfile } fro
  * Correct it rather than trusting it.
  */
 const SEEDS: Record<string, Taxonomy> = {
-  outrigger: {
+  // KEYED BY THE REAL ORG ID, not a readable slug. This said `outrigger` for a
+  // day; the tenant is `outrigger-resorts-hotels`. requireTaxonomy() is handed
+  // the org id off the request, so a friendly key here writes a row nothing can
+  // ever resolve. The guard below now refuses that, but the key has to be right
+  // for the guard to pass at all.
+  "outrigger-resorts-hotels": {
     visitorNoun: "guest",
     visitorNounPlural: "guests",
     offeringNoun: "room",
@@ -67,6 +72,25 @@ if (!org || !SEEDS[org]) {
 
 const want = SEEDS[org];
 const store = await getContentStore();
+
+// THE ORG MUST EXIST. This wrote "outrigger" for a day while the real
+// organisation was "outrigger-resorts-hotels", so the row was an orphan: a
+// taxonomy attached to a tenant that does not exist. Everything looked right —
+// the insert succeeded, the script printed the resolved words, and a SELECT
+// showed an approved profile. It only surfaced when requireTaxonomy was called
+// with the REAL org id and threw no-profile at a customer.
+//
+// A seed keyed by a slug someone typed is a guess. Check it against the tenants
+// the store actually holds, and name them when it is wrong.
+const orgs = await store.listOrgs();
+const known = orgs.map((o) => o.id);
+if (!known.includes(org)) {
+  console.error(`\nNo organisation "${org}" in this database.\n`);
+  console.error(known.length ? `orgs here: ${known.join(", ")}` : "This database has no organisations at all — wrong DATABASE_URL?");
+  console.error(`\nSeeding it anyway would write a profile no caller can ever resolve:`);
+  console.error(`requireTaxonomy() is called with the org id from the request, not this slug.\n`);
+  process.exit(1);
+}
 
 console.log(`\nbackend : ${process.env.DATABASE_URL ? "Neon (DATABASE_URL is set)" : "filesystem (snapshots/)"}`);
 console.log(`org     : ${org}`);
