@@ -7,6 +7,7 @@ import type { Environment } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
 import type { Promotion, PromotionStatus } from "../promotions/types";
 import type { AuditEvent } from "../audit/types";
+import type { SiteProfile, BrandFact } from "../brand/types";
 
 /**
  * Persistence seam for CONTENT (sites, captured pages, assets) — the same
@@ -110,6 +111,25 @@ export interface ContentStore {
   // --- Audit trail (append-only, org-scoped) ---
   listAuditEvents(orgId: string, limit?: number): Promise<AuditEvent[]>;
   addAuditEvent(event: AuditEvent): Promise<void>;
+
+  // --- Brand: what Prism understands about a site (src/lib/brand/types.ts) ---
+  /** Every revision for a site, newest first. Omit siteId for the whole org. */
+  listSiteProfiles(orgId: string, siteId?: string): Promise<SiteProfile[]>;
+  /** A specific revision, or the latest APPROVED one when `rev` is omitted. */
+  getSiteProfile(orgId: string, siteId: string, rev?: number): Promise<SiteProfile | null>;
+  /** Insert a revision. Idempotent on id so a retried compile cannot double-write. */
+  addSiteProfile(profile: SiteProfile): Promise<void>;
+  /**
+   * Patch a revision. Callers must only patch a DRAFT: an approved profile is
+   * the answer to "what did the AI know when it built this" and editing it
+   * would make that answer a lie. Re-read to make the next revision instead.
+   */
+  updateSiteProfile(id: string, patch: Partial<SiteProfile>): Promise<void>;
+
+  // --- Brand: the earned layer (append-only; superseding is a pointer, not an edit) ---
+  listBrandFacts(orgId: string, opts?: { siteId?: string; surfaceId?: string; kinds?: BrandFact["kind"][]; includeExpired?: boolean }): Promise<BrandFact[]>;
+  addBrandFact(fact: BrandFact): Promise<void>;
+  supersedeBrandFact(id: string, bySupersedingId: string): Promise<void>;
 
   // --- Pages ---
   /** Distinct page slugs captured for a site. */

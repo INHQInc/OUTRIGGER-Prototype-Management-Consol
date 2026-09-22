@@ -9,6 +9,7 @@ import type { Environment, EnvironmentKind } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
 import type { Promotion, PromotionStatus, PromotionVehicle } from "../promotions/types";
 import type { AuditEvent } from "../audit/types";
+import type { SiteProfile, BrandFact } from "../brand/types";
 import { DB_OWNER_KEY, decideOwnership, wrongDatabase } from "./db-owner";
 
 /**
@@ -230,6 +231,38 @@ export class NeonContentStore implements ContentStore {
         at timestamptz not null default now()
       )`);
     await this.ddl(() => this.sql`create index if not exists audit_event_org_idx on audit_event (org_id, at desc)`);
+    // What Prism understands about a site. One row per REVISION; approved rows
+    // are never updated, so the profile an experiment built against stays
+    // readable forever. The unique key is what makes "re-read makes r2" safe
+    // under a retried compile.
+    await this.ddl(() => this.sql`
+      create table if not exists site_profile (
+        id text primary key,
+        org_id text not null,
+        site_id text not null,
+        rev integer not null,
+        status text not null default 'draft',
+        profile text not null,
+        created_at timestamptz not null default now()
+      )`);
+    await this.ddl(() => this.sql`create unique index if not exists site_profile_rev_idx on site_profile (org_id, site_id, rev)`);
+    await this.ddl(() => this.sql`create index if not exists site_profile_site_idx on site_profile (org_id, site_id, rev desc)`);
+    // The earned layer. Append-only: a measurement does not stop being true, so
+    // superseding writes a pointer and expiry is a column, never a delete.
+    await this.ddl(() => this.sql`
+      create table if not exists brand_fact (
+        id text primary key,
+        org_id text not null,
+        site_id text not null,
+        surface_id text,
+        kind text not null,
+        fact text not null,
+        observed_at timestamptz not null default now(),
+        expires_at timestamptz,
+        superseded_by text
+      )`);
+    await this.ddl(() => this.sql`create index if not exists brand_fact_site_idx on brand_fact (org_id, site_id, observed_at desc)`);
+    await this.ddl(() => this.sql`create index if not exists brand_fact_surface_idx on brand_fact (org_id, surface_id)`);
     await this.ddl(() => this.sql`
       create table if not exists content_meta (
         key text primary key,
@@ -367,6 +400,85 @@ export class NeonContentStore implements ContentStore {
       insert into audit_event (id, org_id, actor, action, target, detail, at)
       values (${e.id}, ${e.orgId}, ${e.actor}, ${e.action}, ${e.target}, ${e.detail ?? null}, ${e.at})
       on conflict (id) do nothing`;
+  }
+
+  /* --- Brand: site profiles + the earned layer --- */
+
+  private rowToProfile(r: Record<string, unknown>): SiteProfile | null {
+    try {
+      const p = JSON.parse(r.profile as string) as SiteProfile;
+      // The columns are the index; the blob is the record. On any disagreement
+      // the columns win, because they are what queries filtered on.
+      return { ...p, id: r.id as string, orgId: r.org_id as string, siteId: r.site_id as string, rev: Number(r.rev), status: r.status as SiteProfile["status"] };
+    } catch {
+      return null;
+    }
+  }
+
+  async listSiteProfiles(orgId: string, siteId?: string): Promise<SiteProfile[]> {
+    const rows = siteId
+      ? await this.sql`select * from site_profile where org_id = ${orgId} and site_id = ${siteId} order by rev desc`
+      : await this.sql`select * from site_profile where org_id = ${orgId} order by site_id, rev desc`;
+    return rows.map((r) => this.rowToProfile(r)).filter((p): p is SiteProfile => p !== null);
+  }
+
+  async getSiteProfile(orgId: string, siteId: string, rev?: number): Promise<SiteProfile | null> {
+    const rows = rev === undefined
+      ? await this.sql`select * from site_profile where org_id = ${orgId} and site_id = ${siteId} and status = 'approved' order by rev desc limit 1`
+      : await this.sql`select * from site_profile where org_id = ${orgId} and site_id = ${siteId} and rev = ${rev}`;
+    return rows[0] ? this.rowToProfile(rows[0]) : null;
+  }
+
+  async addSiteProfile(p: SiteProfile): Promise<void> {
+    await this.sql`
+      insert into site_profile (id, org_id, site_id, rev, status, profile, created_at)
+      values (${p.id}, ${p.orgId}, ${p.siteId}, ${p.rev}, ${p.status}, ${JSON.stringify(p)}, ${p.createdAt})
+      on conflict (id) do nothing`;
+  }
+
+  async updateSiteProfile(id: string, patch: Partial<SiteProfile>): Promise<void> {
+    const rows = await this.sql`select * from site_profile where id = ${id}`;
+    const cur = rows[0] ? this.rowToProfile(rows[0]) : null;
+    if (!cur) return;
+    const next = { ...cur, ...patch, id: cur.id, orgId: cur.orgId, siteId: cur.siteId, rev: cur.rev };
+    await this.sql`
+      update site_profile set status = ${next.status}, profile = ${JSON.stringify(next)}
+      where id = ${id}`;
+  }
+
+  async listBrandFacts(
+    orgId: string,
+    opts?: { siteId?: string; surfaceId?: string; kinds?: BrandFact["kind"][]; includeExpired?: boolean },
+  ): Promise<BrandFact[]> {
+    const rows = await this.sql`
+      select * from brand_fact
+      where org_id = ${orgId}
+        and (${opts?.siteId ?? null}::text is null or site_id = ${opts?.siteId ?? null})
+        and (${opts?.surfaceId ?? null}::text is null or surface_id = ${opts?.surfaceId ?? null})
+        and superseded_by is null
+        and (${opts?.includeExpired ? true : false} or expires_at is null or expires_at > now())
+      order by observed_at desc`;
+    const facts = rows
+      .map((r) => {
+        try {
+          return JSON.parse(r.fact as string) as BrandFact;
+        } catch {
+          return null;
+        }
+      })
+      .filter((f): f is BrandFact => f !== null);
+    return opts?.kinds?.length ? facts.filter((f) => opts.kinds!.includes(f.kind)) : facts;
+  }
+
+  async addBrandFact(f: BrandFact): Promise<void> {
+    await this.sql`
+      insert into brand_fact (id, org_id, site_id, surface_id, kind, fact, observed_at, expires_at, superseded_by)
+      values (${f.id}, ${f.orgId}, ${f.siteId}, ${f.surfaceId ?? null}, ${f.kind}, ${JSON.stringify(f)}, ${f.observedAt}, ${f.expiresAt ?? null}, ${f.supersededBy ?? null})
+      on conflict (id) do nothing`;
+  }
+
+  async supersedeBrandFact(id: string, bySupersedingId: string): Promise<void> {
+    await this.sql`update brand_fact set superseded_by = ${bySupersedingId} where id = ${id} and superseded_by is null`;
   }
 
   async getGitConnection(orgId: string): Promise<GitConnection | null> {

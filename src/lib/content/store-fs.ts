@@ -10,6 +10,7 @@ import type { Environment } from "../environments";
 import type { ExperimentationConfig } from "../experimentation/types";
 import type { Promotion, PromotionStatus } from "../promotions/types";
 import type { AuditEvent } from "../audit/types";
+import type { SiteProfile, BrandFact } from "../brand/types";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -34,6 +35,8 @@ export class FsContentStore implements ContentStore {
   private versionsFile(): string { return join(this.root(), "_artifact-versions.json"); }
   private promotionsFile(): string { return join(this.root(), "_promotions.json"); }
   private auditFile(): string { return join(this.root(), "_audit.json"); }
+  private profilesFile(): string { return join(this.root(), "_site-profiles.json"); }
+  private factsFile(): string { return join(this.root(), "_brand-facts.json"); }
   private orgReposFile(): string { return join(this.root(), "_org-repos.json"); }
   private gitConnFile(): string { return join(this.root(), "_git-connections.json"); }
 
@@ -321,6 +324,69 @@ export class FsContentStore implements ContentStore {
     const all = await this.readJson<AuditEvent[]>(this.auditFile(), []);
     all.push(e);
     await this.writeJson(this.auditFile(), all);
+  }
+
+  /* --- Brand: site profiles + the earned layer --- */
+
+  async listSiteProfiles(orgId: string, siteId?: string): Promise<SiteProfile[]> {
+    return (await this.readJson<SiteProfile[]>(this.profilesFile(), []))
+      .filter((p) => p.orgId === orgId && (!siteId || p.siteId === siteId))
+      .sort((a, b) => b.rev - a.rev);
+  }
+
+  async getSiteProfile(orgId: string, siteId: string, rev?: number): Promise<SiteProfile | null> {
+    const mine = (await this.readJson<SiteProfile[]>(this.profilesFile(), [])).filter(
+      (p) => p.orgId === orgId && p.siteId === siteId,
+    );
+    if (rev !== undefined) return mine.find((p) => p.rev === rev) ?? null;
+    // Latest APPROVED — a draft is not what the builder should read.
+    return mine.filter((p) => p.status === "approved").sort((a, b) => b.rev - a.rev)[0] ?? null;
+  }
+
+  async addSiteProfile(p: SiteProfile): Promise<void> {
+    const all = await this.readJson<SiteProfile[]>(this.profilesFile(), []);
+    if (all.some((x) => x.id === p.id)) return; // idempotent, matches the Neon on-conflict
+    all.push(p);
+    await this.writeJson(this.profilesFile(), all);
+  }
+
+  async updateSiteProfile(id: string, patch: Partial<SiteProfile>): Promise<void> {
+    const all = await this.readJson<SiteProfile[]>(this.profilesFile(), []);
+    const i = all.findIndex((x) => x.id === id);
+    if (i < 0) return;
+    const cur = all[i];
+    all[i] = { ...cur, ...patch, id: cur.id, orgId: cur.orgId, siteId: cur.siteId, rev: cur.rev };
+    await this.writeJson(this.profilesFile(), all);
+  }
+
+  async listBrandFacts(
+    orgId: string,
+    opts?: { siteId?: string; surfaceId?: string; kinds?: BrandFact["kind"][]; includeExpired?: boolean },
+  ): Promise<BrandFact[]> {
+    const now = new Date().toISOString();
+    return (await this.readJson<BrandFact[]>(this.factsFile(), []))
+      .filter((f) => f.orgId === orgId)
+      .filter((f) => !opts?.siteId || f.siteId === opts.siteId)
+      .filter((f) => !opts?.surfaceId || f.surfaceId === opts.surfaceId)
+      .filter((f) => !f.supersededBy)
+      .filter((f) => opts?.includeExpired || !f.expiresAt || f.expiresAt > now)
+      .filter((f) => !opts?.kinds?.length || opts.kinds.includes(f.kind))
+      .sort((a, b) => b.observedAt.localeCompare(a.observedAt));
+  }
+
+  async addBrandFact(f: BrandFact): Promise<void> {
+    const all = await this.readJson<BrandFact[]>(this.factsFile(), []);
+    if (all.some((x) => x.id === f.id)) return;
+    all.push(f);
+    await this.writeJson(this.factsFile(), all);
+  }
+
+  async supersedeBrandFact(id: string, bySupersedingId: string): Promise<void> {
+    const all = await this.readJson<BrandFact[]>(this.factsFile(), []);
+    const i = all.findIndex((x) => x.id === id);
+    if (i < 0 || all[i].supersededBy) return;
+    all[i] = { ...all[i], supersededBy: bySupersedingId };
+    await this.writeJson(this.factsFile(), all);
   }
 
   async listSlugs(siteKey: string): Promise<string[]> {
