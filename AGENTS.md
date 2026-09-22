@@ -229,9 +229,18 @@ an incident, that the thing they actually needed was a deploy history.
   cautionary tale: ~20k insertions across 107 files, diverged far enough that it
   became something to read ideas from rather than something to merge. A branch
   that outlives the work stops being a branch and becomes a fork.
-- **The agent commits to the branch; the human reviews the diff, merges and
-  pushes.** That is the existing "you push, I don't" rule with a natural place to
-  look at the change before it reaches the live console.
+- **The agent commits, pushes and merges — including to `main`.** Granted
+  22 Sep 2026, replacing "you push, I don't". Do not stage a command and wait to
+  be told to run it; that habit turned a day's work into a queue of round trips.
+  Push, then say what was pushed and what it deploys.
+  - **Before any push to `main`, run `tsc --noEmit` and the three smoke suites**
+    (`vocabulary`, `brand-profile`, `outward`) and state that they passed. A push
+    to `main` deploys to the console people do real customer work in, so the
+    check is the price of not asking.
+  - **Still stop for anything a revert cannot undo**: force-push, history
+    rewrite, deleting a remote branch, dropping or truncating data. That is not
+    permission-seeking — those are simply not recoverable, and the ownership
+    guard exists because the schema case already bit once.
 - **Docs-only changes, and additive code with no callers, go straight to `main`.**
   Wrapping a README edit in a PR buys nothing and trains everyone to skim.
 - **A branch that touches `ensureSchema()` gets a database of its own** before it
