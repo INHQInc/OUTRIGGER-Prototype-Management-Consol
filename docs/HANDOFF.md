@@ -1,5 +1,26 @@
 # HANDOFF — Current State & Continuity
 
+## START HERE IF YOU ARE PICKING UP THE NEUTRALITY WORK (22 Sep 2026)
+
+**`docs/plans/CUSTOMER-NEUTRAL.md` is the approach document.** Read it before
+touching any prompt, any profile field, or anything in the ship layer. It holds
+the reasoning behind the invariants in `AGENTS.md`, which invariants cannot
+carry: the one rule (a hardcoded specific becomes a RESOLVED specific, never a
+generic), the three capture points, every decision made on 22 Sep with its WHY,
+what the two classification sweeps found, what is left in order, and the traps —
+including three strings that look exactly like what we are removing and will
+break the product if swept.
+
+State in one line: **`main` is FROZEN** for a batch release next week; all of it
+is on `phase1/taxonomy-injection` and on `staging`; the ratchet is at **34**,
+down from 48, with `observation.ts` fully converted as the worked example.
+
+Two things that will waste your time if you do not know them. A cached readout
+will not regenerate on a taxonomy change unless you pass `force: true` — that
+cost an hour. And pushing the `staging` branch does NOT deploy to the staging
+environment; that needs an explicit `target: "staging"` deployment.
+
+
 *Updated: 2026-09-22. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
 
 ---
