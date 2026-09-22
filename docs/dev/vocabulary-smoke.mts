@@ -46,12 +46,23 @@ function ok(label: string, cond: boolean, detail?: string) {
 }
 
 /**
- * One customer's words, hardcoded. Deliberately NOT including "room": the
- * console's own UI calls its screens rooms ("rooms, not steps"), so matching it
- * would flag 106 references that are correct. A first pass at this grep
- * reported 147 problems where there were 44.
+ * One customer's words, hardcoded.
+ *
+ * EXCLUDED ON PURPOSE, each for a measured reason:
+ *  - "room"  — the console's own UI calls its screens rooms ("rooms, not
+ *    steps"), so matching it flags 106 correct references. A first pass at this
+ *    grep reported 147 problems where there were 44.
+ *  - "stay"  — 18 hits, almost all "stays the same" and "stay in sync".
+ *  - "booking" — 14 hits, genuinely mixed: some are the hardcoded assumption,
+ *    others name Outrigger's conversion surface in a place where that is the
+ *    data. Needs reading one at a time, so it is tracked in the plan rather
+ *    than guessed at here.
+ *
+ * "hospitality" was missed by the first version of this list, which is how
+ * FALLBACK_SYSTEM — "the experiment analyst for a hospitality A/B testing
+ * program" — sat unflagged while the ratchet reported green.
  */
-const HOSPITALITY = /\b(guests?|hotels?|resorts?)\b/gi;
+const HOSPITALITY = /\b(guests?|hotels?|resorts?|hospitality|lodging|accommodations?|travell?ers?)\b/gi;
 
 /**
  * THE BUDGET — how many hardcoded references each file is still allowed.
@@ -61,13 +72,14 @@ const HOSPITALITY = /\b(guests?|hotels?|resorts?)\b/gi;
  * this list so that re-introducing a word fails as "not allowed any".
  */
 const BUDGET: Record<string, number> = {
-  "lib/ai/results.ts": 18,
+  "lib/ai/results.ts": 19,
   "lib/ai/observation.ts": 14,
-  "lib/skills/builtins.ts": 6,
+  "lib/skills/builtins.ts": 7,
   "lib/ai/next-test.ts": 2,
   "lib/prototypes/results.ts": 2,
   "lib/prototypes/stats.ts": 2,
   "lib/prototypes/verdict.ts": 1,
+  "lib/prototypes/next-test.ts": 1,
 };
 
 /** Where prose that reaches a customer is generated or derived. */
