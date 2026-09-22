@@ -34,27 +34,38 @@ const metric = (key: string, label: string, lift: number, featureOnly = false) =
   cells: [{ variationId: BASE, lift: 0 }, { variationId: FOCUS, lift }],
 });
 
-/** The staging run that exposed this, to the number. */
+/**
+ * The SHAPE of the run that exposed this, with that run's actual lifts: a
+ * decision metric slightly down and unsettled, a large settled rise upstream,
+ * a second rise after it, and one small fall.
+ *
+ * DELIBERATELY VERTICAL-NEUTRAL. The live case was a hotel group and it would
+ * have been easy to paste its metric names in here. movementMeasures() never
+ * reads a label — it sorts on lift and claims by key — so neutral fixtures
+ * assert exactly that: if the assignment ever starts depending on what a
+ * metric is CALLED, these names will not carry it. Prism is for any website,
+ * and its tests should not be where one customer's vocabulary creeps back in.
+ */
 const stats = {
-  primaryKey: "booking-engine",
+  primaryKey: "decision",
   focusVariationId: FOCUS,
   baselineVariationId: BASE,
   metrics: [
-    metric("booking-engine", "Visit Page: Booking Engine: Rooms", -0.041),
-    metric("room-detail", "Total Room Detail Views", 0.344),
-    metric("check-avail", "Total Room Check Availability CTA", 0.255),
-    metric("widget", "Global: Booking Widget Form Submit", -0.021),
+    metric("decision", "The decision metric", -0.041),
+    metric("upstream", "The surface the change touched", 0.344),
+    metric("next-step", "The next step along the path", 0.255),
+    metric("softened", "The step that softened", -0.021),
   ],
 } as unknown as StatsReport;
 const results = { variations: [] } as unknown as ExperimentResults;
-const supporting = ["booking-engine", "room-detail", "check-avail", "widget"];
+const supporting = ["decision", "upstream", "next-step", "softened"];
 
 console.log("\n1. the assignment is the console's, and it is the same every time");
 const m = movementMeasures({ results, stats, supporting });
-ok("prediction is the decision metric — the brief's claim is adjudicated there", m.prediction === "booking-engine", String(m.prediction));
-ok("effect is the biggest rise — the surface the change touched", m.effect === "room-detail", String(m.effect));
-ok("shift is the next rise along the path", m.shift === "check-avail", String(m.shift));
-ok("cost is the fall", m.cost === "widget", String(m.cost));
+ok("prediction is the decision metric — the brief's claim is adjudicated there", m.prediction === "decision", String(m.prediction));
+ok("effect is the biggest rise — the surface the change touched", m.effect === "upstream", String(m.effect));
+ok("shift is the next rise along the path", m.shift === "next-step", String(m.shift));
+ok("cost is the fall", m.cost === "softened", String(m.cost));
 
 console.log("\n2. no metric appears in two movements");
 // "One fact, one home." A number met twice under different headings makes a
@@ -72,16 +83,16 @@ console.log("\n4. a one-armed metric can never evidence a movement");
 // It has no comparison, so there is no movement to show.
 const oneArmed = {
   ...stats,
-  metrics: [...(stats as unknown as { metrics: unknown[] }).metrics, metric("feature-only", "Feature Only", 0.9, true)],
+  metrics: [...(stats as unknown as { metrics: unknown[] }).metrics, metric("one-armed", "Fires in one version only", 0.9, true)],
 } as unknown as StatsReport;
-const m2 = movementMeasures({ results, stats: oneArmed, supporting: [...supporting, "feature-only"] });
-ok("the one-armed metric is not assigned anywhere", ![m2.effect, m2.shift, m2.cost, m2.prediction].includes("feature-only"));
+const m2 = movementMeasures({ results, stats: oneArmed, supporting: [...supporting, "one-armed"] });
+ok("the one-armed metric is not assigned anywhere", ![m2.effect, m2.shift, m2.cost, m2.prediction].includes("one-armed"));
 
 console.log("\n5. nothing to name is left empty, not filled with something wrong");
-const thin = { primaryKey: "booking-engine", focusVariationId: FOCUS, baselineVariationId: BASE,
-  metrics: [metric("booking-engine", "Visit Page: Booking Engine: Rooms", -0.041)] } as unknown as StatsReport;
-const m3 = movementMeasures({ results, stats: thin, supporting: ["booking-engine"] });
-ok("the decision metric still lands in prediction", m3.prediction === "booking-engine");
+const thin = { primaryKey: "decision", focusVariationId: FOCUS, baselineVariationId: BASE,
+  metrics: [metric("decision", "The decision metric", -0.041)] } as unknown as StatsReport;
+const m3 = movementMeasures({ results, stats: thin, supporting: ["decision"] });
+ok("the decision metric still lands in prediction", m3.prediction === "decision");
 ok("slots with no honest metric are undefined", m3.effect === undefined && m3.shift === undefined && m3.cost === undefined,
    JSON.stringify(m3));
 
