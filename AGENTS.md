@@ -1,6 +1,6 @@
 # Claude Context Guide — Prism (OUTRIGGER prototype management console)
 
-*Last updated: 2026-09-22 (branch/preview/schema working rules; brand site-profile store landed). Previously 2026-08-06 (analytics second pass: per-version composites, the metric builder, observations + deep reads, the analyst drawer, scoped reset, Evidence; 08-04: board-page readout, verdict engine, measurement plan)*
+*Last updated: 2026-09-22 (deployment tiers; branch/preview/schema working rules; brand site-profile store landed). Previously 2026-08-06 (analytics second pass: per-version composites, the metric builder, observations + deep reads, the analyst drawer, scoped reset, Evidence; 08-04: board-page readout, verdict engine, measurement plan)*
 
 > **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work — authoritative for "where are we"**). Touching ANY UI? [`docs/DESIGN-PRINCIPLES.md`](docs/DESIGN-PRINCIPLES.md) first — say-it-once, one card grammar, rooms-not-steps; every rule there is a past user correction.
 >
@@ -237,6 +237,44 @@ an incident, that the thing they actually needed was a deploy history.
 - **A branch that touches `ensureSchema()` gets a database of its own** before it
   is ever deployed. See the invariant below — this is the one mistake that a
   redeploy cannot undo.
+
+## Deployment tiers (decided 2026-09-22 — only Production exists today)
+
+**Status: Production is the ONLY tier.** Verified 2026-09-22 against the Vercel
+project `outrigger-prototype-management-consol` — the last twelve deployments
+are all `target: production`, all from `main`, and there are no preview
+deployments at all. Every commit pushed to `main` lands in the console people do
+real customer work in. Staging and Preview below are the agreed target, NOT
+something that exists. Check Vercel before believing this section.
+
+| Tier | Trigger | Database | Acts on |
+|---|---|---|---|
+| **Production** | `main` | live Neon | real customer repos · Optimizely prod `21089662478` |
+| **Staging** (persistent) | long-lived branch | own Neon branch, kept seeded | test repo · Optimizely prep `24138040550` |
+| **Preview** (ephemeral) | any feature branch | fresh Neon branch | test repo · Optimizely prep |
+
+**Why Staging exists as well as Preview.** A preview database starts EMPTY, and
+everything in the brand-profile work is accumulated state — profile revisions,
+corrections, earned facts. You cannot judge whether a site profile is any good
+against a database with no history in it. Staging is the one non-production
+console that keeps realistic data between branches.
+
+**The database is not the biggest risk.** The console holds live credentials and
+acts on other people's systems. A non-production console carrying production
+tokens can create a real experiment in a customer's Optimizely project and write
+to their repo, and no amount of database separation prevents that. A tier is only
+separated when all three of these are:
+
+1. **Database** — its own Neon branch.
+2. **Credentials** — its own GitHub PAT, Optimizely PAT and `ANTHROPIC_API_KEY`.
+   (The separate Anthropic key also gives per-tier cost attribution, which the
+   console has none of today.)
+3. **Blast radius** — which Optimizely project and which repo it can reach.
+   Staging points at prep and must never hold a token that reaches prod.
+
+**Naming:** never call these "environments" in code or UI. `Environment` is
+already a domain noun here meaning the CUSTOMER's own dev/staging/production
+websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
 
 ## Hard rules (invariants)
 
