@@ -176,20 +176,38 @@ ok("analystSkill has both return branches", returns.length === 2, `found ${retur
 ok("every return carries the vocabulary", returns.length === 2 && returns.every((r) => /vocabulary/.test(r)), returns.join(" | "));
 
 console.log("\n5. refusing reaches the customer as words, not a stack trace");
-const route = await readFile(join(SRC, "app/api/prototypes/results/route.ts"), "utf8");
-ok("the results route handles the refusal", /isTaxonomyUnavailable\s*\(/.test(route), "an unseeded customer would get a bare 400 reading like a malformed request");
-ok("...with its own status, not the generic 400", /status:\s*409/.test(route));
+{
+  // EVERY surface that can hit the gate, not just the first one. The refusal
+  // lived inline in the results route while brief-draft and measurement
+  // answered every error with `400 ${e.message}` — so widening the gate to the
+  // brief author and the measurement planner would have shipped a bare 400 on
+  // two routes at once. Add a route here when it starts resolving a customer.
+  const ROUTES = [
+    ["app/api/prototypes/results/route.ts", "readout"],
+    ["app/api/prototypes/brief-draft/route.ts", "brief"],
+    ["app/api/prototypes/measurement/route.ts", "measurement plan"],
+  ] as const;
+  for (const [rel, what] of ROUTES) {
+    const route = await readFile(join(SRC, rel), "utf8");
+    ok(`${rel.split("/").at(-2)} handles the refusal`, route.includes(`taxonomyRefusal(e, "${what}")`),
+      "an undescribed customer would get a bare 400 reading like a malformed request");
+  }
 
-// NOT instanceof. The alias and the relative specifier for the same file can be
-// two module instances with two class identities, so an instanceof in the catch
-// silently returns false and the handler never runs. Measured: modA === modB is
-// false under tsx. The guard tests `name`, which survives the boundary.
-ok(
-  "...via the guard, never instanceof across the module boundary",
-  !/instanceof\s+TaxonomyUnavailable/.test(route),
-  "instanceof fails when the thrower and catcher imported different instances of profile.ts — use isTaxonomyUnavailable()",
-);
-ok("the guard is exported for callers to use", /export function isTaxonomyUnavailable/.test(profile));
+  const refusal = await readFile(join(SRC, "lib/brand/refusal.ts"), "utf8");
+  ok("...with its own status, not the generic 400", /status:\s*409/.test(refusal));
+  // NOT instanceof. The alias and the relative specifier for the same file can
+  // be two module instances with two class identities, so an instanceof in the
+  // catch silently returns false and the handler never runs. Measured:
+  // modA === modB is false under tsx. The guard tests `name`, which survives.
+  ok("...via the guard, never instanceof across the module boundary",
+    !/instanceof\s+TaxonomyUnavailable/.test(refusal),
+    "instanceof fails when the thrower and catcher imported different instances of profile.ts");
+  ok("the guard is exported for callers to use", /export function isTaxonomyUnavailable/.test(profile));
+  // A half-described customer is the likelier case once onboarding exists, and
+  // a two-branch ternary answered it with "that's a bug in the console".
+  ok("all three reasons get their own answer", /"no-profile"/.test(refusal) && /"incomplete"/.test(refusal),
+    "`incomplete` falling into the no-org branch tells the one person who can fix it to report a bug");
+}
 
 console.log("\n6. a resolved word must actually resolve");
 // THE RATCHET REWARDED THIS BUG. Converting observation.ts, a line came out as

@@ -4,6 +4,7 @@ import { draftBrief, refineBrief, type BriefDraft, type BriefSection } from "@/l
 import { referenceKind, normalizeReferenceUrl, type BriefReference } from "@/lib/prototypes/types";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
+import { taxonomyRefusal } from "@/lib/brand/refusal";
 
 /** Sanitize inbound references the same way the brief PATCH does. */
 function cleanRefs(raw: { url?: string; label?: string; note?: string }[] | undefined): BriefReference[] {
@@ -57,6 +58,10 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ draft });
   } catch (e) {
+    // An undescribed customer is a state of the account, not a malformed
+    // request — 409 with words, never a 400 carrying a raw message.
+    const refusal = taxonomyRefusal(e, "brief");
+    if (refusal) return NextResponse.json(refusal.body, { status: refusal.status });
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 }

@@ -14,7 +14,7 @@ import {
   getReading, saveReading, readingBasisKey, clearReading, clearNotebookEntries, clearProtoNotebook } from "@/lib/prototypes/notebook";
 import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
 import { deepObservation, type DeepObservation } from "@/lib/ai/observation";
-import { isTaxonomyUnavailable } from "@/lib/brand/profile";
+import { taxonomyRefusal } from "@/lib/brand/refusal";
 import { describeUpstream } from "@/lib/upstream";
 import { taxonomyRevision } from "@/lib/brand/profile";
 import { resolveRepoSource } from "@/lib/prototypes/source";
@@ -1339,18 +1339,8 @@ export async function POST(req: NextRequest) {
     // customer has never been characterised, which is a state of the account
     // rather than a fault — so it gets its own status and words a person can
     // act on, not the generic 400 that reads like the request was malformed.
-    if (isTaxonomyUnavailable(e)) {
-      return NextResponse.json(
-        {
-          error:
-            e.reason === "no-profile"
-              ? "This customer hasn't been characterised yet, so there are no words to write the readout in. Run onboarding for the site, or seed the customer default, then try again."
-              : "No organisation was resolved for this request, so there is no vocabulary to write in. That's a bug in the console rather than something you can fix here — please report it.",
-          reason: e.reason,
-        },
-        { status: 409 },
-      );
-    }
+    const refusal = taxonomyRefusal(e, "readout");
+    if (refusal) return NextResponse.json(refusal.body, { status: refusal.status });
     // SOMEONE ELSE'S FAILURE IS NOT A BAD REQUEST. This line used to answer
     // every error with 400 and the raw message, so an expired Anthropic key
     // reached the browser as `400 (Bad Request)` and reached the READER as the
