@@ -83,6 +83,25 @@ export class TaxonomyUnavailable extends Error {
 }
 
 /**
+ * ASK THIS, NOT `instanceof`. Identity is not reliable here.
+ *
+ * `@/lib/brand/profile` and `../brand/profile` are the same file and can still
+ * be two module instances, each with its own `TaxonomyUnavailable` class. The
+ * throw comes from whichever instance the thrower imported; an `instanceof` in
+ * the catch tests the one the CATCHER imported. When they differ it returns
+ * false, the handler is skipped, and an unseeded customer gets a generic 400
+ * that reads like a malformed request — with nothing failing to compile and no
+ * error in the log. Measured, not theorised: under tsx the two specifiers give
+ * `modA === modB` false today.
+ *
+ * `name` is set in the constructor and survives the boundary, so it decides.
+ */
+export function isTaxonomyUnavailable(e: unknown): e is TaxonomyUnavailable {
+  if (e instanceof TaxonomyUnavailable) return true;
+  return typeof e === "object" && e !== null && (e as Error).name === "TaxonomyUnavailable";
+}
+
+/**
  * THE STRICT RESOLVER — refuse rather than degrade.
  *
  * Use this for anything a customer reads. It differs from `taxonomyFor` in

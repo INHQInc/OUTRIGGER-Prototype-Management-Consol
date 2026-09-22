@@ -14,6 +14,7 @@ import {
   getReading, saveReading, readingBasisKey, clearReading, clearNotebookEntries, clearProtoNotebook } from "@/lib/prototypes/notebook";
 import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
 import { deepObservation, type DeepObservation } from "@/lib/ai/observation";
+import { isTaxonomyUnavailable } from "@/lib/brand/profile";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { lastPush } from "@/lib/prototypes/ship";
@@ -1327,6 +1328,22 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: "Nothing to do — pass propose, confirm, stamp, promote, ask, or explain." }, { status: 400 });
   } catch (e) {
+    // REFUSING IS RIGHT; A STACK TRACE IS NOT. requireTaxonomy throws when a
+    // customer has never been characterised, which is a state of the account
+    // rather than a fault — so it gets its own status and words a person can
+    // act on, not the generic 400 that reads like the request was malformed.
+    if (isTaxonomyUnavailable(e)) {
+      return NextResponse.json(
+        {
+          error:
+            e.reason === "no-profile"
+              ? "This customer hasn't been characterised yet, so there are no words to write the readout in. Run onboarding for the site, or seed the customer default, then try again."
+              : "No organisation was resolved for this request, so there is no vocabulary to write in. That's a bug in the console rather than something you can fix here — please report it.",
+          reason: e.reason,
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 }

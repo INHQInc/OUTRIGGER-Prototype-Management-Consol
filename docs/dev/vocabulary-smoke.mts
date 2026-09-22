@@ -143,5 +143,56 @@ const body = end === -1 ? rest : rest.slice(0, end);
 ok("requireTaxonomy has no catch that would swallow a store failure", !/\bcatch\s*[({]/.test(body), "a catch inside requireTaxonomy re-creates the silent-neutral bug");
 ok("requireTaxonomy is not implemented on top of taxonomyFor", !/taxonomyFor\s*\(/.test(body), "taxonomyFor swallows store errors; the strict path must not inherit that");
 
+console.log("\n4. the vocabulary is actually injected, in BOTH branches");
+// The seam shipped once with no callers at all and nothing failed, which is how
+// it stayed unwired for a day. These assertions are what make that impossible
+// to repeat: they check the wiring exists, not that the module compiles.
+const results = await readFile(join(SRC, "lib/ai/results.ts"), "utf8");
+
+const aStart = results.indexOf("export async function analystSkill");
+ok("analystSkill exists", aStart !== -1);
+const aRest = results.slice(aStart + 1);
+const aEnd = aRest.indexOf("\nconst ");
+const analyst = aEnd === -1 ? aRest : aRest.slice(0, aEnd);
+
+ok("analystSkill resolves the customer's vocabulary", /requireTaxonomy\s*\(/.test(analyst), "no requireTaxonomy call — the prompts are still hardcoded");
+ok("...through taxonomyPrompt, not a hand-rolled sentence", /taxonomyPrompt\s*\(/.test(analyst));
+ok("...and NOT via the total resolver", !/taxonomyFor\s*\(/.test(analyst), "taxonomyFor degrades to 'visitors' on a store blip — customer-facing prose must refuse");
+
+// THE PLACEMENT ASSERTION, and the one most worth having. analystSkill has a
+// try/catch whose job is to fall back to FALLBACK_SYSTEM when the SKILL store
+// is down. A requireTaxonomy call moved inside it would be swallowed by that
+// catch and the readout would ship in generic words — no error, no log. The
+// resolve must happen BEFORE the try opens.
+const resolveAt = analyst.search(/requireTaxonomy\s*\(/);
+const tryAt = analyst.indexOf("try {");
+ok(
+  "the vocabulary resolves BEFORE the try, so the skill-store catch cannot swallow it",
+  resolveAt !== -1 && tryAt !== -1 && resolveAt < tryAt,
+  "requireTaxonomy sits inside analystSkill's try/catch — a store blip would silently produce generic prose",
+);
+
+// Both exits. The fallback is the path taken when seeding has ALREADY failed,
+// which is exactly when a missing vocabulary would go unnoticed.
+const returns = analyst.match(/return\s*\{\s*system:[^\n]*/g) ?? [];
+ok("analystSkill has both return branches", returns.length === 2, `found ${returns.length}`);
+ok("every return carries the vocabulary", returns.length === 2 && returns.every((r) => /vocabulary/.test(r)), returns.join(" | "));
+
+console.log("\n5. refusing reaches the customer as words, not a stack trace");
+const route = await readFile(join(SRC, "app/api/prototypes/results/route.ts"), "utf8");
+ok("the results route handles the refusal", /isTaxonomyUnavailable\s*\(/.test(route), "an unseeded customer would get a bare 400 reading like a malformed request");
+ok("...with its own status, not the generic 400", /status:\s*409/.test(route));
+
+// NOT instanceof. The alias and the relative specifier for the same file can be
+// two module instances with two class identities, so an instanceof in the catch
+// silently returns false and the handler never runs. Measured: modA === modB is
+// false under tsx. The guard tests `name`, which survives the boundary.
+ok(
+  "...via the guard, never instanceof across the module boundary",
+  !/instanceof\s+TaxonomyUnavailable/.test(route),
+  "instanceof fails when the thrower and catcher imported different instances of profile.ts — use isTaxonomyUnavailable()",
+);
+ok("the guard is exported for callers to use", /export function isTaxonomyUnavailable/.test(profile));
+
 console.log(failures === 0 ? "\nVocabulary is ratcheted. Lower a budget whenever a prompt moves to taxonomyPrompt().\n" : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);
