@@ -1,5 +1,7 @@
 # HANDOFF — Current State & Continuity
 
+*Updated: 2026-09-22. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+
 ## START HERE IF YOU ARE PICKING UP THE NEUTRALITY WORK (22 Sep 2026)
 
 **`docs/plans/CUSTOMER-NEUTRAL.md` is the approach document.** Read it before
@@ -20,8 +22,49 @@ will not regenerate on a taxonomy change unless you pass `force: true` — that
 cost an hour. And pushing the `staging` branch does NOT deploy to the staging
 environment; that needs an explicit `target: "staging"` deployment.
 
+### The other half: the builder is brand-blind
 
-*Updated: 2026-09-22. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+`docs/plans/BUILDER-CONTEXT.md` — the three-tier requirement for what CUSTOMER,
+SITE and PROTOTYPE onboarding must each capture to serve the engine that BUILDS
+prototypes. `CUSTOMER-NEUTRAL.md` is the readout; this is the builder; they are
+different consumers.
+
+The finding that reframes it, verified by hand: **`src/lib/prototypes/provision.ts`
+imports nothing from `../brand`.** The whole context model reaches one consumer,
+the readout. So the surface that writes prose ABOUT the page refuses to run
+without the customer's vocabulary, and the surface that writes words ONTO the
+customer's live page gets none of it.
+
+Onboarding captures `Org {id, name, createdAt}` and `Environment {label, url,
+kind}`. That is all of it. `earnedDigest()` — whose own docstring says it should
+be the loudest thing in the builder's context — has zero callers.
+
+## TWO LIVE CONTRADICTIONS (2026-09-22) — product bugs, not plans
+
+Both verified by hand. Neither is fixed. Both are worth doing regardless of the
+neutrality work, and neither is large.
+
+**1. The builder is told to instrument, and blocked for instrumenting.**
+`src/components/MeasurementPanel.tsx:122` generates a line for the human to
+paste at the builder — *"Instrument these in the variation…"* — whenever the
+measurement plan has gaps. `src/lib/certify/certify.ts:87-90` FAILS
+certification and blocks the push when the artefact contains `dataLayer.push(`,
+`gtag(`, `_satellite` or `adobeDataLayer`.
+
+The two cannot both be obeyed. The safe move is not to instrument, which
+guarantees the primary composite has no both-arms event — so the experiment gets
+built, bound, run, and is **undecidable**. Needs a product decision (is a
+variation allowed to add measurement?) before either side is changed.
+
+**2. The builder cannot see whether the target page is even tagged.**
+`PrototypeTarget.injection` (`types.ts:57-63,70-71`) records per page whether the
+loader is present. The context mapper at `provision.ts:286-290` emits
+`{url, source, reviewUrl, env, snapshot}` and drops it.
+
+On an untagged environment the review URL renders nothing, the status endpoint
+looks healthy, and the builder debugs its own correct code. The console knew the
+whole time. Two fields on the target object; minutes of work.
+
 
 ---
 
