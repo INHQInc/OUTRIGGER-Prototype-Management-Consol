@@ -145,6 +145,48 @@ export async function requireTaxonomy(orgId: string, siteId?: string): Promise<T
   return merge(site, orgDefault);
 }
 
+/**
+ * WHICH REVISION OF THE VOCABULARY THIS ANSWER WAS BUILT FROM.
+ *
+ * Two jobs, both of which the readout was missing.
+ *
+ * INVALIDATION. A cached readout is keyed on a basis — snapshot day, verdict,
+ * mapping, notebooks. The brand profile was not in it, so correcting a
+ * customer's vocabulary left every cached readout standing, still written in
+ * the old words. On 22 Sep that made a working fix look like a broken one: the
+ * taxonomy was repaired, the page was reloaded, and the same stale prose came
+ * back because nothing had told the cache that anything had changed.
+ *
+ * PROVENANCE. `SiteProfile` is a pinned revision precisely so "what did the AI
+ * know when it wrote this" stays answerable a year later. That is worth
+ * nothing if the answer is never recorded next to the thing it produced.
+ *
+ * IT DOES NOT THROW. This is a cache key, not customer prose — the strict
+ * resolver's refusal is right for a readout and wrong here. A store blip
+ * returns null, the key changes, and one readout regenerates. That is the
+ * cheap failure; refusing to compute a cache key is not.
+ */
+export async function taxonomyRevision(orgId: string, siteId?: string): Promise<string | null> {
+  const id = (orgId ?? "").trim();
+  if (!id) return null;
+  try {
+    const store = await getContentStore();
+    const [site, orgDefault] = await Promise.all([
+      siteId && siteId !== ORG_DEFAULT_SITE_ID ? store.getSiteProfile(id, siteId) : Promise.resolve(null),
+      store.getSiteProfile(id, ORG_DEFAULT_SITE_ID),
+    ]);
+    // BOTH, because resolution merges them field by field: a site revision can
+    // change the words while the org default sits still, and the reverse.
+    const parts = [
+      orgDefault ? `org:${orgDefault.rev}` : null,
+      site ? `site:${site.rev}` : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join("+") : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The approved profile for a site, or null when it has never been read. */
 export async function profileFor(orgId: string, siteId: string): Promise<SiteProfile | null> {
   try {

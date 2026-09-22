@@ -25,7 +25,7 @@ import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys } 
 import { STAT_NOISE, type AttentionItem } from "../prototypes/attention";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
-import { requireTaxonomy, taxonomyPrompt } from "../brand/profile";
+import { requireTaxonomy, taxonomyPrompt, taxonomyRevision } from "../brand/profile";
 
 const requireKey = () => {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -854,6 +854,7 @@ export async function generateReading(opts: {
   // WHICH METRIC EACH MOVEMENT IS ABOUT — settled before the model is asked,
   // so the prose is written about a known number rather than the number being
   // chosen to fit prose already written.
+  const profileRev = await taxonomyRevision(opts.orgId);
   const movements = movementMeasures({ results: opts.results, stats: opts.stats, supporting });
   const movementLabel = (k?: string) => (k ? opts.stats?.metrics.find((m) => m.key === k)?.label ?? k : undefined);
   const movementBlock = (["effect", "shift", "cost", "prediction"] as const)
@@ -1342,6 +1343,9 @@ Return only JSON, an OBJECT per section with its text AND the metric key that ev
       question: one(raw.question, 80),
       generatedAt: new Date().toISOString(),
       basisKey: opts.basisKey,
+      // The vocabulary this was written in, pinned beside the words. The
+      // taxonomy is versioned precisely so a readout can be explained later.
+      ...(profileRev ? { profileRev } : {}),
     },
     dataWishes: (Array.isArray(raw.dataWishes) ? raw.dataWishes : [])
       .filter((w): w is string => typeof w === "string" && w.trim().length > 0)

@@ -105,6 +105,12 @@ export interface Reading {
   /** At most one preference question, answered in the analyst thread. */
   question?: string;
   generatedAt: string;
+  /** WHICH REVISION OF THE CUSTOMER'S VOCABULARY THIS WAS WRITTEN IN, e.g.
+   *  "org:2" or "org:2+site:5". SiteProfile is a pinned revision so that "what
+   *  did the AI know when it wrote this" stays answerable a year later — which
+   *  is worth nothing unless the answer is recorded beside the thing it
+   *  produced. Absent on readings written before this. */
+  profileRev?: string;
   /** What the reading was generated FROM — staleness is a key comparison. */
   basisKey: string;
 }
@@ -219,6 +225,10 @@ export function readingBasisKey(parts: {
    *  so a cached reading from the old set is stale by definition — without
    *  this the toggle looks broken: the row never changes. */
   supporting?: string[];
+  /** The brand-profile revision the words are written FROM. Without it,
+   *  correcting a customer's vocabulary left every cached readout standing in
+   *  the old words, and the fix read as a failure. */
+  profileRev?: string | null;
 }): string {
   // READING_FORMAT bumps retire every cached reading on deploy — a format
   // change must never leave old walls of text rendering until data moves.
@@ -226,8 +236,11 @@ export function readingBasisKey(parts: {
   // — presentation — cannot retire the reading and buy a fresh Opus call for
   // words that would come out the same.
   const sup = parts.supporting?.length ? [...parts.supporting].sort().join(",") : "";
-  return ["fmt16", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
-    sup ? `sup:${sup}` : "-"].join("|");
+  // fmt17: the brand-profile revision joined the basis, and the readout's four
+  // movements are now paired with their metric in code. Both change what a
+  // cached reading SAYS, so every one of them retires on this deploy.
+  return ["fmt17", parts.latestSnapshotDate ?? "-", parts.verdict ?? "-", parts.mapConfirmedAt ?? "-", parts.orgNotebookUpdatedAt ?? "-", parts.protoNotebookUpdatedAt ?? "-",
+    sup ? `sup:${sup}` : "-", parts.profileRev ? `rev:${parts.profileRev}` : "-"].join("|");
 }
 
 /** Blank the cached reading. */

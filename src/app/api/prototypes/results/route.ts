@@ -16,6 +16,7 @@ import { proposeMetricMap, analyzeResults, analystSkill, generateReading, define
 import { deepObservation, type DeepObservation } from "@/lib/ai/observation";
 import { isTaxonomyUnavailable } from "@/lib/brand/profile";
 import { describeUpstream } from "@/lib/upstream";
+import { taxonomyRevision } from "@/lib/brand/profile";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { lastPush } from "@/lib/prototypes/ship";
@@ -273,6 +274,9 @@ function decisionOf(map: MetricMap | null, stats: StatsReport | null): {
 }
 
 type BasisInput = {
+  /** Needed for the brand-profile revision: the words a readout is written in
+   *  are part of what makes a cached one stale. */
+  orgId: string;
   history: ResultsHistory; verdict: VerdictRecord | null; map: MetricMap | null;
   orgNb: { updatedAt?: string }; protoNb: { updatedAt?: string };
   stats?: StatsReport | null; results?: ExperimentResults | null;
@@ -290,8 +294,9 @@ function supportingFor(opts: BasisInput): string[] {
 }
 
 /** The reading's staleness basis, derived from the current truth. */
-function basisFor(opts: BasisInput): string {
+async function basisFor(opts: BasisInput): Promise<string> {
   return readingBasisKey({
+    profileRev: await taxonomyRevision(opts.orgId),
     latestSnapshotDate: opts.history.days[opts.history.days.length - 1]?.date,
     verdict: opts.verdict?.verdict,
     mapConfirmedAt: opts.map?.confirmedAt,
@@ -304,8 +309,9 @@ function basisFor(opts: BasisInput): string {
 /** Deep observations are PER-METRIC and don't depend on which other metrics
  *  are supporting, so they keep the basis WITHOUT the set — otherwise marking
  *  a fourth metric would throw away the three deep reads already generated. */
-function obsBasisFor(opts: BasisInput): string {
+async function obsBasisFor(opts: BasisInput): Promise<string> {
   return readingBasisKey({
+    profileRev: await taxonomyRevision(opts.orgId),
     latestSnapshotDate: opts.history.days[opts.history.days.length - 1]?.date,
     verdict: opts.verdict?.verdict,
     mapConfirmedAt: opts.map?.confirmedAt,
@@ -356,10 +362,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const basisIn = { history, verdict, map: effMap, orgNb, protoNb, stats, results: bundle.results };
-  const basis = basisFor(basisIn);
+  const basisIn = { orgId: g.orgId, history, verdict, map: effMap, orgNb, protoNb, stats, results: bundle.results };
+  const basis = await basisFor(basisIn);
   const deepCache = JSON.parse((await (await getContentStore()).getFlag(`observations:${g.proto.key}`)) || "{}") as Record<string, { basisKey?: string }>;
-  const obsBasis = obsBasisFor(basisIn);
+  const obsBasis = await obsBasisFor(basisIn);
   const deepObservations = Object.fromEntries(Object.entries(deepCache).filter(([, v]) => typeof v?.basisKey === "string" && v.basisKey.startsWith(`${obsBasis}|obs7`)));
   const attention = deriveAttention({
     verdict, stats, map: effMap, planDrift,
@@ -834,7 +840,7 @@ export async function POST(req: NextRequest) {
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
       const { stats, verdict, history, map } = await analyze(g.proto, bundle);
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
-      const basis = obsBasisFor({ history, verdict, map, orgNb, protoNb });
+      const basis = await obsBasisFor({ orgId: g.orgId, history, verdict, map, orgNb, protoNb });
 
       const store = await getContentStore();
       const cacheKey = `observations:${g.proto.key}`;
@@ -1230,7 +1236,7 @@ export async function POST(req: NextRequest) {
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
       const { stats, verdict, history, map } = await analyze(g.proto, bundle);
       const [orgNb, protoNb, cached] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key), getReading(g.proto.key)]);
-      const basis = basisFor({ history, verdict, map, orgNb, protoNb, stats, results: bundle.results });
+      const basis = await basisFor({ orgId: g.orgId, history, verdict, map, orgNb, protoNb, stats, results: bundle.results });
       if (!body.force && cached?.basisKey === basis) {
         return NextResponse.json({ reading: cached, readingStale: false, readingBasis: basis, notebook: { org: orgNb, proto: protoNb } });
       }
@@ -1258,7 +1264,7 @@ export async function POST(req: NextRequest) {
         // concurrent tune/ask that must keep the new reading stale.
         const protoNb2 = dataWishes.length ? await appendNotebook(g.proto.key, [], dataWishes) : protoNb;
         const foreignWrite = protoNb2.entries.length !== protoNb.entries.length;
-        reading.basisKey = foreignWrite ? basis : basisFor({ history, verdict, map, orgNb, protoNb: protoNb2, stats, results: bundle.results });
+        reading.basisKey = foreignWrite ? basis : await basisFor({ orgId: g.orgId, history, verdict, map, orgNb, protoNb: protoNb2, stats, results: bundle.results });
         await saveReading(g.proto.key, reading);
         return NextResponse.json({ reading, readingStale: foreignWrite, readingBasis: reading.basisKey, notebook: { org: orgNb, proto: protoNb2 } });
       } finally {
