@@ -180,15 +180,67 @@ definition are already live and therefore already locked. They are not a
 migration, they are a cohort — grandfathered, and worth labelling as such so a
 readout never implies a human described something nobody did.
 
+## Decided: the definition INFORMS, and the taxonomy catches legacy
+
+### Precedence
+
+```
+1. the human's definition for THIS metric   — informs the model's wording
+2. the site/customer taxonomy               — fallback, LEGACY ONLY
+3. (nothing)                                — requireTaxonomy refuses; no prose
+```
+
+There is no fourth tier. A customer with no brand profile does not get generic
+prose, it gets a refusal — that is what `requireTaxonomy` is for.
+
+### "Informs", not "verbatim"
+
+The human's sentence is given to the model as the authority on MEANING, and the
+model still writes the line. It may tighten the phrasing, fit the 140-character
+cap and match the surrounding prose — it may not contradict the definition,
+widen it, or introduce a mechanism the human did not describe.
+
+Verbatim was the alternative and it was rejected: a definition typed in a hurry
+at planning time reads like a form field, and the readout is a document someone
+shows an executive. Informing keeps the prose readable while keeping the meaning
+owned by a person.
+
+That makes the definition behave like every other CHARACTERIZED fact here: a
+human settles it, the machine renders it, and the machine may not quietly
+disagree. The existing repair round-trip in `observation.ts` is the enforcement
+point — output that contradicts the definition is rejected and re-asked, exactly
+as output containing digits is today.
+
+### The fallback is a closed set, and must stay closed
+
+The taxonomy fallback exists for metrics that went live before the gate — the
+nine with no definition, already locked, unreachable by any gate.
+
+**It must not be reachable by a new metric.** If a metric created after the gate
+can quietly fall back to org-level vocabulary, the gate stops being a gate: a
+team blocked at arming would learn that waiting produces the same readout
+without the typing. The fallback serves what is already behind the closed door;
+it is never a way around it.
+
+Mechanically that means the fallback keys on something a new metric cannot
+satisfy — the metric map predating the gate's release — rather than simply
+"definition is absent". "Absent" is the condition the gate exists to prevent, so
+it cannot also be the condition that excuses it.
+
+### Disclose which tier was used
+
+A readout written from a human definition and one written from org vocabulary
+are not the same claim, and this system distinguishes CHARACTERIZED from
+inferred everywhere else. The observation should record which tier produced it,
+alongside the profile revision from Phase 4 of the prompt plan.
+
+That answers grandfathering without a banner on every historical readout: the
+provenance is recorded and available where someone asks how a line was arrived
+at, rather than announced over prose nobody is questioning.
+
 ## Open questions
 
-- **Does the definition override or inform?** If a human wrote `captures`, should
-  the model still write its own, or print the human's verbatim? Verbatim is more
-  honest and removes a whole class of drift; generating from it is more fluent.
-- **Backfill.** Nine existing metrics have no definition. Do their readouts stay
-  as they are, or does the gate apply retroactively and make live experiments
-  unreadable until someone types?
-- **How are the nine grandfathered metrics labelled?** They are live and locked,
-  so the gate can never reach them. A readout over them should not imply a human
-  described what a model inferred — but saying so on every historical readout may
-  be noisier than it is worth.
+- **What does the gate say when it blocks?** "The primary metric needs a
+  definition" is accurate and useless. It should show the metric, show what the
+  planner already inferred, and let the human accept or rewrite it. A blocked
+  arming should cost one edit, not a context switch into another screen.
