@@ -17,9 +17,22 @@
  * commercial model usually are company-wide.
  *
  * This sits in front of every model call, so it must be cheap and it must never
- * throw. A store that is down degrades to the neutral default and the readout
- * says "visitors" — which is wrong-ish but harmless. Throwing here would take
- * down every AI surface at once.
+ * throw. A store that is down degrades to the neutral default. Throwing here
+ * would take down every AI surface at once.
+ *
+ * THAT DEGRADATION IS NOT HARMLESS FOR CUSTOMER-FACING PROSE, which an earlier
+ * version of this comment claimed. A Neon blip during a readout would silently
+ * turn "guests who reach the booking engine" into "visitors who reach the
+ * checkout" — no error, no log, and the customer reads it before we do. Bland
+ * and confidently wrong is worse than absent, because nothing signals it.
+ *
+ * So there are two resolvers, and the choice between them is the choice between
+ * degrading and refusing:
+ *
+ *   taxonomyFor()     — total, never throws. For internal surfaces where
+ *                       neutral words are an acceptable degradation.
+ *   requireTaxonomy() — throws unless a profile genuinely exists. For anything
+ *                       a customer will read.
  */
 
 import { getContentStore } from "../content/store";
@@ -39,19 +52,78 @@ export async function taxonomyFor(orgId: string, siteId?: string): Promise<Taxon
       siteId && siteId !== ORG_DEFAULT_SITE_ID ? store.getSiteProfile(orgId, siteId) : Promise.resolve(null),
       store.getSiteProfile(orgId, ORG_DEFAULT_SITE_ID),
     ]);
-    // Merge field by field rather than whole-object, so a site that has
-    // corrected only its visitor noun still inherits the rest.
-    return {
-      ...DEFAULT_TAXONOMY,
-      ...(orgDefault?.taxonomy ?? {}),
-      ...(site?.taxonomy ?? {}),
-      entityKinds: site?.taxonomy?.entityKinds?.length
-        ? site.taxonomy.entityKinds
-        : orgDefault?.taxonomy?.entityKinds ?? DEFAULT_TAXONOMY.entityKinds,
-    };
+    return merge(site, orgDefault);
   } catch {
     return DEFAULT_TAXONOMY;
   }
+}
+
+/**
+ * Merge field by field rather than whole-object, so a site that has corrected
+ * only its visitor noun still inherits the rest. Shared by both resolvers so
+ * they can never disagree about precedence.
+ */
+function merge(site: SiteProfile | null, orgDefault: SiteProfile | null): Taxonomy {
+  return {
+    ...DEFAULT_TAXONOMY,
+    ...(orgDefault?.taxonomy ?? {}),
+    ...(site?.taxonomy ?? {}),
+    entityKinds: site?.taxonomy?.entityKinds?.length
+      ? site.taxonomy.entityKinds
+      : orgDefault?.taxonomy?.entityKinds ?? DEFAULT_TAXONOMY.entityKinds,
+  };
+}
+
+/** Thrown when prose a customer will read has no vocabulary to write it in. */
+export class TaxonomyUnavailable extends Error {
+  constructor(readonly reason: "no-org" | "no-profile", message: string) {
+    super(message);
+    this.name = "TaxonomyUnavailable";
+  }
+}
+
+/**
+ * THE STRICT RESOLVER — refuse rather than degrade.
+ *
+ * Use this for anything a customer reads. It differs from `taxonomyFor` in
+ * three ways, each deliberate:
+ *
+ *  1. IT DOES NOT SWALLOW STORE ERRORS. `taxonomyFor` catches everything, so a
+ *     database outage is indistinguishable from an unseeded customer. Here the
+ *     error propagates, because "the database was briefly down" and "nobody has
+ *     ever described this brand" want different responses from a human.
+ *
+ *  2. IT CHECKS FOR A ROW, NOT FOR NEUTRAL-LOOKING VALUES. Comparing the result
+ *     against DEFAULT_TAXONOMY would refuse to serve a genuinely
+ *     vertical-neutral customer whose own words really are "visitor" and
+ *     "product" — a SaaS company would be told its profile is missing when it
+ *     is present and correct. Existence is the question; the values are not.
+ *
+ *  3. IT REJECTS A BLANK ORG. A missing tenant id resolves to neutral defaults
+ *     that look perfectly valid, so a tenancy bug would present as bland prose
+ *     rather than as an error. That is the worst way for it to present.
+ */
+export async function requireTaxonomy(orgId: string, siteId?: string): Promise<Taxonomy> {
+  const id = (orgId ?? "").trim();
+  if (!id) {
+    throw new TaxonomyUnavailable("no-org", "No organisation was supplied, so there is no brand vocabulary to write in. This is a bug in the caller, not a missing profile.");
+  }
+
+  // Deliberately NOT wrapped: a store failure must reach the caller.
+  const store = await getContentStore();
+  const [site, orgDefault] = await Promise.all([
+    siteId && siteId !== ORG_DEFAULT_SITE_ID ? store.getSiteProfile(id, siteId) : Promise.resolve(null),
+    store.getSiteProfile(id, ORG_DEFAULT_SITE_ID),
+  ]);
+
+  if (!site && !orgDefault) {
+    throw new TaxonomyUnavailable(
+      "no-profile",
+      `No approved brand profile for "${id}"${siteId ? ` or its site "${siteId}"` : ""}. Writing for a customer in generic words would be worse than not writing: onboard the site, or seed the customer default, then retry.`,
+    );
+  }
+
+  return merge(site, orgDefault);
 }
 
 /** The approved profile for a site, or null when it has never been read. */

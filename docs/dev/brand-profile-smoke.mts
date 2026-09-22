@@ -26,7 +26,7 @@
  */
 
 import { getContentStore } from "../../src/lib/content/store";
-import { taxonomyFor, earnedDigest, baselineFor, ORG_DEFAULT_SITE_ID } from "../../src/lib/brand/profile";
+import { taxonomyFor, requireTaxonomy, TaxonomyUnavailable, earnedDigest, baselineFor, ORG_DEFAULT_SITE_ID } from "../../src/lib/brand/profile";
 import { EMPTY_OBSERVED, type BrandFact, type SiteProfile } from "../../src/lib/brand/types";
 
 const ORG = `smoke-org-${Date.now()}`;
@@ -135,6 +135,46 @@ await store.supersedeBrandFact(b1.id, "replacement-id");
 ok("superseded baseline stops resolving", (await baselineFor(ORG, SITE, "visit_booking_engine")) === null);
 const all = await store.listBrandFacts(ORG, { siteId: SITE, includeExpired: true });
 ok("superseded row still exists, just not returned", !all.some((f) => f.id === b1.id));
+
+console.log("\n7. the STRICT resolver refuses rather than degrades");
+// Customer-facing prose must not quietly fall back to "visitors"/"checkout".
+// These four claims are the difference between refusing and degrading.
+async function threw(fn: () => Promise<unknown>): Promise<TaxonomyUnavailable | null> {
+  try { await fn(); return null; } catch (e) { return e instanceof TaxonomyUnavailable ? e : null; }
+}
+
+const blank = await threw(() => requireTaxonomy("  "));
+ok("a blank org is a tenancy bug, not a missing profile", blank?.reason === "no-org", String(blank?.reason));
+
+const unseeded = await threw(() => requireTaxonomy(`never-seeded-${ORG}`));
+ok("an org with no profile refuses", unseeded?.reason === "no-profile", String(unseeded?.reason));
+
+// Not asserting the visitor noun here: by this point section 4 has approved r2,
+// so the site's own value is legitimately "DRAFTED". The inherited field is the
+// order-independent one, and it is also the one that proves the merge ran.
+const seeded = await requireTaxonomy(ORG, SITE);
+ok("an org WITH a profile resolves, inheriting the customer default", seeded.offeringNounPlural === "rooms", seeded.offeringNounPlural);
+
+// THE SUBTLE ONE. Refusing on "the values look neutral" would reject a SaaS
+// customer whose own words genuinely are visitor/product/convert — telling them
+// their profile is missing when it is present and correct. Existence is the
+// question, never the values.
+const NEUTRAL_ORG = `${ORG}-neutral`;
+await store.addSiteProfile(
+  profile({
+    id: `${NEUTRAL_ORG}-org-default`,
+    orgId: NEUTRAL_ORG,
+    siteId: ORG_DEFAULT_SITE_ID,
+    status: "approved",
+    approvedAt: new Date().toISOString(),
+    taxonomy: { visitorNoun: "visitor", visitorNounPlural: "visitors", offeringNoun: "product" },
+  }),
+);
+const neutralButReal = await threw(() => requireTaxonomy(NEUTRAL_ORG));
+ok("a genuinely vertical-neutral profile is NOT mistaken for a missing one", neutralButReal === null);
+
+console.log("\n8. the total resolver still degrades, on purpose");
+ok("taxonomyFor never throws for an unknown org", (await taxonomyFor("no-such-org")).visitorNounPlural === "visitors");
 
 console.log(failures === 0 ? "\nAll brand-profile claims hold.\n" : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);
