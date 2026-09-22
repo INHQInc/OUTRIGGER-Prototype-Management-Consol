@@ -328,6 +328,14 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   failure, `FALLBACK_SYSTEM` invisible to a vocabulary check. Each was
   correct-looking configuration with no mechanism proving it. The three smoke
   suites are that mechanism; extend them rather than adding another header note.
+- **A dev script that writes must declare its backend, not inherit it.**
+  `getContentStore()` picks Neon or the filesystem from `DATABASE_URL`, so any
+  script under `docs/dev/` that writes rows can hit a live tenant just by being
+  run in the wrong shell. A *test* refuses outright — `brand-profile-smoke.mts`
+  exits 2 if `DATABASE_URL` is set, and sandboxes its cwd so it cannot even see
+  the dev snapshots tree. A *seeding tool* targets the real database on purpose,
+  so it prints which backend it resolved and offers `--dry`
+  (`seed-taxonomy.mts`). One or the other, never silence.
 - **Never trust `GET /repos` `permissions.push`** for a fine-grained PAT — it reflects the account's role, not the token's grant. Use `canCreateBranch()` (bogus-SHA probe: 403 = no write, 422 = write).
 - **`~/Projects/Outrigger_Website` (Azure DevOps clone) is READ-ONLY.** Pull only; never push/commit/modify.
 - **Snapshots are immutable** (PageVersion never edited; re-capture = new version). **ArtifactVersions are immutable** (append-only; carry a fixed code snapshot).

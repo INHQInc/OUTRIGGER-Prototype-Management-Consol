@@ -22,12 +22,40 @@
  *  6. Superseding is a POINTER. The superseded row still exists; it just stops
  *     being returned.
  *
- * Writes into snapshots/ under a throwaway org id, then removes its own rows.
+ * HERMETIC BY CONSTRUCTION. It runs in a throwaway snapshots tree and refuses
+ * to run against a database at all — see the guard below, which exists because
+ * an earlier version of this line claimed a cleanup that no code performed.
  */
 
 import { getContentStore } from "../../src/lib/content/store";
 import { taxonomyFor, requireTaxonomy, TaxonomyUnavailable, earnedDigest, baselineFor, ORG_DEFAULT_SITE_ID } from "../../src/lib/brand/profile";
 import { EMPTY_OBSERVED, type BrandFact, type SiteProfile } from "../../src/lib/brand/types";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// THE GUARD. getContentStore() picks its backend from DATABASE_URL, and this
+// file writes ~90 rows of deliberate nonsense. Pointed at a real database it
+// would seed junk profiles and facts into a live tenant — silently, because
+// every write here is a legitimate API call. A test must not be able to do
+// that by inheriting a shell variable.
+if (process.env.DATABASE_URL) {
+  console.error(
+    "\nRefusing to run: DATABASE_URL is set.\n" +
+      "This suite writes throwaway rows and must only ever touch the filesystem backend.\n" +
+      "Run it as:  env -u DATABASE_URL npx tsx docs/dev/brand-profile-smoke.mts\n",
+  );
+  process.exit(2);
+}
+
+// FsContentStore roots itself at process.cwd()/snapshots on every call, so
+// moving cwd moves the whole store. The test therefore cannot see, corrupt or
+// grow the dev snapshots tree, and cleanup is one rmSync rather than a delete
+// method added to the production interface for a test's convenience.
+const SANDBOX = mkdtempSync(join(tmpdir(), "prism-brand-smoke-"));
+process.chdir(SANDBOX);
+const cleanup = () => rmSync(SANDBOX, { recursive: true, force: true });
+process.on("exit", cleanup);
 
 const ORG = `smoke-org-${Date.now()}`;
 const SITE = "site-a";
