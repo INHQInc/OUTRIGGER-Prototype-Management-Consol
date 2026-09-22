@@ -25,7 +25,12 @@ environment; that needs an explicit `target: "staging"` deployment.
 
 ---
 
-## VERTICAL-NEUTRAL VOCABULARY (2026-09-22) — seam shipped, guarded, no callers
+## VERTICAL-NEUTRAL VOCABULARY (2026-09-22) — WIRED; 48 down to 34
+
+*This heading said "no callers" for most of 22 Sep and was true when written.
+`analystSkill()` injects the vocabulary, `observation.ts` is fully converted,
+and the resolver now refuses per field. Details below are the morning's state;
+`docs/plans/CUSTOMER-NEUTRAL.md` is current.*
 
 `src/lib/brand/` holds the Beta-2 context model: three kinds of knowledge with
 different truth conditions — OBSERVED (crawl facts, re-read never approved),
