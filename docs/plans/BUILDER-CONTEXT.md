@@ -116,10 +116,10 @@ Each row: the guess, the line that forces it, and the damage in a built prototyp
 
 ### The cut
 
-**Step 0 — the seam (a precondition, not a tier).** Three changes, none of which capture anything:
-1. `provision.ts` imports from `../brand` and writes a new `.opmc/customer.md` (characterized prose — voice, audience, vertical, standing guardrails) plus a `context.json.site` block (structured data).
-2. Those inputs join `contentHashOf()` (`provision.ts:162-173`) — otherwise the branch never learns they changed.
-3. A root `CLAUDE.md` is provisioned (`HANDOFF.md:796`, already scoped), so orientation stops depending on the human pasting the right launch string.
+**Step 0 — the seam (a precondition, not a tier). SHIPPED 22 Sep 2026 (`a6a3e12`), items 1 and 2.** Three changes, none of which capture anything:
+1. ✅ `provision.ts` imports from `../brand` and writes a new `.opmc/customer.md` (characterized prose) plus a `context.json.customer` block (structured data). It also REFUSES, ahead of every git call, when the org has no complete profile — the `requireTaxonomy` rule applied to the page itself. An uncharacterized section still carries an instruction pointing at the page's own evidence; silence would read as freedom.
+2. ✅ Those inputs join `contentHashOf()` — the profile revision, via the single derivation `brandBasis()`, with the parameter REQUIRED so a third surface cannot silently omit it and make the Re-sync warning un-clearable.
+3. ⬜ A root `CLAUDE.md` is provisioned (`HANDOFF.md`, already scoped), so orientation stops depending on the human pasting the right launch string. **Still open, and Q6 below is the decision it waits on** — `.opmc/customer.md` is a file the agent must be TOLD to read (brief.md now tells it); a root `CLAUDE.md` is one Claude Code loads by itself.
 
 **Step 1 — five customer fields.**
 - **Vertical** (new scalar on `Org`) — S
@@ -128,7 +128,7 @@ Each row: the guess, the line that forces it, and the damage in a built prototyp
 - **Standing guardrails** (new list) — S
 - **Taxonomy delivered** (`taxonomyPrompt()` exists; add a second call site) — wiring only
 
-**Step 2 — the free riders.** Three facts the console already computes and stores, delivered in the same payload with zero capture work: the `CompatReport` for the target environment (`compat.ts:61-88` → flag `compat:<envId>`), `TargetInjection` per page (`types.ts:57-63`, currently dropped at `provision.ts:289`), and the certification thresholds as numbers (`certify.ts:35-36`). Plus `ExperimentationConfig.provider` (`experimentation/types.ts:26`), which already exists and un-hardcodes the timing rule's vendor name.
+**Step 2 — the free riders.** Three facts the console already computes and stores, delivered in the same payload with zero capture work: the `CompatReport` for the target environment (`compat.ts:61-88` → flag `compat:<envId>`), ✅ `TargetInjection` per page (**shipped `ff60848`** — state only; the check timestamp is deliberately withheld because it would be written at commit time and then sit still), and the certification thresholds as numbers (`certify.ts:35-36`). Plus `ExperimentationConfig.provider` (`experimentation/types.ts:26`), which already exists and un-hardcodes the timing rule's vendor name.
 
 ### Why customer, not site
 
@@ -157,8 +157,8 @@ Ranked by value per unit of work. The schema is done for every row.
 
 | Type / field | Where | State | Work remaining |
 |---|---|---|---|
-| `Taxonomy` + `requireTaxonomy()` + `taxonomyPrompt()` | `brand/types.ts:39-57`; `brand/profile.ts:117-159,220-228` | Built, tested, seeded — **one consumer** (`ai/results.ts:59`) | Add a second call site in `provision.ts`. Hours. |
-| `TargetInjection` | `prototypes/types.ts:57-63,75-77` | Persisted per page; **dropped** by the context mapper at `provision.ts:289` | Add two fields to the target object. Minutes. |
+| `Taxonomy` + `requireTaxonomy()` + `taxonomyPrompt()` | `brand/types.ts:39-57`; `brand/profile.ts:117-159,220-228` | Built, tested, seeded — **two consumers** since `a6a3e12` (`ai/results.ts`, `prototypes/customer-context.ts`) | ✅ Done. |
+| `TargetInjection` | `prototypes/types.ts:57-63,75-77` | ✅ Delivered to `brief.md` + `context.json` and folded into the content hash (`ff60848`) | ✅ Done. |
 | `CompatReport` | `capture/compat.ts:18-23,61-88`; stored `compat:<envId>` (`environments/compat/route.ts:17`) | Computed, stored, never read by provision | Read the flag, render it. Hours. |
 | `PrototypeArm` | `prototypes/types.ts:236-244` | Recorded; absent from `brief.md` and `context.json` | Render sibling arms. Hours. |
 | `PrototypeRecord.parentKey` | `prototypes/types.ts:286-290` | Set at promote, never read by provision | Render the prior round. Hours. |

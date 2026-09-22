@@ -342,6 +342,22 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   file can enforce about itself. Never wrap the strict path in a try/catch —
   `vocabulary-smoke` fails if you do. `DEFAULT_TAXONOMY` is for seeding a DRAFT
   a human corrects; it is never resolved from and never served.
+- **Provisioning refuses too, and BEFORE it touches git.** `provisionBranch`
+  resolves the customer through `customerContextFor()` (`prototypes/customer-context.ts`)
+  ahead of every git call and throws when the profile is missing or incomplete.
+  A prototype writes copy onto a real page under the customer's name, so
+  building it in a template's voice is the same failure as writing a readout in
+  one. The gate sits before `createBranch` on purpose: refusing afterwards
+  leaves a half-provisioned branch behind. An UNCHARACTERIZED section still
+  ships an instruction pointing at the page's own evidence — silence reads as
+  freedom, and a model with freedom and no voice description writes generic
+  marketing copy.
+- **`contentHashOf(proto, brandRev)` — the second argument is required, and
+  there is ONE derivation of it (`brandBasis()`).** Four surfaces compare this
+  hash (provision, the prototype page, the board, `/api/prototypes/sync-status`).
+  Two of them deriving it two ways means two hashes for one branch, which shows
+  as a "Re-sync" warning that clicking Re-sync cannot clear. Optional would have
+  let a fifth surface omit it silently; required makes TypeScript find it.
 - **No generic fallback, anywhere a customer can see.** Decided 22 Sep 2026: a
   half-described customer gets NO prose rather than confident generic prose.
   Onboarding is the gate. A hardcoded specific becomes a RESOLVED specific and

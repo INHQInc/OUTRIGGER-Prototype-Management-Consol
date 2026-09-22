@@ -48,20 +48,38 @@ SITE and PROTOTYPE onboarding must each capture to serve the engine that BUILDS
 prototypes. `CUSTOMER-NEUTRAL.md` is the readout; this is the builder; they are
 different consumers.
 
-The finding that reframes it, verified by hand: **`src/lib/prototypes/provision.ts`
-imports nothing from `../brand`.** The whole context model reaches one consumer,
-the readout. So the surface that writes prose ABOUT the page refuses to run
+The finding that reframed it, verified by hand: **`src/lib/prototypes/provision.ts`
+imported nothing from `../brand`.** The whole context model reached one consumer,
+the readout. So the surface that writes prose ABOUT the page refused to run
 without the customer's vocabulary, and the surface that writes words ONTO the
-customer's live page gets none of it.
+customer's live page got none of it.
 
-Onboarding captures `Org {id, name, createdAt}` and `Environment {label, url,
-kind}`. That is all of it. `earnedDigest()` — whose own docstring says it should
-be the loudest thing in the builder's context — has zero callers.
+**Step 0 of §3 — the seam — shipped 2026-09-22 (`a6a3e12`).** The branch now
+carries `.opmc/customer.md` (resolved prose) and `context.json.customer`
+(structured), and `brief.md` points at them. It REFUSES like the readout does:
+an org without a complete brand profile cannot be provisioned at all, and the
+gate sits ahead of every git call so a refusal never leaves a half-made branch.
+An uncharacterized section still carries an instruction — silence reads as
+freedom, and a model with freedom and no voice description writes generic
+marketing copy, which is the failure this work exists to remove.
+
+The profile revision joins `contentHashOf`, so correcting a customer's words
+stales every branch written in the old ones. That hash is compared on three
+surfaces, so the parameter is REQUIRED and there is one derivation,
+`brandBasis()` — an omitted argument is exactly how two surfaces come to
+compute different hashes for one branch and show a Re-sync warning nothing can
+clear. **Still to capture (§1A): vertical, standing guardrails, and a writer
+for voice/audience — the schema keys exist, nothing writes them.**
+
+Onboarding still captures only `Org {id, name, createdAt}` and `Environment
+{label, url, kind}` — the seam delivers what exists, it does not capture more.
+`earnedDigest()` — whose own docstring says it should be the loudest thing in
+the builder's context — still has zero callers.
 
 ## TWO LIVE CONTRADICTIONS (2026-09-22) — product bugs, not plans
 
-Both verified by hand. Neither is fixed. Both are worth doing regardless of the
-neutrality work, and neither is large.
+Both verified by hand. **The second is now FIXED** (`ff60848`); the first still
+needs a product decision and is described below as it stands.
 
 **1. The builder is told to instrument, and blocked for instrumenting.**
 `src/components/MeasurementPanel.tsx:122` generates a line for the human to
@@ -75,14 +93,23 @@ guarantees the primary composite has no both-arms event — so the experiment ge
 built, bound, run, and is **undecidable**. Needs a product decision (is a
 variation allowed to add measurement?) before either side is changed.
 
-**2. The builder cannot see whether the target page is even tagged.**
-`PrototypeTarget.injection` (`types.ts:57-63,70-71`) records per page whether the
-loader is present. The context mapper at `provision.ts:286-290` emits
-`{url, source, reviewUrl, env, snapshot}` and drops it.
+**2. ~~The builder cannot see whether the target page is even tagged.~~ FIXED
+2026-09-22 (`ff60848`).** `PrototypeTarget.injection` was recorded per page and
+dropped by the context mapper, so on an untagged environment the review URL
+rendered nothing, the status endpoint looked healthy, and the builder debugged
+its own correct code.
 
-On an untagged environment the review URL renders nothing, the status endpoint
-looks healthy, and the builder debugs its own correct code. The console knew the
-whole time. Two fields on the target object; minutes of work.
+The verdict now ships in both files a builder opens — a `Loader tag` column in
+`brief.md`, `targets[].injection` in `context.json` — and, when any page fails,
+one line saying the build cannot appear there, because "absent" is a fact the
+reader still has to interpret.
+
+Two details worth keeping. The state joins `contentHashOf`, so **tagging a page
+that was absent stales the branch**; without that the agent reads yesterday's
+verdict forever, which is worse than silence because it is confidently wrong.
+And the check TIMESTAMP is deliberately NOT delivered — it would be written at
+commit time and then sit still, so a three-day-old "checked just now" is the
+likelier reading. `docs/dev/builder-context-smoke.mts` asserts it stays out.
 
 
 ---
