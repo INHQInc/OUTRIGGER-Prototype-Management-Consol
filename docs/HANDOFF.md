@@ -21,12 +21,18 @@ frozen — but it means the repo's own "authoritative state" is on a branch, whi
 is exactly the kind of thing that gets missed. It resolves when the release
 ships and the branch merges.
 
-## ⛔ RELEASE GATE — SEED PRODUCTION BEFORE THIS BRANCH MERGES (22 Sep 2026)
+## ⛔ RELEASE GATE — SEED PRODUCTION BEFORE THIS CODE SERVES IT (22 Sep 2026)
 
-**Merging `phase1/taxonomy-injection` into `main` without seeding production's
-brand profile first takes the console's entire build loop down for the live
-tenant.** Found by an adversarial pass over `ff60848`/`a6a3e12` and reproduced
-against the real code path before being written here.
+**Nothing here is blocked today.** Staging is seeded, staging is where this
+runs, and there is no merge to `main` planned. This is a precondition on the
+release, whenever and however it happens — record it, don't act on it.
+
+**Whatever route puts this code in front of production's `DATABASE_URL` — a
+merge, a promoted deployment, a hand-cut release — production must have a brand
+profile BEFORE it does, or the console's entire build loop goes down for the
+live tenant.** The gate is about the database, not about git, so no deployment
+mechanism escapes it. Found by an adversarial pass over `ff60848`/`a6a3e12` and
+reproduced against the real code path before being written here.
 
 The chain, all of it verified:
 
@@ -37,7 +43,8 @@ The chain, all of it verified:
    `provisionBranch` → the customer gate → `TaxonomyUnavailable` → **400**.
 3. Production has no org-default (`siteId = "*"`) profile row — this file has
    said "Production is NOT seeded" all day, and that was written about readouts.
-   It now governs provisioning too.
+   It now governs provisioning too. Staging IS seeded, which is why none of
+   this is visible where the work is actually being done.
 4. `buildDone` requires `synced` (`pipeline.ts`), so the Build dot can never go
    green, and `builtins.ts` tells every agent session to POST provision itself
    whenever the hash differs — so each session burns a failed re-sync and
