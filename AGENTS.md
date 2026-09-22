@@ -360,7 +360,9 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   deployment route escapes it. It was written for readouts ("shipping the
   injection before seeding production turns every readout into an error") and
   now governs provisioning too. Staging is seeded; production is not. See the
-  RELEASE GATE at the top of `docs/HANDOFF.md`.
+  CUTOVER STEP at the top of `docs/HANDOFF.md` — the plan is to keep
+  building on staging and cut over in one deployment with downtime, and the
+  seed is step 1 of that window, before the deploy.
 - **`contentHashOf(proto, brandRev)` — the second argument is required, and
   there is ONE derivation of it (`brandBasis()`).** Four surfaces compare this
   hash (provision, the prototype page, the board, `/api/prototypes/sync-status`).

@@ -21,49 +21,47 @@ frozen — but it means the repo's own "authoritative state" is on a branch, whi
 is exactly the kind of thing that gets missed. It resolves when the release
 ships and the branch merges.
 
-## ⛔ RELEASE GATE — SEED PRODUCTION BEFORE THIS CODE SERVES IT (22 Sep 2026)
+## CUTOVER STEP — SEED PRODUCTION INSIDE THE DOWNTIME WINDOW (22 Sep 2026)
 
-**Nothing here is blocked today.** Staging is seeded, staging is where this
-runs, and there is no merge to `main` planned. This is a precondition on the
-release, whenever and however it happens — record it, don't act on it.
+**The plan (Bryan, 22 Sep): keep building on `staging`, then one full feature
+deployment to production with planned downtime.** That is the right shape for
+this, because the change needs a data step and a one-time re-sync of every
+prototype — both of which belong in a window rather than in a live console.
 
-**Whatever route puts this code in front of production's `DATABASE_URL` — a
-merge, a promoted deployment, a hand-cut release — production must have a brand
-profile BEFORE it does, or the console's entire build loop goes down for the
-live tenant.** The gate is about the database, not about git, so no deployment
-mechanism escapes it. Found by an adversarial pass over `ff60848`/`a6a3e12` and
-reproduced against the real code path before being written here.
+Nothing is blocked today. Staging is seeded, staging is where this runs.
 
-The chain, all of it verified:
+**In the window, in this order:**
 
-1. `ff60848` changed the content-hash format and `a6a3e12` added the required
-   brand revision, so **every** already-provisioned prototype's stored
-   `provision:<key>` hash mismatches and the card lights up "Re-sync".
-2. Re-sync and "Prepare the branch" both POST `/api/prototypes/provision` →
-   `provisionBranch` → the customer gate → `TaxonomyUnavailable` → **400**.
-3. Production has no org-default (`siteId = "*"`) profile row — this file has
-   said "Production is NOT seeded" all day, and that was written about readouts.
-   It now governs provisioning too. Staging IS seeded, which is why none of
-   this is visible where the work is actually being done.
-4. `buildDone` requires `synced` (`pipeline.ts`), so the Build dot can never go
-   green, and `builtins.ts` tells every agent session to POST provision itself
-   whenever the hash differs — so each session burns a failed re-sync and
-   surfaces the 400 as its own error.
+1. **Seed production's brand profile** — against production's `DATABASE_URL`:
 
-**The fix is one command, run against production's `DATABASE_URL`:**
+       npx tsx docs/dev/seed-taxonomy.mts outrigger-resorts-hotels
 
-    npx tsx docs/dev/seed-taxonomy.mts outrigger-resorts-hotels
+   Verify with `docs/dev/check-taxonomy.mts` (read-only) before continuing.
+2. **Deploy.**
+3. **Re-sync every prototype once.** The content hash format changed, so every
+   already-provisioned branch is stale by definition.
 
-Then re-sync each prototype once. The console now says the real cause while it
-is blocked — a `danger` alert naming the missing profile rather than the old
-"the brief or pages changed", which was wrong AND unclearable.
+**Step 1 cannot move after step 2.** Provisioning now refuses without a brand
+profile, and Re-sync is the only thing that clears the stale-hash warning — so
+deploying first gives every card a `danger` alert whose one remedy returns 400.
+`buildDone` requires `synced`, so no Build dot can go green, and `builtins.ts`
+tells every agent session to POST provision itself whenever the hash differs,
+which turns one stuck console into a stuck console plus confused agents.
 
-**The wider gap this exposed, which is NOT fixed.** `seed-taxonomy.mts` is the
-only writer of a `SiteProfile` outside the test suites — there is no console
-screen and no API route — and its `SEEDS` map has exactly one key. So for
-customer number two, provisioning is refused and *nobody can unblock it without
-editing source*. That is the onboarding UX in `BUILDER-CONTEXT.md` §1A/Q7,
-and it is now on the critical path rather than in the backlog.
+The constraint is on the DATABASE, not on a branch: whatever route points this
+code at production's `DATABASE_URL`, the profile has to be there first.
+
+While it IS blocked, the console now says why — a `danger` alert naming the
+missing profile, not the old "the brief or pages changed", which was both wrong
+and unclearable.
+
+**The wider gap this exposed, which is NOT fixed and is not a cutover step.**
+`seed-taxonomy.mts` is the only writer of a `SiteProfile` outside the test
+suites — there is no console screen and no API route — and its `SEEDS` map has
+exactly one key. So for customer number two, provisioning is refused and
+*nobody can unblock it without editing source*. That is the onboarding UX in
+`BUILDER-CONTEXT.md` §1A/Q7, and enforcement moved it from the backlog onto the
+critical path.
 
 ---
 
