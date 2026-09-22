@@ -158,7 +158,7 @@ described as.
 
 ---
 
-## Two Vercel behaviours that cost time on 22 Sep
+## Three Vercel behaviours that cost time on 22 Sep
 
 **A branch created at an already-deployed commit does not build.** `staging` was
 branched from `main` at `84c73ef`, which production had deployed four minutes
@@ -186,6 +186,49 @@ POST /v13/deployments?forceNew=1
 Check `target` in the response before believing a deployment went where you
 asked. A staging deployment that silently ran as a preview would claim the wrong
 database and look fine doing it.
+
+**Pushing the `staging` branch does not deploy to the staging environment.**
+This is the one that matters, because it looks exactly like it worked: the push
+produces a deployment, it builds, it goes READY, and it is not staging.
+
+The custom environment is configured correctly — `branchMatcher` is
+`{ type: "equals", pattern: "staging" }`, which is what the UI writes and what
+the docs describe. It still does not route. Five deployments on the `staging`
+branch, split perfectly by how they were created:
+
+| Created by | `target` | Aliases assigned |
+|---|---|---|
+| `git push origin main:staging` (×3) | `null` | branch alias only |
+| `POST /v13/deployments` with `target: "staging"` (×2) | `"staging"` | **`…-consol-bryan-hopkins-projects.vercel.app`** + branch alias |
+
+That second alias is the staging URL — the one that was logged into to prove the
+tier works. Only a `target: "staging"` deployment is ever assigned it. So a push
+leaves the staging URL serving whatever the last explicit staging deployment
+built, with no error anywhere and a green build in the dashboard to look at.
+
+It had already happened twice before it was noticed. Between 22 Sep 17:00 and
+17:52 the branch moved from `84c73ef` to `f1dab44` — twelve commits — while the
+staging URL stayed on `84c73ef`.
+
+**So: after pushing `staging`, trigger the deployment explicitly.** The push
+alone is not the deploy.
+
+```
+POST /v13/deployments?forceNew=1
+{ "name": "outrigger-prototype-management-consol",
+  "project": "prj_k2NQb2qYTAN2rlgHwW7D4KLOIONx", "target": "staging",
+  "gitSource": { "type": "github", "org": "INHQInc",
+                 "repo": "OUTRIGGER-Prototype-Management-Consol", "ref": "staging" } }
+```
+
+Confirm two fields in the response, not one: `target` is `"staging"` **and**
+`alias` contains `…-consol-bryan-hopkins-projects.vercel.app`. The alias is the
+stronger check — it is the URL a person actually opens.
+
+*Unresolved: why `branchMatcher` does not route a pushed branch to its custom
+environment. The configuration reads correctly and the behaviour contradicts it.
+Recorded as observed rather than explained — the workaround above is proven, the
+cause is not.*
 
 ---
 
