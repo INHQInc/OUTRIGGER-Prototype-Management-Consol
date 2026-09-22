@@ -15,6 +15,7 @@ import {
 import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
 import { deepObservation, type DeepObservation } from "@/lib/ai/observation";
 import { isTaxonomyUnavailable } from "@/lib/brand/profile";
+import { describeUpstream } from "@/lib/upstream";
 import { resolveRepoSource } from "@/lib/prototypes/source";
 import { listArtifactVersions } from "@/lib/prototypes/versions";
 import { lastPush } from "@/lib/prototypes/ship";
@@ -1344,6 +1345,22 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+    // SOMEONE ELSE'S FAILURE IS NOT A BAD REQUEST. This line used to answer
+    // every error with 400 and the raw message, so an expired Anthropic key
+    // reached the browser as `400 (Bad Request)` and reached the READER as the
+    // stringified JSON `401 {"type":"authentication_error"}`. 502 says the
+    // request was fine and an upstream was not, and `service`/`upstreamStatus`
+    // put the answer in the response instead of leaving it to be narrowed down.
+    const upstream = describeUpstream(e);
+    if (upstream) {
+      console.warn(`[results] ${upstream.service} ${upstream.status}: ${upstream.detail}`);
+      return NextResponse.json(
+        { error: upstream.human, service: upstream.service, upstreamStatus: upstream.status, detail: upstream.detail },
+        { status: 502 },
+      );
+    }
+    // Our own bug. It keeps the old shape deliberately: naming a service we
+    // cannot identify would be worse than saying nothing.
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 }

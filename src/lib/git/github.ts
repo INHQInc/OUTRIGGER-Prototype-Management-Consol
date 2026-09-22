@@ -14,6 +14,10 @@ const BASE = "https://api.github.com";
 export class GitError extends Error {
   constructor(public status: number, message: string) {
     super(message);
+    // NAMED so a catch can recognise it without `instanceof`. The same file can
+    // resolve to two module instances under two specifiers, and instanceof then
+    // returns false across that boundary — measured here, 22 Sep 2026.
+    this.name = "GitError";
   }
 }
 
