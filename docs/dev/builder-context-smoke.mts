@@ -167,5 +167,29 @@ console.log("\n8. an uncharacterized section still carries an instruction");
   ok("a section that IS written gets no gap text", !md.split("## How it sounds")[1]?.startsWith("\nNot characterized"));
 }
 
+console.log("\n9. a remedy that does not work is worse than no remedy");
+{
+  // The first version of this refusal named two fixes and both were wrong: a
+  // console screen that does not exist, and `--dry`, which is the flag that
+  // writes NOTHING. A user follows it, sees exit 0, re-syncs, and gets the
+  // identical error with nothing explaining why.
+  const msg = SRC.slice(SRC.indexOf("This customer has no usable brand profile"), SRC.indexOf("This customer has no usable brand profile") + 600);
+  ok("does not send the user to a dry run", !msg.includes("--dry"));
+  ok("names the actual org, not a placeholder", msg.includes("${orgId}") && !msg.includes("<org>"),
+    "a guessed org id is how a row keyed `outrigger` instead of `outrigger-resorts-hotels` cost a day");
+  ok("is honest that no screen exists yet", /no onboarding screen/.test(msg));
+}
+
+console.log("\n10. the loader-tag warning is not swallowed by the table above it");
+{
+  // `.filter(Boolean)` eats the array's blank-line separators. That is safe
+  // while every following line is a heading — a heading ends a GFM table — and
+  // this warning is a paragraph, so without a leading newline it parses as one
+  // more table row and renders inside the first column.
+  const warn = SRC.indexOf("A page whose loader tag is absent");
+  ok("the warning starts its own block", SRC.slice(warn - 4, warn).includes("\\n"),
+    SRC.slice(warn - 20, warn + 40));
+}
+
 console.log(failures ? `\n${failures} FAILED\n` : "\nall good\n");
 process.exit(failures ? 1 : 0);

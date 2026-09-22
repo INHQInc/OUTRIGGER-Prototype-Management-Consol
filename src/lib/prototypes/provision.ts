@@ -178,8 +178,13 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
       ? [`| Page | Review link (?opmc) | Environment | Loader tag | Offline snapshot |`, `|---|---|---|---|---|`, ...targetRows].join("\n")
       : "_No target pages yet._",
     ``,
+    // THE LEADING NEWLINE IS LOAD-BEARING. The `` separators in this array are
+    // empty strings and the `.filter(Boolean)` below eats them, which is fine
+    // while every following line is a heading — a heading ends a GFM table. A
+    // paragraph does not: without this newline the warning is parsed as one
+    // more table row and renders inside the first column.
     proto.targets.some((t) => !injectionPasses(t))
-      ? `**A page whose loader tag is absent or wrong-env cannot show your build.** \`?opmc\` will render nothing there however correct the variation is — say so rather than debugging the code. Fix: Pages tab → copy the tag for that environment.\n`
+      ? `\n**A page whose loader tag is absent or wrong-env cannot show your build.** \`?opmc\` will render nothing there however correct the variation is — say so rather than debugging the code. Fix: Pages tab → copy the tag for that environment.\n`
       : ``,
     `Read \`.opmc/targets/<slug>/skeleton.html\` + \`selectors.md\` to author robust selectors offline; verify on the live review link.`,
     ``,
@@ -246,7 +251,13 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   // prose ABOUT the page — this is the same rule for the page itself.
   const customer = await customerContextFor(orgId).catch((e: unknown) => {
     if (isTaxonomyUnavailable(e)) {
-      throw new Error(`This customer has no usable brand profile, so there are no words to build in. ${e.message} Fix it in the console (or seed it: \`npx tsx docs/dev/seed-taxonomy.mts <org> --dry\`), then re-sync.`);
+      // NAME THE ORG AND THE REAL COMMAND. This said "fix it in the console
+      // (or seed it: ... --dry)". There is no brand-profile screen, `--dry`
+      // is the flag that writes NOTHING, and `<org>` left as a placeholder is
+      // how an orphan row keyed `outrigger` instead of `outrigger-resorts-hotels`
+      // cost a day. A remedy that does not work is worse than no remedy: the
+      // user runs it, sees exit 0, retries, and gets the identical error.
+      throw new Error(`This customer has no usable brand profile, so there are no words to build in. ${e.message} There is no onboarding screen for this yet \u2014 today the only writer is the seed script, and only for customers it already knows: \`npx tsx docs/dev/seed-taxonomy.mts ${orgId}\`. Then re-sync.`);
     }
     throw e;
   });
