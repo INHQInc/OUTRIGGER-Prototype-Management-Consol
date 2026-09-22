@@ -126,6 +126,37 @@ described as.
 
 ---
 
+## Two Vercel behaviours that cost time on 22 Sep
+
+**A branch created at an already-deployed commit does not build.** `staging` was
+branched from `main` at `84c73ef`, which production had deployed four minutes
+earlier. Vercel deduplicates by commit SHA, so the push produced *no deployment
+at all* — no error, no skipped entry, nothing. The environment config was
+correct the whole time. `guard/code-write` had built fine an hour before because
+it carried its own distinct SHA.
+
+This only bites at bootstrap. Once `staging` diverges from `main` it always has
+something new to build. To force one: push any commit (an empty one works), or
+trigger it from the API.
+
+**The deployments API ignores `customEnvironmentSlugOrId`.** Passing it produced
+an ordinary Preview deployment — `target: null`, no custom environment attached,
+and therefore Preview's environment variables rather than staging's. The field
+that works is `target` set to the environment slug:
+
+```
+POST /v13/deployments?forceNew=1
+{ "name": "...", "project": "prj_...", "target": "staging",
+  "gitSource": { "type": "github", "org": "INHQInc",
+                 "repo": "OUTRIGGER-Prototype-Management-Consol", "ref": "staging" } }
+```
+
+Check `target` in the response before believing a deployment went where you
+asked. A staging deployment that silently ran as a preview would claim the wrong
+database and look fine doing it.
+
+---
+
 ## After you refresh a branch from production, later
 
 A Neon branch is a point-in-time copy, so any branch forked from now on carries
