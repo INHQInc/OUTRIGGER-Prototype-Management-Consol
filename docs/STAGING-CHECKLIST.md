@@ -14,36 +14,68 @@ Two secrets remain, and only a person can enter them.
 
 ---
 
-## What is left — both are yours
+## Status: done. Staging is live and logged into.
 
-An agent does not handle connection strings or API keys. These are the only
-steps not done.
+Confirmed 22 Sep by logging in at
+`https://outrigger-prototype-management-consol-bryan-hopkins-projects.vercel.app`
+— which exercises the whole chain at once: Vercel routes the branch to the
+staging environment, the app signs a session with staging's `AUTH_SECRET`,
+matches the user against staging's `ADMIN_EMAILS`, checks staging's
+`ADMIN_LOGIN_SECRET`, and reads staging's own Neon branch.
 
-### A. `DATABASE_URL` for staging and for Preview
+### The eight variables staging needs
 
-For each of the two: Neon → project `outrigger-prototype-console` → Branches →
-the branch → **Connect** → copy the string. Then Vercel → Environment Variables
-→ **Add Environment Variable**:
+| Variable | Type | Note |
+|---|---|---|
+| `DATABASE_URL` | Secret | staging Neon branch |
+| `PRISM_DB_OWNER` | Config | `staging` |
+| `NEXT_PUBLIC_RELEASE_CHANNEL` | Config | `Staging` — the visible proof you are not on production |
+| `ANTHROPIC_API_KEY` | Secret | shared with Preview, separate from production |
+| `AUTH_SECRET` | Secret | **must differ from production's** |
+| `ADMIN_LOGIN_SECRET` | Secret | its own password |
+| `ADMIN_EMAILS` | Config | same addresses as production |
+| `PUBLIC_BASE_URL` | Config | staging's own URL |
 
-| Field | Value |
-|---|---|
-| Key | `DATABASE_URL` |
-| Type | Secret |
-| Value | the string you copied |
-| Environments | tick **only** the one tier — `staging`, or `Preview` |
+### Correcting this document: "Add nothing else" was wrong
 
-The environments box is the whole risk. It opens with **Production** ticked.
-Untick it. Production already has its own and must not be touched.
+An earlier version of this checklist said staging needed only `DATABASE_URL` and
+`ANTHROPIC_API_KEY`, and to **add nothing else**. That was wrong, and it left
+staging unusable in a way that looked like a deploy failure. Three of the four
+variables above are required before a single authenticated page renders:
 
-### B. `ANTHROPIC_API_KEY` for staging
+- **`AUTH_SECRET` unset → the app throws.** `authSecret()` in
+  `src/lib/auth/config.ts` raises rather than returning a default. Not a login
+  failure — a crash on any page that touches a session.
+- **`ADMIN_EMAILS` unset → login always fails.** `isAdminEmail()` tests
+  membership of an empty list, so the correct password is still rejected.
+- **`ADMIN_LOGIN_SECRET` unset → "Admin login not configured"**, a 500 returned
+  before any password is checked.
 
-Preview already has one — the existing key is scoped *Production and Preview*
-(added 24 Jul). Only staging is missing it. Add it scoped to **staging** only.
-A separate key from production gives you per-tier cost attribution, which the
-console has none of today.
+The right rule is narrower than "add nothing else": **withhold only the variables
+that let a tier reach the outside world** — `PRISM_OUTWARD_EFFECTS`,
+`CRON_SECRET`, `RESEND_API_KEY`, `MAILGUN_*`, `OPTIMIZELY_*`. Everything the app
+needs to boot and authenticate must be present, with its own values.
 
-**Add nothing else.** Leaving `CRON_SECRET` and `PRISM_OUTWARD_EFFECTS` off
-staging is what keeps it harmless.
+### `AUTH_SECRET` and `ADMIN_LOGIN_SECRET` are not interchangeable
+
+They look alike in the dashboard and behave nothing alike.
+
+| | `AUTH_SECRET` | `ADMIN_LOGIN_SECRET` |
+|---|---|---|
+| What | signs session cookies | a password people type |
+| Rotating it | **invalidates every session** — everyone logged out, 365-day cookies | harmless; existing sessions keep working |
+| Across tiers | **must differ** — a shared key makes a staging session valid on production | may differ; no reason to share |
+
+The dangerous case is editing production's `AUTH_SECRET` while meaning to add
+staging's. Same dialog shape, and the damage is invisible until people start
+getting logged out. Two tells that you are on an existing row rather than adding
+a new one: the **Key field is greyed out**, and the Config option reads *"Saved
+secrets are write-only."*
+
+To add a tier's own value, always use **Add Environment Variable** and expect to
+end with *two* rows of the same name on different scopes. Vercel allows that —
+`PRISM_DB_OWNER` exists three times. Confirm by the timestamps: the new row says
+"Added just now" and the old row's date must not have moved.
 
 ---
 
