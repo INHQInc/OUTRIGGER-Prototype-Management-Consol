@@ -1,9 +1,138 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-09-20. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+*Updated: 2026-09-22. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
 
 ---
 
+## BRAND PROFILE STORE (2026-09-22) — shipped to main, nothing reads it yet
+
+The Beta-2 context model landed on trunk as `src/lib/brand/`. **No call site
+consumes it.** That is deliberate: the seam ships first so the eighteen hardcoded
+hospitality strings get deleted once rather than twice.
+
+### The model
+
+Three kinds of knowledge, kept apart because they have different truth
+conditions (from `docs/architecture/CONTEXT-INGESTION.md` on `beta-2`):
+
+| Kind | What it is | Who settles it |
+|---|---|---|
+| OBSERVED | crawl facts: fonts, palette, CTAs, pages | re-read, never approved |
+| CHARACTERIZED | prose inferred from the observed | a human accepts it |
+| EARNED | what this site's experiments proved | measurement |
+
+`SiteProfile` is a **pinned revision**, immutable once approved; re-reading makes
+r2 and never rewrites r1. That is what makes "what did the AI know when it built
+this" answerable a year later. `BrandFact` is the earned layer, append-only, with
+expiry as a column and superseding as a pointer.
+
+### Two decisions worth not re-litigating
+
+**The unit of characterization is the SITE, not the customer.** A crawl is of a
+site and two sites of one customer do not share a voice. The customer level holds
+inherited defaults only, at the sentinel `siteId = "*"`, resolved site → customer
+→ vertical-neutral.
+
+**Stored taxonomy is SPARSE (`Partial<Taxonomy>`).** Beta 2 stored a complete
+object per site. The smoke test caught what that costs: spreading a fully
+populated taxonomy silently overwrites every inherited value with a neutral
+default, so a site that corrected only its visitor noun lost its customer's
+product noun. Store only what this site actually says; resolution fills the gaps.
+
+Also: Beta 2's section key `guests` became `audience`. The schema built to remove
+the hospitality assumption had the assumption inside it.
+
+### Verify
+
+`npx tsx docs/dev/brand-profile-smoke.mts` — 13 assertions against the real FS
+backend: neutral default, field-by-field inheritance, drafts are not the answer,
+revisions additive, expired facts excluded, superseding is a pointer.
+
+---
+
+## TIERS AND GUARDS (2026-09-22) — infrastructure, partly armed
+
+Read `AGENTS.md` → "Deployment tiers" for the model. This is what is actually
+true as of 22 Sep.
+
+### Done
+
+- **Vercel custom environment `staging`** exists on `outrigger-prototype-management-consol`,
+  tracking the branch `staging` exactly (`env_pdfiFOr3Vr2F6lzKIFwm1S6fSEqX`).
+  Created with "import variables from another environment" OFF, so it inherited
+  nothing from production.
+- **Config vars set** (all type Config, not Secret, so they stay readable):
+  `PRISM_DB_OWNER=prod` on Production · `PRISM_DB_OWNER=staging` and
+  `NEXT_PUBLIC_RELEASE_CHANNEL=Staging` on staging.
+- **Deployment protection was already correct.** `ssoProtection.enabled: true`,
+  `deploymentType: "all_except_custom_domains"`. Every `.vercel.app` URL,
+  including staging and previews, needs a team login; the production custom
+  domain stays public.
+
+### NOT done — the guard is not armed
+
+`select val from content_meta where key = 'db-owner'` returns **nothing**. The
+production build serving today (`06d29f0`) was created about ten minutes BEFORE
+`PRISM_DB_OWNER` was added, and env vars only apply to new deployments. The
+variable is set; the running build has never seen it.
+
+**One production redeploy of the same commit arms it.** Until then a
+misconfigured deployment pointed at the live database would run as "legacy" and
+proceed, which is the exact hazard the guard exists for.
+
+### The decision on seeding staging, and why
+
+**Copy production into the staging Neon branch. Do NOT scrub it.**
+
+Customer credentials live in the DATABASE, not in env vars: the GitHub PAT in
+`git_connection.config`, the Optimizely PAT and project id in
+`experimentation_config.config`. So swapping `DATABASE_URL` isolates the rows and
+not the reach — a naive copy hands staging live customer tokens.
+
+Scrubbing was rejected because it is a procedure that must be repeated correctly
+forever, and every refresh is another chance to miss a row. `src/lib/deploy/outward.ts`
+already solves it structurally: outward effects are opt-in per deployment and
+default to blocked. Leave `PRISM_OUTWARD_EFFECTS` unset on staging and it can
+read the customer's real Optimizely data over GET and change nothing.
+
+**Do not attach a custom domain to staging.** Protection is
+`all_except_custom_domains`, so `staging.prism.brandgraphai.com` would make a
+console holding customer data publicly reachable. Use the generated URL.
+
+### Still outstanding
+
+- Production redeploy (arms the ownership guard).
+- Neon branch for staging, then `DATABASE_URL` + `ANTHROPIC_API_KEY` on the
+  staging environment. Leave `CRON_SECRET` unset — both crons fail closed
+  without it, which is how duplicate report emails are prevented.
+- Merge `guard/code-write` (below) before staging has a database.
+
+---
+
+## OUTWARD EFFECTS: code-write was never enforced (2026-09-22) — branch `guard/code-write`
+
+`src/lib/deploy/outward.ts` names three dangerous surfaces and gated two.
+`email` and `experiment-write` asserted; the GitHub client never did, so a
+co-hosted deployment could still create `prototype/<key>` and commit into the
+shared prototypes repo — the exact case that file's own header describes.
+
+Guarded inside `gh()` in `src/lib/git/github.ts`, the one choke point every call
+passes through, mirroring `optimizely/api.ts:98`. A future write method inherits
+it instead of having to remember.
+
+**The test is structural, and that is the point.** `docs/dev/outward-smoke.mts`
+reads the `OutwardEffect` union out of the module and requires each arm to be
+asserted somewhere under `src/`. A TypeScript union cannot report an unused arm
+at a CALL site, which is why this gap survived being written in a header, listed
+in the permission table, and reviewed. Verified it fails for the right reason
+when the guard is removed.
+
+Known side effect: `canCreateBranch()`'s bogus-SHA write probe is a POST, so on a
+deployment without `code-write` the Settings → Repositories probe now surfaces the
+outward refusal instead of a clean yes/no. The message names the variable to set,
+so that is honest rather than broken.
+
+---
 ## READOUT PROSE CAPS (2026-09-20) — shipped
 
 A finished readout rendered `partial structure · executive: over 900 chars
