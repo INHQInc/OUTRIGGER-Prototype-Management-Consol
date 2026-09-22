@@ -352,6 +352,14 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   ships an instruction pointing at the page's own evidence — silence reads as
   freedom, and a model with freedom and no voice description writes generic
   marketing copy.
+- **A tier that enforces the profile must be SEEDED BEFORE the code that
+  enforces it lands there.** Provisioning refuses without a brand profile and
+  the content hash changed, so on an unseeded tier every prototype shows
+  "Re-sync" and every Re-sync 400s — an unclearable warning on a build loop
+  that cannot run. The ordering constraint was written for readouts ("shipping
+  the injection before seeding production turns every readout into an error")
+  and now governs provisioning too. See the RELEASE GATE at the top of
+  `docs/HANDOFF.md`.
 - **`contentHashOf(proto, brandRev)` — the second argument is required, and
   there is ONE derivation of it (`brandBasis()`).** Four surfaces compare this
   hash (provision, the prototype page, the board, `/api/prototypes/sync-status`).

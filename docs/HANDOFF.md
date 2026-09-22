@@ -21,6 +21,45 @@ frozen — but it means the repo's own "authoritative state" is on a branch, whi
 is exactly the kind of thing that gets missed. It resolves when the release
 ships and the branch merges.
 
+## ⛔ RELEASE GATE — SEED PRODUCTION BEFORE THIS BRANCH MERGES (22 Sep 2026)
+
+**Merging `phase1/taxonomy-injection` into `main` without seeding production's
+brand profile first takes the console's entire build loop down for the live
+tenant.** Found by an adversarial pass over `ff60848`/`a6a3e12` and reproduced
+against the real code path before being written here.
+
+The chain, all of it verified:
+
+1. `ff60848` changed the content-hash format and `a6a3e12` added the required
+   brand revision, so **every** already-provisioned prototype's stored
+   `provision:<key>` hash mismatches and the card lights up "Re-sync".
+2. Re-sync and "Prepare the branch" both POST `/api/prototypes/provision` →
+   `provisionBranch` → the customer gate → `TaxonomyUnavailable` → **400**.
+3. Production has no org-default (`siteId = "*"`) profile row — this file has
+   said "Production is NOT seeded" all day, and that was written about readouts.
+   It now governs provisioning too.
+4. `buildDone` requires `synced` (`pipeline.ts`), so the Build dot can never go
+   green, and `builtins.ts` tells every agent session to POST provision itself
+   whenever the hash differs — so each session burns a failed re-sync and
+   surfaces the 400 as its own error.
+
+**The fix is one command, run against production's `DATABASE_URL`:**
+
+    npx tsx docs/dev/seed-taxonomy.mts outrigger-resorts-hotels
+
+Then re-sync each prototype once. The console now says the real cause while it
+is blocked — a `danger` alert naming the missing profile rather than the old
+"the brief or pages changed", which was wrong AND unclearable.
+
+**The wider gap this exposed, which is NOT fixed.** `seed-taxonomy.mts` is the
+only writer of a `SiteProfile` outside the test suites — there is no console
+screen and no API route — and its `SEEDS` map has exactly one key. So for
+customer number two, provisioning is refused and *nobody can unblock it without
+editing source*. That is the onboarding UX in `BUILDER-CONTEXT.md` §1A/Q7,
+and it is now on the critical path rather than in the backlog.
+
+---
+
 ## START HERE IF YOU ARE PICKING UP THE NEUTRALITY WORK (22 Sep 2026)
 
 **`docs/plans/CUSTOMER-NEUTRAL.md` is the approach document.** Read it before

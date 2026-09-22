@@ -34,7 +34,7 @@ const SANDBOX = mkdtempSync(join(tmpdir(), "prism-builder-"));
 process.chdir(SANDBOX);
 process.on("exit", () => rmSync(SANDBOX, { recursive: true, force: true }));
 
-const { contentHashOf } = await import("../../src/lib/prototypes/provision");
+const { contentHashOf, renderBriefMd } = await import("../../src/lib/prototypes/provision");
 const { customerContextFor, renderCustomerMd, brandBasis } = await import("../../src/lib/prototypes/customer-context");
 const { isTaxonomyUnavailable } = await import("../../src/lib/brand/profile");
 const { getContentStore } = await import("../../src/lib/content/store");
@@ -88,14 +88,39 @@ console.log("\n2. the page list still decides staleness on its own");
   ])));
 }
 
+const brief = (targets: PrototypeRecord["targets"]) =>
+  renderBriefMd(proto(targets), new Map(), "https://console.example", "2026-09-22T00:00:00.000Z");
+const tgt = (state?: string) => [{ url: "https://example.com/a", source: "live" as const,
+  ...(state ? { injection: { state, at: "2026-01-01T00:00:00.000Z" } } : {}) }] as PrototypeRecord["targets"];
+
 console.log("\n3. the verdict reaches both files the agent reads");
 {
   ok("context.json carries it", /injection:\s*\{\s*state:/.test(SRC),
     "the context mapper must emit targets[].injection");
-  ok("brief.md carries it", SRC.includes("injectionNote(t)") && SRC.includes("| Loader tag |"),
-    "the human-readable table needs the column too — context.json is not what a person opens");
-  ok("an untagged page gets an instruction, not just a state", SRC.includes("renders nothing"),
+  const md = brief(tgt("absent"));
+  ok("brief.md has the column", md.includes("| Loader tag |"), "context.json is not what a person opens");
+  ok("...and the verdict in it", /ABSENT/.test(md));
+  ok("an untagged page gets an instruction, not just a state", md.includes("renders nothing"),
     "\"absent\" without \"so your build cannot appear\" is a fact the reader has to interpret");
+  ok("the failing page is NAMED", md.includes("`https://example.com/a`"),
+    "on a three-page prototype, \"a page\" sends the agent to check all three");
+}
+
+console.log("\n3b. PROVEN BROKEN is not the same as NOBODY LOOKED");
+{
+  // The gate was `!injectionPasses(t)`, which is false for "never checked" and
+  // for "unreachable" too — so every FIRST provision told the agent flatly that
+  // its page could not show the build. The same confidently-wrong failure this
+  // warning exists to prevent, pointed the other way.
+  const HARD = "cannot show your build";
+  const unchecked = brief(tgt());
+  ok("a never-checked page raises no alarm", !unchecked.includes(HARD), "this is EVERY first provision");
+  ok("...but is not silent either", /nobody has checked/.test(unchecked));
+  ok("an unreachable page raises no alarm", !brief(tgt("unreachable")).includes(HARD));
+  for (const state of ["absent", "wrong-env"]) {
+    ok(`"${state}" DOES raise the alarm`, brief(tgt(state)).includes(HARD));
+  }
+  ok("a verified page says nothing at all", !brief(tgt("present")).includes("loader tag yet"));
 }
 
 console.log("\n4. the check timestamp is deliberately NOT delivered");
@@ -184,11 +209,35 @@ console.log("\n10. the loader-tag warning is not swallowed by the table above it
 {
   // `.filter(Boolean)` eats the array's blank-line separators. That is safe
   // while every following line is a heading — a heading ends a GFM table — and
-  // this warning is a paragraph, so without a leading newline it parses as one
-  // more table row and renders inside the first column.
-  const warn = SRC.indexOf("A page whose loader tag is absent");
-  ok("the warning starts its own block", SRC.slice(warn - 4, warn).includes("\\n"),
-    SRC.slice(warn - 20, warn + 40));
+  // this warning is a paragraph, so without a blank line before it GFM parses
+  // it as one more table row and renders it inside the first column.
+  const lines = brief(tgt("absent")).split("\n");
+  const i = lines.findIndex((l) => l.includes("cannot show your build"));
+  ok("there is a blank line between the table and the warning", i > 0 && lines[i - 1].trim() === "",
+    `previous line: ${JSON.stringify(lines[i - 1])}`);
+}
+
+console.log("\n11. a card blocked on a missing profile says so, instead of blaming the brief");
+{
+  // Without this the console says "The brief or pages changed ... Re-sync",
+  // and Re-sync returns 400 because provisioning refuses without a profile.
+  // The warning is then permanent and names the wrong cause: the user edits
+  // the brief, re-syncs, fails, and has nothing to go on.
+  const { derivePipeline } = await import("../../src/lib/prototypes/pipeline");
+  const p = proto(tgt());
+  const stale = JSON.stringify({ contentHash: "deadbeefdeadbeef", provisionedAt: "2026-01-01T00:00:00.000Z" });
+  const base = { proto: p, provisionFlagRaw: stale, source: null, versions: [], lastPush: null } as never;
+
+  const noProfile = derivePipeline({ ...(base as object), brandRev: null } as never);
+  const hit = noProfile.alerts.find((a) => /brand profile/.test(a.text));
+  ok("the alert names the missing profile", Boolean(hit));
+  ok("...at danger, not warn", hit?.level === "danger", "a permanently stuck card is not a nudge");
+  ok("...and does not also blame the brief", !noProfile.alerts.some((a) => /brief or pages changed/.test(a.text)),
+    "two alerts for one cause sends the user to edit a brief that is fine");
+
+  const seeded = derivePipeline({ ...(base as object), brandRev: "org:1" } as never);
+  ok("a seeded customer still gets the ordinary re-sync nudge",
+    seeded.alerts.some((a) => /brief or pages changed/.test(a.text)));
 }
 
 console.log(failures ? `\n${failures} FAILED\n` : "\nall good\n");

@@ -137,8 +137,14 @@ function injectionNote(t: PrototypeTarget): string {
 
 type EnvLite = { origin: string; label: string; kind: string; loaderKey: string; url: string };
 
-function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>, consoleUrl: string, provisionedAt: string): string {
+/** Exported for `docs/dev/builder-context-smoke.mts` — the loader-tag warning
+ *  is a claim about the customer’s page, so it is asserted by RENDERING it. */
+export function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>, consoleUrl: string, provisionedAt: string): string {
   const b = proto.brief;
+  // Split deliberately: `injectionPasses` is the PASS test, and its negation
+  // lumps "proven absent" together with "nobody looked".
+  const blocked = proto.targets.filter((t) => t.injection?.state === "absent" || t.injection?.state === "wrong-env");
+  const unverified = proto.targets.filter((t) => !injectionPasses(t) && !blocked.includes(t));
   const targetRows = proto.targets.map((t) => {
     let origin = ""; try { origin = new URL(t.url).origin; } catch { /* */ }
     const env = envByOrigin.get(origin);
@@ -178,14 +184,23 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
       ? [`| Page | Review link (?opmc) | Environment | Loader tag | Offline snapshot |`, `|---|---|---|---|---|`, ...targetRows].join("\n")
       : "_No target pages yet._",
     ``,
+    // PROVEN BROKEN IS NOT THE SAME AS UNCHECKED, and this said it was. The
+    // gate was `!injectionPasses(t)`, which is false for "never checked" and
+    // for "unreachable" too — so every FIRST provision, where nothing has been
+    // verified yet, told the agent flatly that its page could not show the
+    // build. That is the same confidently-wrong failure this warning exists to
+    // prevent, pointed the other way.
+    //
     // THE LEADING NEWLINE IS LOAD-BEARING. The `` separators in this array are
     // empty strings and the `.filter(Boolean)` below eats them, which is fine
     // while every following line is a heading — a heading ends a GFM table. A
-    // paragraph does not: without this newline the warning is parsed as one
-    // more table row and renders inside the first column.
-    proto.targets.some((t) => !injectionPasses(t))
-      ? `\n**A page whose loader tag is absent or wrong-env cannot show your build.** \`?opmc\` will render nothing there however correct the variation is — say so rather than debugging the code. Fix: Pages tab → copy the tag for that environment.\n`
-      : ``,
+    // paragraph does not: without this newline the text is parsed as one more
+    // table row and renders inside the first column.
+    blocked.length
+      ? `\n**A page whose loader tag is absent or wrong-env cannot show your build.** \`?opmc\` will render nothing on ${blocked.map((t) => `\`${t.url}\``).join(", ")} however correct the variation is — say so rather than debugging the code. Fix: Pages tab → copy the tag for that environment.\n`
+      : unverified.length
+        ? `\n_No page here has been verified as carrying the loader tag yet — that means nobody has checked, not that it is missing. If \`?opmc\` renders nothing, verify on the Pages tab before suspecting your code._\n`
+        : ``,
     `Read \`.opmc/targets/<slug>/skeleton.html\` + \`selectors.md\` to author robust selectors offline; verify on the live review link.`,
     ``,
   ].filter(Boolean).join("\n");

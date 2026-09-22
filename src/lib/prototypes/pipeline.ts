@@ -201,7 +201,13 @@ export function derivePipeline(inp: PipelineInputs): Pipeline {
   // guard, so Handoff cards sat there being told to re-sync a branch for an
   // agent that will never build again. A finished card says nothing.
   if (!stageShipped) {
-  if (!external && !synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
+  // SAY THE REAL CAUSE. A null brandRev means this customer has no complete
+  // brand profile, and provisioning REFUSES without one (provision.ts) — so
+  // "the brief or pages changed … Re-sync" is both wrong and unactionable:
+  // clicking Re-sync returns a 400 and the warning never clears. Naming the
+  // actual blocker is the difference between a stuck card and a fixable one.
+  if (!external && !synced && inp.brandRev === null) alerts.push({ level: "danger", text: "This customer has no brand profile, so the branch cannot be provisioned — the agent would write copy in words the customer never chose. Seed or approve the profile first; Re-sync will keep failing until it exists.", anchor: "build" });
+  else if (!external && !synced) alerts.push({ level: "warn", text: "The brief or pages changed since the branch was last synced — Re-sync so the agent builds against the current brief.", anchor: "build" });
   if (!external && synced && drifted) alerts.push({ level: "warn", text: "The build no longer matches the brief — re-sync and rebuild, or dismiss the audit if the brief is the thing that's wrong.", anchor: "build" });
   if (!external && problem === "starter-build") alerts.push({ level: "danger", text: "The branch is serving the inherited starter build — the review URL shows the wrong prototype. Build and push once.", anchor: "build" });
   // "Fix and re-cut" was a dead end: certification judges the CODE, and nobody

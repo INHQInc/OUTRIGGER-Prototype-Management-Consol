@@ -104,9 +104,14 @@ const before = await requireTaxonomy(org).catch((e) => {
 });
 const existing = await store.getSiteProfile(org, ORG_DEFAULT_SITE_ID);
 
+// `before` is null when nothing resolves, which is THE case this script exists
+// for. Dereferencing it threw a TypeError before the --dry check and before the
+// write, so the only unblock path crashed on exactly the input it is for — and
+// `docs/dev` is excluded from tsconfig, so nothing caught a null deref that
+// strict mode would have refused anywhere else in the repo.
 console.log(`\nresolves today:`);
 for (const k of Object.keys(want) as (keyof Taxonomy)[]) {
-  const b = JSON.stringify(before[k]);
+  const b = before ? JSON.stringify(before[k]) : "(nothing — no profile yet)";
   const w = JSON.stringify(want[k]);
   const neutral = JSON.stringify(DEFAULT_TAXONOMY[k]);
   const mark = b === w ? "  " : "->";
