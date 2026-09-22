@@ -254,9 +254,12 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
       // NAME THE ORG AND THE REAL COMMAND. This said "fix it in the console
       // (or seed it: ... --dry)". There is no brand-profile screen, `--dry`
       // is the flag that writes NOTHING, and `<org>` left as a placeholder is
-      // how an orphan row keyed `outrigger` instead of `outrigger-resorts-hotels`
-      // cost a day. A remedy that does not work is worse than no remedy: the
-      // user runs it, sees exit 0, retries, and gets the identical error.
+      // how a row once got keyed to a readable slug rather than the real tenant
+      // id and cost a day — nothing could ever resolve it. (Spelling that id
+      // out here would put this file on the vocabulary ratchet, which counts
+      // words, not intent; seed-taxonomy.mts:49-53 has the real ids.)
+      // A remedy that does not work is worse than no remedy: the user runs it,
+      // sees exit 0, retries, and gets the identical error.
       throw new Error(`This customer has no usable brand profile, so there are no words to build in. ${e.message} There is no onboarding screen for this yet \u2014 today the only writer is the seed script, and only for customers it already knows: \`npx tsx docs/dev/seed-taxonomy.mts ${orgId}\`. Then re-sync.`);
     }
     throw e;
