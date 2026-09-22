@@ -21,7 +21,7 @@ import { deriveDataGlobals, deriveDesignTokens, fetchPageHtml, type FontRef } fr
 import { listReferenceRepos } from "../git/reference-repos";
 import { enabledSkillsForPrototype } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
-import { isBriefComplete, type PrototypeRecord } from "./types";
+import { injectionPasses, isBriefComplete, type PrototypeRecord, type PrototypeTarget } from "./types";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
 
@@ -107,6 +107,32 @@ function deriveSelectors(html: string, url: string): string {
   ].join("\n");
 }
 
+/**
+ * THE LOADER-TAG VERDICT FOR ONE PAGE, in words the builder can act on.
+ *
+ * The console has verified this per page since the Pages tab shipped
+ * (`TargetInjection`, types.ts) and threw it away right here. On an untagged
+ * environment the review URL renders nothing, `/api/loader/status` looks
+ * healthy, and the agent debugs its own correct code — while the console knew
+ * the whole time.
+ *
+ * The check TIMESTAMP is deliberately not delivered. It would be written at
+ * commit time and then sit still until something else staled the branch, so a
+ * three-day-old "checked just now" is the likelier reading. The state is what
+ * is actionable; the console holds the recency.
+ */
+function injectionNote(t: PrototypeTarget): string {
+  const inj = t.injection;
+  switch (inj?.state) {
+    case "present": return "present (verified)";
+    case "confirmed": return "present (human-confirmed)";
+    case "wrong-env": return `WRONG ENV — the tag on this page belongs to ${inj.foundEnvLabel || "another environment"}`;
+    case "absent": return "**ABSENT — `?opmc` renders nothing here**";
+    case "unreachable": return "unknown — the page could not be reached";
+    default: return "never checked";
+  }
+}
+
 type EnvLite = { origin: string; label: string; kind: string; loaderKey: string; url: string };
 
 function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>, consoleUrl: string, provisionedAt: string): string {
@@ -114,7 +140,7 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
   const targetRows = proto.targets.map((t) => {
     let origin = ""; try { origin = new URL(t.url).origin; } catch { /* */ }
     const env = envByOrigin.get(origin);
-    return `| ${t.url} | \`${t.url}?opmc=${proto.key}\` | ${env ? `${env.label} (${env.kind})` : "—"} | .opmc/targets/${slugForUrl(t.url)}/ |`;
+    return `| ${t.url} | \`${t.url}?opmc=${proto.key}\` | ${env ? `${env.label} (${env.kind})` : "—"} | ${injectionNote(t)} | .opmc/targets/${slugForUrl(t.url)}/ |`;
   });
   return [
     `<!-- OPMC-PROVISIONED · do NOT hand-edit · edit the brief in the console and Re-sync · the DB is canonical · this dir is dropped from the ship PR -->`,
@@ -146,9 +172,12 @@ function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>
     proto.metrics.primary ? `## Metrics\nPrimary: ${proto.metrics.primary}${proto.metrics.guardrails.length ? ` · Guardrails: ${proto.metrics.guardrails.join(", ")}` : ""}\n` : "",
     `## Target pages`,
     proto.targets.length
-      ? [`| Page | Review link (?opmc) | Environment | Offline snapshot |`, `|---|---|---|---|`, ...targetRows].join("\n")
+      ? [`| Page | Review link (?opmc) | Environment | Loader tag | Offline snapshot |`, `|---|---|---|---|---|`, ...targetRows].join("\n")
       : "_No target pages yet._",
     ``,
+    proto.targets.some((t) => !injectionPasses(t))
+      ? `**A page whose loader tag is absent or wrong-env cannot show your build.** \`?opmc\` will render nothing there however correct the variation is — say so rather than debugging the code. Fix: Pages tab → copy the tag for that environment.\n`
+      : ``,
     `Read \`.opmc/targets/<slug>/skeleton.html\` + \`selectors.md\` to author robust selectors offline; verify on the live review link.`,
     ``,
   ].filter(Boolean).join("\n");
@@ -164,7 +193,10 @@ export function contentHashOf(proto: PrototypeRecord): string {
     brief: proto.brief,
     hypothesis: proto.hypothesis,
     metrics: proto.metrics,
-    targets: proto.targets.map((t) => t.url).sort(),
+    // The loader-tag verdict is DELIVERED now (`context.json` → targets[].injection),
+    // which makes it a build input: tagging a page that was absent has to stale
+    // the branch, or the agent keeps reading yesterday's "renders nothing here".
+    targets: proto.targets.map((t) => `${t.url}\u0000${t.injection?.state ?? "unchecked"}`).sort(),
     // Attachments are build inputs, so changing them makes the branch stale
     // exactly as editing the brief does. Asset name + filename only: the bytes
     // behind a content-addressed name never change, and the note is for the
@@ -286,7 +318,14 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     targets: proto.targets.map((t) => {
       let origin = ""; try { origin = new URL(t.url).origin; } catch { /* */ }
       const env = envByOrigin.get(origin);
-      return { url: t.url, source: t.source, reviewUrl: `${t.url}?opmc=${proto.key}`, env: env ? { label: env.label, kind: env.kind } : null, snapshot: `.opmc/targets/${slugForUrl(t.url)}/` };
+      return {
+        url: t.url, source: t.source, reviewUrl: `${t.url}?opmc=${proto.key}`,
+        env: env ? { label: env.label, kind: env.kind } : null,
+        // Is the loader tag actually on this page? See `injectionNote` above for
+        // why the state ships and the check timestamp does not.
+        injection: { state: t.injection?.state ?? "unchecked", note: injectionNote(t), foundEnvLabel: t.injection?.foundEnvLabel ?? null },
+        snapshot: `.opmc/targets/${slugForUrl(t.url)}/`,
+      };
     }),
     // Read-only production source checkouts. Identity + notes only — the local
     // path is machine-specific and lives in the init script, never committed.
