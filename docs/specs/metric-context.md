@@ -107,6 +107,45 @@ blocked on it. Do them in this order:
 4. Output validation (Phase 3), which now has two sources of truth to check
    against — the taxonomy and the human's own words
 
+## The window is narrow, and it is not the brief
+
+The brief is authored **well in advance of the build**. The metrics do not exist
+then — not in Prism and not in Optimizely. They appear only after the experiment
+is integrated and someone adds them in Optimizely, and Prism learns them by
+reading the API back:
+
+```
+"No experiment bound yet — bind it in the Ship section first."
+"No events found on the experiment or in the project registry —
+ add metrics to the experiment in Optimizely first."
+```
+— `lib/ai/measurement.ts`, `api/prototypes/measurement/route.ts`
+
+**So metric context cannot live in the brief.** The brief describes something
+that does not have metrics yet; by the time metrics exist the brief is long
+written. That answers an open question this spec previously left open, and it
+answers it by timing rather than by preference.
+
+The real window is between two events:
+
+```
+metrics exist in Optimizely and read back through the API
+          ↓
+   [ THE WINDOW — context must be captured here ]
+          ↓
+        experiment goes live
+```
+
+That is a genuinely awkward moment: late enough that the team is close to
+launching, early enough that nothing has been measured. It is also the only
+moment when the question "what does this metric capture?" can be both asked and
+answered, so the gate belongs at **go-live**, not at brief completion and not at
+map confirmation.
+
+Which sharpens the recommendation above: block **starting the experiment** until
+the primary metric has a definition — not `confirmed`, which a team may set
+while still iterating on the binding. Arming is the last responsible moment.
+
 ## Open questions
 
 - **Does the definition override or inform?** If a human wrote `captures`, should
@@ -115,6 +154,7 @@ blocked on it. Do them in this order:
 - **Backfill.** Nine existing metrics have no definition. Do their readouts stay
   as they are, or does the gate apply retroactively and make live experiments
   unreadable until someone types?
-- **Does this belong in the brief instead?** The brief already states the
-  hypothesis and what done looks like. Metric context might be a section there
-  rather than a per-metric field — one artifact rather than two.
+- **What about a metric added after go-live?** Optimizely allows it, and the
+  drift audit already detects a results name absent from `known`. A metric that
+  appears mid-flight has missed the window entirely — does it get a definition
+  retroactively, or is it marked exploratory and excluded from the verdict?
