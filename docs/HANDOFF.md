@@ -4,213 +4,200 @@
 
 ---
 
-## BRAND PROFILE STORE (2026-09-22) — shipped to main, nothing reads it yet
+## VERTICAL-NEUTRAL VOCABULARY (2026-09-22) — seam shipped, guarded, no callers
 
-The Beta-2 context model landed on trunk as `src/lib/brand/`. **No call site
-consumes it.** That is deliberate: the seam ships first so the eighteen hardcoded
-hospitality strings get deleted once rather than twice.
+`src/lib/brand/` holds the Beta-2 context model: three kinds of knowledge with
+different truth conditions — OBSERVED (crawl facts, re-read never approved),
+CHARACTERIZED (prose a human accepts), EARNED (what this site's experiments
+proved, append-only). `SiteProfile` is a pinned revision; re-reading makes r2 and
+never rewrites r1, which is what makes "what did the AI know when it built this"
+answerable a year later.
 
-### The model
+**Still no call site consumes it, deliberately** — the seam ships first so the
+hardcoded hospitality strings get replaced once rather than twice.
 
-Three kinds of knowledge, kept apart because they have different truth
-conditions (from `docs/architecture/CONTEXT-INGESTION.md` on `beta-2`):
+### Two resolvers, and the choice between them is the point
 
-| Kind | What it is | Who settles it |
-|---|---|---|
-| OBSERVED | crawl facts: fonts, palette, CTAs, pages | re-read, never approved |
-| CHARACTERIZED | prose inferred from the observed | a human accepts it |
-| EARNED | what this site's experiments proved | measurement |
+```
+taxonomyFor()     total, never throws     internal surfaces; neutral words are an OK degradation
+requireTaxonomy() throws unless a profile exists     anything a customer reads
+```
 
-`SiteProfile` is a **pinned revision**, immutable once approved; re-reading makes
-r2 and never rewrites r1. That is what makes "what did the AI know when it built
-this" answerable a year later. `BrandFact` is the earned layer, append-only, with
-expiry as a column and superseding as a pointer.
+`taxonomyFor` catches everything, so a Neon blip during a readout would silently
+turn "guests who reach the booking engine" into "visitors who reach the
+checkout" — no error, no log, customer reads it first. An earlier comment in that
+file called the degradation "wrong-ish but harmless"; for customer-facing prose
+it is neither, because nothing signals it.
 
-### Two decisions worth not re-litigating
+`requireTaxonomy` differs in three deliberate ways: store errors propagate (a
+database blip and an undescribed brand deserve different responses); it checks
+for a ROW not for neutral-looking values (a SaaS customer whose words genuinely
+are visitor/product must not be told its profile is missing); and it rejects a
+blank org, because a tenancy bug presenting as bland prose is the worst way for
+one to present.
 
-**The unit of characterization is the SITE, not the customer.** A crawl is of a
-site and two sites of one customer do not share a voice. The customer level holds
-inherited defaults only, at the sentinel `siteId = "*"`, resolved site → customer
-→ vertical-neutral.
+### The debt is 48, and it is ratcheted
 
-**Stored taxonomy is SPARSE (`Partial<Taxonomy>`).** Beta 2 stored a complete
-object per site. The smoke test caught what that costs: spreading a fully
-populated taxonomy silently overwrites every inherited value with a neutral
-default, so a site that corrected only its visitor noun lost its customer's
-product noun. Store only what this site actually says; resolution fills the gaps.
+`docs/dev/vocabulary-smoke.mts` holds a per-file budget. Counts may only fall; a
+new file with no budget fails; a padded budget fails. Green for good at zero, and
+the list IS the work list.
 
-Also: Beta 2's section key `guests` became `audience`. The schema built to remove
-the hospitality assumption had the assumption inside it.
+```
+lib/ai/results.ts          19      lib/prototypes/results.ts   2
+lib/ai/observation.ts      14      lib/prototypes/stats.ts     2
+lib/skills/builtins.ts      7      lib/prototypes/verdict.ts   1
+lib/ai/next-test.ts         2      lib/prototypes/next-test.ts 1
+```
 
-### Verify
+Three numbers were quoted wrong before anything was measured: 18 (from memory),
+then 147 (a grep that counted the console's own UI "rooms"), then 44 (grep -c
+counts LINES; several say "Guests … guest"). 48 is the occurrence count, and the
+ratchet is now the number rather than anyone's recollection. It also caught
+`FALLBACK_SYSTEM` — "the experiment analyst for a hospitality A/B testing
+program" — only after "hospitality" was added to the word list.
 
-`npx tsx docs/dev/brand-profile-smoke.mts` — 13 assertions against the real FS
-backend: neutral default, field-by-field inheritance, drafts are not the answer,
-revisions additive, expired facts excluded, superseding is a pointer.
+Deliberately excluded, each measured: `room` (106 hits, the console's own UI
+vocabulary), `stay` (18, nearly all "stays the same"), `booking` (14, genuinely
+mixed — some are the assumption, some name Outrigger's conversion surface where
+that IS the data).
 
----
+### Outrigger is seeded on STAGING only
 
-## TIERS AND GUARDS (2026-09-22) — infrastructure, partly armed
+`npx tsx docs/dev/seed-taxonomy.mts outrigger [--dry]`, targeting whatever
+`DATABASE_URL` points at. One row at the org-default sentinel `siteId = "*"`,
+seven fields, verified in Neon. **Production is NOT seeded**, and that is a hard
+ordering constraint: `requireTaxonomy` throws, so shipping the injection before
+seeding production turns every readout into an error.
 
-Read `AGENTS.md` → "Deployment tiers" for the model. This is what is actually
-true as of 22 Sep.
+### Where it goes next
 
-### Done
+`docs/plans/VERTICAL-NEUTRAL-PROMPTS.md` — four phases. Phase 1 is one change:
+`analystSkill(orgId)` already takes an org and already feeds `deepObservation`
+plus three call sites in `results.ts`, so appending `taxonomyPrompt()` there
+reaches all of them. Both branches need it, including `FALLBACK_SYSTEM`.
 
-- **Vercel custom environment `staging`** exists on `outrigger-prototype-management-consol`,
-  tracking the branch `staging` exactly (`env_pdfiFOr3Vr2F6lzKIFwm1S6fSEqX`).
-  Created with "import variables from another environment" OFF, so it inherited
-  nothing from production.
-- **Config vars set** (all type Config, not Secret, so they stay readable):
-  `PRISM_DB_OWNER=prod` on Production · `PRISM_DB_OWNER=staging` and
-  `NEXT_PUBLIC_RELEASE_CHANNEL=Staging` on staging.
-- **Deployment protection was already correct.** `ssoProtection.enabled: true`,
-  `deploymentType: "all_except_custom_domains"`. Every `.vercel.app` URL,
-  including staging and previews, needs a team login; the production custom
-  domain stays public.
-- **`DATABASE_URL` narrowed to Production only** (22 Sep). It had covered
-  Production *and* Preview since 17 Jul, so every feature-branch preview was
-  reading and writing the live database. Previews now have no database and will
-  error on pages that need one, until the `preview` Neon branch lands. A preview
-  that errors is better than one that silently writes to production.
+The pass condition for the prose work is an EMPTY DIFF — Outrigger's readout
+should come out identical, because the resolved words equal the hardcoded ones.
+That only works because the seed exists first.
 
-  This also unblocked staging: Vercel refuses a second variable of the same name
-  whose scope overlaps an existing one, and a custom environment counts as
-  preview. That is why pasting the staging string kept failing.
-
-### The guard IS armed, and arming it proved the Neon project
-
-`select val from content_meta where key = 'db-owner'` on the production branch
-of `outrigger-prototype-console` returns **`prod`**. Production redeployed on
-`c2012c4` at 17:21Z; the claim landed on the next authenticated request.
-
-This mattered for a second reason. `DATABASE_URL` is type **Secret** — Vercel:
-*"You can't reveal this value after saving."* Not to an agent, not to Bryan. And
-Vercel's Storage tab shows **no connected database**, so no integration record
-names the project either. Which Neon project production uses could not be
-established by looking at anything. The claim established it by behaviour: the
-row appeared in `outrigger-prototype-console`, so that is production's database
-and the `staging` branch was forked from the right place.
-
-Corroborating: at the moment the live console was reloaded, Neon's branch list
-showed `production` **Active**, "Compute last active: now", 223.82 MB, while
-`staging` sat idle at 0 CU-hrs.
-
-### Three tiers, three Neon branches
-
-| Vercel env | Neon branch | id | `PRISM_DB_OWNER` | claim state |
-|---|---|---|---|---|
-| Production | `production` | `br-winter-grass-aumw7fr9` | `prod` | claimed |
-| staging | `staging` | `br-proud-sky-au0k0nig` | `staging` | no row — claims on first boot |
-| Preview | `preview` | `br-noisy-hat-auqae51j` | `preview` | set by hand, see below |
-
-`preview` was forked **after** production claimed, so it arrived carrying
-`db-owner = prod` and every preview would have refused to start. Corrected on
-that branch with `update content_meta set val = 'preview' …`. `staging` was
-forked at 09:54, before the claim, and genuinely has no row — verified, not
-assumed. Every branch forked from here on needs the same one-line correction.
-
-### What preview being real changes
-
-`DATABASE_URL` had covered *Production and Preview* since 17 Jul, so every
-feature-branch preview read and wrote the live database. Now Production-only.
-
-Note what preview still holds: `RESEND_API_KEY`, `CRON_SECRET` and
-`ADMIN_LOGIN_SECRET` are all scoped *Production and Preview*, and the Neon fork
-carries the customer's GitHub and Optimizely PATs in its rows. What keeps it
-harmless is that `PRISM_OUTWARD_EFFECTS` is **Production only**, so
-`src/lib/deploy/outward.ts` refuses email, experiment-write and code-write
-everywhere else. That is the structural argument for not scrubbing, and it now
-carries real weight rather than being theoretical.
-
-### Correcting an earlier diagnosis
-
-The staging `DATABASE_URL` paste was blamed on Vercel rejecting a duplicate key
-whose scope overlaps an existing one, custom environments counting as preview.
-**Wrong.** `PRISM_DB_OWNER` now exists as three rows — Production, staging,
-Preview — accepted without complaint. The likely real cause was the environments
-box, which opens with Production ticked. Narrowing `DATABASE_URL` was still
-right, for the preview-writes-production reason; it was not the unblock it was
-described as.
-
-### The decision on seeding staging, and why
-
-**Copy production into the staging Neon branch. Do NOT scrub it.**
-
-Customer credentials live in the DATABASE, not in env vars: the GitHub PAT in
-`git_connection.config`, the Optimizely PAT and project id in
-`experimentation_config.config`. So swapping `DATABASE_URL` isolates the rows and
-not the reach — a naive copy hands staging live customer tokens.
-
-Scrubbing was rejected because it is a procedure that must be repeated correctly
-forever, and every refresh is another chance to miss a row. `src/lib/deploy/outward.ts`
-already solves it structurally: outward effects are opt-in per deployment and
-default to blocked. Leave `PRISM_OUTWARD_EFFECTS` unset on staging and it can
-read the customer's real Optimizely data over GET and change nothing.
-
-**Do not attach a custom domain to staging.** Protection is
-`all_except_custom_domains`, so `staging.prism.brandgraphai.com` would make a
-console holding customer data publicly reachable. Use the generated URL.
-
-### The Neon project cannot be verified by looking, so don't try
-
-`DATABASE_URL` is type **Secret**. Vercel's own words: *"You can't reveal this
-value after saving."* Not to an agent, not to Bryan. And the Storage tab shows
-**no connected database** — the string was pasted by hand, so no integration
-record names the project either. Two dead ends, both checked on 22 Sep.
-
-**The redeploy answers it instead, causally.** `PRISM_DB_OWNER=prod` is set on
-Production only; on first boot `NeonContentStore.create()` CAS-writes that claim
-into whatever database it really connects to. Redeploy, then look for
-`db-owner = prod` in Neon project `outrigger-prototype-console`. Present means
-proven and armed; absent means the `staging` branch was copied from the wrong
-project. One action, two answers.
-
-**Later refreshes carry the claim.** A Neon branch taken *after* the claim exists
-copies `db-owner = prod`, so a staging deployment declaring `staging` will refuse
-to start. Correct behaviour, confusing symptom. Fix on the refreshed branch:
-`update content_meta set val = 'staging' where key = 'db-owner';`
-
-### Still outstanding — two secrets, both human-only
-
-`docs/STAGING-CHECKLIST.md` has the steps. An agent does not enter connection
-strings or API keys, so these are the only things left:
-
-- `DATABASE_URL` on **staging**, and on **Preview**. Tick only that one tier;
-  the dialog opens with Production ticked.
-- `ANTHROPIC_API_KEY` on **staging**. Preview already has one — the existing key
-  is scoped *Production and Preview* (24 Jul).
-- Leave `CRON_SECRET` unset on both. Both crons fail closed without it, which is
-  how duplicate report emails are prevented.
-
-Merged separately: `guard/code-write` is open as PR #1.
+`docs/specs/metric-context.md` — the layer above: per-metric human definitions,
+gated at arming, informing the model rather than overriding it, with the taxonomy
+as a legacy-only fallback.
 
 ---
 
-## OUTWARD EFFECTS: code-write was never enforced (2026-09-22) — branch `guard/code-write`
+## TIERS ARE LIVE (2026-09-22) — three environments, each proven by behaviour
 
-`src/lib/deploy/outward.ts` names three dangerous surfaces and gated two.
-`email` and `experiment-write` asserted; the GitHub client never did, so a
-co-hosted deployment could still create `prototype/<key>` and commit into the
-shared prototypes repo — the exact case that file's own header describes.
+| | Production | staging | Preview |
+|---|---|---|---|
+| branch | `main` | `staging` | every other |
+| Neon branch | `production` `br-winter-grass-aumw7fr9` | `staging` `br-proud-sky-au0k0nig` | `preview` `br-noisy-hat-auqae51j` |
+| `db-owner` claim | `prod` | `staging` | `preview` |
+| reaches the world | yes | **no** | **no** |
 
-Guarded inside `gh()` in `src/lib/git/github.ts`, the one choke point every call
+Neon project `outrigger-prototype-console` = `delicate-frog-62798343`, AWS
+us-east-1. Every claim was written by the deployment itself into whatever
+database it actually connects to. Nobody typed them — that is what makes this
+proof rather than configuration.
+
+**The ownership guard is armed.** A deployment pointed at a database it does not
+own refuses to start rather than running nine `alter table` statements against
+it. Arming it also answered a question nothing else could: `DATABASE_URL` is type
+Secret and Vercel will not reveal it to anyone, and the Storage tab shows no
+connected database, so which Neon project production uses could not be
+established by looking. The claim established it by behaviour.
+
+**Previews stopped writing to production.** `DATABASE_URL` had covered Production
+and Preview since 17 Jul.
+
+**What keeps staging and preview harmless** is not scrubbing — customer tokens
+live in database rows, so a copy carries them. It is `PRISM_OUTWARD_EFFECTS`
+being Production-only, so `lib/deploy/outward.ts` refuses email,
+experiment-write and code-write everywhere else. Note what preview does hold:
+`RESEND_API_KEY`, `CRON_SECRET` and `ADMIN_LOGIN_SECRET` are all
+Production-and-Preview.
+
+**Staging needs eight variables, not two.** An earlier checklist said
+`DATABASE_URL` and `ANTHROPIC_API_KEY` and "add nothing else", which left staging
+unusable in a way that looked like a broken deploy: `AUTH_SECRET` unset makes the
+app throw, `ADMIN_EMAILS` unset rejects the right password against an empty
+allowlist, `ADMIN_LOGIN_SECRET` unset returns 500 before any check. The rule is
+narrower — withhold only what lets a tier reach the outside world.
+
+`AUTH_SECRET` **must differ per tier**: a shared signing key makes a staging
+session valid on production. Rotating it logs everyone out (365-day cookies);
+rotating `ADMIN_LOGIN_SECRET` is harmless. They look identical in the dashboard.
+
+Two Vercel behaviours that cost time, both in `docs/STAGING-CHECKLIST.md`: a
+branch created at an already-deployed commit produces NO deployment (dedupe by
+SHA, no error, nothing in the list), and the deployments API ignores
+`customEnvironmentSlugOrId` — use `target: "<slug>"` and check `target` in the
+RESPONSE, because a staging deploy silently running as a preview would claim the
+wrong database and look healthy.
+
+---
+
+## OUTWARD EFFECTS: code-write is enforced (2026-09-22) — merged, live on `main`
+
+`lib/deploy/outward.ts` named three dangerous surfaces and gated two. `email` and
+`experiment-write` asserted; the GitHub client never did, so a co-hosted
+deployment could create `prototype/<key>` and commit into the shared prototypes
+repo — the exact case that file's own header describes. Merged as PR #1, live in
+production since `84c73ef`.
+
+Guarded inside `gh()` in `lib/git/github.ts`, the one choke point every call
 passes through, mirroring `optimizely/api.ts:98`. A future write method inherits
-it instead of having to remember.
+it rather than having to remember.
 
 **The test is structural, and that is the point.** `docs/dev/outward-smoke.mts`
 reads the `OutwardEffect` union out of the module and requires each arm to be
 asserted somewhere under `src/`. A TypeScript union cannot report an unused arm
-at a CALL site, which is why this gap survived being written in a header, listed
-in the permission table, and reviewed. Verified it fails for the right reason
-when the guard is removed.
+at a CALL site, which is why this survived being written in a header, listed in
+the permission table, and reviewed.
 
-Known side effect: `canCreateBranch()`'s bogus-SHA write probe is a POST, so on a
-deployment without `code-write` the Settings → Repositories probe now surfaces the
-outward refusal instead of a clean yes/no. The message names the variable to set,
-so that is honest rather than broken.
+Known side effect: `canCreateBranch()`'s bogus-SHA probe is a POST, so without
+`code-write` the Settings → Repositories probe surfaces the outward refusal
+instead of a clean yes/no. The message names the variable, so that is honest
+rather than broken.
 
 ---
+
+## `brand.ts` IS NOW `attribution.ts` (2026-09-22)
+
+Two meanings of "brand" shared a namespace: the copyright notice stamped on every
+artifact, and the customer's own vocabulary. `@/lib/brand` resolved to the file
+only because `src/lib/brand/` had no `index.ts` — and anyone adding one, an
+obvious convenience while wiring up the vocabulary work, would have silently
+redirected both importers and dropped the copyright notice off the readout PDF.
+Nothing would have failed to compile; no test covers the notice's presence.
+
+The file's own header said OWNERSHIP AND ATTRIBUTION, so it was already misnamed.
+Renamed, two importers updated, and the header now says why so nobody renames it
+back.
+
+---
+
+## THE PATTERN WORTH NOTICING (2026-09-22)
+
+Four bugs surfaced in one day and all four had the same shape: **something true
+of the design, written down, and never asserted anywhere.**
+
+- `code-write` — declared in the union, listed in the permission table,
+  documented in the header, never called.
+- The ownership guard — variable set, but the running build predated it, so the
+  claim row was never written.
+- `brand.ts` / `brand/` — correct today, one `index.ts` away from silent failure.
+- `FALLBACK_SYSTEM` — "a hospitality A/B testing program", invisible to a
+  vocabulary check that did not include the word.
+
+None was a coding error. Each was a correct-looking configuration with no
+mechanism proving it worked. The cheapest mechanism is a structural test —
+`outward-smoke` for the first, the `db-owner` claim for the second,
+`vocabulary-smoke` for the fourth. When something is true of the design, assert
+it in a file rather than a comment.
+
+---
+
 ## READOUT PROSE CAPS (2026-09-20) — shipped
 
 A finished readout rendered `partial structure · executive: over 900 chars

@@ -303,7 +303,31 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   split it across two releases with the read removed first. Code rolls back in
   seconds and a dropped column does not roll back at all.
 
-- **Never hardcode a brand or site.** Everything is per-tenant/per-site config from the store. (Known debt: `lib/sites.ts` and the handoff patch generator still encode Outrigger specifics — the *ship* layer is not yet portable.)
+- **Never hardcode a brand or site.** Everything is per-tenant/per-site config
+  from the store. Vocabulary comes from `lib/brand/` — `taxonomyPrompt()` for
+  what to say, never a literal "guest" or "hotel". The debt is **ratcheted, not
+  aspirational**: `docs/dev/vocabulary-smoke.mts` holds a per-file budget that
+  may only go down, and a new file with hardcoded vocabulary fails the suite.
+  (Known debt beyond that: `lib/sites.ts` and the handoff patch generator still
+  encode Outrigger specifics — the *ship* layer is not yet portable.)
+- **Customer-facing prose uses `requireTaxonomy()`, never `taxonomyFor()`.** The
+  total resolver swallows store errors and returns neutral defaults, so a
+  database blip would quietly print "visitors who reach the checkout" to a hotel
+  — no error, no log, the customer reads it first. Refuse rather than degrade;
+  internal surfaces may use the total one. Never wrap the strict path in a
+  try/catch: that re-creates the exact bug, and `vocabulary-smoke` fails if you
+  do.
+- **`attribution.ts` is ownership; `brand/` is the customer's vocabulary.** Two
+  different things, one word. Do not add `src/lib/brand/index.ts` — `@/lib/brand`
+  resolves to the attribution file only because that directory has none, and an
+  index would silently redirect both importers and drop the copyright notice off
+  the readout PDF with nothing failing to compile.
+- **When something is true of the design, assert it in a file, not a comment.**
+  Four bugs in one day shared this shape: `code-write` declared and never called,
+  the ownership guard set but never armed, `brand.ts` one `index.ts` from silent
+  failure, `FALLBACK_SYSTEM` invisible to a vocabulary check. Each was
+  correct-looking configuration with no mechanism proving it. The three smoke
+  suites are that mechanism; extend them rather than adding another header note.
 - **Never trust `GET /repos` `permissions.push`** for a fine-grained PAT — it reflects the account's role, not the token's grant. Use `canCreateBranch()` (bogus-SHA probe: 403 = no write, 422 = write).
 - **`~/Projects/Outrigger_Website` (Azure DevOps clone) is READ-ONLY.** Pull only; never push/commit/modify.
 - **Snapshots are immutable** (PageVersion never edited; re-capture = new version). **ArtifactVersions are immutable** (append-only; carry a fixed code snapshot).
