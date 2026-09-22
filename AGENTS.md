@@ -240,18 +240,23 @@ an incident, that the thing they actually needed was a deploy history.
 
 ## Deployment tiers (decided 2026-09-22 — only Production exists today)
 
-**Status: Production is the ONLY tier.** Verified 2026-09-22 against the Vercel
-project `outrigger-prototype-management-consol` — the last twelve deployments
-are all `target: production`, all from `main`, and there are no preview
-deployments at all. Every commit pushed to `main` lands in the console people do
-real customer work in. Staging and Preview below are the agreed target, NOT
-something that exists. Check Vercel before believing this section.
+**Status: Production is still the only tier that runs.** Verified 2026-09-22
+against the Vercel project `outrigger-prototype-management-consol`. Every commit
+pushed to `main` lands in the console people do real customer work in.
+
+Partly built: the Vercel environment `staging` exists and tracks the branch
+`staging`, and a Neon branch `staging` exists — but nothing has deployed to it,
+because it has no `DATABASE_URL` yet. Preview builds run but now have **no
+database at all**, since `DATABASE_URL` was narrowed to Production only on
+22 Sep; they will error on any page that needs one until a `preview` Neon branch
+is wired up. Current state and next actions: `docs/STAGING-CHECKLIST.md`. Check
+Vercel before believing this section.
 
 | Tier | Trigger | Database | Acts on |
 |---|---|---|---|
 | **Production** | `main` | live Neon | real customer repos · Optimizely prod `21089662478` |
 | **Staging** (persistent) | long-lived branch | own Neon branch, kept seeded | test repo · Optimizely prep `24138040550` |
-| **Preview** (ephemeral) | any feature branch | fresh Neon branch | test repo · Optimizely prep |
+| **Preview** (ephemeral) | any feature branch | one shared `preview` Neon branch, disposable | test repo · Optimizely prep |
 
 **Why Staging exists as well as Preview.** A preview database starts EMPTY, and
 everything in the brand-profile work is accumulated state — profile revisions,

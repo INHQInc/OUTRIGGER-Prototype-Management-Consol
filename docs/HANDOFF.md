@@ -68,6 +68,15 @@ true as of 22 Sep.
   `deploymentType: "all_except_custom_domains"`. Every `.vercel.app` URL,
   including staging and previews, needs a team login; the production custom
   domain stays public.
+- **`DATABASE_URL` narrowed to Production only** (22 Sep). It had covered
+  Production *and* Preview since 17 Jul, so every feature-branch preview was
+  reading and writing the live database. Previews now have no database and will
+  error on pages that need one, until the `preview` Neon branch lands. A preview
+  that errors is better than one that silently writes to production.
+
+  This also unblocked staging: Vercel refuses a second variable of the same name
+  whose scope overlaps an existing one, and a custom environment counts as
+  preview. That is why pasting the staging string kept failing.
 
 ### NOT done — the guard is not armed
 
@@ -99,16 +108,36 @@ read the customer's real Optimizely data over GET and change nothing.
 `all_except_custom_domains`, so `staging.prism.brandgraphai.com` would make a
 console holding customer data publicly reachable. Use the generated URL.
 
+### The Neon project cannot be verified by looking, so don't try
+
+`DATABASE_URL` is type **Secret**. Vercel's own words: *"You can't reveal this
+value after saving."* Not to an agent, not to Bryan. And the Storage tab shows
+**no connected database** — the string was pasted by hand, so no integration
+record names the project either. Two dead ends, both checked on 22 Sep.
+
+**The redeploy answers it instead, causally.** `PRISM_DB_OWNER=prod` is set on
+Production only; on first boot `NeonContentStore.create()` CAS-writes that claim
+into whatever database it really connects to. Redeploy, then look for
+`db-owner = prod` in Neon project `outrigger-prototype-console`. Present means
+proven and armed; absent means the `staging` branch was copied from the wrong
+project. One action, two answers.
+
+**Later refreshes carry the claim.** A Neon branch taken *after* the claim exists
+copies `db-owner = prod`, so a staging deployment declaring `staging` will refuse
+to start. Correct behaviour, confusing symptom. Fix on the refreshed branch:
+`update content_meta set val = 'staging' where key = 'db-owner';`
+
 ### Still outstanding
 
-Step-by-step, in order, for a human: **`docs/STAGING-CHECKLIST.md`**. Start at
-step 0 — whether the right Neon project was copied is unproven, because the
-connection password is not readable.
+Step-by-step, in order, for a human: **`docs/STAGING-CHECKLIST.md`**.
 
-- Production redeploy (arms the ownership guard).
-- Neon branch for staging, then `DATABASE_URL` + `ANTHROPIC_API_KEY` on the
-  staging environment. Leave `CRON_SECRET` unset — both crons fail closed
-  without it, which is how duplicate report emails are prevented.
+- Production redeploy — arms the guard and proves the project. Everything else
+  waits on it.
+- `DATABASE_URL` + `ANTHROPIC_API_KEY` on the staging environment. Leave
+  `CRON_SECRET` unset — both crons fail closed without it, which is how
+  duplicate report emails are prevented.
+- A `preview` Neon branch, plus `DATABASE_URL` and `PRISM_DB_OWNER=preview` on
+  Preview, to undo the subtraction above.
 - Merge `guard/code-write` (below) before staging has a database.
 
 ---
