@@ -73,7 +73,6 @@ const HOSPITALITY = /\b(guests?|hotels?|resorts?|hospitality|lodging|accommodati
  */
 const BUDGET: Record<string, number> = {
   "lib/ai/results.ts": 19,
-  "lib/ai/observation.ts": 14,
   "lib/skills/builtins.ts": 7,
   "lib/ai/next-test.ts": 2,
   "lib/prototypes/results.ts": 2,

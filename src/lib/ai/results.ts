@@ -26,6 +26,7 @@ import { STAT_NOISE, type AttentionItem } from "../prototypes/attention";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
 import { requireTaxonomy, taxonomyPrompt, taxonomyRevision } from "../brand/profile";
+import type { Taxonomy } from "../brand/types";
 
 const requireKey = () => {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -44,25 +45,29 @@ const FALLBACK_SYSTEM =
  * `deepObservation` via the `system` it is handed. Appending the vocabulary
  * once reaches all four; appending it at each call site would drift.
  */
-export async function analystSkill(orgId: string): Promise<{ system: string; ref?: { id: string; updatedAt?: string } }> {
+export async function analystSkill(orgId: string): Promise<{ system: string; taxonomy: Taxonomy; ref?: { id: string; updatedAt?: string } }> {
   // OUTSIDE the try below, and that placement is the whole point. The catch
   // there exists to fall back to FALLBACK_SYSTEM when the SKILL store is
   // unreachable. If the vocabulary resolved inside it, a store blip would be
   // indistinguishable from an unseeded customer and would silently ship a
   // readout written in generic words — precisely the failure `requireTaxonomy`
   // was built to refuse. A missing profile must reach the API layer instead.
-  const vocabulary = taxonomyPrompt(await requireTaxonomy(orgId));
+  // RESOLVED ONCE AND HANDED DOWN. deepObservation writes prose in the same
+  // words, and re-resolving there would let one request write half its output
+  // in one revision's vocabulary and half in another's.
+  const taxonomy = await requireTaxonomy(orgId);
+  const vocabulary = taxonomyPrompt(taxonomy);
 
   try {
     await ensureSkillsSeeded(orgId);
     const skill = await getSkill(orgId, "opmc-experiment-analyst");
-    if (skill) return { system: `${parseFrontmatter(skill.body).body}\n\n${vocabulary}`, ref: { id: skill.id, updatedAt: skill.updatedAt } };
+    if (skill) return { system: `${parseFrontmatter(skill.body).body}\n\n${vocabulary}`, taxonomy, ref: { id: skill.id, updatedAt: skill.updatedAt } };
   } catch { /* fall through to the hardcoded analyst */ }
 
   // BOTH branches carry it. The fallback is the path taken when seeding has
   // already failed, which is exactly the moment a dropped vocabulary would go
   // unnoticed — the same shape as a guard that is set but never armed.
-  return { system: `${FALLBACK_SYSTEM}\n\n${vocabulary}` };
+  return { system: `${FALLBACK_SYSTEM}\n\n${vocabulary}`, taxonomy };
 }
 
 const mapTool = (eventNames: string[]) => ({

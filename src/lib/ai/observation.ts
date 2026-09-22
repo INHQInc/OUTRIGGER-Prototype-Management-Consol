@@ -13,6 +13,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import type { Taxonomy } from "../brand/types";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { ExperimentResults, MetricMap } from "../prototypes/results";
 import type { StatsReport } from "../prototypes/stats";
@@ -31,7 +32,7 @@ export interface DeepObservation {
   inertVariation?: boolean;
   /** Legacy fields — cached six-part reads still parse; nothing writes them. */
   headline?: string;
-  /** WHAT THIS METRIC CAPTURES — the guest behaviour it counts. A definition,
+  /** WHAT THIS METRIC CAPTURES — the visitor behaviour it counts. A definition,
    *  not a finding: true before the experiment ran and after it ends. */
   captures?: string;
   /** WHAT HAPPENED — the behaviour, not the arithmetic. */
@@ -47,7 +48,7 @@ export interface DeepObservation {
    *  metric is an action total, fires in one arm, has members Optimizely isn't
    *  reporting, or hasn't separated from the control. Asking the model for
    *  "measurement caveats" produced the same sentence as the rival explanation
-   *  ("it counts taps, not guests") in two sections of the same box — and a
+   *  ("it counts taps, not people") in two sections of the same box — and a
    *  caveat that depends on the model remembering it is a caveat that will
    *  eventually go missing. */
   counting?: string;
@@ -61,20 +62,37 @@ export interface DeepObservation {
   basisKey: string;
 }
 
-const tool = {
+/**
+ * BUILT PER CALL, because the worked example is the CUSTOMER'S.
+ *
+ * This was a module-level constant, so its worked example was one customer's
+ * sentence frozen into the schema. The example is doing real work — it shows
+ * the model the SHAPE of a good line, not merely which nouns to use — so
+ * deleting it would have cost quality, while keeping it hands every other
+ * customer someone else's vertical to imitate. Resolving it from the taxonomy
+ * is the only option that keeps the example concrete for all of them.
+ *
+ * (The first draft of this comment quoted the old example verbatim and the
+ * ratchet counted it, correctly: "it is only a comment" is exactly the
+ * loophole that lets a vertical back in.)
+ */
+function toolFor(t: Taxonomy) {
+  const cap = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+  return {
   name: "give_observation",
   description: "The two questions a metric's own numbers cannot answer: WHY it moved, read off what was actually built, and what ELSE could explain the same behaviour.",
   input_schema: {
     type: "object" as const,
     properties: {
-      captures: { type: "string" as const, description: "<=140 chars, NO DIGITS. WHAT THIS METRIC CAPTURES: the guest behaviour it counts, in plain words — e.g. 'Guests who reach the booking engine's rooms and rates step' or 'Guests opening a room's details, by either route'. A DEFINITION, not a finding: it must read the same whether the metric went up, down or nowhere. Never mention versions, results, or movement." },
+      captures: { type: "string" as const, description: `<=140 chars, NO DIGITS. WHAT THIS METRIC CAPTURES: the ${t.visitorNoun} behaviour it counts, in plain words — e.g. '${cap(t.visitorNounPlural)} who reach the ${t.conversionSurface}' or '${cap(t.visitorNounPlural)} opening a ${t.offeringNoun}'s details, by either route'. A DEFINITION, not a finding: it must read the same whether the metric went up, down or nowhere. Never mention versions, results, or movement.` },
       mechanism: { type: "string" as const, description: "<=500 chars, NO DIGITS. WHY it happened, read off what was actually built — the specific thing on the screen that changed and how it altered the path. If the code or the surfaces do not support an explanation, say that the mechanism is unclear rather than inventing one." },
-      rival: { type: "string" as const, description: "<=400 chars, NO DIGITS. WHY IT MIGHT NOT BE THAT: the strongest competing explanation for the same GUEST BEHAVIOUR — attention shifting from another surface rather than new demand, curiosity rather than intent, a difference in who was exposed, a knock-on from a change elsewhere in the path. This is about the world, NOT about the instrument: never write about how the metric is counted, actions-versus-guests, one-armed surfaces or sample size — the console states all of that itself, and repeating it here wastes the one section that can only come from you. Omit ONLY if no credible rival exists." },
+      rival: { type: "string" as const, description: `<=400 chars, NO DIGITS. WHY IT MIGHT NOT BE THAT: the strongest competing explanation for the same ${t.visitorNoun.toUpperCase()} BEHAVIOUR — attention shifting from another surface rather than new demand, curiosity rather than intent, a difference in who was exposed, a knock-on from a change elsewhere in the path. This is about the world, NOT about the instrument: never write about how the metric is counted, actions-versus-${t.visitorNounPlural}, one-armed surfaces or sample size — the console states all of that itself, and repeating it here wastes the one section that can only come from you. Omit ONLY if no credible rival exists.` },
 
     },
     required: ["captures", "mechanism"],
   },
-};
+  };
+}
 
 const DIGITS = /\d/;
 const STATS = /\bq\s*[=<>]|\bp\s*[=<>]\s*0?\.|χ²|\bSRM\b|\balpha\b|\bFDR\b|\bconfidence interval\b|\bstatistically significant\b|\bsample size\b/i;
@@ -101,8 +119,13 @@ export async function deepObservation(opts: {
    *  own artifact. Ground truth, not the buildMode checkbox. */
   codeSource?: "optimizely" | "console" | "none";
   system: string;
+  /** The CUSTOMER'S words, resolved once by analystSkill and handed down. Not
+   *  re-resolved here: one request must not be able to write half its prose in
+   *  one revision's vocabulary and half in another's. */
+  taxonomy: Taxonomy;
   basisKey: string;
 }): Promise<DeepObservation> {
+  const t = opts.taxonomy;
   const client = new Anthropic();
   const m = opts.stats?.metrics.find((x) => x.key === opts.metricKey);
   if (!m) throw new Error("That metric isn't reporting.");
@@ -155,26 +178,26 @@ ${[
   // ONE block, whatever the change was authored with. Labelling these
   // separately taught the model to narrate the plumbing — "read against the
   // visual-editor edits", "the placeholder describes a different artifact" —
-  // which is the console talking about itself in a readout for a hotel.
+  // which is the console talking about itself in a customer's readout.
   opts.variationJs ? opts.variationJs.slice(0, 6000) : "",
   opts.editorChanges?.length ? opts.editorChanges.map((c) => `- ${c}`).join("\n") : "",
 ].filter(Boolean).join("\n\n")
-  ? `WHAT THE NEW VERSION CHANGES ON THE PAGE — everything below is live for guests in this version. Some of it may be inert; take the parts that actually alter the screen and ignore the rest.\n${[
+  ? `WHAT THE NEW VERSION CHANGES ON THE PAGE — everything below is live for ${t.visitorNounPlural} in this version. Some of it may be inert; take the parts that actually alter the screen and ignore the rest.\n${[
       opts.variationJs ? opts.variationJs.slice(0, 6000) : "",
       opts.editorChanges?.length ? opts.editorChanges.map((c) => `- ${c}`).join("\n") : "",
     ].filter(Boolean).join("\n\n")}`
   : "(Nothing available shows what this version changes on the page. Say plainly that the mechanism cannot be read — never guess from the brief, and never describe a change you were not shown.)"}
 
-Start with CAPTURES — what this metric counts in guest behaviour, as a definition that would read identically if the numbers were reversed.
+Start with CAPTURES — what this metric counts in ${t.visitorNoun} behaviour, as a definition that would read identically if the numbers were reversed.
 
 Then answer ONLY the two questions this metric's own numbers cannot:
-  WHY — the mechanism, written as a guest's experience of the page. Name the thing ON THE SCREEN that changed and how it altered where they went next. If what you were shown does not support an explanation, say the mechanism is unclear rather than inventing one.
-  NEVER mention HOW OR WHERE the change was made or how this console knows about it: no visual editor, no custom code, no artifact, no placeholder, no push, no repository, no console. A hotel executive is reading this and does not care which tool the change was typed into — only what changed on the page and what guests did about it. A sentence a reader could not act on because it is about our tooling is a failed sentence.
+  WHY — the mechanism, written as a ${t.visitorNoun}'s experience of the page. Name the thing ON THE SCREEN that changed and how it altered where they went next. If what you were shown does not support an explanation, say the mechanism is unclear rather than inventing one.
+  NEVER mention HOW OR WHERE the change was made or how this console knows about it: no visual editor, no custom code, no artifact, no placeholder, no push, no repository, no console. A business leader is reading this and does not care which tool the change was typed into — only what changed on the page and what ${t.visitorNounPlural} did about it. A sentence a reader could not act on because it is about our tooling is a failed sentence.
   WHY IT MIGHT NOT BE THAT — the strongest competing explanation for the same behaviour. A mechanism offered without a rival is a story rather than an analysis, so give it unless none is credible.
 Do NOT describe what happened, restate the movement, or say what it means for the business: the console prints the numbers, the trend and the whole-experiment read already, and repeating them is what made this section too long to read.
 NO DIGITS in your words — every number is printed beside your sentences and would go stale the moment the counts move. No statistics vocabulary: no significance, no sample size, no confidence, no days remaining. Do not give a verdict on the experiment; that belongs to the decision metric and the console computes it.`,
     }],
-    tools: [tool],
+    tools: [toolFor(t)],
     tool_choice: { type: "tool", name: "give_observation" },
   });
 
@@ -236,7 +259,7 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
       parts.push(`the surface only exists in the ${m.featureOnly === "variation" ? "new version" : "control"}, so there is nothing equivalent to compare it against — read it as adoption, not as a lift`);
     }
     if (m.kind === "composite" && m.test === "actions") {
-      parts.push("this is a total of ACTIONS per visitor, not a head-count: one guest acting several times counts each time, so the rate can pass one hundred per cent and it measures behaviour rather than distinct people");
+      parts.push("this is a total of ACTIONS per visitor, not a head-count: one ${t.visitorNoun} acting several times counts each time, so the rate can pass one hundred per cent and it measures behaviour rather than distinct people");
     }
     if (m.test === "none") {
       parts.push("this is a value-style metric, so per-visitor variation is not available from the totals and no confidence can be computed for it");

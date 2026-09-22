@@ -886,11 +886,11 @@ export async function POST(req: NextRequest) {
           if (variationJs) codeSource = "console";
         }
       }
-      const { system } = await analystSkill(g.orgId);
+      const { system, taxonomy } = await analystSkill(g.orgId);
 
       const observation = await deepObservation({
         metricKey: key, proto: g.proto, results: bundle.results, map, stats, verdict,
-        variationJs, editorChanges, codeSource, system, basisKey: basis,
+        variationJs, editorChanges, codeSource, system, taxonomy, basisKey: basis,
       });
       await store.setFlag(cacheKey, JSON.stringify({ ...cached, [key]: observation })).catch(() => {});
       await audit(g.orgId, actor, "results.observation-read", g.proto.name, (observation.headline ?? observation.mechanism).slice(0, 200));
