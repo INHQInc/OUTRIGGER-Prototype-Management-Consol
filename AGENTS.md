@@ -1,6 +1,6 @@
 # Claude Context Guide — Prism (OUTRIGGER prototype management console)
 
-*Last updated: 2026-08-06 (analytics second pass: per-version composites, the metric builder, observations + deep reads, the analyst drawer, scoped reset, Evidence; 08-04: board-page readout, verdict engine, measurement plan)*
+*Last updated: 2026-09-22 (branch/preview/schema working rules; brand site-profile store landed). Previously 2026-08-06 (analytics second pass: per-version composites, the metric builder, observations + deep reads, the analyst drawer, scoped reset, Evidence; 08-04: board-page readout, verdict engine, measurement plan)*
 
 > **Read first:** [`docs/LIFECYCLE-ARCHITECTURE.md`](docs/LIFECYCLE-ARCHITECTURE.md) (locked lifecycle model) then [`docs/HANDOFF.md`](docs/HANDOFF.md) (**current state, in-flight work — authoritative for "where are we"**). Touching ANY UI? [`docs/DESIGN-PRINCIPLES.md`](docs/DESIGN-PRINCIPLES.md) first — say-it-once, one card grammar, rooms-not-steps; every rule there is a past user correction.
 >
@@ -218,7 +218,38 @@ names a metric key, the code resolves the value, here as everywhere.
   `scheduleDue()` means the job can run sixty times and the report leaves once.
   One prototype's failure never stops the sweep.
 
+## Working on this repo (branches, previews, schema)
+
+**Branches are for preview URLs and a review point. They are NOT rollback.**
+Rollback is Vercel promoting a previous immutable deployment, plus `git revert`.
+Saying "we branched" and meaning "we can undo it" is how a team discovers, during
+an incident, that the thing they actually needed was a deploy history.
+
+- **One short-lived branch per stage, merged within days.** `beta-2` is the
+  cautionary tale: ~20k insertions across 107 files, diverged far enough that it
+  became something to read ideas from rather than something to merge. A branch
+  that outlives the work stops being a branch and becomes a fork.
+- **The agent commits to the branch; the human reviews the diff, merges and
+  pushes.** That is the existing "you push, I don't" rule with a natural place to
+  look at the change before it reaches the live console.
+- **Docs-only changes, and additive code with no callers, go straight to `main`.**
+  Wrapping a README edit in a PR buys nothing and trains everyone to skim.
+- **A branch that touches `ensureSchema()` gets a database of its own** before it
+  is ever deployed. See the invariant below — this is the one mistake that a
+  redeploy cannot undo.
+
 ## Hard rules (invariants)
+
+- **A preview deployment must never share the production database.**
+  `ensureSchema()` runs DDL on the first request against whatever `DATABASE_URL`
+  the deployment was handed, and a Vercel env var not scoped to Production only
+  is handed to previews too. Set `PRISM_DB_OWNER` on production — unset is
+  "legacy" and deliberately unguarded (`lib/content/db-owner.ts`) — and give each
+  preview its own Neon branch.
+- **Schema changes are additive and forward-only.** New tables, new nullable
+  columns. NEVER drop or repurpose a column in the release that stops writing it;
+  split it across two releases with the read removed first. Code rolls back in
+  seconds and a dropped column does not roll back at all.
 
 - **Never hardcode a brand or site.** Everything is per-tenant/per-site config from the store. (Known debt: `lib/sites.ts` and the handoff patch generator still encode Outrigger specifics — the *ship* layer is not yet portable.)
 - **Never trust `GET /repos` `permissions.push`** for a fine-grained PAT — it reflects the account's role, not the token's grant. Use `canCreateBranch()` (bogus-SHA probe: 403 = no write, 422 = write).
