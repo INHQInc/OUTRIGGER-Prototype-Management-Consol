@@ -7,7 +7,7 @@ import type { AttentionItem } from "@/lib/prototypes/attention";
 import type { DeepObservation } from "@/lib/ai/observation";
 import { MetricBuilder } from "./MetricBuilder";
 import { figureValue, templateStory, shortLabel } from "@/lib/ai/results";
-import { shortNotice, provenanceLine } from "@/lib/brand";
+import { shortNotice, provenanceLine } from "@/lib/attribution";
 import { SWEEP_HOUR_UTC } from "@/lib/prototypes/report";
 import type { StatsReport, CellStats, TrendPoint, DailySnapshot } from "@/lib/prototypes/stats";
 import type { VerdictRecord, VerdictState } from "@/lib/prototypes/verdict";

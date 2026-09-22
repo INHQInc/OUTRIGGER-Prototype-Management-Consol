@@ -9,6 +9,14 @@
  * artifact also carries a traceability line naming the org, the experiment and
  * the moment it was generated — that is the part that does work if ownership is
  * ever actually contested.
+ *
+ * NOT `brand.ts`, deliberately. This is about who OWNS the artifact; the
+ * customer's own brand — its vocabulary, voice and palette — lives in
+ * `src/lib/brand/`. While this was a file called `brand.ts` sitting beside a
+ * directory called `brand/`, `@/lib/brand` resolved here only because that
+ * directory had no `index.ts`. Adding one would have silently redirected these
+ * imports and dropped the copyright notice off the readout PDF — a failure with
+ * no error attached to it. Renamed 22 Sep 2026.
  */
 
 /** The product has no public name yet, so nothing asserts one — the notice

@@ -31,7 +31,7 @@ import type { StatsReport } from "../prototypes/stats";
 import type { VerdictRecord } from "../prototypes/verdict";
 import type { Reading } from "../prototypes/notebook";
 import type { ReadoutModel, MetricView, Tone, Severity } from "../prototypes/readout-model";
-import { shortNotice, provenanceLine } from "../brand";
+import { shortNotice, provenanceLine } from "../attribution";
 
 const F = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
