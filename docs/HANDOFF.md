@@ -2,6 +2,25 @@
 
 *Updated: 2026-09-22. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
 
+## ⚠ THESE DOCS EXIST ONLY ON `phase1/taxonomy-injection` (22 Sep 2026)
+
+**If you are reading this on `main`, you are reading a day-old file and the
+documents below do not exist for you.** `main` is frozen for a batch release and
+carries none of it: no `docs/plans/CUSTOMER-NEUTRAL.md`, no
+`docs/plans/BUILDER-CONTEXT.md`, no `docs/architecture/CONTEXT-INGESTION.md`, no
+release-freeze rule in `AGENTS.md`.
+
+    git fetch origin && git checkout phase1/taxonomy-injection
+
+Or read a single file without switching:
+
+    git show phase1/taxonomy-injection:docs/plans/CUSTOMER-NEUTRAL.md
+
+This split is deliberate — `main` auto-deploys production and production is
+frozen — but it means the repo's own "authoritative state" is on a branch, which
+is exactly the kind of thing that gets missed. It resolves when the release
+ships and the branch merges.
+
 ## START HERE IF YOU ARE PICKING UP THE NEUTRALITY WORK (22 Sep 2026)
 
 **`docs/plans/CUSTOMER-NEUTRAL.md` is the approach document.** Read it before
