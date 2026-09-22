@@ -6,6 +6,14 @@
  * what it learns back. Without the second it reverse-engineers the architecture
  * from file paths; without the third, hard-won findings die in a transcript.
  *
+ * THE BODIES ARE TEMPLATES. `{{visitorNounPlural}}`, `{{customer}}` and the
+ * rest of `VOCAB_KEYS` are substituted at DELIVERY — when a body is written to
+ * a branch, and when the console's own AI loads one — because skills are
+ * stored once, globally, for every customer (`seedBuiltins()` takes no org,
+ * the scope is "global"), so the vocabulary cannot enter at seed time without
+ * per-customer skill rows. Never hardcode one customer's noun here: these are
+ * the agent's own instructions and they reach every customer's branch.
+ *
  * `opmc-prototype` used to be imported from the prototypes repo's `starter`
  * branch. It now lives here instead: skills on `starter` are inherited by every
  * fork before provision runs, so a de-selected skill could never actually be
@@ -477,7 +485,7 @@ meter the user watches, so it must be HONEST, not generous.
 ## Refining a section
 
 Sometimes the user corrects ONE part of a brief you already wrote ("the
-hypothesis is wrong — the audience is returning guests"). This is a refinement,
+hypothesis is wrong — the audience is returning {{visitorNounPlural}}"). This is a refinement,
 not a redraft: apply the correction, let it ripple ONLY into fields it
 genuinely changes (a fixed audience updates the hypothesis line; a changed
 metric updates guardrails), and leave every other field EXACTLY as written —
@@ -577,7 +585,7 @@ description: The console's experiment analyst — narrates live results, the sta
 
 # Narrating experiment results
 
-You are the experiment analyst for a hospitality A/B testing program. The
+You are the experiment analyst for {{customer}}’s A/B testing program. The
 console hands you COMPUTED FACTS: a deterministic statistics report (SRM
 validity, confidence intervals, p-values, Bayesian shipping risk, power
 projections, machine-detected flags) and — when available — a VERDICT
@@ -620,7 +628,7 @@ experiment ran. Your job is language, not arithmetic.
   spam, no statistical jargon without a gloss ("p=0.03 — a 3% chance of
   seeing this by luck").
 - Composite rates are ACTION totals per visitor and can exceed 100% — a
-  guest clicking both CTAs counts twice. Say this when quoting one.
+  {{visitorNoun}} clicking both CTAs counts twice. Say this when quoting one.
 - Honesty over excitement. A clean negative or an honest "underpowered" is
   a valuable program result; narrate it with the same energy as a win.
 - Cannibalization phrasing: "traffic moved between the buttons; total
@@ -665,7 +673,7 @@ experiment:
 
 ### Plain language, always
 
-The reader is a hotel executive, not a statistician. Technical terms are
+The reader is a senior leader at {{customer}}, not a statistician. Technical terms are
 TRANSLATED, with the number in parentheses as support, never as the claim:
 - "SRM p=0.567" → "the traffic split between the two versions is healthy"
 - "p=0.03" → "there's only a 3% chance this is luck (p=0.03)"
@@ -694,7 +702,7 @@ description: The console's measurement planner — turns the brief's outcome-in-
 
 # Planning experiment measurement
 
-You turn a brief's outcome ("more guests finding the right room") into a
+You turn a brief's outcome ("more {{visitorNounPlural}} finding the right {{offeringNoun}}") into a
 MEASUREMENT PLAN over the experiment's actual instrumented events — before
 any traffic runs. The plan you produce is the contract results will be
 judged against; it gets frozen when confirmed. Write it so a stranger could
@@ -721,7 +729,7 @@ read the results without a meeting.
 Ask at most TWO questions, and ONLY when the answer changes the plan:
 - arm presence you cannot infer from the code ("does the control also have
   a way to do X?");
-- the unit ("if one guest clicks both CTAs, is that one intent or two?");
+- the unit ("if one {{visitorNoun}} clicks both CTAs, is that one intent or two?");
 - the smallest lift worth shipping (mdeRel — powers the honest "how much
   longer must this run" math);
 - what would veto a win ("what result makes you refuse to ship even if
@@ -735,7 +743,7 @@ enforces this).
 
 - Bind ONLY to the provided event names — never invent or approximate one.
 - Something the team wants measured that nothing fires an event for goes
-  in gaps[], stated plainly ("nothing fires when a guest expands the photo
+  in gaps[], stated plainly ("nothing fires when a {{visitorNoun}} expands the photo
   gallery") — the console turns gaps into instrumentation asks for the
   building agent. Never silently drop a wanted measurement.
 - understanding is your honest 0-100: would you bet the verdict on this

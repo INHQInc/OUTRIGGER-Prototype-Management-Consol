@@ -155,6 +155,9 @@ console.log("\n7. a described customer gets its own words, never the neutral def
 {
   const store = await getContentStore();
   const now = "2026-09-22T00:00:00.000Z";
+  // The ORG record too — `{{customer}}` resolves to its name, and without one
+  // it falls back to the org id, which is still resolved but not the point.
+  await store.addOrg({ id: "cust-org", name: "Rider Co.", createdAt: now });
   await store.addSiteProfile({
     id: "cust-org-star-r1", orgId: "cust-org", siteId: "*", rev: 1, status: "approved",
     taxonomy: { visitorNoun: "rider", visitorNounPlural: "riders", offeringNoun: "route",
@@ -238,6 +241,38 @@ console.log("\n11. a card blocked on a missing profile says so, instead of blami
   const seeded = derivePipeline({ ...(base as object), brandRev: "org:1" } as never);
   ok("a seeded customer still gets the ordinary re-sync nudge",
     seeded.alerts.some((a) => /brief or pages changed/.test(a.text)));
+}
+
+console.log("\n12. the agent's own instructions are written in the customer's words");
+{
+  // Skill bodies ARE the builder's instructions and they are stored once,
+  // globally, for every customer. `analystSkill()` was documented as "THE ONE
+  // SEAM the customer's vocabulary enters through" while brief.ts and
+  // measurement.ts read bodies straight past it.
+  const { resolvedSystem, upsertSkill } = await import("../../src/lib/skills/skills");
+
+  let refused = false;
+  try { await resolvedSystem("nobody-here", "opmc-brief-author", "fallback"); }
+  catch (e) { refused = isTaxonomyUnavailable(e); }
+  ok("an undescribed customer gets no instructions at all", refused,
+    "a brief becomes the building agent's instructions — not a place for a template's words");
+
+  let blankOrg = false;
+  try { await resolvedSystem(null, "opmc-brief-author", "fallback"); }
+  catch (e) { blankOrg = isTaxonomyUnavailable(e); }
+  ok("a null org refuses as a CALLER bug, not a missing profile", blankOrg);
+
+  await upsertSkill({ id: "t-skill", name: "t-skill", scope: "global", description: "",
+    body: "---\nname: t-skill\n---\nWrite for {{customer}}. Their people are {{visitorNounPlural}}; they {{primaryAction}}.", builtIn: true });
+  const sys = await resolvedSystem("cust-org", "t-skill", "unused fallback");
+  ok("the body is resolved, not handed over raw", !sys.includes("{{"), sys.slice(0, 120));
+  ok("...into this customer's actual words", sys.includes("riders") && sys.includes("book a ride"));
+  ok("...and the vocabulary block is appended too", sys.includes("VOCABULARY"),
+    "substitution fills the slots a body thought to leave; the block covers the prose it did not");
+
+  const fell = await resolvedSystem("cust-org", "no-such-skill", "Fallback for {{customer}}.");
+  ok("the FALLBACK is resolved as well", fell.includes("Fallback for Rider Co."),
+    "the fallback is the path taken when seeding already failed — the moment a dropped vocabulary goes unnoticed");
 }
 
 console.log(failures ? `\n${failures} FAILED\n` : "\nall good\n");

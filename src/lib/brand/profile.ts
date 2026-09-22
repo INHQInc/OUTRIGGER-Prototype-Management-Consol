@@ -279,3 +279,69 @@ export async function baselineFor(orgId: string, siteId: string, metricKey: stri
     return null;
   }
 }
+
+/**
+ * THE CUSTOMER'S WORDS, AS A UNIT — the vocabulary plus who it belongs to.
+ *
+ * The two travel together because every surface that needs one needs the
+ * other: the analyst names the reader AND writes in their nouns; a skill body
+ * does both in the same paragraph. Resolving them separately is how one half
+ * of a prompt ends up in one revision's words and the other half in another's.
+ */
+export interface Vocabulary {
+  taxonomy: Taxonomy;
+  /** The customer's display name, falling back to the org id — which is their
+   *  own identifier, so still a resolved specific and never a generic. */
+  customer: string;
+}
+
+/** Resolve both, or refuse. Throws `TaxonomyUnavailable`, exactly as
+ *  `requireTaxonomy` does — this is the same gate with a name attached. */
+export async function vocabularyFor(orgId: string, siteId?: string): Promise<Vocabulary> {
+  const taxonomy = await requireTaxonomy(orgId, siteId);
+  // AFTER the refusal, never before: a store blip on the ORG row must not
+  // decide whether a customer has a vocabulary.
+  const store = await getContentStore();
+  const org = await store.getOrg(orgId).catch(() => null);
+  return { taxonomy, customer: org?.name || orgId };
+}
+
+/**
+ * The placeholders a skill body may use. One list, because it is also the
+ * validation: a `{{…}}` that is not here is a typo, and the smoke suite fails
+ * on one rather than letting it ship to an agent as literal braces.
+ */
+export const VOCAB_KEYS = [
+  "customer", "visitorNoun", "visitorNounPlural", "offeringNoun",
+  "offeringNounPlural", "primaryAction", "conversionSurface", "entityKinds",
+] as const;
+export type VocabKey = (typeof VOCAB_KEYS)[number];
+
+const PLACEHOLDER = /\{\{\s*([A-Za-z]+)\s*\}\}/g;
+
+/**
+ * SUBSTITUTE THE CUSTOMER INTO A SKILL BODY.
+ *
+ * Skill bodies are the agent's own instructions, delivered to every branch and
+ * used by the console's own AI. They are stored ONCE, globally, for every
+ * customer — `seedBuiltins()` takes no org and the scope is "global" — so the
+ * vocabulary cannot enter at seed time without per-customer skill rows. It
+ * enters at DELIVERY instead, where the customer is already resolved.
+ *
+ * AN UNKNOWN PLACEHOLDER IS LEFT ALONE, deliberately. Dropping it would delete
+ * a word from an instruction silently; leaving `{{whatever}}` in the text is
+ * visible to whoever reads it. The suite catches the typo before it ships.
+ */
+export function resolveVocabulary(text: string, v: Vocabulary): string {
+  return text.replace(PLACEHOLDER, (whole, key: string) => {
+    if (key === "customer") return v.customer;
+    if (key === "entityKinds") return v.taxonomy.entityKinds.join(", ");
+    const value = (v.taxonomy as unknown as Record<string, unknown>)[key];
+    return typeof value === "string" && value ? value : whole;
+  });
+}
+
+/** Every placeholder a body uses, for validation. */
+export function vocabularyKeysIn(text: string): string[] {
+  return [...text.matchAll(PLACEHOLDER)].map((m) => m[1]);
+}

@@ -18,6 +18,7 @@
  * Stored as content-store flags so this needs no schema migration.
  */
 import { getContentStore } from "../content/store";
+import { resolveVocabulary, taxonomyPrompt, vocabularyFor } from "../brand/profile";
 
 export type SkillScope = "global" | "brand" | "prototype";
 
@@ -142,4 +143,37 @@ export async function setSkillSelection(prototypeKey: string, enabledIds: string
 /** The skills provision should write into `.claude/skills/` on the branch. */
 export async function enabledSkillsForPrototype(orgId: string | null | undefined, prototypeKey: string): Promise<Skill[]> {
   return (await resolveSkillsForPrototype(orgId, prototypeKey)).filter((r) => r.enabled).map((r) => r.skill);
+}
+
+/**
+ * A SKILL BODY, READY FOR A MODEL — fetched, resolved, and carrying the
+ * customer's vocabulary. This is the only supported way to read one for a
+ * prompt.
+ *
+ * Skill bodies are stored once, globally, for every customer, and they are
+ * templates: `{{visitorNounPlural}}`, `{{customer}}` and the rest of
+ * `VOCAB_KEYS`. Reading `skill.body` straight and handing it to a model does
+ * one of two things — ships literal braces, or (before they were templated)
+ * ships one customer's nouns to every customer. Three call sites were doing
+ * exactly that, because the vocabulary seam lived in `analystSkill()` and
+ * `brief.ts` / `measurement.ts` never went through it.
+ *
+ * IT REFUSES. `vocabularyFor` throws when the customer is undescribed, and
+ * that is the point: a brief becomes the building agent's instructions and a
+ * measurement plan becomes the contract results are judged against. Neither is
+ * a place to write in a template's words.
+ */
+export async function resolvedSystem(orgId: string | null | undefined, id: string, fallback: string): Promise<string> {
+  // A NULL ORG IS NOT COERCED AWAY. `brief.ts` carries `string | null`, and
+  // `requireTaxonomy` refuses a blank with "this is a bug in the caller, not a
+  // missing profile" — which is the right answer, and one a `?? ""` at the
+  // call site would have turned into a confusing "no profile for ''".
+  const v = await vocabularyFor(orgId ?? "");
+  const skill = await getSkill(orgId, id);
+  const body = skill ? parseFrontmatter(skill.body).body : fallback;
+  // The vocabulary is APPENDED as well as substituted: substitution fills the
+  // slots a body thought to leave, and the appended block covers the prose it
+  // did not. `analystSkill()` has done this since the injection shipped; these
+  // surfaces never did.
+  return `${resolveVocabulary(body, v)}\n\n${taxonomyPrompt(v.taxonomy)}`;
 }

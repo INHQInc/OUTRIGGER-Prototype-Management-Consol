@@ -352,6 +352,18 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   ships an instruction pointing at the page's own evidence — silence reads as
   freedom, and a model with freedom and no voice description writes generic
   marketing copy.
+- **A skill body is a TEMPLATE, and reading one raw is a bug.** Skills are
+  stored once, globally, for every customer (`seedBuiltins()` takes no org,
+  scope is `"global"`), so the vocabulary cannot enter at seed time without
+  per-customer rows. Bodies carry `{{visitorNoun}}`-style placeholders from
+  `VOCAB_KEYS` and are substituted at DELIVERY — `resolvedSystem()` for the
+  console's own AI, `resolveVocabulary()` where the caller already holds the
+  vocabulary (branch delivery, `analystSkill`). `analystSkill()` was documented
+  as "THE ONE SEAM the customer's vocabulary enters through" while `brief.ts`
+  and `measurement.ts` read bodies straight past it; `vocabulary-smoke` §7 now
+  fails on any reader that does. An unknown placeholder is left VISIBLE rather
+  than dropped — deleting a word from an instruction silently is worse than
+  printing braces somebody can see.
 - **A tier that enforces the profile must be SEEDED BEFORE the code that
   enforces it serves that tier.** Provisioning refuses without a brand profile
   and the content hash changed, so on an unseeded tier every prototype shows

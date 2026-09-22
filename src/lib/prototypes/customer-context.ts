@@ -18,9 +18,8 @@
  * build. The alternative is a generic fallback, which is the one thing this
  * whole line of work exists to remove.
  */
-import { requireTaxonomy, taxonomyPrompt, taxonomyRevision, profileFor, ORG_DEFAULT_SITE_ID } from "../brand/profile";
+import { vocabularyFor, taxonomyPrompt, taxonomyRevision, profileFor, ORG_DEFAULT_SITE_ID } from "../brand/profile";
 import { SECTION_LABEL, type SectionKey, type Taxonomy } from "../brand/types";
-import { getOrg } from "../orgs";
 
 export interface CustomerContext {
   orgId: string;
@@ -57,11 +56,11 @@ const DELIVERED: SectionKey[] = ["voice", "audience", "business", "design"];
  * vocabulary is missing or half-described — see the file header.
  */
 export async function customerContextFor(orgId: string): Promise<CustomerContext> {
-  const taxonomy = await requireTaxonomy(orgId);
-  const [org, profile] = await Promise.all([
-    getOrg(orgId).catch(() => null),
-    profileFor(orgId, ORG_DEFAULT_SITE_ID),
-  ]);
+  // ONE DERIVATION of "the customer's words and whose they are" — `skills.ts`
+  // resolves skill bodies through the same call, so a branch cannot end up
+  // with a customer.md naming one customer and a SKILL.md naming another.
+  const { taxonomy, customer } = await vocabularyFor(orgId);
+  const profile = await profileFor(orgId, ORG_DEFAULT_SITE_ID);
   const sections: Partial<Record<SectionKey, string>> = {};
   for (const k of DELIVERED) {
     const v = profile?.sections?.[k]?.trim();
@@ -69,7 +68,7 @@ export async function customerContextFor(orgId: string): Promise<CustomerContext
   }
   return {
     orgId,
-    name: org?.name || orgId,
+    name: customer,
     profileRev: await taxonomyRevision(orgId),
     taxonomy,
     sections,

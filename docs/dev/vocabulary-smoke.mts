@@ -72,7 +72,6 @@ const HOSPITALITY = /\b(guests?|hotels?|resorts?|hospitality|lodging|accommodati
  * this list so that re-introducing a word fails as "not allowed any".
  */
 const BUDGET: Record<string, number> = {
-  "lib/skills/builtins.ts": 7,
   "lib/ai/next-test.ts": 2,
   "lib/prototypes/results.ts": 2,
   "lib/prototypes/stats.ts": 2,
@@ -222,6 +221,56 @@ ok(
   deadInterpolations.length === 0,
   deadInterpolations.join(" | ") + " — these print the literal ${...} to the model; use a backtick template",
 );
+
+console.log("\n7. a templated skill body must actually BE resolved");
+// Skill bodies are the agent's own instructions and they are stored ONCE,
+// globally, for every customer — so they carry `{{visitorNoun}}`-style
+// placeholders that are substituted at DELIVERY. Two ways that goes wrong:
+// a placeholder nobody resolves (literal braces reach the model), and a
+// placeholder nobody defined (a typo, same outcome).
+{
+  const { VOCAB_KEYS, resolveVocabulary } = await import("../../src/lib/brand/profile");
+  const known = new Set<string>(VOCAB_KEYS);
+  const PH = /\{\{\s*([A-Za-z]+)\s*\}\}/g;
+
+  const builtins = await readFile(join(SRC, "lib/skills/builtins.ts"), "utf8");
+  const used = [...builtins.matchAll(PH)].map((m) => m[1]);
+  const unknown = [...new Set(used.filter((k) => !known.has(k)))];
+  ok(`every placeholder in builtins.ts is a known key (${new Set(used).size} used)`,
+    unknown.length === 0, `unknown: ${unknown.join(", ")} — a typo ships literal braces to the agent`);
+  ok("builtins.ts uses the placeholders at all", used.length > 0,
+    "at zero on the ratchet with no placeholders, the words were deleted rather than resolved");
+
+  // EVERY reader of a skill body that feeds a model must resolve it. This is
+  // the assertion that would have caught `brief.ts` and `measurement.ts`,
+  // which read `skill.body` straight for months while `analystSkill()` was
+  // documented as "THE ONE SEAM the customer's vocabulary enters through".
+  const raw: string[] = [];
+  for (const f of files) {
+    const rel = relative(SRC, f);
+    // `skills.ts` is where the resolving reader lives. `seed.ts` reads a body
+    // to store it, and storing it UNRESOLVED is the design — one row serves
+    // every customer, and the substitution happens at delivery.
+    if (rel === "lib/skills/skills.ts" || rel === "lib/skills/seed.ts") continue;
+    const text = await readFile(f, "utf8");
+    text.split("\n").forEach((line, i) => {
+      if (!/\bparseFrontmatter\(|\bsk\.body\b|\bskill\.body\b/.test(line)) return;
+      if (/resolveVocabulary|resolvedSystem|prev\.body|\.body === md/.test(line)) return;
+      raw.push(`${rel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+    });
+  }
+  ok("no delivery point hands a raw skill body to a model", raw.length === 0,
+    raw.join(" | ") + " — use resolvedSystem() or resolveVocabulary()");
+
+  // The substitution itself, and what it does with a key nobody defined.
+  const v = { customer: "Acme Freight", taxonomy: { visitorNoun: "shipper", visitorNounPlural: "shippers",
+    offeringNoun: "lane", offeringNounPlural: "lanes", primaryAction: "book a lane",
+    conversionSurface: "quote form", entityKinds: ["lane", "carrier"] } };
+  const out = resolveVocabulary("{{customer}} · {{visitorNounPlural}} · {{entityKinds}} · {{nonsense}}", v);
+  ok("it substitutes the customer and their nouns", out.startsWith("Acme Freight · shippers · lane, carrier"));
+  ok("an unknown placeholder is LEFT VISIBLE, not dropped", out.endsWith("{{nonsense}}"),
+    "dropping it deletes a word from an instruction silently; leaving it is readable by whoever hits it");
+}
 
 console.log(failures === 0 ? "\nVocabulary is ratcheted. Lower a budget whenever a prompt moves to taxonomyPrompt().\n" : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

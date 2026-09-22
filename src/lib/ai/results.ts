@@ -25,7 +25,7 @@ import { computeComposite, compositeMembers, optiPrimaryKeyOf, supportingKeys } 
 import { STAT_NOISE, type AttentionItem } from "../prototypes/attention";
 import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
-import { requireTaxonomy, taxonomyPrompt, taxonomyRevision } from "../brand/profile";
+import { requireTaxonomy, resolveVocabulary, taxonomyPrompt, taxonomyRevision } from "../brand/profile";
 import type { Taxonomy } from "../brand/types";
 import { getOrg } from "../orgs";
 
@@ -79,7 +79,9 @@ export async function analystSkill(orgId: string): Promise<{ system: string; tax
   try {
     await ensureSkillsSeeded(orgId);
     const skill = await getSkill(orgId, "opmc-experiment-analyst");
-    if (skill) return { system: `${parseFrontmatter(skill.body).body}\n\n${vocabulary}`, taxonomy, customer, ref: { id: skill.id, updatedAt: skill.updatedAt } };
+    // RESOLVED, not raw. A skill body is a template — see `VOCAB_KEYS` — and
+    // handing the raw one to the model ships literal braces.
+    if (skill) return { system: `${resolveVocabulary(parseFrontmatter(skill.body).body, { taxonomy, customer })}\n\n${vocabulary}`, taxonomy, customer, ref: { id: skill.id, updatedAt: skill.updatedAt } };
   } catch { /* fall through to the hardcoded analyst */ }
 
   // BOTH branches carry it. The fallback is the path taken when seeding has

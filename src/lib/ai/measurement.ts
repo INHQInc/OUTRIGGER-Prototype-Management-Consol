@@ -19,7 +19,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { PrototypeRecord } from "../prototypes/types";
 import type { CompositeMetric, MetricMap } from "../prototypes/results";
-import { getSkill, parseFrontmatter } from "../skills/skills";
+import { resolvedSystem } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
 
 const FALLBACK_SYSTEM =
@@ -116,8 +116,7 @@ export async function planMeasurement(opts: {
     throw new Error("No events found on the experiment or in the project registry — add metrics to the experiment in Optimizely first.");
   }
   await ensureSkillsSeeded(opts.orgId);
-  const skill = await getSkill(opts.orgId, "opmc-measurement-planner");
-  const system = skill ? parseFrontmatter(skill.body).body : FALLBACK_SYSTEM;
+  const system = await resolvedSystem(opts.orgId, "opmc-measurement-planner", FALLBACK_SYSTEM);
   const finalPass = Boolean(opts.answers?.length);
 
   const client = new Anthropic();

@@ -9,7 +9,7 @@
  * Structured output via a forced tool call, so the response is validated JSON.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { getSkill, parseFrontmatter } from "../skills/skills";
+import { resolvedSystem } from "../skills/skills";
 import { getBriefAttachment } from "../prototypes/attachments";
 import { ensureSkillsSeeded } from "../skills/seed";
 import type { PrototypeRecord, BriefReference } from "../prototypes/types";
@@ -166,8 +166,7 @@ export async function draftBrief(opts: {
     throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables to enable AI brief drafting.");
   }
   await ensureSkillsSeeded(opts.orgId);
-  const skill = await getSkill(opts.orgId, "opmc-brief-author");
-  const system = skill ? parseFrontmatter(skill.body).body : "You write structured, falsifiable A/B experiment briefs for client-side injected variations.";
+  const system = await resolvedSystem(opts.orgId, "opmc-brief-author", "You write structured, falsifiable A/B experiment briefs for client-side injected variations.");
 
   const refs = opts.references ?? opts.proto.brief.references ?? [];
   const context = [
@@ -308,8 +307,7 @@ export async function refineBrief(opts: {
     throw new Error("ANTHROPIC_API_KEY isn't set on the server — add it in Vercel → Settings → Environment Variables to enable AI brief drafting.");
   }
   await ensureSkillsSeeded(opts.orgId);
-  const skill = await getSkill(opts.orgId, "opmc-brief-author");
-  const system = skill ? parseFrontmatter(skill.body).body : "You write structured, falsifiable A/B experiment briefs for client-side injected variations.";
+  const system = await resolvedSystem(opts.orgId, "opmc-brief-author", "You write structured, falsifiable A/B experiment briefs for client-side injected variations.");
 
   const refs = opts.references ?? opts.proto.brief.references ?? [];
   const context = [

@@ -21,7 +21,7 @@ import { deriveDataGlobals, deriveDesignTokens, fetchPageHtml, type FontRef } fr
 import { listReferenceRepos } from "../git/reference-repos";
 import { enabledSkillsForPrototype } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
-import { isTaxonomyUnavailable } from "../brand/profile";
+import { isTaxonomyUnavailable, resolveVocabulary } from "../brand/profile";
 import { brandBasis, customerContextFor, renderCustomerMd } from "./customer-context";
 import { injectionPasses, isBriefComplete, type PrototypeRecord, type PrototypeTarget } from "./types";
 
@@ -423,7 +423,9 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     const skills = await enabledSkillsForPrototype(orgId, proto.key);
     const managed = skills.map((sk) => sk.id).sort();
     for (const sk of skills) {
-      files.push({ path: `.claude/skills/${sk.id}/SKILL.md`, content: Buffer.from(sk.body, "utf8") });
+      // The bodies are templates and this is one of their two delivery points.
+      // An unresolved one reaches the branch as literal `{{visitorNoun}}`.
+      files.push({ path: `.claude/skills/${sk.id}/SKILL.md`, content: Buffer.from(resolveVocabulary(sk.body, { taxonomy: customer.taxonomy, customer: customer.name }), "utf8") });
     }
     const prevRaw = await client.readFileAtRef(owner, repo, ".opmc/skills.json", branch).catch(() => null);
     let prevManaged: string[] | null = null;

@@ -44,6 +44,10 @@ Nothing is blocked today. Staging is seeded, staging is where this runs.
 **Step 1 cannot move after step 2.** Provisioning now refuses without a brand
 profile, and Re-sync is the only thing that clears the stale-hash warning — so
 deploying first gives every card a `danger` alert whose one remedy returns 400.
+Since the skill bodies became templates, **AI brief drafting and measurement
+planning refuse on the same gate** (`resolvedSystem` → `vocabularyFor`), so a
+pre-seed console is not merely stuck on provisioning — it cannot draft a brief
+either. All of it clears the moment the profile exists.
 `buildDone` requires `synced`, so no Build dot can go green, and `builtins.ts`
 tells every agent session to POST provision itself whenever the hash differs,
 which turns one stuck console into a stuck console plus confused agents.
@@ -77,7 +81,7 @@ including three strings that look exactly like what we are removing and will
 break the product if swept.
 
 State in one line: **`main` is FROZEN** for a batch release next week; all of it
-is on `phase1/taxonomy-injection` and on `staging`; the ratchet is at **34**,
+is on `phase1/taxonomy-injection` and on `staging`; the ratchet is at **8**,
 down from 48, with `observation.ts` fully converted as the worked example.
 
 Two things that will waste your time if you do not know them. A cached readout
