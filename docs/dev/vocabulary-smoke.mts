@@ -72,13 +72,6 @@ const HOSPITALITY = /\b(guests?|hotels?|resorts?|hospitality|lodging|accommodati
  * this list so that re-introducing a word fails as "not allowed any".
  */
 const BUDGET: Record<string, number> = {
-  // The 4 that remain are BLOCKED, not skipped, and they are all the same
-  // blocker: they describe the READER, not the site. FALLBACK_SYSTEM says
-  // "a hospitality A/B testing program" (needs Org.vertical) and three prompts
-  // say "hotel executives" / "the hotel’s team" (needs an audience field).
-  // Both are customer-tier capture — BUILDER-CONTEXT.md §3 step 1. Replacing
-  // them with "the business" would be the amnesia the one rule forbids.
-  "lib/ai/results.ts": 4,
   "lib/skills/builtins.ts": 7,
   "lib/ai/next-test.ts": 2,
   "lib/prototypes/results.ts": 2,

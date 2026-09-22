@@ -27,6 +27,7 @@ import { getSkill, parseFrontmatter } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
 import { requireTaxonomy, taxonomyPrompt, taxonomyRevision } from "../brand/profile";
 import type { Taxonomy } from "../brand/types";
+import { getOrg } from "../orgs";
 
 const requireKey = () => {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -34,8 +35,21 @@ const requireKey = () => {
   }
 };
 
-const FALLBACK_SYSTEM =
-  "You are the experiment analyst for a hospitality A/B testing program. Answer ONLY from the computed facts provided — never derive or adjust a number, never contradict the computed verdict or a validity flag. Notebook entries are history: never quote a number from them, only from the computed blocks. The pre-registered primary metric alone can confirm/refute the hypothesis; everything else is exploratory and must be labeled so. Below significance say 'too early to call' (running) or 'unproven, not refuted' (ended). Lead with the verdict, then the two or three numbers that matter, then flags, then the recommendation. Plain prose.";
+/**
+ * WHO THE ANALYST WORKS FOR, resolved.
+ *
+ * This named one industry’s testing program, and the plan had it filed as
+ * blocked on a new `Org.vertical` field. It was not: the customer’s NAME is
+ * already captured at onboarding, and naming the actual customer is both more
+ * specific than a vertical and correct for every vertical. A vertical is still
+ * worth capturing for the BUILDER — it shapes copy — but the analyst never
+ * needed one.
+ *
+ * `name` falls back to the org id, which is the customer's own identifier and
+ * therefore still a resolved specific, never a generic.
+ */
+const fallbackSystem = (customer: string) =>
+  `You are the experiment analyst for ${customer}\u2019s A/B testing program. Answer ONLY from the computed facts provided — never derive or adjust a number, never contradict the computed verdict or a validity flag. Notebook entries are history: never quote a number from them, only from the computed blocks. The pre-registered primary metric alone can confirm/refute the hypothesis; everything else is exploratory and must be labeled so. Below significance say 'too early to call' (running) or 'unproven, not refuted' (ended). Lead with the verdict, then the two or three numbers that matter, then flags, then the recommendation. Plain prose.`;
 
 /**
  * THE ONE SEAM the customer's vocabulary enters through.
@@ -45,7 +59,7 @@ const FALLBACK_SYSTEM =
  * `deepObservation` via the `system` it is handed. Appending the vocabulary
  * once reaches all four; appending it at each call site would drift.
  */
-export async function analystSkill(orgId: string): Promise<{ system: string; taxonomy: Taxonomy; ref?: { id: string; updatedAt?: string } }> {
+export async function analystSkill(orgId: string): Promise<{ system: string; taxonomy: Taxonomy; customer: string; ref?: { id: string; updatedAt?: string } }> {
   // OUTSIDE the try below, and that placement is the whole point. The catch
   // there exists to fall back to FALLBACK_SYSTEM when the SKILL store is
   // unreachable. If the vocabulary resolved inside it, a store blip would be
@@ -57,17 +71,21 @@ export async function analystSkill(orgId: string): Promise<{ system: string; tax
   // in one revision's vocabulary and half in another's.
   const taxonomy = await requireTaxonomy(orgId);
   const vocabulary = taxonomyPrompt(taxonomy);
+  // WHO THE READOUT IS FOR. Handed down with the vocabulary for the same
+  // reason: the prompts that named the reader were naming one customer’s
+  // industry, and a readout is written FOR one named customer.
+  const customer = (await getOrg(orgId).catch(() => null))?.name || orgId;
 
   try {
     await ensureSkillsSeeded(orgId);
     const skill = await getSkill(orgId, "opmc-experiment-analyst");
-    if (skill) return { system: `${parseFrontmatter(skill.body).body}\n\n${vocabulary}`, taxonomy, ref: { id: skill.id, updatedAt: skill.updatedAt } };
+    if (skill) return { system: `${parseFrontmatter(skill.body).body}\n\n${vocabulary}`, taxonomy, customer, ref: { id: skill.id, updatedAt: skill.updatedAt } };
   } catch { /* fall through to the hardcoded analyst */ }
 
   // BOTH branches carry it. The fallback is the path taken when seeding has
   // already failed, which is exactly the moment a dropped vocabulary would go
   // unnoticed — the same shape as a guard that is set but never armed.
-  return { system: `${FALLBACK_SYSTEM}\n\n${vocabulary}`, taxonomy };
+  return { system: `${fallbackSystem(customer)}\n\n${vocabulary}`, taxonomy, customer };
 }
 
 const mapTool = (eventNames: string[]) => ({
@@ -858,7 +876,7 @@ export async function generateReading(opts: {
 }): Promise<{ reading: Reading; dataWishes: string[] }> {
   requireKey();
   const client = new Anthropic();
-  const { system, taxonomy: t } = await analystSkill(opts.orgId);
+  const { system, taxonomy: t, customer } = await analystSkill(opts.orgId);
   // The metrics a beat may name, with what each reads right now. Shown so
   // the analyst picks the right one — never copied into the words.
   // THE SUPPORTING SET — the team's own answer to "what is this readout
@@ -1025,7 +1043,7 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map, t)}
 
-${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones that support the hypothesis. Write ONE observation for EVERY metric below, no exceptions. The reader is the hotel's team and the only question they are asking is WHAT DOES THIS TELL US. So: what are ${t.visitorNounPlural} doing differently on that surface, where is intent being created or lost along the path to the ${t.conversionSurface}, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
+${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones that support the hypothesis. Write ONE observation for EVERY metric below, no exceptions. The reader is ${customer}\u2019s own team and the only question they are asking is WHAT DOES THIS TELL US. So: what are ${t.visitorNounPlural} doing differently on that surface, where is intent being created or lost along the path to the ${t.conversionSurface}, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
   const m = opts.stats?.metrics.find((x) => x.key === k);
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
@@ -1055,7 +1073,7 @@ ${measureMenu}
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING for hotel executives: a HEADLINE (the story in one line), THE FOUR MOVEMENTS below, a LEDE that is those four run together as one flowing paragraph, and ONE BEAT FOR EACH metric in the beat list above, in that order, decision metric first.
+Give the READING for ${customer}\u2019s senior leaders: a HEADLINE (the story in one line), THE FOUR MOVEMENTS below, a LEDE that is those four run together as one flowing paragraph, and ONE BEAT FOR EACH metric in the beat list above, in that order, decision metric first.
 
 THE FOUR MOVEMENTS — the same four in every experiment, so a reader learns the shape once:
 · effect — what the change did to the thing it was aimed at.
@@ -1386,20 +1404,23 @@ export interface AnalystAnswer {
   readOnlyNotice?: string;
 }
 
-const answerTool = {
+/** Same rule as `readingToolFor`: a tool description is a prompt, and this one
+ *  names the reader. Resolved per customer, and a template literal so the
+ *  interpolation is not dead text. */
+const answerToolFor = (customer: string) => ({
   name: "give_answer",
   description: "The analyst's answer — executive format, enforced: a one-sentence direct answer, then bullets that each LEAD with a data point.",
   input_schema: {
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "ONE sentence answering the question directly, plain business words" },
-      bullets: { type: "array" as const, items: { type: "string" as const }, description: "2-6 bullets, ONE fact each, LEADING with the number ('Hero clicks: 4.14% vs 1.47% — the variant is losing'). Plain text, no markdown. The audience is hotel executives: NEVER write q-values, p-values, 'alpha', 'FDR' or 'statistically significant' — say 'beyond what luck explains' / 'still inside the range luck could produce'" },
+      bullets: { type: "array" as const, items: { type: "string" as const }, description: `2-6 bullets, ONE fact each, LEADING with the number ('Hero clicks: 4.14% vs 1.47% — the variant is losing'). Plain text, no markdown. The audience is ${customer}\u2019s senior leaders: NEVER write q-values, p-values, 'alpha', 'FDR' or 'statistically significant' — say 'beyond what luck explains' / 'still inside the range luck could produce'` },
       caveat: { type: "string" as const, description: "one sentence when honesty demands it (too early, exploratory, data gap)" },
       nextStep: { type: "string" as const, description: "one sentence recommendation tied to the verdict" },
     },
     required: ["headline", "bullets"],
   },
-};
+});
 
 export async function analyzeResults(opts: {
   orgId: string;
@@ -1418,7 +1439,7 @@ export async function analyzeResults(opts: {
 }): Promise<AnalystAnswer> {
   requireKey();
   const client = new Anthropic();
-  const { system, taxonomy: t } = await analystSkill(opts.orgId);
+  const { system, taxonomy: t, customer } = await analystSkill(opts.orgId);
   // The SAME structure the standing reading is built from. Without it the ask
   // box got an undifferentiated pile of metrics, so asking the analyst a
   // question produced a worse answer than not asking one.
@@ -1452,7 +1473,7 @@ ${opts.stance === "challenge"
 ANSWER IT THROUGH THE TEAM'S OWN METRICS. The decision metric is ${decisionLabel}, and the supporting metrics above are the steps this team believes lead to it — several are COMPOSITES they defined themselves, which exist precisely because no single Optimizely event expresses what they mean. Reason with those, and with THE CHAIN, rather than reaching for whichever raw event happens to be nearest the question. A background metric may be raised as a caution; it is never the answer. If the honest answer is that their metrics cannot settle the question, say so and say what would.`
     : "Give the readout: the verdict as the headline, then the numbers that matter as bullets, a caveat if honesty demands one, and the recommendation. Build it from the decision metric and the supporting metrics above."}`,
     }],
-    tools: [answerTool],
+    tools: [answerToolFor(customer)],
     tool_choice: { type: "tool", name: "give_answer" },
   });
   const tu = res.content.find((c) => c.type === "tool_use");
