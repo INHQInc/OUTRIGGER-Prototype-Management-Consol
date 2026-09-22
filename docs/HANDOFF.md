@@ -78,16 +78,60 @@ true as of 22 Sep.
   whose scope overlaps an existing one, and a custom environment counts as
   preview. That is why pasting the staging string kept failing.
 
-### NOT done — the guard is not armed
+### The guard IS armed, and arming it proved the Neon project
 
-`select val from content_meta where key = 'db-owner'` returns **nothing**. The
-production build serving today (`06d29f0`) was created about ten minutes BEFORE
-`PRISM_DB_OWNER` was added, and env vars only apply to new deployments. The
-variable is set; the running build has never seen it.
+`select val from content_meta where key = 'db-owner'` on the production branch
+of `outrigger-prototype-console` returns **`prod`**. Production redeployed on
+`c2012c4` at 17:21Z; the claim landed on the next authenticated request.
 
-**One production redeploy of the same commit arms it.** Until then a
-misconfigured deployment pointed at the live database would run as "legacy" and
-proceed, which is the exact hazard the guard exists for.
+This mattered for a second reason. `DATABASE_URL` is type **Secret** — Vercel:
+*"You can't reveal this value after saving."* Not to an agent, not to Bryan. And
+Vercel's Storage tab shows **no connected database**, so no integration record
+names the project either. Which Neon project production uses could not be
+established by looking at anything. The claim established it by behaviour: the
+row appeared in `outrigger-prototype-console`, so that is production's database
+and the `staging` branch was forked from the right place.
+
+Corroborating: at the moment the live console was reloaded, Neon's branch list
+showed `production` **Active**, "Compute last active: now", 223.82 MB, while
+`staging` sat idle at 0 CU-hrs.
+
+### Three tiers, three Neon branches
+
+| Vercel env | Neon branch | id | `PRISM_DB_OWNER` | claim state |
+|---|---|---|---|---|
+| Production | `production` | `br-winter-grass-aumw7fr9` | `prod` | claimed |
+| staging | `staging` | `br-proud-sky-au0k0nig` | `staging` | no row — claims on first boot |
+| Preview | `preview` | `br-noisy-hat-auqae51j` | `preview` | set by hand, see below |
+
+`preview` was forked **after** production claimed, so it arrived carrying
+`db-owner = prod` and every preview would have refused to start. Corrected on
+that branch with `update content_meta set val = 'preview' …`. `staging` was
+forked at 09:54, before the claim, and genuinely has no row — verified, not
+assumed. Every branch forked from here on needs the same one-line correction.
+
+### What preview being real changes
+
+`DATABASE_URL` had covered *Production and Preview* since 17 Jul, so every
+feature-branch preview read and wrote the live database. Now Production-only.
+
+Note what preview still holds: `RESEND_API_KEY`, `CRON_SECRET` and
+`ADMIN_LOGIN_SECRET` are all scoped *Production and Preview*, and the Neon fork
+carries the customer's GitHub and Optimizely PATs in its rows. What keeps it
+harmless is that `PRISM_OUTWARD_EFFECTS` is **Production only**, so
+`src/lib/deploy/outward.ts` refuses email, experiment-write and code-write
+everywhere else. That is the structural argument for not scrubbing, and it now
+carries real weight rather than being theoretical.
+
+### Correcting an earlier diagnosis
+
+The staging `DATABASE_URL` paste was blamed on Vercel rejecting a duplicate key
+whose scope overlaps an existing one, custom environments counting as preview.
+**Wrong.** `PRISM_DB_OWNER` now exists as three rows — Production, staging,
+Preview — accepted without complaint. The likely real cause was the environments
+box, which opens with Production ticked. Narrowing `DATABASE_URL` was still
+right, for the preview-writes-production reason; it was not the unblock it was
+described as.
 
 ### The decision on seeding staging, and why
 
@@ -127,18 +171,19 @@ copies `db-owner = prod`, so a staging deployment declaring `staging` will refus
 to start. Correct behaviour, confusing symptom. Fix on the refreshed branch:
 `update content_meta set val = 'staging' where key = 'db-owner';`
 
-### Still outstanding
+### Still outstanding — two secrets, both human-only
 
-Step-by-step, in order, for a human: **`docs/STAGING-CHECKLIST.md`**.
+`docs/STAGING-CHECKLIST.md` has the steps. An agent does not enter connection
+strings or API keys, so these are the only things left:
 
-- Production redeploy — arms the guard and proves the project. Everything else
-  waits on it.
-- `DATABASE_URL` + `ANTHROPIC_API_KEY` on the staging environment. Leave
-  `CRON_SECRET` unset — both crons fail closed without it, which is how
-  duplicate report emails are prevented.
-- A `preview` Neon branch, plus `DATABASE_URL` and `PRISM_DB_OWNER=preview` on
-  Preview, to undo the subtraction above.
-- Merge `guard/code-write` (below) before staging has a database.
+- `DATABASE_URL` on **staging**, and on **Preview**. Tick only that one tier;
+  the dialog opens with Production ticked.
+- `ANTHROPIC_API_KEY` on **staging**. Preview already has one — the existing key
+  is scoped *Production and Preview* (24 Jul).
+- Leave `CRON_SECRET` unset on both. Both crons fail closed without it, which is
+  how duplicate report emails are prevented.
+
+Merged separately: `guard/code-write` is open as PR #1.
 
 ---
 
