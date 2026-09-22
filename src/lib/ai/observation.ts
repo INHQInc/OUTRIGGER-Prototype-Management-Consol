@@ -259,7 +259,7 @@ NO DIGITS in your words — every number is printed beside your sentences and wo
       parts.push(`the surface only exists in the ${m.featureOnly === "variation" ? "new version" : "control"}, so there is nothing equivalent to compare it against — read it as adoption, not as a lift`);
     }
     if (m.kind === "composite" && m.test === "actions") {
-      parts.push("this is a total of ACTIONS per visitor, not a head-count: one ${t.visitorNoun} acting several times counts each time, so the rate can pass one hundred per cent and it measures behaviour rather than distinct people");
+      parts.push(`this is a total of ACTIONS per visitor, not a head-count: one ${t.visitorNoun} acting several times counts each time, so the rate can pass one hundred per cent and it measures behaviour rather than distinct people`);
     }
     if (m.test === "none") {
       parts.push("this is a value-style metric, so per-visitor variation is not available from the totals and no confidence can be computed for it");

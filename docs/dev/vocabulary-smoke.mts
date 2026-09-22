@@ -193,5 +193,36 @@ ok(
 );
 ok("the guard is exported for callers to use", /export function isTaxonomyUnavailable/.test(profile));
 
+console.log("\n6. a resolved word must actually resolve");
+// THE RATCHET REWARDED THIS BUG. Converting observation.ts, a line came out as
+//   parts.push("... one ${t.visitorNoun} acting several times ...")
+// — DOUBLE quotes. Valid TypeScript, so tsc was silent. The word "guest" was
+// gone, so the count went to zero and section 1 went green. The model was
+// being handed the literal characters ${t.visitorNoun}.
+//
+// Counting the ABSENCE of a hardcoded word is not the same as checking the
+// PRESENCE of a working substitution, and only the first was ever asserted.
+// Two independent readers found it; no test did.
+const TAXONOMY_INTERP = /\$\{\s*(t|tax|taxonomy)\s*[.?]/;
+/** Blank out template literals, where ${...} is the whole point. */
+function withoutTemplates(src: string): string {
+  return src.replace(/`(?:\\.|[^`\\])*`/gs, (m) => " ".repeat(m.length));
+}
+const deadInterpolations: string[] = [];
+for (const f of files) {
+  const text = withoutTemplates(await readFile(f, "utf8"));
+  text.split("\n").forEach((line, i) => {
+    // a quoted string on this line that carries a taxonomy interpolation
+    for (const m of line.matchAll(/"[^"]*"|'[^']*'/g)) {
+      if (TAXONOMY_INTERP.test(m[0])) deadInterpolations.push(`${relative(SRC, f)}:${i + 1}  ${m[0].slice(0, 90)}`);
+    }
+  });
+}
+ok(
+  "no taxonomy interpolation sits in a quoted string",
+  deadInterpolations.length === 0,
+  deadInterpolations.join(" | ") + " — these print the literal ${...} to the model; use a backtick template",
+);
+
 console.log(failures === 0 ? "\nVocabulary is ratcheted. Lower a budget whenever a prompt moves to taxonomyPrompt().\n" : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);
