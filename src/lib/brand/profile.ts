@@ -26,13 +26,18 @@
  * checkout" — no error, no log, and the customer reads it before we do. Bland
  * and confidently wrong is worse than absent, because nothing signals it.
  *
- * So there are two resolvers, and the choice between them is the choice between
- * degrading and refusing:
+ * There used to be two resolvers, and the choice between them was the choice
+ * between degrading and refusing. As of 22 Sep 2026 there is ONE:
  *
- *   taxonomyFor()     — total, never throws. For internal surfaces where
- *                       neutral words are an acceptable degradation.
- *   requireTaxonomy() — throws unless a profile genuinely exists. For anything
- *                       a customer will read.
+ *   requireTaxonomy() — throws unless EVERY field is recorded. For anything a
+ *                       customer will read, which is all of it.
+ *
+ * The total one was deleted rather than documented, because a resolver that
+ * degrades is only ever one careless import away from a customer surface, and
+ * "use the strict one" is a rule a file cannot enforce about itself.
+ *
+ * DEFAULT_TAXONOMY survives for exactly one job: seeding a DRAFT that a human
+ * corrects. It is never resolved from and never served.
  */
 
 import { getContentStore } from "../content/store";
@@ -41,42 +46,18 @@ import { DEFAULT_TAXONOMY, type BrandFact, type SiteProfile, type Taxonomy } fro
 /** The customer-level row. A profile at this siteId holds inherited defaults only. */
 export const ORG_DEFAULT_SITE_ID = "*";
 
-/**
- * Resolve the taxonomy for a site. Never throws; falls back to neutral.
- * `siteId` omitted resolves the customer default alone.
- */
-export async function taxonomyFor(orgId: string, siteId?: string): Promise<Taxonomy> {
-  try {
-    const store = await getContentStore();
-    const [site, orgDefault] = await Promise.all([
-      siteId && siteId !== ORG_DEFAULT_SITE_ID ? store.getSiteProfile(orgId, siteId) : Promise.resolve(null),
-      store.getSiteProfile(orgId, ORG_DEFAULT_SITE_ID),
-    ]);
-    return merge(site, orgDefault);
-  } catch {
-    return DEFAULT_TAXONOMY;
-  }
-}
 
-/**
- * Merge field by field rather than whole-object, so a site that has corrected
- * only its visitor noun still inherits the rest. Shared by both resolvers so
- * they can never disagree about precedence.
- */
-function merge(site: SiteProfile | null, orgDefault: SiteProfile | null): Taxonomy {
-  return {
-    ...DEFAULT_TAXONOMY,
-    ...(orgDefault?.taxonomy ?? {}),
-    ...(site?.taxonomy ?? {}),
-    entityKinds: site?.taxonomy?.entityKinds?.length
-      ? site.taxonomy.entityKinds
-      : orgDefault?.taxonomy?.entityKinds ?? DEFAULT_TAXONOMY.entityKinds,
-  };
-}
+
+/** Every field a customer must have described. Derived from Taxonomy so a new
+ *  field cannot be added without this check noticing it. */
+const TAXONOMY_FIELDS = [
+  "visitorNoun", "visitorNounPlural", "offeringNoun", "offeringNounPlural",
+  "primaryAction", "conversionSurface", "entityKinds",
+] as const satisfies readonly (keyof Taxonomy)[];
 
 /** Thrown when prose a customer will read has no vocabulary to write it in. */
 export class TaxonomyUnavailable extends Error {
-  constructor(readonly reason: "no-org" | "no-profile", message: string) {
+  constructor(readonly reason: "no-org" | "no-profile" | "incomplete", message: string) {
     super(message);
     this.name = "TaxonomyUnavailable";
   }
@@ -102,25 +83,36 @@ export function isTaxonomyUnavailable(e: unknown): e is TaxonomyUnavailable {
 }
 
 /**
- * THE STRICT RESOLVER — refuse rather than degrade.
+ * THE ONLY RESOLVER. It refuses; it never degrades.
  *
- * Use this for anything a customer reads. It differs from `taxonomyFor` in
- * three ways, each deliberate:
+ * A second, total resolver used to sit beside this one and fill anything
+ * missing from DEFAULT_TAXONOMY. It was deleted 22 Sep 2026. Two resolvers
+ * meant one of them was the wrong one to call, and the wrong one was the easy
+ * one — the name is left out of this comment deliberately, because the ratchet
+ * greps for it and a mention that looks like a call would trip it.
  *
- *  1. IT DOES NOT SWALLOW STORE ERRORS. `taxonomyFor` catches everything, so a
- *     database outage is indistinguishable from an unseeded customer. Here the
- *     error propagates, because "the database was briefly down" and "nobody has
- *     ever described this brand" want different responses from a human.
+ *  1. IT DOES NOT SWALLOW STORE ERRORS. A database outage and an undescribed
+ *     brand want different responses from a human, so the error propagates.
  *
- *  2. IT CHECKS FOR A ROW, NOT FOR NEUTRAL-LOOKING VALUES. Comparing the result
- *     against DEFAULT_TAXONOMY would refuse to serve a genuinely
- *     vertical-neutral customer whose own words really are "visitor" and
- *     "product" — a SaaS company would be told its profile is missing when it
- *     is present and correct. Existence is the question; the values are not.
+ *  2. IT REJECTS A BLANK ORG. A missing tenant id used to resolve to neutral
+ *     defaults that looked perfectly valid, so a tenancy bug presented as bland
+ *     prose rather than as an error. That is the worst way for it to present.
  *
- *  3. IT REJECTS A BLANK ORG. A missing tenant id resolves to neutral defaults
- *     that look perfectly valid, so a tenancy bug would present as bland prose
- *     rather than as an error. That is the worst way for it to present.
+ *  3. IT REQUIRES EVERY FIELD — this is the part that was missing.
+ *     `SiteProfile.taxonomy` is `Partial<Taxonomy>` by design, and `merge()`
+ *     spread the gaps from DEFAULT_TAXONOMY. So a profile that recorded only a
+ *     visitor noun silently produced "product", "convert" and "checkout" for a
+ *     customer who had described none of them, and nothing reported it. The
+ *     guard caught the unseeded customer and missed the half-described one,
+ *     which is the likelier case the moment onboarding exists — sparse storage
+ *     IS the design.
+ *
+ *     DEFAULT_TAXONOMY is now what it should always have been: the seed for a
+ *     draft a human corrects, never something a customer can be served.
+ *
+ * The cost is deliberate: a customer who is half-described gets no prose at
+ * all rather than confident generic prose. Decided 22 Sep 2026 — we would
+ * rather refuse than sound like a template.
  */
 export async function requireTaxonomy(orgId: string, siteId?: string): Promise<Taxonomy> {
   const id = (orgId ?? "").trim();
@@ -142,7 +134,28 @@ export async function requireTaxonomy(orgId: string, siteId?: string): Promise<T
     );
   }
 
-  return merge(site, orgDefault);
+  // Site over customer default, field by field, with NO neutral base. A gap
+  // here is a gap, not a silent "visitor".
+  const resolved: Partial<Taxonomy> = {
+    ...(orgDefault?.taxonomy ?? {}),
+    ...(site?.taxonomy ?? {}),
+    entityKinds: site?.taxonomy?.entityKinds?.length
+      ? site.taxonomy.entityKinds
+      : orgDefault?.taxonomy?.entityKinds,
+  };
+
+  const missing = TAXONOMY_FIELDS.filter((k) => {
+    const v = resolved[k];
+    return Array.isArray(v) ? v.length === 0 : !String(v ?? "").trim();
+  });
+  if (missing.length) {
+    throw new TaxonomyUnavailable(
+      "incomplete",
+      `The brand profile for "${id}"${siteId ? ` / "${siteId}"` : ""} is missing ${missing.join(", ")}. Every field is required: filling a gap from the neutral default would print words this customer never chose, and nothing downstream could tell that it had happened.`,
+    );
+  }
+
+  return resolved as Taxonomy;
 }
 
 /**

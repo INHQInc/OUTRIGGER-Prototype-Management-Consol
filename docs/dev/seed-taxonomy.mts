@@ -34,7 +34,7 @@
  */
 
 import { getContentStore } from "../../src/lib/content/store";
-import { taxonomyFor, ORG_DEFAULT_SITE_ID } from "../../src/lib/brand/profile";
+import { requireTaxonomy, isTaxonomyUnavailable, ORG_DEFAULT_SITE_ID } from "../../src/lib/brand/profile";
 import { EMPTY_OBSERVED, DEFAULT_TAXONOMY, type Taxonomy, type SiteProfile } from "../../src/lib/brand/types";
 
 /**
@@ -95,7 +95,13 @@ if (!known.includes(org)) {
 console.log(`\nbackend : ${process.env.DATABASE_URL ? "Neon (DATABASE_URL is set)" : "filesystem (snapshots/)"}`);
 console.log(`org     : ${org}`);
 
-const before = await taxonomyFor(org);
+// Before seeding there may be nothing, or something incomplete. Both are
+// expected here and neither is an error — this is the only place in the
+// codebase that legitimately reads a taxonomy that may not resolve.
+const before = await requireTaxonomy(org).catch((e) => {
+  if (isTaxonomyUnavailable(e)) return null;
+  throw e;
+});
 const existing = await store.getSiteProfile(org, ORG_DEFAULT_SITE_ID);
 
 console.log(`\nresolves today:`);
@@ -136,11 +142,13 @@ const profile: SiteProfile = {
 
 await store.addSiteProfile(profile);
 
-const after = await taxonomyFor(org);
+// Strict on purpose: if the row we just wrote does not resolve COMPLETELY,
+// the seed did not do its job and saying so now is the whole point.
+const after = await requireTaxonomy(org);
 const ok = (Object.keys(want) as (keyof Taxonomy)[]).every((k) => JSON.stringify(after[k]) === JSON.stringify(want[k]));
 
 console.log(`\nwrote   : ${profile.id} (rev ${rev}, approved)`);
 console.log(`resolves now:`);
 for (const k of Object.keys(want) as (keyof Taxonomy)[]) console.log(`     ${String(k).padEnd(19)} ${JSON.stringify(after[k])}`);
-console.log(ok ? `\nSeeded. taxonomyFor("${org}") now returns the customer's words.\n` : `\nMISMATCH — resolution did not return what was written.\n`);
+console.log(ok ? `\nSeeded. requireTaxonomy("${org}") now resolves every field.\n` : `\nMISMATCH — resolution did not return what was written.\n`);
 process.exit(ok ? 0 : 1);

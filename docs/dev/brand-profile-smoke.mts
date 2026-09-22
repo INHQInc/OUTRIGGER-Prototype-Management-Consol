@@ -28,7 +28,7 @@
  */
 
 import { getContentStore } from "../../src/lib/content/store";
-import { taxonomyFor, requireTaxonomy, TaxonomyUnavailable, earnedDigest, baselineFor, ORG_DEFAULT_SITE_ID } from "../../src/lib/brand/profile";
+import { requireTaxonomy, TaxonomyUnavailable, earnedDigest, baselineFor, ORG_DEFAULT_SITE_ID } from "../../src/lib/brand/profile";
 import { EMPTY_OBSERVED, type BrandFact, type SiteProfile } from "../../src/lib/brand/types";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -102,10 +102,16 @@ function fact(over: Partial<BrandFact>): BrandFact {
 
 const store = await getContentStore();
 
-console.log("\n1. neutral default when nothing has been read");
-const fresh = await taxonomyFor(ORG, SITE);
-ok("visitors, not guests", fresh.visitorNounPlural === "visitors", fresh.visitorNounPlural);
-ok("neutral offering", fresh.offeringNoun === "product", fresh.offeringNoun);
+console.log("\n1. nothing read yet means NO WORDS, not neutral ones");
+// This assertion is inverted from what it said this morning. It used to check
+// that a brand-new tenant resolved to "visitors"/"product". Decided 22 Sep:
+// generic language is never served, so an undescribed tenant gets refused.
+const freshErr = await (async () => {
+  try { await requireTaxonomy(ORG, SITE); return null; }
+  catch (e) { return e instanceof TaxonomyUnavailable ? e : null; }
+})();
+ok("an unread site refuses", freshErr?.reason === "no-profile", String(freshErr?.reason));
+ok("...and says what to do about it", Boolean(freshErr?.message.includes("onboard")), freshErr?.message);
 
 console.log("\n2. resolution merges field by field");
 await store.addSiteProfile(
@@ -114,7 +120,12 @@ await store.addSiteProfile(
     siteId: ORG_DEFAULT_SITE_ID,
     status: "approved",
     approvedAt: new Date().toISOString(),
-    taxonomy: { offeringNoun: "room", offeringNounPlural: "rooms", primaryAction: "book" },
+    // A COMPLETE org default: every field, because requireTaxonomy now refuses a
+    // partial one. The site row below still overrides only what it disagrees with,
+    // which is the inheritance this section exists to prove.
+    taxonomy: { visitorNoun: "visitor", visitorNounPlural: "visitors", offeringNoun: "room",
+      offeringNounPlural: "rooms", primaryAction: "book", conversionSurface: "booking engine",
+      entityKinds: ["property"] },
   }),
 );
 await store.addSiteProfile(
@@ -126,7 +137,7 @@ await store.addSiteProfile(
     taxonomy: { visitorNoun: "guest", visitorNounPlural: "guests" },
   }),
 );
-const merged = await taxonomyFor(ORG, SITE);
+const merged = await requireTaxonomy(ORG, SITE);
 ok("site wins for its own correction", merged.visitorNounPlural === "guests", merged.visitorNounPlural);
 ok("customer default still inherited", merged.offeringNounPlural === "rooms", merged.offeringNounPlural);
 ok("customer action inherited", merged.primaryAction === "book", merged.primaryAction);
@@ -135,7 +146,7 @@ console.log("\n3. a draft is not the answer");
 await store.addSiteProfile(
   profile({ id: `${ORG}-${SITE}-r2`, rev: 2, status: "draft", taxonomy: { visitorNounPlural: "DRAFTED" } }),
 );
-const stillR1 = await taxonomyFor(ORG, SITE);
+const stillR1 = await requireTaxonomy(ORG, SITE);
 ok("draft r2 ignored", stillR1.visitorNounPlural === "guests", stillR1.visitorNounPlural);
 
 console.log("\n4. revisions are additive");
@@ -183,7 +194,8 @@ ok("an org with no profile refuses", unseeded?.reason === "no-profile", String(u
 const seeded = await requireTaxonomy(ORG, SITE);
 ok("an org WITH a profile resolves, inheriting the customer default", seeded.offeringNounPlural === "rooms", seeded.offeringNounPlural);
 
-// THE SUBTLE ONE. Refusing on "the values look neutral" would reject a SaaS
+// THE SUBTLE ONE, and it survives the per-field rule unchanged. Refusing on
+// "the values look neutral" would reject a SaaS
 // customer whose own words genuinely are visitor/product/convert — telling them
 // their profile is missing when it is present and correct. Existence is the
 // question, never the values.
@@ -195,14 +207,41 @@ await store.addSiteProfile(
     siteId: ORG_DEFAULT_SITE_ID,
     status: "approved",
     approvedAt: new Date().toISOString(),
-    taxonomy: { visitorNoun: "visitor", visitorNounPlural: "visitors", offeringNoun: "product" },
+    // COMPLETE, and every word happens to equal the neutral default. That is
+    // the whole point: this customer really does say "visitor" and "product",
+    // and refusing them for it would be telling a SaaS company its profile is
+    // missing when it is present and correct.
+    taxonomy: { visitorNoun: "visitor", visitorNounPlural: "visitors", offeringNoun: "product",
+      offeringNounPlural: "products", primaryAction: "convert", conversionSurface: "checkout",
+      entityKinds: ["plan"] },
   }),
 );
 const neutralButReal = await threw(() => requireTaxonomy(NEUTRAL_ORG));
 ok("a genuinely vertical-neutral profile is NOT mistaken for a missing one", neutralButReal === null);
 
-console.log("\n8. the total resolver still degrades, on purpose");
-ok("taxonomyFor never throws for an unknown org", (await taxonomyFor("no-such-org")).visitorNounPlural === "visitors");
+console.log("\n8. a HALF-described customer is refused too");
+// The bug this closes: taxonomy is Partial<Taxonomy> by design and the merge
+// used to spread gaps from DEFAULT_TAXONOMY, so a profile recording only a
+// visitor noun silently served "product", "convert" and "checkout" to someone
+// who had described none of them. The guard caught the unseeded customer and
+// missed the half-described one — the likelier case once onboarding exists.
+const PARTIAL = `${ORG}-partial`;
+await store.addSiteProfile(
+  profile({
+    id: `${PARTIAL}-org-default`,
+    orgId: PARTIAL,
+    siteId: ORG_DEFAULT_SITE_ID,
+    status: "approved",
+    approvedAt: new Date().toISOString(),
+    taxonomy: { visitorNoun: "member", visitorNounPlural: "members" },
+  }),
+);
+const partialErr = await threw(() => requireTaxonomy(PARTIAL));
+ok("a profile missing fields is refused", partialErr?.reason === "incomplete", String(partialErr?.reason));
+ok("...naming every field that is missing",
+   Boolean(partialErr?.message.includes("offeringNoun") && partialErr?.message.includes("primaryAction") && partialErr?.message.includes("conversionSurface")),
+   partialErr?.message);
+ok("...and not naming the ones that ARE recorded", !partialErr?.message.includes("visitorNoun,"), partialErr?.message);
 
 console.log(failures === 0 ? "\nAll brand-profile claims hold.\n" : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

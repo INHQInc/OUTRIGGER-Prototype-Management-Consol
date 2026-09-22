@@ -331,13 +331,23 @@ websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
   may only go down, and a new file with hardcoded vocabulary fails the suite.
   (Known debt beyond that: `lib/sites.ts` and the handoff patch generator still
   encode Outrigger specifics — the *ship* layer is not yet portable.)
-- **Customer-facing prose uses `requireTaxonomy()`, never `taxonomyFor()`.** The
-  total resolver swallows store errors and returns neutral defaults, so a
-  database blip would quietly print "visitors who reach the checkout" to a hotel
-  — no error, no log, the customer reads it first. Refuse rather than degrade;
-  internal surfaces may use the total one. Never wrap the strict path in a
-  try/catch: that re-creates the exact bug, and `vocabulary-smoke` fails if you
-  do.
+- **There is ONE resolver and it refuses: `requireTaxonomy()`.** It throws
+  unless EVERY taxonomy field is recorded — not merely when the profile row is
+  missing. `SiteProfile.taxonomy` is `Partial<Taxonomy>` by design and the merge
+  used to spread the gaps from `DEFAULT_TAXONOMY`, so a profile recording only a
+  visitor noun silently served "product", "convert" and "checkout" to a customer
+  who had described none of them. The total resolver beside it was **deleted**
+  22 Sep 2026 rather than documented: a resolver that degrades is one careless
+  import away from a customer surface, and "use the strict one" is not a rule a
+  file can enforce about itself. Never wrap the strict path in a try/catch —
+  `vocabulary-smoke` fails if you do. `DEFAULT_TAXONOMY` is for seeding a DRAFT
+  a human corrects; it is never resolved from and never served.
+- **No generic fallback, anywhere a customer can see.** Decided 22 Sep 2026: a
+  half-described customer gets NO prose rather than confident generic prose.
+  Onboarding is the gate. A hardcoded specific becomes a RESOLVED specific and
+  never a generic — replacing "guests who reach the booking engine" with
+  "visitors who reach the checkout" is not neutrality, it is amnesia: worse for
+  the customer who had it, no better for the one who did not.
 - **`attribution.ts` is ownership; `brand/` is the customer's vocabulary.** Two
   different things, one word. Do not add `src/lib/brand/index.ts` — `@/lib/brand`
   resolves to the attribution file only because that directory has none, and an

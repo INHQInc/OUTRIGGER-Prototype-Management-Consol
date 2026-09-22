@@ -26,7 +26,7 @@
  * no mechanism proving it. A ratchet is the cheapest such mechanism.
  *
  * It also pins the two-resolver split, because the whole point of
- * `requireTaxonomy` is that it refuses where `taxonomyFor` degrades. A helpful
+ * `requireTaxonomy` is that it refuses, per field, rather than degrading. A helpful
  * future edit that wraps it in a try/catch would restore the silent-neutral
  * failure this was built to remove, and nothing else would notice.
  */
@@ -140,7 +140,7 @@ const rest = profile.slice(start + 1);
 const end = rest.indexOf("\nexport ");
 const body = end === -1 ? rest : rest.slice(0, end);
 ok("requireTaxonomy has no catch that would swallow a store failure", !/\bcatch\s*[({]/.test(body), "a catch inside requireTaxonomy re-creates the silent-neutral bug");
-ok("requireTaxonomy is not implemented on top of taxonomyFor", !/taxonomyFor\s*\(/.test(body), "taxonomyFor swallows store errors; the strict path must not inherit that");
+ok("there is no second, degrading resolver to fall into", !/taxonomyFor\s*\(/.test(profile), "taxonomyFor was deleted 22 Sep 2026: two resolvers meant one was the wrong one to call, and the wrong one was the easy one");
 
 console.log("\n4. the vocabulary is actually injected, in BOTH branches");
 // The seam shipped once with no callers at all and nothing failed, which is how
@@ -156,7 +156,7 @@ const analyst = aEnd === -1 ? aRest : aRest.slice(0, aEnd);
 
 ok("analystSkill resolves the customer's vocabulary", /requireTaxonomy\s*\(/.test(analyst), "no requireTaxonomy call — the prompts are still hardcoded");
 ok("...through taxonomyPrompt, not a hand-rolled sentence", /taxonomyPrompt\s*\(/.test(analyst));
-ok("...and NOT via the total resolver", !/taxonomyFor\s*\(/.test(analyst), "taxonomyFor degrades to 'visitors' on a store blip — customer-facing prose must refuse");
+ok("...and not via any degrading resolver", !/taxonomyFor\s*\(/.test(analyst), "the strict resolver is the only one; a degrading path must not come back");
 
 // THE PLACEMENT ASSERTION, and the one most worth having. analystSkill has a
 // try/catch whose job is to fall back to FALLBACK_SYSTEM when the SKILL store
