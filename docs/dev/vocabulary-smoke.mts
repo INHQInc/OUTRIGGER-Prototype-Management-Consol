@@ -286,24 +286,55 @@ console.log("\n7. a templated skill body must actually BE resolved");
   // the sentence has to be written not to need either. Both of these shipped
   // and were caught by reading the resolved output for a second customer.
   const NEWLINES = /\s*\n\s*/g; // the first "a admin" spanned a line break
-  // Comment lines are dropped first: this file's own comments quote the two
-  // broken forms in order to explain them, and a guard that fires on its own
-  // documentation gets deleted rather than obeyed.
-  const prose = (src: string) => src.split("\n")
-    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n").replace(NEWLINES, " ");
+  // SCOPE IT TO THE PROSE, which is exactly the template literals. A first
+  // version dropped "lines that look like comments" (`^\s*\*`) and so skipped
+  // 12 markdown-bold lines of real skill body — `**Only re-sync when…**` looks
+  // like a JSDoc continuation. Taking only the backtick strings gets every
+  // line a model reads and no line it does not, without guessing.
+  // Block comments go FIRST. A JSDoc explaining this rule quotes the broken
+  // forms inside backticks, and an unbalanced backtick in a comment pairs up
+  // with a real template literal and drags the comment in as "prose" — which
+  // is how this guard first failed on its own documentation.
+  const onlyTemplates = (src: string) => {
+    const code = src
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
+    return (code.match(/`(?:\\.|[^`\\])*`/gs) ?? []).join("\n").replace(NEWLINES, " ");
+  };
   const PROMPTS: [string, string][] = [
-    ["lib/skills/builtins.ts", prose(builtins)],
-    ["lib/ai/results.ts", prose(await readFile(join(SRC, "lib/ai/results.ts"), "utf8"))],
+    ["lib/skills/builtins.ts", onlyTemplates(builtins)],
+    ["lib/ai/results.ts", onlyTemplates(await readFile(join(SRC, "lib/ai/results.ts"), "utf8"))],
   ];
+
+  // A placeholder resolves to one word. It cannot pick the article in front of
+  // it, and it cannot spell a possessive for a name that already ends in s, so
+  // the sentence has to be written not to need either. Both shipped, and both
+  // were caught by rendering the output for a SECOND customer and reading it.
   const ARTICLE = /\b[Aa]n?\s+(?:\{\{\s*\w+|\$\{\s*(?:t|v)\.(?:visitorNoun|offeringNoun)\b)/;
   const POSSESSIVE = /(?:\}\}|\$\{\s*customer\s*\})['\u2019]s\b/;
+  // PROVE THE GUARD STILL BITES. Both regexes have now been rewritten twice to
+  // stop them matching this file's own comments, and a guard that passes
+  // because it can no longer see anything is worse than no guard.
+  ok("the article rule catches the form it is for",
+    ARTICLE.test("counts twice \u2014 a {{visitorNoun}} clicking both CTAs") &&
+    ARTICLE.test("so a ${t.visitorNoun} converting twice"));
+  ok("the possessive rule catches the form it is for",
+    POSSESSIVE.test("the analyst for {{customer}}\u2019s programme") &&
+    POSSESSIVE.test("for ${customer}'s team"));
+  ok("and neither fires on the corrected forms",
+    !ARTICLE.test("one {{visitorNoun}} clicking both CTAs") &&
+    !POSSESSIVE.test("senior leaders at ${customer}"));
+  // The prose actually reached the guard \u2014 an empty extraction passes silently.
+  ok("the extraction found real prose to check",
+    PROMPTS.every(([, t]) => t.length > 2000), PROMPTS.map(([n, t]) => `${n}:${t.length}`).join(" "));
+
   for (const [name, text] of PROMPTS) {
     const a = text.match(ARTICLE);
     ok(`${name}: no article in front of a substitution`, !a,
-      `${a?.[0]} \u2014 reads "a admin" for about half of all customers; rephrase to a plural or "one"`);
+      `${a?.[0]} \u2014 reads "a admin" for about half of all customers; use a plural or "one"`);
     const q = text.match(POSSESSIVE);
     ok(`${name}: no possessive on a substituted name`, !q,
-      `${q?.[0]} \u2014 renders "Outrigger Hotels and Resorts\u2019s"; put the name after a preposition`);
+      `${q?.[0]} \u2014 renders "Acme Logistics\u2019s"; put the name after a preposition`);
   }
 
   // The substitution itself, and what it does with a key nobody defined.
