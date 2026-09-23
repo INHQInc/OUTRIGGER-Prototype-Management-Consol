@@ -37,6 +37,28 @@ const BUDGET_WARN = 150_000;  // bytes
 const BUDGET_FAIL = 400_000;
 
 /**
+ * ONE TABLE: the pattern that FAILS the cut and the words the branch is told.
+ *
+ * These were two lists — the regexes here, and a hand-written copy beside
+ * `CERTIFICATION_LIMITS` that provisioning ships to the agent. Two lists for
+ * one rule is the drift this repo has spent the day removing everywhere else:
+ * add a vendor to the enforcement and the branch keeps promising the old set,
+ * so the agent is judged by a rule it was told the wrong version of.
+ */
+const ANALYTICS: { re: RegExp; label: string }[] = [
+  { re: /\bgtag\s*\(/, label: "gtag(" },
+  { re: /\bga\s*\(\s*['"]/, label: "ga('…')" },
+  { re: /\bfbq\s*\(/, label: "fbq(" },
+  { re: /dataLayer\s*\.\s*push\s*\(/, label: "dataLayer.push(" },
+  { re: /google-analytics\.com/, label: "google-analytics.com" },
+  { re: /googletagmanager\.com/, label: "googletagmanager.com" },
+  { re: /connect\.facebook\.net/, label: "connect.facebook.net" },
+  { re: /hotjar|mouseflow|clarity\.ms|qualtrics|segment\.(io|com)\/v1/, label: "hotjar / mouseflow / clarity / qualtrics / segment" },
+  { re: /_satellite\b/, label: "_satellite" },
+  { re: /adobeDataLayer/, label: "adobeDataLayer" },
+];
+
+/**
  * THE RULES THE BUILD IS JUDGED BY, AS NUMBERS, so the branch can carry them.
  *
  * Certification runs at cut time and the agent had only prose about it — it
@@ -52,20 +74,11 @@ const BUDGET_FAIL = 400_000;
 export const CERTIFICATION_LIMITS = {
   bytesWarn: BUDGET_WARN,
   bytesFail: BUDGET_FAIL,
-  forbidden: [
-    "gtag(", "ga('…')", "fbq(", "dataLayer.push(", "_satellite", "adobeDataLayer",
-    "google-analytics.com", "googletagmanager.com", "connect.facebook.net",
-    "hotjar / mouseflow / clarity / qualtrics / segment",
-  ],
+  // DERIVED from the table above, never typed twice.
+  forbidden: ANALYTICS.map((a) => a.label),
 } as const;
 
 /** Trackers/analytics that must never ride along with a variation. */
-const ANALYTICS = [
-  /\bgtag\s*\(/, /\bga\s*\(\s*['"]/, /\bfbq\s*\(/, /dataLayer\s*\.\s*push\s*\(/,
-  /google-analytics\.com/, /googletagmanager\.com/, /connect\.facebook\.net/,
-  /hotjar|mouseflow|clarity\.ms|qualtrics|segment\.(io|com)\/v1/,
-  /_satellite\b/, /adobeDataLayer/,
-];
 
 /** Cross-origin references that would break the same-origin asset rule. */
 const URLISH = /\bhttps?:\/\/([a-z0-9.-]+)/gi;
@@ -108,7 +121,7 @@ export function certifyVariation(js: string, opts: { key: string; targetOrigins?
   }
 
   // 4 · Zero analytics
-  const hits = ANALYTICS.filter((re) => re.test(js)).map((re) => re.source);
+  const hits = ANALYTICS.filter((a) => a.re.test(js)).map((a) => a.label);
   if (hits.length === 0) add("no-analytics", "Zero analytics / tracking added", "pass", "No tracker calls or analytics domains found.");
   else add("no-analytics", "Zero analytics / tracking added", "fail", `Tracking references found: ${hits.slice(0, 4).join(" · ")}. A variation must never add measurement the platform doesn't know about.`);
 

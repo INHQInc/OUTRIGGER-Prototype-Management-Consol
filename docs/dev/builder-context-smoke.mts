@@ -314,6 +314,19 @@ console.log("\n13. the builder is told what else is in play");
   ok("the size limits are numbers in the brief",
     b.includes(`${(CERTIFICATION_LIMITS.bytesFail / 1000).toFixed(0)}KB`) && b.includes(`${(CERTIFICATION_LIMITS.bytesWarn / 1000).toFixed(0)}KB`));
   ok("every forbidden pattern is listed", CERTIFICATION_LIMITS.forbidden.every((f) => b.includes(f)));
+  // DERIVED, not typed twice. These were two lists — the regexes certifyVariation
+  // iterates, and a hand-written copy beside CERTIFICATION_LIMITS. Adding a
+  // vendor to the enforcement left the branch promising the old set, so the
+  // agent was judged by a rule it had been told the wrong version of.
+  {
+    const src = readFileSync(new URL("../../src/lib/certify/certify.ts", import.meta.url), "utf8");
+    ok("the disclosed list is derived from the enforced table",
+      /forbidden:\s*ANALYTICS\.map/.test(src),
+      "a hand-written copy drifts the first time somebody adds a vendor");
+    const table = (src.match(/label:\s*"/g) ?? []).length;
+    ok(`...and the table is the only place a pattern is named (${table} entries)`,
+      table === CERTIFICATION_LIMITS.forbidden.length);
+  }
   // The live contradiction is surfaced rather than left for the agent to hit.
   ok("the instrument-vs-certify conflict is stated", /can conflict/.test(b) && /undecidable/.test(b));
   const lines = b.split("\n");
