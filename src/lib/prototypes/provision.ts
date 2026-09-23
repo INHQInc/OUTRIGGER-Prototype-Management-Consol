@@ -228,6 +228,38 @@ export function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, E
   ].filter(Boolean).join("\n");
 }
 
+/** What the console wrote to `.claude/skills/` last time. */
+export interface SkillManifest {
+  managed?: string[];
+  /** `<id>:<hash of the RESOLVED body>` per skill. Absent on any manifest
+   *  written before this existed \u2014 see `skillsChangedFrom`. */
+  delivered?: string[];
+}
+
+/**
+ * DID THE DELIVERED SKILL SET CHANGE? Pure, so it can be tested \u2014 its caller
+ * sits inside `provisionBranch`, which needs a GitHub client to reach.
+ *
+ * Two questions, and the second was missing. WHICH skills (the id list) caught
+ * enabling or removing one. WHAT THEY SAY did not \u2014 so editing a body left
+ * the branch on the old copy while provision answered "no change", and the
+ * agent went on following superseded instructions with nothing to indicate it.
+ * Hashing the RESOLVED bytes covers a body edit and a vocabulary correction
+ * alike, because those bytes are what actually lands on the branch.
+ *
+ * ABSENT IS UNKNOWN, NOT CHANGED. Every manifest written before `delivered`
+ * existed lacks it, and treating that as "the bodies changed" would make every
+ * branch in existence claim a skill change on its next sync \u2014 which tells the
+ * human to pull and restart the agent. Unknown defers to the id comparison,
+ * and the first sync after this writes the hashes for every sync after that.
+ */
+export function skillsChangedFrom(prev: SkillManifest | null, managed: string[], delivered: string[]): boolean {
+  const eq = (a: string[], b: string[]) => JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+  if (!eq(prev?.managed ?? [], managed)) return true;
+  if (!prev?.delivered) return false;
+  return !eq(prev.delivered, delivered);
+}
+
 export function contentHashOf(proto: PrototypeRecord, brandRev: string | null): string {
   // ONLY what the agent builds against: brief/pages/identity. The lifecycle
   // stage is deliberately NOT here — advancing Review → live used to re-flag
@@ -456,17 +488,26 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     await ensureSkillsSeeded(orgId); // re-assert built-ins before delivering
     const skills = await enabledSkillsForPrototype(orgId, proto.key);
     const managed = skills.map((sk) => sk.id).sort();
+    // WHAT WAS DELIVERED, not just which skills were. The comparison below read
+    // the ID LIST alone, so editing a skill's BODY produced no change signal:
+    // the branch kept the old SKILL.md and provision could answer "no change"
+    // while the agent went on following superseded instructions. Hashing the
+    // RESOLVED bytes covers both the edit and a vocabulary correction, and it
+    // is the bytes that actually land on the branch.
+    const delivered: string[] = [];
     for (const sk of skills) {
       // The bodies are templates and this is one of their two delivery points.
       // An unresolved one reaches the branch as literal `{{visitorNoun}}`.
-      files.push({ path: `.claude/skills/${sk.id}/SKILL.md`, content: Buffer.from(resolveVocabulary(sk.body, { taxonomy: customer.taxonomy, customer: customer.name }), "utf8") });
+      const body = resolveVocabulary(sk.body, { taxonomy: customer.taxonomy, customer: customer.name });
+      delivered.push(`${sk.id}:${createHash("sha256").update(body).digest("hex").slice(0, 12)}`);
+      files.push({ path: `.claude/skills/${sk.id}/SKILL.md`, content: Buffer.from(body, "utf8") });
     }
+    delivered.sort();
     const prevRaw = await client.readFileAtRef(owner, repo, ".opmc/skills.json", branch).catch(() => null);
-    let prevManaged: string[] | null = null;
+    let prev: SkillManifest | null = null;
     if (prevRaw) {
       try {
-        const prev = JSON.parse(prevRaw) as { managed?: string[] };
-        prevManaged = [...(prev.managed ?? [])].sort();
+        prev = JSON.parse(prevRaw) as SkillManifest;
         for (const id of prev.managed ?? []) {
           if (!managed.includes(id)) deletions.push(`.claude/skills/${id}/SKILL.md`);
         }
@@ -476,8 +517,8 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     // must see — a skills-only re-sync (enable a new skill, brief untouched)
     // used to be silently skipped whenever page captures failed, leaving the
     // agent's branch without the skill it was just promised.
-    skillsChanged = JSON.stringify(prevManaged ?? []) !== JSON.stringify(managed);
-    files.push({ path: ".opmc/skills.json", content: Buffer.from(JSON.stringify({ managed, writtenAt: provisionedAt }, null, 2), "utf8") });
+    skillsChanged = skillsChangedFrom(prev, managed, delivered);
+    files.push({ path: ".opmc/skills.json", content: Buffer.from(JSON.stringify({ managed, delivered, writtenAt: provisionedAt }, null, 2), "utf8") });
   } catch { /* skills are additive — never block provisioning on them */ }
 
   // Idempotent: skip the commit if nothing changed since the last provision —

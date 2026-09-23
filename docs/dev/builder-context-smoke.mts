@@ -322,5 +322,55 @@ console.log("\n13. the builder is told what else is in play");
     `previous line: ${JSON.stringify(lines[i - 1])}`);
 }
 
+console.log("\n14. editing a skill changes what it says, never where it goes");
+{
+  // `delivery` is written in one place (seed.ts) and read as
+  // `(s.delivery ?? "branch")`. The editor posts five fields and upsertSkill
+  // replaced the row wholesale, so editing one of the three CONSOLE skills
+  // reclassified it as a BRANCH skill — and the console's analyst prompt
+  // started shipping onto prototype branches. Silent, because both readers
+  // fetch by id and never look at `delivery`.
+  const { upsertSkill, getSkill, enabledSkillsForPrototype } = await import("../../src/lib/skills/skills");
+  await upsertSkill({ id: "console-only", name: "console-only", scope: "global", description: "",
+    body: "---\nname: console-only\n---\nbody", builtIn: true, delivery: "console" });
+
+  const before = await getSkill("cust-org", "console-only");
+  ok("a console skill is not offered to a branch",
+    !(await enabledSkillsForPrototype("cust-org", "p1")).some((s) => s.id === "console-only"));
+
+  // Exactly what POST /api/skills does now: spread the stored row, then apply
+  // the editor's fields.
+  await upsertSkill({ ...before!, id: "console-only", name: "console-only", scope: "global",
+    description: "", body: "---\nname: console-only\n---\nEDITED", builtIn: false });
+
+  const after = await getSkill("cust-org", "console-only");
+  ok("the edit landed", after?.body.includes("EDITED"));
+  ok("...and delivery survived it", after?.delivery === "console",
+    "rebuilding the row instead of merging drops every field the editor does not post");
+  ok("...so it still never reaches a branch",
+    !(await enabledSkillsForPrototype("cust-org", "p1")).some((s) => s.id === "console-only"));
+}
+
+console.log("\n15. changing what a skill SAYS is a change");
+{
+  // The staleness check compared the id LIST alone, so editing a body left the
+  // branch on the old copy while provision answered "no change" — the agent
+  // went on following superseded instructions with nothing to indicate it.
+  const { skillsChangedFrom } = await import("../../src/lib/prototypes/provision");
+  const ids = ["a", "b"];
+  ok("a new skill is a change", skillsChangedFrom({ managed: ["a"], delivered: ["a:1"] }, ids, ["a:1", "b:1"]));
+  ok("a removed skill is a change", skillsChangedFrom({ managed: ["a", "b"], delivered: ["a:1", "b:1"] }, ["a"], ["a:1"]));
+  ok("an EDITED BODY is a change", skillsChangedFrom({ managed: ids, delivered: ["a:1", "b:1"] }, ids, ["a:2", "b:1"]));
+  ok("identical is not a change", !skillsChangedFrom({ managed: ids, delivered: ["a:1", "b:1"] }, ids, ["b:1", "a:1"]),
+    "order must not matter — the sets are sorted");
+  // The migration case, and the one that would hurt: every manifest written
+  // before `delivered` existed lacks it. Reading that as "changed" would make
+  // every branch claim a skill change on its next sync, which tells the human
+  // to pull and restart the agent.
+  ok("an OLD manifest with no hashes is unknown, not changed",
+    !skillsChangedFrom({ managed: ids }, ids, ["a:1", "b:1"]));
+  ok("no manifest at all still compares the ids", skillsChangedFrom(null, ids, ["a:1", "b:1"]));
+}
+
 console.log(failures ? `\n${failures} FAILED\n` : "\nall good\n");
 process.exit(failures ? 1 : 0);
