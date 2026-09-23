@@ -31,8 +31,12 @@ A **multi-tenant "build-and-ship layer"** for advanced web experiments — the p
 THREE NOUNS TODAY — Customer (who) · Environment (where) · Prototype (what).
 SITE IS COMING BACK — decided by Bryan 23 Sep 2026, NOT BUILT YET:
   Customer → Site → Environment; every Prototype belongs to exactly ONE Site;
-  picked from a sidebar selector with NO "All sites"; vocabulary per Site,
-  inheriting from the brand. New names only (siteId / site_id / org_site /
+  picked from a sidebar selector with NO "All sites". EVERYTHING LIVES ON
+  THE SITE (Bryan, 23 Sep: "brand is generi wrapper"): vocabulary, voice,
+  look, experiments. The customer is a container (users, connectors), with no
+  vocabulary of its own and NO inheritance; the brief overrides per experiment.
+  Onboarding is one flow, per SITE; adding a customer is just a name.
+  New names only (siteId / site_id / org_site /
   lib/site/) — the legacy siteKey is load-bearing. The Site eliminated 07-21
   was a clone config (src/lib/sites.ts); do not revive it.
   Rules + traps: docs/HANDOFF.md → "IN FLIGHT — SITE".

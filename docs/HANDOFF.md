@@ -58,7 +58,16 @@ by `docs/dev/brand-onboarding-smoke.mts`. What comes next is the site.
 - **No "All sites" option — exactly one site is always selected.** "there cannot
   be an all sites in the drop down." A customer with no sites sees "Add a site",
   and site-owned pages send you there. Switching customer resets the site.
-- **Vocabulary is per site, inheriting from the brand.** "each site might call a
+- **⚠ Revised the same day: NO brand layer.** Bryan: "brand is generi wrapper",
+  "exp are per site". Everything lives on the site: its words, voice, look and
+  experiments. The customer is a container (users, connectors). The brief sets
+  what one experiment is about (offering, its words, its action, where it
+  finishes → metric → readout). Nothing inherits; adding a site may copy another
+  site's answers once. And: "onboardin is one flow for a site not a brand, adding a brand is a name continer for us to organize our customers". So **`/brand` (Configuration → Brand, on
+  staging since 23 Sep as "step one of every customer") becomes the selected
+  site's page**, and creating a customer asks only for its name. The original
+  bullet, kept for the history:
+- ~~**Vocabulary is per site, inheriting from the brand.**~~ "each site might call a
   product something different" — outrigger.com says hotels,
   hawaiivacationcondos.outrigger.com says condos. The brand default holds the
   words stated at onboarding; a site overrides only where it differs.
@@ -167,6 +176,9 @@ Nothing is blocked today. Staging is seeded, staging is where this runs.
      and Approve. This did not exist until 23 Sep.
 
    Verify with `docs/dev/check-taxonomy.mts` (read-only) before continuing.
+   (Still right for the code as it is: the profile at `siteId = "*"`. When Site is
+   built, that row becomes the customer's STARTING SITE's profile — there is no
+   brand layer to keep it as. Update this step then.)
 2. **Deploy.**
 3. **Re-sync every prototype once.** The content hash format changed, so every
    already-provisioned branch is stale by definition.

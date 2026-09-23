@@ -27,7 +27,10 @@ below:
    and the questions are about; `Correction` is the Correct step's record; `sources`
    is the provenance a revision needs. They are unbuilt, not dead — rule 1 applied
    without knowing the consumer existed on another branch.
-2. **Brand is onboarding STEP ONE, at customer creation — not a Settings page.**
+2. **⚠ SUPERSEDED 23 Sep 2026 — see § Onboarding: the site holds everything; the
+   customer is a wrapper with no vocabulary.** The original rule, kept for its
+   reasoning:
+   **Brand is onboarding STEP ONE, at customer creation — not a Settings page.**
    And understanding is split by WHO SUPPLIES IT: the customer tier holds what a
    person STATES about the brand (vocabulary, voice, audience, what it sells),
    captured first with no crawl and no model; the site tier holds what a read
@@ -229,8 +232,21 @@ kept as a `Correction`) → a new revision. The source repo shortens it.
 
 **Designed 23 Sep with Bryan — proposals until he has reacted to the mockup.**
 Site is a real entity again: Customer → Site → Environment, one site per
-experiment, picked from a sidebar selector with no "All sites", and vocabulary
-per site inheriting from the brand. Site onboarding then runs: business type
+experiment, picked from a sidebar selector with no "All sites".
+
+**Decided 23 Sep, after the mockup — two levels, no brand layer.** Bryan: "what
+if we dont really care too much about brand and everything really pivotes around
+each site", then "exp are per site / brand is generi wrapper". So beta-2 was
+right that the brand is a container. The customer holds users and connectors
+only. The SITE holds its words (who it serves, main offering, main action, where
+that finishes), voice, look and never-rules. The BRIEF holds what one experiment
+is trying to sell, that offering's words and action, where it finishes, and so
+its metric and readout: a spa test on a rooms page names "spa" there. Nothing
+inherits. Onboarding is ONE flow, for a site: "onboardin is one flow for a site not a brand, adding a brand is a name continer for us to organize our customers". Adding a site may COPY another site's answers once ("start from
+outrigger.com's answers"), and an edit may be applied to other sites once;
+neither is a live link.
+
+The flow as first proposed, still the shape: Site onboarding then runs: business type
 (detected and confirmed; it picks which questions are asked, never an answer) →
 the read → the evidence check → an interview in four kinds (proven, found but
 unproven, unsettled, only you know), each answer refinable with AI as a

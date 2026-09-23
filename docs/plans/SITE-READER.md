@@ -39,6 +39,25 @@ blank.
   its quote, refinable like every other answer.
 - "Something else" loads the general section only.
 
+## What the site holds, what the brief holds (Bryan, 23 Sep)
+
+No brand layer: the customer is a named container. Two levels:
+
+| Site (onboarding asks, pre-filled when proven) | Brief (per experiment) |
+|---|---|
+| broad type · who it serves · main offering · main action · where that finishes · voice · look · words never used · what must never change | what this test is trying to sell (defaults to the site's main offering) · that offering's words · its action and where it finishes · the primary metric · the readout |
+
+The reader also NOTES, without asking: the sub-type, the kinds of page the site
+is built from, the audience and business summaries, the site's sections. They go
+to the builder as background; nobody confirms them. The brief reads its own
+target and offering pages when it is written, so a spa test on a rooms page gets
+spa words from the spa page and onboarding never needs to know the spa exists.
+
+**The build gate changes with this:** it requires the site's four words (who it
+serves, main offering, main action, where it finishes); `entityKinds` becomes a
+note, and the brief may override the offering, action and finish for its own
+experiment. The resolver is site → brief; no `"*"` default.
+
 ## The skill: `opmc-site-reader`
 
 One skill, `delivery: "console"`, with:
