@@ -304,6 +304,15 @@ separated when all three of these are:
 already a domain noun here meaning the CUSTOMER's own dev/staging/production
 websites (`listEnvironmentsByOrg`). These are *tiers* or *deployments*.
 
+## The architecture, end to end
+
+`docs/architecture/THE-CHAIN.md` is the plan: every stage from customer
+onboarding to readout, the contract at each of the ten seams, the eighteen dead
+types to delete, the build order, and the decisions that need a human. Read it
+before proposing anything structural — it was mapped from the code and
+hand-verified, and it will tell you whether the thing you are about to add
+already exists with no writer.
+
 ## Hard rules (invariants)
 
 - **A preview deployment must never share the production database.**

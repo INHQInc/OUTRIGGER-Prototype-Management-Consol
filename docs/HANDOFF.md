@@ -21,6 +21,25 @@ frozen — but it means the repo's own "authoritative state" is on a branch, whi
 is exactly the kind of thing that gets missed. It resolves when the release
 ships and the branch merges.
 
+## READ THIS FIRST IF YOU ARE PICKING UP THE ARCHITECTURE (22 Sep 2026)
+
+**`docs/architecture/THE-CHAIN.md`** — the whole flow from customer onboarding to
+readout and back, its contracts, what gets deleted, the order to build in, and
+the three decisions that need a human. It was produced by mapping the code (not
+the docs) with twenty agents, designing the target four ways, and judging; every
+load-bearing claim in it was then verified by hand.
+
+The headline: 292 fields across the chain, **77 declared in a type and never
+written**, 19 needed by a consumer with no source, 107 breaks at the ten stage
+boundaries, and **no seam where information survives intact**. The brand
+knowledge the product is named for — palette, fonts, headlines, CTA labels — is
+declared in full with zero writers, and so is the earned layer, so nothing a
+concluded experiment learns reaches the next build.
+
+Everything below this line is state and history. That document is the plan.
+
+---
+
 ## CUTOVER STEP — SEED PRODUCTION INSIDE THE DOWNTIME WINDOW (22 Sep 2026)
 
 **The plan (Bryan, 22 Sep): keep building on `staging`, then one full feature
