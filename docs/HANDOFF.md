@@ -51,16 +51,24 @@ Nothing is blocked today. Staging is seeded, staging is where this runs.
 
 **In the window, in this order:**
 
-1. **Seed production's brand profile** — against production's `DATABASE_URL`:
+1. **Give production a brand profile** — two ways, same result:
+   - the seed script, against production's `DATABASE_URL` (fastest, and writes
+     exactly the words staging has been running on):
 
-       npx tsx docs/dev/seed-taxonomy.mts outrigger-resorts-hotels
+         npx tsx docs/dev/seed-taxonomy.mts outrigger-resorts-hotels
+
+   - or, after deploying, **Configuration → Brand** on production, as an admin,
+     and Approve. This did not exist until 23 Sep.
 
    Verify with `docs/dev/check-taxonomy.mts` (read-only) before continuing.
 2. **Deploy.**
 3. **Re-sync every prototype once.** The content hash format changed, so every
    already-provisioned branch is stale by definition.
 
-**Step 1 cannot move after step 2.** Provisioning now refuses without a brand
+**Seed BEFORE deploying if you can.** Since `/brand` exists, forgetting is no
+longer unrecoverable — an admin can open the screen on production and approve —
+but every build, brief draft and readout refuses in the gap between the deploy
+and the approve. Provisioning now refuses without a brand
 profile, and Re-sync is the only thing that clears the stale-hash warning — so
 deploying first gives every card a `danger` alert whose one remedy returns 400.
 Since the skill bodies became templates, **AI brief drafting and measurement
@@ -78,13 +86,18 @@ While it IS blocked, the console now says why — a `danger` alert naming the
 missing profile, not the old "the brief or pages changed", which was both wrong
 and unclearable.
 
-**The wider gap this exposed, which is NOT fixed and is not a cutover step.**
-`seed-taxonomy.mts` is the only writer of a `SiteProfile` outside the test
-suites — there is no console screen and no API route — and its `SEEDS` map has
-exactly one key. So for customer number two, provisioning is refused and
-*nobody can unblock it without editing source*. That is the onboarding UX in
-`BUILDER-CONTEXT.md` §1A/Q7, and enforcement moved it from the backlog onto the
-critical path.
+**The wider gap this exposed — FIXED 23 Sep 2026 (`d91824e`).** Until then
+`seed-taxonomy.mts` was the only writer of a `SiteProfile` outside the test
+suites, and its allowlist held one customer, so customer number two could not
+be provisioned by anyone without a source edit. **`/brand`** is now step one of
+creating a customer: both create entry points land there, it is the first row of
+the setup checklist (done = the build gate would pass), and every refusal names
+it. It captures what a person STATES — the seven vocabulary nouns, then voice,
+audience and what the business sells. Drafts save as you type and are never
+served; approving makes a new revision, never rewrites an old one, and makes no
+revision at all if nothing changed. `docs/dev/brand-onboarding-smoke.mts` holds
+all four promises. The SITE tier — read, generated interview, corrections — is
+the next piece; see `THE-CHAIN.md` § Onboarding.
 
 ---
 
