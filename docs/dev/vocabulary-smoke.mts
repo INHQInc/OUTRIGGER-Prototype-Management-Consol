@@ -280,6 +280,32 @@ console.log("\n7. a templated skill body must actually BE resolved");
   ok("no delivery point hands a raw skill body to a model", raw.length === 0,
     raw.join(" | ") + " — use resolvedSystem() or resolveVocabulary()");
 
+  // ── GRAMMAR THE SUBSTITUTION CANNOT FIX ───────────────────────────────
+  // A placeholder resolves to one word. It cannot pick the article in front of
+  // it, and it cannot spell a possessive for a name that already ends in s. So
+  // the sentence has to be written not to need either. Both of these shipped
+  // and were caught by reading the resolved output for a second customer.
+  const NEWLINES = /\s*\n\s*/g; // the first "a admin" spanned a line break
+  // Comment lines are dropped first: this file's own comments quote the two
+  // broken forms in order to explain them, and a guard that fires on its own
+  // documentation gets deleted rather than obeyed.
+  const prose = (src: string) => src.split("\n")
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n").replace(NEWLINES, " ");
+  const PROMPTS: [string, string][] = [
+    ["lib/skills/builtins.ts", prose(builtins)],
+    ["lib/ai/results.ts", prose(await readFile(join(SRC, "lib/ai/results.ts"), "utf8"))],
+  ];
+  const ARTICLE = /\b[Aa]n?\s+(?:\{\{\s*\w+|\$\{\s*(?:t|v)\.(?:visitorNoun|offeringNoun)\b)/;
+  const POSSESSIVE = /(?:\}\}|\$\{\s*customer\s*\})['\u2019]s\b/;
+  for (const [name, text] of PROMPTS) {
+    const a = text.match(ARTICLE);
+    ok(`${name}: no article in front of a substitution`, !a,
+      `${a?.[0]} \u2014 reads "a admin" for about half of all customers; rephrase to a plural or "one"`);
+    const q = text.match(POSSESSIVE);
+    ok(`${name}: no possessive on a substituted name`, !q,
+      `${q?.[0]} \u2014 renders "Outrigger Hotels and Resorts\u2019s"; put the name after a preposition`);
+  }
+
   // The substitution itself, and what it does with a key nobody defined.
   const v = { customer: "Acme Freight", taxonomy: { visitorNoun: "shipper", visitorNounPlural: "shippers",
     offeringNoun: "lane", offeringNounPlural: "lanes", primaryAction: "book a lane",

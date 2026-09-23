@@ -47,9 +47,17 @@ const requireKey = () => {
  *
  * `name` falls back to the org id, which is the customer's own identifier and
  * therefore still a resolved specific, never a generic.
+ *
+ * NO POSSESSIVE, and that is not fussiness. `${customer}'s program` renders
+ * "Acme Logistics's" for any customer name ending in s, which is a large
+ * share of company names. Putting the name after a preposition works for all
+ * of them. The same rule governs the skill bodies in `builtins.ts`, and the
+ * article: `a {{visitorNoun}}` reads "a admin" for about half of all
+ * customers, and a substitution cannot choose an article — so the sentence
+ * must be written not to need one.
  */
 const fallbackSystem = (customer: string) =>
-  `You are the experiment analyst for ${customer}\u2019s A/B testing program. Answer ONLY from the computed facts provided — never derive or adjust a number, never contradict the computed verdict or a validity flag. Notebook entries are history: never quote a number from them, only from the computed blocks. The pre-registered primary metric alone can confirm/refute the hypothesis; everything else is exploratory and must be labeled so. Below significance say 'too early to call' (running) or 'unproven, not refuted' (ended). Lead with the verdict, then the two or three numbers that matter, then flags, then the recommendation. Plain prose.`;
+  `You are the experiment analyst for the A/B testing program at ${customer}. Answer ONLY from the computed facts provided — never derive or adjust a number, never contradict the computed verdict or a validity flag. Notebook entries are history: never quote a number from them, only from the computed blocks. The pre-registered primary metric alone can confirm/refute the hypothesis; everything else is exploratory and must be labeled so. Below significance say 'too early to call' (running) or 'unproven, not refuted' (ended). Lead with the verdict, then the two or three numbers that matter, then flags, then the recommendation. Plain prose.`;
 
 /**
  * THE ONE SEAM the customer's vocabulary enters through.
@@ -228,7 +236,7 @@ THEIR DESCRIPTION: ${opts.description.slice(0, 600)}
 AVAILABLE EVENTS (a custom metric can ONLY sum these):
 ${opts.eventNames.map((n) => `- ${n}`).join("\n")}
 
-Define it via the tool. Action-total semantics (a ${t.visitorNoun} firing two member events counts twice). If the description needs anything these events can't express — segments, revenue arithmetic, per-session windows — set feasible=false and say what's missing; NEVER approximate silently.`,
+Define it via the tool. Action-total semantics (one ${t.visitorNoun} firing two member events counts twice). If the description needs anything these events can't express — segments, revenue arithmetic, per-session windows — set feasible=false and say what's missing; NEVER approximate silently.`,
     }],
     tools: [defineTool(opts.eventNames)],
     tool_choice: { type: "tool", name: "define_custom_metric" },
@@ -341,7 +349,7 @@ function renderContext(results: ExperimentResults, map: MetricMap | null, t: Tax
       : map.confirmed
         ? `CONFIRMED by ${map.confirmedBy ?? "a human"}`
         : "PROPOSED by Claude, NOT human-confirmed — treat the mapping itself as provisional";
-    lines.push(`\nCOMPOSITE METRICS (${provenance}; summed ACTION totals, not unique ${t.visitorNounPlural} — a ${t.visitorNoun} converting on two member events counts twice, so rates are actions-per-visitor and can exceed 100%):`);
+    lines.push(`\nCOMPOSITE METRICS (${provenance}; summed ACTION totals, not unique ${t.visitorNounPlural} — one ${t.visitorNoun} converting on two member events counts twice, so rates are actions-per-visitor and can exceed 100%):`);
     for (const c of map.composites) {
       // PER-COMPOSITE provenance. One sentence for the whole block described
       // Optimizely's own declared primary as "proposed by Claude", which is
@@ -1045,7 +1053,7 @@ ${renderStats(opts.stats)}
 RAW NUMBERS:
 ${renderContext(opts.results, opts.map, t)}
 
-${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones that support the hypothesis. Write ONE observation for EVERY metric below, no exceptions. The reader is ${customer}\u2019s own team and the only question they are asking is WHAT DOES THIS TELL US. So: what are ${t.visitorNounPlural} doing differently on that surface, where is intent being created or lost along the path to the ${t.conversionSurface}, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
+${watched.length ? `THE SUPPORTING METRICS — the team marked these as the ones that support the hypothesis. Write ONE observation for EVERY metric below, no exceptions. The reader is the team at ${customer} and the only question they are asking is WHAT DOES THIS TELL US. So: what are ${t.visitorNounPlural} doing differently on that surface, where is intent being created or lost along the path to the ${t.conversionSurface}, and what does it imply about the next move. Name the surface in their words. NEVER write about significance, sample size, confidence, or days remaining — the console prints all of that beside your sentence.\n${watched.map((k) => {
   const m = opts.stats?.metrics.find((x) => x.key === k);
   const c = m?.cells.find((x) => x.variationId === opts.stats?.focusVariationId);
   return `${k} — ${m?.label ?? k}${m?.featureOnly ? " (fires in one version only)" : c?.lift !== undefined ? ` (${c.lift >= 0 ? "+" : ""}${(c.lift * 100).toFixed(1)}%)` : ""}`;
@@ -1075,7 +1083,7 @@ ${measureMenu}
 RISKS ALREADY FOUND (the console computed these; you may gloss one in ≤70 plain words, you may never add your own):
 ${opts.attention.filter((a) => a.severity !== "good").map((a) => `${a.id} — ${a.title}: ${a.detail}`).join("\n") || "(none)"}
 
-Give the READING for ${customer}\u2019s senior leaders: a HEADLINE (the story in one line), THE FOUR MOVEMENTS below, a LEDE that is those four run together as one flowing paragraph, and ONE BEAT FOR EACH metric in the beat list above, in that order, decision metric first.
+Give the READING for senior leaders at ${customer}: a HEADLINE (the story in one line), THE FOUR MOVEMENTS below, a LEDE that is those four run together as one flowing paragraph, and ONE BEAT FOR EACH metric in the beat list above, in that order, decision metric first.
 
 THE FOUR MOVEMENTS — the same four in every experiment, so a reader learns the shape once:
 · effect — what the change did to the thing it was aimed at.
@@ -1416,7 +1424,7 @@ const answerToolFor = (customer: string) => ({
     type: "object" as const,
     properties: {
       headline: { type: "string" as const, description: "ONE sentence answering the question directly, plain business words" },
-      bullets: { type: "array" as const, items: { type: "string" as const }, description: `2-6 bullets, ONE fact each, LEADING with the number ('Hero clicks: 4.14% vs 1.47% — the variant is losing'). Plain text, no markdown. The audience is ${customer}\u2019s senior leaders: NEVER write q-values, p-values, 'alpha', 'FDR' or 'statistically significant' — say 'beyond what luck explains' / 'still inside the range luck could produce'` },
+      bullets: { type: "array" as const, items: { type: "string" as const }, description: `2-6 bullets, ONE fact each, LEADING with the number ('Hero clicks: 4.14% vs 1.47% — the variant is losing'). Plain text, no markdown. The audience is senior leaders at ${customer}: NEVER write q-values, p-values, 'alpha', 'FDR' or 'statistically significant' — say 'beyond what luck explains' / 'still inside the range luck could produce'` },
       caveat: { type: "string" as const, description: "one sentence when honesty demands it (too early, exploratory, data gap)" },
       nextStep: { type: "string" as const, description: "one sentence recommendation tied to the verdict" },
     },
