@@ -13,6 +13,30 @@ repo have been wrong three times in one day and agent reports were wrong twice.
 
 Where a claim is not marked verified, treat it as a lead, not a fact.
 
+## ⚠ Corrected 23 Sep 2026 — after reading `beta-2`
+
+This document was written without knowing the `beta-2` branch existed. That
+branch is OLDER and a reference, not the plan (Bryan, 23 Sep) — it is a pure UI
+mock on fixtures, with no API calls in any of its 21 console files — but it holds
+the onboarding thinking this document lacked, and it overturns two conclusions
+below:
+
+1. **`ObservedFacts`, `SiteProfile.corrections` and `sources` are KEPT, not cut.**
+   Every design deleted them because nothing writes them. Beta-2's site interview
+   is built *out of* them: fonts, palette and button labels are what a read sees
+   and the questions are about; `Correction` is the Correct step's record; `sources`
+   is the provenance a revision needs. They are unbuilt, not dead — rule 1 applied
+   without knowing the consumer existed on another branch.
+2. **Brand is onboarding STEP ONE, at customer creation — not a Settings page.**
+   And understanding is split by WHO SUPPLIES IT: the customer tier holds what a
+   person STATES about the brand (vocabulary, voice, audience, what it sells),
+   captured first with no crawl and no model; the site tier holds what a read
+   SEES and the interview SETTLES, inheriting from the customer where silent.
+   Beta-2 put everything on the site ("the brand is just a container"); this
+   document put everything on the customer. Both were half right.
+
+The onboarding design that follows from this is in § Onboarding, below.
+
 ## The state today, in numbers
 
 | | |
@@ -88,7 +112,8 @@ to some degree; that one is schema with no plumbing at either end.
 
 Only fields with a named live consumer appear. **R** = the pipeline refuses without it.
 
-**CUSTOMER** — captured once, by a human, on a screen that does not exist yet.
+**CUSTOMER** — captured once, by a person, as the FIRST step of creating the customer.
+No crawl, no model: these are things only the customer can state.
 
 | Field | Consumer | R |
 |---|---|---|
@@ -129,19 +154,23 @@ refusal with words, folded into the hash, pinned by a ratchet.**
 
 ## What gets CUT
 
-All four designs, independently, delete the same schema. That is not taste.
+All four designs deleted largely the same schema. **Three of their cuts are
+reversed** (see the correction at the top): `ObservedFacts`, `Correction` and
+`SiteProfile.sources` are the site interview's raw material and record. What
+remains:
 
-`ObservedFacts` and `EMPTY_OBSERVED` (all nine fields) · `SiteProfile.corrections`
-and `Correction` · `SiteProfile.sources` · `SectionKey "market"` ·
+`SectionKey "market"` ·
 `Environment.siteKey` · `SiteRepoBinding` and `deployPrototypeToGit` ·
 `planMeasurement.reportingNames` · `SiteConfig` · `ArtifactVersion.notes` ·
 `PushResult` fields nothing reads · `PrototypeArm.addedAt/addedBy` ·
 `VerdictRecord.observedAt/experimentStatus/skillRef`.
 
-`ObservedFacts` is the contested one, and the answer is still cut: the agent
-already gets fonts, custom properties and the z-index ladder from per-target
-`design-tokens.md`, which is derived fresh on every provision. Two homes for one
-fact is how they disagree.
+`ObservedFacts` was the contested one and the cut is reversed. The concern was
+real — per-target `design-tokens.md` already carries fonts and custom properties,
+and two homes for one fact is how they disagree — so the rule is: `ObservedFacts`
+is the SITE-level, approved record the interview is conducted over, and
+`design-tokens.md` is the per-page, per-provision snapshot. One is what the
+customer confirmed; the other is what this page looks like today.
 
 **And a ratchet so it cannot re-accumulate.** A `reachability-smoke` with a
 per-file budget that may only fall, in the exact shape of the vocabulary ratchet
@@ -149,7 +178,9 @@ that now holds at zero across 275 files. Without it, 77 dead fields becomes 90.
 
 ## The order
 
-1. **Settings → Brand.** One form writing a `SiteProfile` revision. Every consumer
+1. **Brand, as step one of creating a customer** (see § Onboarding). It writes a
+   `SiteProfile` revision at the customer default. The same component edits it
+   afterwards — one editor, not a wizard plus a settings page. Every consumer
    is already live, already strict, already refusing — `addSiteProfile` has zero
    production callers, `customerContextFor` already maps sections into
    `customer.md`, and `brandRev` is already in the content hash, so a correction
@@ -172,6 +203,41 @@ Staleness for earned facts is **surface-scoped and monotonic** — a deposit
 counter, never wall-clock expiry inside the content hash. Expiry belongs at render
 time. A hash whose meaning is "a person changed something" must not flip at
 midnight with no diff.
+
+## Onboarding
+
+Taken from `beta-2` where it holds up, adapted to the console that exists.
+
+**Customer tier — ships first, needs no crawl and no model.**
+Create a customer → name → **Brand**. The questions are the seven vocabulary
+nouns asked in plain words, then voice, audience and what the business sells.
+The profile is written as a draft from the first save, so leaving loses nothing,
+and approved as a new revision on finish. `requireTaxonomy` completeness is the
+real readiness signal — not an invented percentage. The setup checklist gains
+"Describe the brand" as its first step; done means provisioning would succeed.
+
+**Site tier — later, and this is where beta-2's interview lives.**
+Read (real: `deriveDesignTokens` feeding an `ObservedFacts` writer) → Ask
+(questions generated from what the read could see but not decide, recorded in
+`ObservedFacts.unsettled`) → Correct (approve / edit / hand back with a note,
+kept as a `Correction`) → a new revision. The source repo shortens it.
+
+**Kept from beta-2:** a question carries a *because* line saying why it is being
+asked; options show a hint before the click; every question offers "I don't
+know — record it as unknown"; three rounds at most, then whatever is open is
+written as unknown and the agent must ask rather than assume; saving makes a new
+revision and a re-read never rewrites an approved one; one readiness derivation
+behind one card.
+
+**Dropped from beta-2:** every fixture; the understanding meter (its numbers are
+authored, not measured); in-memory state; the owner-invite step (no invite
+system exists); a forward-locked wizard (`DESIGN-PRINCIPLES.md` §3 requires every
+step to be openable); and D10's "nothing at the customer level".
+
+**Built in this console's own UI grammar, not shadcn.** Beta-2 was built on
+shadcn; this branch has no shadcn layer at all, and `DESIGN-PRINCIPLES.md`
+requires one card grammar. A second component system arriving mid-release is
+exactly what that rule exists to prevent.
 
 ## Decisions that are yours
 
