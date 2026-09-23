@@ -98,6 +98,11 @@ For each answer, in `lib/site/` (the new-names rule from HANDOFF):
 
 A failed check never deletes an answer. It only stops it being pre-filled.
 
+**Proof is per field** (found on Patagonia and Linear, 23 Sep): a word check
+proves a noun or verb, but it can't prove a place. "Where it completes" is proven
+by its cited URL being on this site and being where the action finishes. It
+failed the word check on all four sites while the agent had cited the right page.
+
 ## Where it runs
 
 A read takes minutes and reads up to ~30 pages; a request can't hold it
@@ -125,9 +130,10 @@ already have:
 - one retailer with a real catalogue;
 - one software company with a trial and a demo.
 
-The retail and software reads test the two gaps the mockup doesn't cover yet: a
-catalogue instead of one product word, and two actions or audiences instead of
-one.
+**Done 23 Sep for Patagonia and Linear** — results in the investigation doc. Both
+gaps are real: Patagonia's offering is a range ("clothing and gear"), not one
+word, and its biggest section is activism, not the shop. The skill must look for
+second actions on purpose; the answer shape must hold a range.
 
 ## Open
 

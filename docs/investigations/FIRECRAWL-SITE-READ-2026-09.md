@@ -121,6 +121,57 @@ The agent's execution trace records which pages said what — the provenance
 `SiteProfile.sources` is declared to hold. Its live view is a real "reading your
 site" screen, where beta-2 had a timed animation.
 
+## Two unlike sites: Patagonia (retail) and Linear (software), 23 Sep
+
+Same read: `map`, `branding` on the home page, the agent with the same neutral
+prompt and schema, then the evidence check (now a script, run on all four sites).
+Cost: 4 credits (map and branding); both agent runs billed 0 again.
+
+| | Pages | Biggest folders | Vocabulary proven by its own quote |
+|---|---|---|---|
+| hawaiivacationcondos | 762 | /hawaii 507 | **5 of 6** |
+| Linear | 1,405 | /integrations 325, /changelog 256, /docs 159 | **3 of 6** |
+| Patagonia | 4,513 | **/actionworks 1,752**, /product 1,289, /shop 1,079 | **1 of 6** |
+
+**What the agent answered, and what the check did with it:**
+
+- **Patagonia:** customer · product · shop. The agent fell back to the generic
+  words; the check refused all four nouns. Its own quotes show the site's word is
+  "gear" ("Shop outdoor clothing and gear that's built to last") — a range, not
+  one noun. Only "shop" was proven.
+- **Linear:** user · tool · sign up. "user" came from "$10 per user/month" and
+  was refused as generic. "tool" was proven ("A new species of product tool"),
+  but the agent itself flagged that Linear calls itself a "product development
+  system". The entity kinds were excellent: issues, projects, cycles,
+  initiatives — the product's own objects.
+
+**What this proves about the design:**
+
+1. **The check earns its place.** On the site least like a hotel it stopped four
+   generic answers from being pre-filled. Without it, Patagonia's builder would
+   have been told to write "products" for "customers".
+2. **One offering noun doesn't fit retail.** Patagonia sells clothing and gear
+   across 2,000+ product pages. The answer shape needs the portfolio/catalogue
+   case (see THE-CHAIN § Onboarding), not a better single word.
+3. **Second jobs are big, not edge cases.** Patagonia's largest folder is
+   Action Works (activism: petitions, volunteering, grassroots groups) — more
+   pages than the shop — plus Worn Wear (secondhand). Linear sells enterprise
+   through a sales contact beside self-serve sign-up; the agent put that in
+   `business` but did not name it as a second action. The reader has to look for
+   second actions on purpose.
+4. **"Where it completes" fails on all four sites, for a structural reason.** The
+   agent cites the right page ("Add to Bag" on a product page; "Create your
+   workspace" on /signup), but the word check can't prove a place. That field
+   needs its own proof: the cited URL, on this site, is where the action
+   finishes. Proof rules have to be per field.
+5. **Locales appear:** Patagonia's map has /mx and /no. A site in several
+   languages will need its vocabulary per locale, or a rule that the read uses
+   one.
+6. **`branding` roles are wrong again:** Linear's background and body text both
+   came back #08090A (a dark site); Patagonia's "primary" is a light blue from
+   one element. The earlier rule stands: trust the inventory, aggregate across
+   pages, ask where they disagree.
+
 ## Found on the way
 
 - **The console's local `FIRECRAWL_API_KEY` was dead** (rejected as an invalid
