@@ -7,6 +7,8 @@ export interface OrgOption { id: string; name: string }
 
 function setActiveOrgCookie(id: string) {
   document.cookie = "opmc_org=" + encodeURIComponent(id) + "; path=/; max-age=31536000; samesite=lax";
+  // A new customer starts at its own first site, never a stale one.
+  document.cookie = "opmc_site=; path=/; max-age=0; samesite=lax";
 }
 
 /** Tenant switcher — top of the sidebar. Switch org, or create one (admins). */

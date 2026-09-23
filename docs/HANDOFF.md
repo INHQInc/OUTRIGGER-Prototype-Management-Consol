@@ -204,6 +204,15 @@ in chat.
      `"*"`, still read by org — moving them onto sites (and the three smokes
      that assert inheritance) is slice 3. Proof: `docs/dev/site-smoke.mts`.
      Not yet deployed to the staging environment — it goes with slice 2's screen.
+   - **Slice 2 landed (23 Sep):** the sidebar **site selector** under the customer
+     switcher (`SiteSwitcher.tsx`; cookie `opmc_site` via `lib/site/active-site.ts`,
+     memoised per request; no "All sites"; orange dot while a site is in setup;
+     switching customer clears it). Dashboard, Prototypes (board + table),
+     Environments, New prototype and Backlog list and create in the SELECTED site;
+     each prototype's site still comes from its record. A customer with no site
+     sees "No site yet" with Add a site. `/sites/new` is step 1 only (name + URL,
+     admin); the rest of setup is slice 3. Brand, Reports, Skills, Activity and
+     Settings stay customer-wide until decided.
    Known gaps the mockup doesn't draw yet: a catalogue instead of one product
    word; two actions or audiences; a read that finds little (login walls, apps).
 2. Write the Site build plan from the rules above and his reactions; present it

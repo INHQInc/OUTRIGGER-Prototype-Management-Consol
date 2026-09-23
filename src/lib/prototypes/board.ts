@@ -8,6 +8,7 @@
  */
 import { getContentStore } from "../content/store";
 import { resolvePrototypeOrg } from "./org";
+import { resolvePrototypeSite } from "../site/sites";
 import { brandBasis } from "./customer-context";
 import { resolveRepoSource } from "./source";
 import { listArtifactVersions } from "./versions";
@@ -26,11 +27,16 @@ export { BOARD_COLUMNS } from "./board-model";
 export type { BoardColumn, BoardCard } from "./board-model";
 import type { BoardColumn, BoardCard } from "./board-model";
 
-export async function buildBoard(orgId: string): Promise<{ cards: BoardCard[]; archivedCount: number }> {
+export async function buildBoard(orgId: string, siteId?: string | null): Promise<{ cards: BoardCard[]; archivedCount: number }> {
   const store = await getContentStore();
   const all = await store.listPrototypes();
   const orgIds = await Promise.all(all.map((p) => resolvePrototypeOrg(p)));
-  const protos = all.filter((_, i) => orgIds[i] === orgId);
+  let protos = all.filter((_, i) => orgIds[i] === orgId);
+  // One site's prototypes — each card's site from ITS record, never the cookie.
+  if (siteId) {
+    const siteIds = await Promise.all(protos.map((p) => resolvePrototypeSite(p)));
+    protos = protos.filter((_, i) => siteIds[i] === siteId);
+  }
 
   const client = await getOptimizelyClientForOrg(orgId).catch(() => null);
   // ONCE for the whole board: every card belongs to this org, and the profile

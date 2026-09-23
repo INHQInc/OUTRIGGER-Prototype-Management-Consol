@@ -46,11 +46,12 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
   );
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="border border-dashed border-border rounded-xl py-16 text-center">
       <p className="text-[15px] text-muted">{title}</p>
       {hint && <p className="text-[14px] text-muted-2 mt-1">{hint}</p>}
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import type { SessionPayload } from "@/lib/auth/types";
 import type { BuildInfo } from "@/lib/build-info";
 import { OrgSwitcher, type OrgOption } from "./OrgSwitcher";
+import { SiteSwitcher, type SiteOption } from "./SiteSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 import { PrismLogo } from "@/components/PrismMark";
 
@@ -59,7 +60,7 @@ const ICON = {
   reports: "M4 4h16v16H4zM8 9h8M8 13h8M8 17h5",
 };
 
-export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: SessionPayload | null; orgs: OrgOption[]; activeOrgId: string | null; canCreate: boolean; build: BuildInfo }) {
+export function Sidebar({ user, orgs, activeOrgId, sites, activeSiteId, canCreate, build }: { user: SessionPayload | null; orgs: OrgOption[]; activeOrgId: string | null; sites: SiteOption[]; activeSiteId: string | null; canCreate: boolean; build: BuildInfo }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -149,13 +150,25 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
           collapsed rail keeps its initial with the full name on hover rather
           than dropping the control. */}
       {collapsed ? (
-        <div className="flex justify-center py-2 border-b border-border" title={orgs.find((o) => o.id === activeOrgId)?.name ?? "Customer"}>
-          <div className="w-7 h-7 rounded-md border border-border bg-surface-2 flex items-center justify-center text-[12.5px] font-bold uppercase">
+        <div className="flex flex-col items-center gap-1.5 py-2 border-b border-border">
+          <div title={orgs.find((o) => o.id === activeOrgId)?.name ?? "Customer"}
+            className="w-7 h-7 rounded-md border border-border bg-surface-2 flex items-center justify-center text-[12.5px] font-bold uppercase">
             {(orgs.find((o) => o.id === activeOrgId)?.name ?? "?").slice(0, 1)}
           </div>
+          {/* The site is abbreviated too, never hidden — same reason as the customer. */}
+          {activeOrgId && (
+            <div title={sites.find((s) => s.id === activeSiteId)?.name ?? "No site yet"}
+              className="relative w-7 h-7 rounded-md border border-border bg-surface-2 flex items-center justify-center text-[12.5px] font-bold uppercase text-muted">
+              {(sites.find((s) => s.id === activeSiteId)?.name ?? "–").slice(0, 1)}
+              {sites.find((s) => s.id === activeSiteId)?.status === "setup" && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-warn" />}
+            </div>
+          )}
         </div>
       ) : (
-        <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
+        <>
+          <OrgSwitcher orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate} />
+          {activeOrgId && <SiteSwitcher sites={sites} activeSiteId={activeSiteId} canCreate={canCreate} />}
+        </>
       )}
 
       <nav className={`flex-1 space-y-0.5 overflow-y-auto overflow-x-visible ${collapsed ? "px-2 py-3" : "p-3"}`}>

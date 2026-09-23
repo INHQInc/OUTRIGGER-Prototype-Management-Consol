@@ -11,11 +11,13 @@ const inp = "rounded-lg bg-background border border-border px-3 py-2 text-[15px]
  * The customer's environments — where prototypes are reviewed and promoted.
  * Each environment carries its own loader tag + verification status.
  */
-export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canManage }: {
+export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canManage, siteId }: {
   initialEnvironments: Environment[];
   seenAt: Record<string, string | null>;
   consoleUrl: string;
   canManage: boolean;
+  /** The selected site — a new environment is added to it. */
+  siteId: string;
 }) {
   const router = useRouter();
   const [url, setUrl] = useState("");
@@ -52,7 +54,7 @@ export function OrgEnvironments({ initialEnvironments, seenAt, consoleUrl, canMa
     if (!url.trim() || busy) return;
     setBusy(true); setError(null);
     try {
-      const res = await fetch("/api/environments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, label, kind }) });
+      const res = await fetch("/api/environments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, label, kind, siteId }) });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Failed to add environment"); return; }
       setUrl(""); setLabel("");

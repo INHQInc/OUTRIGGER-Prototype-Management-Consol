@@ -202,5 +202,23 @@ console.log("\n8. the hosted store carries every site field");
   ok("deleting a customer deletes its org_site rows", delOrg.includes("delete from org_site where org_id"));
 }
 
+console.log("\n9. the pages list one site, and new things land in it");
+{
+  const src = (p: string) => readFileSync(new URL(`../../src/${p}`, import.meta.url), "utf8");
+  const switcher = src("components/SiteSwitcher.tsx");
+  ok("the selector has no \"All sites\"", !/all sites/i.test(switcher.replace(/\/\*[\s\S]*?\*\//g, "")));
+  ok("the layout passes the customer's sites to the sidebar", /sites=\{sites\}/.test(src("app/layout.tsx")));
+  ok("the board is built for one site", /buildBoard\(orgId, site\.id\)/.test(src("app/prototypes/page.tsx")));
+  ok("the dashboard lists the site's environments", /e\.siteId === site\.id/.test(src("app/page.tsx")));
+  ok("the dashboard lists the site's prototypes", /resolvePrototypeSite/.test(src("app/page.tsx")));
+  ok("the environments page lists the site's environments", /e\.siteId === site\.id/.test(src("app/environments/page.tsx")));
+  ok("a new environment is added to the selected site", /JSON\.stringify\(\{ url, label, kind, siteId \}\)/.test(src("components/OrgEnvironments.tsx")));
+  ok("a new prototype is created in the selected site", /siteId,\s*\n\s*brief:/.test(src("components/PrototypeWizard.tsx")));
+  ok("a promoted backlog idea lands in the selected site", /siteId \? \{ siteId \}/.test(src("components/Backlog.tsx")));
+  ok("switching customer forgets the site", src("components/OrgSwitcher.tsx").includes("opmc_site=; path=/; max-age=0"));
+  const active = src("lib/site/active-site.ts");
+  ok("the cookie is only trusted for a site of the active customer", /sites\.find\(\(s\) => s\.id === val\) \?\? sites\[0\]/.test(active));
+}
+
 console.log(`\n${failures === 0 ? "All site checks passed." : `${failures} FAILED.`}\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -24,7 +24,7 @@ function slugPreview(name: string): string {
  * description, repo + branch, page(s). Then the workspace hands you the
  * init script for Claude.
  */
-export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
+export function PrototypeWizard({ envUrls, siteId }: { envUrls: string[]; siteId: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -94,6 +94,7 @@ export function PrototypeWizard({ envUrls }: { envUrls: string[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
+          siteId,
           brief: { change: description.trim() },
           targets: cleanTargets,
           buildMode: builtHere ? "console" : "external",

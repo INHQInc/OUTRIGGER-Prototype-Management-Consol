@@ -22,7 +22,7 @@ const inp = "w-full rounded-lg bg-background border border-border px-3 py-2 text
  * The one action that matters is graduation: turn an item into a real prototype
  * (creates it, pre-filled from the item, and marks the item planned).
  */
-export function Backlog({ initial, canManage }: { initial: Idea[]; canManage: boolean }) {
+export function Backlog({ initial, canManage, siteId }: { initial: Idea[]; canManage: boolean; siteId: string | null }) {
   const router = useRouter();
   const [items, setItems] = useState(initial);
   const [open, setOpen] = useState<string | null>(null);
@@ -74,7 +74,7 @@ export function Backlog({ initial, canManage }: { initial: Idea[]; canManage: bo
     try {
       const res = await fetch("/api/prototypes", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: i.title, brief: { change: i.body || "", problem: "", doneLooksLike: "" } }),
+        body: JSON.stringify({ name: i.title, ...(siteId ? { siteId } : {}), brief: { change: i.body || "", problem: "", doneLooksLike: "" } }),
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error ?? "Couldn't create the prototype"); return; }

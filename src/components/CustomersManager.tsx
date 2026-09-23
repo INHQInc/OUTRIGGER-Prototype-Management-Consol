@@ -8,6 +8,8 @@ export interface CustomerRow { id: string; name: string; createdAt: string; prot
 
 function setActiveOrgCookie(id: string) {
   document.cookie = "opmc_org=" + encodeURIComponent(id) + "; path=/; max-age=31536000; samesite=lax";
+  // A new customer starts at its own first site, never a stale one.
+  document.cookie = "opmc_site=; path=/; max-age=0; samesite=lax";
 }
 
 /** Manage customers/brands — list, create, switch, rename, cascade-delete. */

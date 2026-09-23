@@ -6,6 +6,8 @@ import { buildInfo } from "@/lib/build-info";
 import { currentUser } from "@/lib/auth/current";
 import { listOrgs } from "@/lib/orgs";
 import { accessibleOrgIds, getActiveOrgId } from "@/lib/active-org";
+import { getActiveSite } from "@/lib/site/active-site";
+import type { SiteOption } from "@/components/SiteSwitcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,11 +34,16 @@ export default async function RootLayout({
   const user = await currentUser();
   let orgs: { id: string; name: string }[] = [];
   let activeOrgId: string | null = null;
+  let sites: SiteOption[] = [];
+  let activeSiteId: string | null = null;
   const canCreate = user?.role === "admin";
   if (user) {
     const accessible = new Set(await accessibleOrgIds());
     orgs = (await listOrgs()).filter((o) => accessible.has(o.id)).map((o) => ({ id: o.id, name: o.name }));
     activeOrgId = await getActiveOrgId();
+    const active = await getActiveSite(activeOrgId);
+    sites = active.sites.map((s) => ({ id: s.id, name: s.name, url: s.url, status: s.status }));
+    activeSiteId = active.site?.id ?? null;
   }
   return (
     <html
@@ -49,7 +56,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem("opmc-theme");if(t==="dark")document.documentElement.dataset.theme="dark"}catch(e){}` }} />
       </head>
       <body className="min-h-full flex">
-        <AppFrame build={buildInfo()} user={user} orgs={orgs} activeOrgId={activeOrgId} canCreate={canCreate}>{children}</AppFrame>
+        <AppFrame build={buildInfo()} user={user} orgs={orgs} activeOrgId={activeOrgId} sites={sites} activeSiteId={activeSiteId} canCreate={canCreate}>{children}</AppFrame>
       </body>
     </html>
   );

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { getActiveOrgId } from "@/lib/active-org";
+import { getActiveSite } from "@/lib/site/active-site";
 import { PageHeader, EmptyState } from "@/components/ui";
 import { ProgramBoard } from "@/components/ProgramBoard";
 import { PrototypeTable } from "@/components/PrototypeTable";
@@ -34,11 +36,24 @@ export default async function PrototypesBoard({ searchParams }: { searchParams: 
     );
   }
 
-  const { cards, archivedCount } = await buildBoard(orgId);
+  const { site } = await getActiveSite(orgId);
+  if (!site) {
+    return (
+      <>
+        <PageHeader title="Prototypes" />
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          <EmptyState title="No site yet." hint="Prototypes belong to a site. Add this customer's first site to start."
+            action={<Link href="/sites/new" className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover inline-flex items-center">Add a site</Link>} />
+        </div>
+      </>
+    );
+  }
+
+  const { cards, archivedCount } = await buildBoard(orgId, site.id);
 
   return (
     <>
-      <PageHeader title="Prototypes" subtitle="Every prototype, its stage, and its experiment — one truth" />
+      <PageHeader title="Prototypes" subtitle={`${site.name} — every prototype, its stage, and its experiment`} />
       <div className="flex-1 overflow-y-auto px-8 py-6">
         {/* The SAME TabRow the workspace uses for its rooms. It was a pair of
             pills here and an underlined row there — one gesture, two grammars,

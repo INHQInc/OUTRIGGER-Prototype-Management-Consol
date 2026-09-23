@@ -20,6 +20,8 @@ import { NewPrototype } from "@/components/NewPrototype";
 import { PROTOTYPE_STAGES, STAGE_LABEL, STAGE_TONE, normalizeStage, type PrototypeStage } from "@/lib/prototypes/types";
 import type { Promotion } from "@/lib/promotions/types";
 import { brandStatus } from "@/lib/brand/onboarding";
+import { getActiveSite } from "@/lib/site/active-site";
+import { resolvePrototypeSite } from "@/lib/site/sites";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +41,23 @@ export default async function Dashboard() {
     );
   }
 
+  // First, so a customer's starting site exists and its environments and
+  // prototypes are in it before anything below filters by site.
+  const { site } = await getActiveSite(orgId);
+  if (!site) {
+    return (
+      <>
+        <PageHeader title="Dashboard" />
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          <EmptyState title="No site yet." hint="Everything in Prism belongs to a site. Add this customer's first site to start."
+            action={<Link href="/sites/new" className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover inline-flex items-center">Add a site</Link>} />
+        </div>
+      </>
+    );
+  }
+
   const store = await getContentStore();
-  const [org, brand, environments, gitStatus, expCfg, orgRepos, events] = await Promise.all([
+  const [org, brand, orgEnvironments, gitStatus, expCfg, orgRepos, events] = await Promise.all([
     getOrg(orgId),
     brandStatus(orgId),
     listOrgEnvironments(orgId),
@@ -49,13 +66,16 @@ export default async function Dashboard() {
     listOrgRepos(orgId),
     listAuditEvents(orgId, 8),
   ]);
+  const environments = orgEnvironments.filter((e) => e.siteId === site.id);
   const loaderMarked = Boolean(await store.getFlag(`setup:loader:${orgId}`));
   // Auto-verified the moment any of the customer's environments beacons in.
   const loaderSeen = (await Promise.all(environments.map((e) => envLoaderSeenAt(e)))).some(Boolean);
   const loaderDone = loaderMarked || loaderSeen;
   const allProtos = await store.listPrototypes();
   const protoOrgs = await Promise.all(allProtos.map((p) => resolvePrototypeOrg(p)));
-  const protos = allProtos.filter((_, i) => protoOrgs[i] === orgId);
+  const orgProtos = allProtos.filter((_, i) => protoOrgs[i] === orgId);
+  const protoSites = await Promise.all(orgProtos.map((p) => resolvePrototypeSite(p)));
+  const protos = orgProtos.filter((_, i) => protoSites[i] === site.id);
   const promosByProto = await Promise.all(protos.map((p) => listPromotions(p.key)));
 
   // ── Setup checklist (sequenced; owns the top of the page until complete) ──
@@ -131,7 +151,7 @@ export default async function Dashboard() {
     <>
       <PageHeader
         title="Dashboard"
-        subtitle={org?.name ?? orgId}
+        subtitle={`${org?.name ?? orgId} · ${site.name}`}
         actions={<NewPrototype />}
       />
       <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
