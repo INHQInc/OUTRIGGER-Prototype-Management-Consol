@@ -172,6 +172,19 @@ Mockup: https://claude.ai/artifact/XppRLQaVkFjMpj7M8z6mNY (17 boards: every step
   count it ("Appointments are booked on Asana Spa's website, so we can only count
   clicks").
 
+### Considered and set aside, 23 Sep: a site knowledge graph
+
+Bryan asked whether to model a site as a graph (offerings, locations, calls to
+action and where they finish, key terms, experiments attached) the way
+BrandGraphAI does, instead of fields. It would fix the retail catalogue and
+several-offerings cases and give the site a memory of past tests. Decided: **keep
+going with what we had for now** (Bryan). If it comes back: keep it small and
+growing (about 25 pages at setup, more only when a brief targets new pages), show
+it as plain lists (never a diagram), and take only BrandGraphAI's Firecrawl client
+and scan lessons (`src/lib/enrichment/firecrawl.ts` in INHQInc/hospitality-ai-bot),
+not its full extract-everything pipeline, which exists to answer guest questions
+in chat.
+
 ### Next, in order
 
 1. **Building (Bryan, 23 Sep: "lets start building then and the backend")** — in
