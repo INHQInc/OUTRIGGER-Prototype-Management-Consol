@@ -89,6 +89,29 @@ will not regenerate on a taxonomy change unless you pass `force: true` — that
 cost an hour. And pushing the `staging` branch does NOT deploy to the staging
 environment; that needs an explicit `target: "staging"` deployment.
 
+### What the builder is handed now (22 Sep, end of day)
+
+Every item below was recorded by the console and thrown away before today.
+
+| Delivered | Where | Stales the branch? |
+|---|---|---|
+| The customer's vocabulary + characterized prose | `.opmc/customer.md`, `context.json.customer` | yes — via `brandBasis()` in the hash |
+| Loader-tag verdict per page | `brief.md` table, `context.json.targets[].injection` | yes — the STATE is in the hash |
+| Sibling arms of the same test | `brief.md` | no — advisory; refreshes on any re-sync |
+| The round this was promoted from, with its verdict | `brief.md` | no — same |
+| Certification limits as numbers | `brief.md`, `context.json.certification` | n/a — constants |
+| Skill bodies in the customer's words | `.claude/skills/**` | yes — a hash of each RESOLVED body |
+
+The certification section also states live contradiction 1 to the agent and
+tells it to stop and say so rather than ship an undecidable experiment. That is
+not a fix — the product decision is still open — it stops the contradiction
+being resolved silently in the meantime.
+
+**Vocabulary ratchet: 8**, from 48 at the start of the day. `lib/ai/results.ts`
+and `lib/skills/builtins.ts` are both at zero and off the budget list. What
+remains: `lib/ai/next-test.ts` (2), `lib/prototypes/` results (2), stats (2),
+verdict (1), next-test (1).
+
 ### The other half: the builder is brand-blind
 
 `docs/plans/BUILDER-CONTEXT.md` — the three-tier requirement for what CUSTOMER,
