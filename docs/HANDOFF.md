@@ -99,12 +99,13 @@ This reverses the old "three nouns only" rule; AGENTS.md now says so.
   `map` for the inventory, `branding` aggregated across one page per template,
   the agent with our schema for the meaning, then the evidence check: pre-fill
   only what an answer's own quote proves.
-- **Business type first** (Bryan's idea — it changes the "what do you sell"
-  question: retail may have fifty product types, hospitality hotels or cruises).
-  Proposed: detected from the read and confirmed, never asked blank; a primary
-  type plus traits (the condo site also recruits property owners); the list is
-  exactly the schemas we have; the type picks which questions are asked and
-  never supplies an answer.
+- **Business type first, BROAD only** (Bryan's idea, narrowed by him on 23 Sep:
+  "shouldnt we just have hosptiality and the agent … can determine more
+  details"). Detected and confirmed, never asked blank: Hospitality, Retail,
+  Software and subscriptions, Services and lead generation, Non-profit, Media and
+  publishing, Something else. It picks the reader's knowledge, never an answer;
+  the sub-type ("vacation rentals, and rental management for owners") comes back
+  as an ordinary answer with its quote.
 - **The offering noun resolves page → site → brand**, in one of three shapes: one
   offering, a portfolio of kinds (outrigger.com — the agent correctly declined to
   pick one word), or a catalogue (retail; Firecrawl's `product` format).
@@ -114,15 +115,22 @@ This reverses the old "three nouns only" rule; AGENTS.md now says so.
   unproven* (offered as a labelled option, never pre-filled), *unsettled* (the
   site does not decide — e.g. booking completes on an off-site engine), *only you
   know* (what no crawl can see — words never used, what must never change).
-  Refine with AI rewrites ONE answer from the person's words and shows
-  was → now before it is accepted.
-- **Mockup, in progress:** https://claude.ai/artifact/XppRLQaVkFjMpj7M8z6mNY —
+  Refine is the brief's own `SectionHead` (BriefComposer.tsx) — "Refine ✎",
+  the inline box, "Refine this", rewritten in place. Bryan asked for exactly that
+  ("like we have on the breif"); a separate was → now screen was dropped.
+- **Mockup, published (8 boards):** https://claude.ai/artifact/XppRLQaVkFjMpj7M8z6mNY —
   the real read of hawaiivacationcondos.outrigger.com, drawn in the console's own
   design language.
+- **The reader is not built, and nothing like it exists.** Plan:
+  `docs/plans/SITE-READER.md` — an `opmc-site-reader` skill (general method plus
+  one knowledge section per broad type) driving a Claude loop with Firecrawl as
+  its tools, and a code check that decides what may be pre-filled.
 
 ### Next, in order
 
-1. Finish the mockup; Bryan reacts.
+1. Bryan reacts to the mockup and the site-reader plan.
+   Known gaps the mockup doesn't draw yet: a catalogue instead of one product
+   word; two actions or audiences; a read that finds little (login walls, apps).
 2. Write the Site build plan from the rules above and his reactions; present it
    before building.
 3. Build on `staging` — `main` is frozen.
