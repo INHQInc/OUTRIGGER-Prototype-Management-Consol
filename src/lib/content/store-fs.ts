@@ -11,6 +11,7 @@ import type { ExperimentationConfig } from "../experimentation/types";
 import type { Promotion, PromotionStatus } from "../promotions/types";
 import type { AuditEvent } from "../audit/types";
 import type { SiteProfile, BrandFact } from "../brand/types";
+import type { Site } from "../site/types";
 
 const TYPE_BY_EXT: Record<string, string> = {
   css: "text/css", js: "text/javascript", jpg: "image/jpeg", jpeg: "image/jpeg",
@@ -39,6 +40,7 @@ export class FsContentStore implements ContentStore {
   private factsFile(): string { return join(this.root(), "_brand-facts.json"); }
   private orgReposFile(): string { return join(this.root(), "_org-repos.json"); }
   private gitConnFile(): string { return join(this.root(), "_git-connections.json"); }
+  private orgSitesFile(): string { return join(this.root(), "_org-sites.json"); }
 
   private async readJson<T>(file: string, fallback: T): Promise<T> {
     try { return JSON.parse(await readFile(file, "utf8")); } catch { return fallback; }
@@ -80,6 +82,34 @@ export class FsContentStore implements ContentStore {
     await this.writeJson(this.orgReposFile(), orgRepos);
     const gitConns = (await this.readJson<GitConnection[]>(this.gitConnFile(), [])).filter((c) => c.orgId !== id);
     await this.writeJson(this.gitConnFile(), gitConns);
+    const sites = (await this.readJson<Site[]>(this.orgSitesFile(), [])).filter((s) => s.orgId !== id);
+    await this.writeJson(this.orgSitesFile(), sites);
+  }
+
+  async listOrgSites(orgId: string): Promise<Site[]> {
+    const sites = (await this.readJson<Site[]>(this.orgSitesFile(), [])).filter((s) => s.orgId === orgId);
+    return sites.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  async getOrgSite(id: string): Promise<Site | null> {
+    return (await this.readJson<Site[]>(this.orgSitesFile(), [])).find((s) => s.id === id) ?? null;
+  }
+  async addOrgSite(site: Site): Promise<void> {
+    const sites = await this.readJson<Site[]>(this.orgSitesFile(), []);
+    if (sites.some((s) => s.id === site.id)) return; // on-conflict-do-nothing
+    sites.push(site);
+    await this.writeJson(this.orgSitesFile(), sites);
+  }
+  async updateOrgSite(id: string, patch: Partial<Site>): Promise<void> {
+    const sites = await this.readJson<Site[]>(this.orgSitesFile(), []);
+    const i = sites.findIndex((s) => s.id === id);
+    if (i === -1) return;
+    // id and orgId are identity, never patched.
+    sites[i] = { ...sites[i], ...patch, id: sites[i].id, orgId: sites[i].orgId };
+    await this.writeJson(this.orgSitesFile(), sites);
+  }
+  async deleteOrgSite(id: string): Promise<void> {
+    const sites = (await this.readJson<Site[]>(this.orgSitesFile(), [])).filter((s) => s.id !== id);
+    await this.writeJson(this.orgSitesFile(), sites);
   }
 
   async getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null> {

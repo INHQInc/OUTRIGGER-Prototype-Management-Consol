@@ -16,6 +16,9 @@ export interface Environment {
   id: string;
   /** Owning customer. */
   orgId: string;
+  /** The site (lib/site/) this environment belongs to. Absent on rows made
+   *  before sites existed; the customer's starting site adopts them on first read. */
+  siteId?: string;
   /** Legacy: the pre-refactor site this env belonged to (kept for heartbeat + migration). */
   siteKey?: string;
   label: string;
@@ -69,19 +72,42 @@ export async function listOrgEnvironments(orgId: string): Promise<Environment[]>
   return sortEnvs([...own, ...adopted.filter((e) => !seen.has(e.id))]);
 }
 
-export async function addOrgEnvironment(orgId: string, input: { label?: string; url: string; kind: EnvironmentKind }): Promise<Environment> {
+export async function addOrgEnvironment(
+  orgId: string,
+  input: { label?: string; url: string; kind: EnvironmentKind; siteId?: string | null },
+): Promise<Environment> {
   const url = normalizeUrl(input.url);
   const store = await getContentStore();
   const existing = await listOrgEnvironments(orgId);
   if (existing.some((e) => e.url === url)) throw new Error(`An environment for ${url} already exists.`);
   const label = input.label?.trim() || KIND_LABEL[input.kind];
-  const base = `${orgId}-${slugify(label) || input.kind}`;
+  // `${orgId}--${slug}`. With a single "-", org "acme" + "EU Prod" and org
+  // "acme-eu" + "Prod" were both "acme-eu-prod": ids are a global primary key
+  // but uniqueness was only checked inside one customer, and the store's
+  // on-conflict-do-nothing dropped the second row while the API returned 201.
+  // Neither an org id nor a slug can contain "--", so this is unique across
+  // customers by construction. Existing ids are NOT renamed: an environment's
+  // id is its public loader key (/loader/<id>) and its heartbeat flag.
+  const slug = slugify(label).replace(/-+$/g, "") || input.kind;
+  const base = `${orgId}--${slug}`;
   const ids = new Set(existing.map((e) => e.id));
   let id = base;
   let n = 2;
   while (ids.has(id)) id = `${base}-${n++}`;
-  const env: Environment = { id, orgId, label, url, kind: input.kind, createdAt: new Date().toISOString() };
+  const env: Environment = {
+    id,
+    orgId,
+    ...(input.siteId ? { siteId: input.siteId } : {}),
+    label,
+    url,
+    kind: input.kind,
+    createdAt: new Date().toISOString(),
+  };
   await store.addEnvironment(env);
+  // Report only what was saved.
+  if (!(await store.listEnvironmentsByOrg(orgId)).some((e) => e.id === id)) {
+    throw new Error("The environment couldn't be saved. Try again.");
+  }
   return env;
 }
 

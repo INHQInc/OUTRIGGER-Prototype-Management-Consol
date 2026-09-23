@@ -192,6 +192,18 @@ in chat.
    store, (2) the sidebar selector and site-scoped pages, (3) the site setup flow
    with manual answers, (4) the reader (scan) backend, (5) the build gate and the
    brief's Key terms.
+   - **Slice 1 landed (23 Sep):** `src/lib/site/` (types, `industries.ts`
+     catalogue, `sites.ts`), store methods on both backends, Neon `org_site` +
+     `environment.site_id`, `/api/sites`, and `siteId` on environments and
+     prototypes (the POST and promote writers carry it). **The starting site:** a
+     customer with environments, prototypes or a profile gets ONE site, id
+     `${orgId}--site`, on its first `listSites` read, and everything moves into
+     it; a brand-new customer gets none. Environment ids are now
+     `${orgId}--${slug}` (the cross-customer collision is fixed; existing ids are
+     not renamed — they are loader keys). Brand profiles are UNTOUCHED: still
+     `"*"`, still read by org — moving them onto sites (and the three smokes
+     that assert inheritance) is slice 3. Proof: `docs/dev/site-smoke.mts`.
+     Not yet deployed to the staging environment — it goes with slice 2's screen.
    Known gaps the mockup doesn't draw yet: a catalogue instead of one product
    word; two actions or audiences; a read that finds little (login walls, apps).
 2. Write the Site build plan from the rules above and his reactions; present it

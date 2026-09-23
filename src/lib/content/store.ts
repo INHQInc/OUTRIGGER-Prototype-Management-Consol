@@ -8,6 +8,7 @@ import type { ExperimentationConfig } from "../experimentation/types";
 import type { Promotion, PromotionStatus } from "../promotions/types";
 import type { AuditEvent } from "../audit/types";
 import type { SiteProfile, BrandFact } from "../brand/types";
+import type { Site } from "../site/types";
 
 /**
  * Persistence seam for CONTENT (sites, captured pages, assets) — the same
@@ -64,6 +65,16 @@ export interface ContentStore {
   updateDynamicSite(siteKey: string, patch: Partial<SiteConfig>): Promise<void>;
   /** Cascade-delete a site: its record + all pages/versions/assets + prototypes + repo binding + environments. */
   deleteSite(siteKey: string): Promise<void>;
+
+  // --- Sites (Customer → Site → Environment; src/lib/site/). NOT the legacy
+  //     `site` table above: that is the clone-config SiteConfig keyed by siteKey. ---
+  listOrgSites(orgId: string): Promise<Site[]>;
+  getOrgSite(id: string): Promise<Site | null>;
+  /** Insert a site; idempotent on id (on-conflict-do-nothing), so two requests
+   *  racing to create a customer's starting site end with one. */
+  addOrgSite(site: Site): Promise<void>;
+  updateOrgSite(id: string, patch: Partial<Site>): Promise<void>;
+  deleteOrgSite(id: string): Promise<void>;
 
   // --- Environments (per-CUSTOMER deploy/review targets: dev/staging/production) ---
   listEnvironmentsByOrg(orgId: string): Promise<Environment[]>;

@@ -10,6 +10,7 @@ import type { ExperimentationConfig } from "../experimentation/types";
 import type { Promotion, PromotionStatus, PromotionVehicle } from "../promotions/types";
 import type { AuditEvent } from "../audit/types";
 import type { SiteProfile, BrandFact } from "../brand/types";
+import type { Site } from "../site/types";
 import { DB_OWNER_KEY, decideOwnership, wrongDatabase } from "./db-owner";
 
 /**
@@ -29,7 +30,7 @@ export class NeonContentStore implements ContentStore {
    * function so it can be tested; this is only the plumbing around it.
    *
    * Note the order: the refusal happens BEFORE `ensureSchema()`, so a
-   * deployment pointed at a database it does not own never reaches the nine
+   * deployment pointed at a database it does not own never reaches the
    * `alter table` statements. That is the whole point — the DDL is the
    * damage.
    */
@@ -263,6 +264,21 @@ export class NeonContentStore implements ContentStore {
       )`);
     await this.ddl(() => this.sql`create index if not exists brand_fact_site_idx on brand_fact (org_id, site_id, observed_at desc)`);
     await this.ddl(() => this.sql`create index if not exists brand_fact_surface_idx on brand_fact (org_id, surface_id)`);
+    // Sites (src/lib/site/). Identity columns plus the whole record as JSON, the
+    // site_profile pattern: a new Site field then round-trips without a column
+    // list to forget. `site` is taken by the legacy clone config.
+    await this.ddl(() => this.sql`
+      create table if not exists org_site (
+        id text primary key,
+        org_id text not null,
+        data text not null,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      )`);
+    await this.ddl(() => this.sql`create index if not exists org_site_org_idx on org_site (org_id)`);
+    // Which site an environment belongs to. '' = not yet assigned (a customer's
+    // starting site adopts it on first read — lib/site/sites.ts).
+    await this.ddl(() => this.sql`alter table environment add column if not exists site_id text not null default ''`);
     await this.ddl(() => this.sql`
       create table if not exists content_meta (
         key text primary key,
@@ -576,6 +592,7 @@ export class NeonContentStore implements ContentStore {
     await this.sql`delete from git_connection where org_id = ${id}`;
     await this.sql`delete from experimentation_config where org_id = ${id}`;
     await this.sql`delete from audit_event where org_id = ${id}`;
+    await this.sql`delete from org_site where org_id = ${id}`;
     await this.sql`delete from org where id = ${id}`;
   }
   async listMembers(orgId: string): Promise<OrgMember[]> {
@@ -595,9 +612,14 @@ export class NeonContentStore implements ContentStore {
     return rows.map((r) => r.org_id as string);
   }
 
+  // THE COLUMNS ARE LISTED BY HAND in mapEnv, addEnvironment and
+  // updateEnvironment: a field missing from any of the three round-trips on the
+  // filesystem store and is silently dropped here. docs/dev/site-smoke.mts
+  // asserts site_id is in all three.
   private mapEnv = (r: Record<string, unknown>) => ({
     id: r.id as string,
     orgId: (r.org_id as string) || "",
+    siteId: (r.site_id as string) || undefined,
     siteKey: (r.site_key as string) || undefined,
     label: r.label as string,
     url: r.url as string,
@@ -614,8 +636,8 @@ export class NeonContentStore implements ContentStore {
   }
   async addEnvironment(env: Environment): Promise<void> {
     await this.sql`
-      insert into environment (id, org_id, site_key, label, url, kind, created_at)
-      values (${env.id}, ${env.orgId}, ${env.siteKey ?? ""}, ${env.label}, ${env.url}, ${env.kind}, ${env.createdAt})
+      insert into environment (id, org_id, site_id, site_key, label, url, kind, created_at)
+      values (${env.id}, ${env.orgId}, ${env.siteId ?? ""}, ${env.siteKey ?? ""}, ${env.label}, ${env.url}, ${env.kind}, ${env.createdAt})
       on conflict (id) do nothing`;
   }
   async updateEnvironment(id: string, patch: Partial<Environment>): Promise<void> {
@@ -623,9 +645,45 @@ export class NeonContentStore implements ContentStore {
     if (patch.url !== undefined) await this.sql`update environment set url = ${patch.url} where id = ${id}`;
     if (patch.kind !== undefined) await this.sql`update environment set kind = ${patch.kind} where id = ${id}`;
     if (patch.orgId !== undefined) await this.sql`update environment set org_id = ${patch.orgId} where id = ${id}`;
+    if (patch.siteId !== undefined) await this.sql`update environment set site_id = ${patch.siteId} where id = ${id}`;
   }
   async deleteEnvironment(id: string): Promise<void> {
     await this.sql`delete from environment where id = ${id}`;
+  }
+
+  /* --- Sites (lib/site/). The JSON blob is the record; id and org_id are the
+     index, and win on any disagreement (the site_profile rule). --- */
+  private rowToSite(r: Record<string, unknown>): Site | null {
+    try {
+      const site = JSON.parse(r.data as string) as Site;
+      return { ...site, id: r.id as string, orgId: r.org_id as string };
+    } catch {
+      return null;
+    }
+  }
+  async listOrgSites(orgId: string): Promise<Site[]> {
+    const rows = await this.sql`select * from org_site where org_id = ${orgId} order by created_at`;
+    return rows.map((r) => this.rowToSite(r)).filter((x): x is Site => x !== null);
+  }
+  async getOrgSite(id: string): Promise<Site | null> {
+    const rows = await this.sql`select * from org_site where id = ${id}`;
+    return rows[0] ? this.rowToSite(rows[0]) : null;
+  }
+  async addOrgSite(site: Site): Promise<void> {
+    await this.sql`
+      insert into org_site (id, org_id, data, created_at, updated_at)
+      values (${site.id}, ${site.orgId}, ${JSON.stringify(site)}, ${site.createdAt}, ${site.updatedAt})
+      on conflict (id) do nothing`;
+  }
+  async updateOrgSite(id: string, patch: Partial<Site>): Promise<void> {
+    const current = await this.getOrgSite(id);
+    if (!current) return;
+    // id and orgId are identity, never patched.
+    const next: Site = { ...current, ...patch, id: current.id, orgId: current.orgId };
+    await this.sql`update org_site set data = ${JSON.stringify(next)}, updated_at = now() where id = ${id}`;
+  }
+  async deleteOrgSite(id: string): Promise<void> {
+    await this.sql`delete from org_site where id = ${id}`;
   }
 
   async getExperimentationConfig(orgId: string): Promise<ExperimentationConfig | null> {

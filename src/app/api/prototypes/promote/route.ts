@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getContentStore } from "@/lib/content/store";
 import { canAccessOrg } from "@/lib/active-org";
 import { resolvePrototypeOrg } from "@/lib/prototypes/org";
+import { resolvePrototypeSite } from "@/lib/site/sites";
 import { currentUser } from "@/lib/auth/current";
 import { audit } from "@/lib/audit";
 import { getVerdict } from "@/lib/prototypes/verdict";
@@ -61,9 +62,12 @@ export async function POST(req: NextRequest) {
   for (let n = 2; await store.getPrototype(key); n++) key = `${base}-${n}`;
 
   const now = new Date().toISOString();
+  // A follow-up tests the same surface, so it belongs to the parent's site.
+  const siteId = await resolvePrototypeSite(parent);
   const child: PrototypeRecord = {
     key,
     orgId,
+    ...(siteId ? { siteId } : {}),
     siteKey: parent.siteKey,
     name,
     // Where it is built follows the parent — a follow-up to an Optimizely-built

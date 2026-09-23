@@ -80,6 +80,18 @@ const HOSPITALITY = /\b(guests?|hotels?|resorts?|hospitality|lodging|accommodati
 const BUDGET: Record<string, number> = {
 };
 
+/**
+ * NOT A BUDGET — a file that names industries because naming them is its job.
+ *
+ * `lib/site/industries.ts` is the catalogue a person picks their site's industry
+ * from ("Hospitality", "Retail", …), so it cannot avoid the word. It is not one
+ * customer's words, nothing reads it to write a prompt or a page, and the
+ * industry never supplies an answer — it only picks which setup questions are
+ * asked. Exempted by exact path, so every other file, including anything that
+ * imports the catalogue, is still counted.
+ */
+const CATALOGUE = new Set(["lib/site/industries.ts"]);
+
 /** Where prose that reaches a customer is generated or derived. */
 /**
  * EVERYTHING, not four directories. The scan covered `lib/ai`, `lib/skills`,
@@ -129,6 +141,7 @@ for (const d of SCANNED) files.push(...(await walk(join(SRC, d)).catch(() => [])
 
 const counts = new Map<string, number>();
 for (const f of files) {
+  if (CATALOGUE.has(relative(SRC, f))) continue;
   const text = codeOnly(await readFile(f, "utf8"));
   const n = (text.match(HOSPITALITY) ?? []).length;
   if (n > 0) counts.set(relative(SRC, f), n);

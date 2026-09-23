@@ -29,7 +29,8 @@ A **multi-tenant "build-and-ship layer"** for advanced web experiments — the p
 
 ```
 THREE NOUNS TODAY — Customer (who) · Environment (where) · Prototype (what).
-SITE IS COMING BACK — decided by Bryan 23 Sep 2026, NOT BUILT YET:
+SITE — decided by Bryan 23 Sep 2026, BEING BUILT (slice 1 landed: lib/site/,
+  org_site, the starting-site migration; no screen yet — HANDOFF has the slices):
   Customer → Site → Environment; every Prototype belongs to exactly ONE Site;
   picked from a sidebar selector with NO "All sites". EVERYTHING LIVES ON
   THE SITE (Bryan, 23 Sep: "brand is generi wrapper"): vocabulary, voice,
@@ -77,7 +78,7 @@ orgId back-filled via prototypes/org.ts resolver. Old loader tags (/loader/<site
 ## Persistence — ContentStore seam
 
 `getContentStore()` picks the backend by `DATABASE_URL` (mirrors the auth store):
-- **Neon** (hosted): tables `org, org_member, site, environment, git_connection, org_repo, page_version, asset, repo_binding (legacy), prototype, prototype_overlay (orphaned), artifact_version, promotion, audit_event, experimentation_config, content_meta`.
+- **Neon** (hosted): tables `org, org_member, org_site, site, environment, git_connection, org_repo, page_version, asset, repo_binding (legacy), prototype, prototype_overlay (orphaned), artifact_version, promotion, audit_event, experimentation_config, content_meta`.
 - **Filesystem** (local, no `DATABASE_URL`): `snapshots/` tree + `_*.json` maps.
 
 Schema **auto-migrates** on first request via a **race-safe `ddl()` helper** (create-if-not-exists / alter-add-column-if-not-exists, swallowing duplicate-object races 23505/42P07/42710). Do NOT do bare `create table if not exists` outside `ddl()` — concurrent cold starts collide on `pg_catalog`.

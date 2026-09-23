@@ -10,6 +10,7 @@ import { audit } from "@/lib/audit";
 import { apiOrgFromAuthHeader } from "@/lib/api-token";
 import { guardPrototypeAccess } from "@/lib/prototypes/guard";
 import { defaultOrgRepo } from "@/lib/git/org-repos";
+import { defaultSiteId, getSiteById } from "@/lib/site/sites";
 
 /** A prototype's own branch — never the shared `starter` template. Coerces
  *  a blank or `starter` choice to the conventional prototype/<key>. */
@@ -189,10 +190,24 @@ export async function POST(req: NextRequest) {
   }
   // Creating (no existing record) always requires an owning customer — no orphans.
   if (!existing && !activeOrg) return NextResponse.json({ error: "No active customer." }, { status: 400 });
+  const recordOrg = existing ? existingOrg : activeOrg!;
+
+  // A prototype belongs to exactly one site, and once it has one it keeps it —
+  // this route never moves a prototype between sites. A new one takes the site
+  // it was created under (validated against its customer), or the customer's
+  // default site when none was sent.
+  let siteId = existing?.siteId;
+  if (!siteId && b.siteId) {
+    const site = await getSiteById(recordOrg, b.siteId);
+    if (!site) return NextResponse.json({ error: "Unknown site." }, { status: 400 });
+    siteId = site.id;
+  }
+  if (!siteId) siteId = (await defaultSiteId(recordOrg)) ?? undefined;
 
   const record: PrototypeRecord = {
     key,
-    orgId: existing ? existingOrg : activeOrg!,
+    orgId: recordOrg,
+    ...(siteId ? { siteId } : {}),
     siteKey: b.siteKey ?? existing?.siteKey ?? "",
     name: b.name.trim(),
     status: normalizeStage(b.status),

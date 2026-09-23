@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { listOrgEnvironments, addOrgEnvironment, deleteOrgEnvironment, updateEnvironment, type EnvironmentKind } from "@/lib/environments";
 import { getActiveOrgId } from "@/lib/active-org";
 import { currentUser } from "@/lib/auth/current";
+import { defaultSiteId, getSiteById } from "@/lib/site/sites";
 
 async function guard() {
   const [user, orgId] = await Promise.all([currentUser(), getActiveOrgId()]);
@@ -17,16 +18,24 @@ export async function GET() {
   return NextResponse.json({ environments: await listOrgEnvironments(g.orgId) });
 }
 
-/** POST { url, label?, kind } → add an environment. */
+/** POST { url, label?, kind, siteId? } → add an environment to a site (default: the customer's first). */
 export async function POST(req: NextRequest) {
   const g = await guard();
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
-  let body: { url?: string; label?: string; kind?: EnvironmentKind };
+  let body: { url?: string; label?: string; kind?: EnvironmentKind; siteId?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
   if (!body.url?.trim()) return NextResponse.json({ error: "A URL is required" }, { status: 400 });
   const kind: EnvironmentKind = body.kind === "development" || body.kind === "production" ? body.kind : "staging";
+  let siteId: string | null = null;
+  if (body.siteId) {
+    const site = await getSiteById(g.orgId, body.siteId);
+    if (!site) return NextResponse.json({ error: "Unknown site." }, { status: 400 });
+    siteId = site.id;
+  } else {
+    siteId = await defaultSiteId(g.orgId);
+  }
   try {
-    const environment = await addOrgEnvironment(g.orgId, { label: body.label, url: body.url, kind });
+    const environment = await addOrgEnvironment(g.orgId, { label: body.label, url: body.url, kind, siteId });
     return NextResponse.json({ environment }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });

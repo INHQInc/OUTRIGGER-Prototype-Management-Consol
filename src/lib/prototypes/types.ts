@@ -265,6 +265,13 @@ export interface PrototypeRecord {
   key: string;
   /** Owning customer. Legacy records may lack it — resolve via prototypes/org.ts. */
   orgId?: string;
+  /**
+   * The site (lib/site/) this prototype belongs to — exactly one. Records made
+   * before sites existed lack it; resolve through `resolvePrototypeSite`, which
+   * moves them into their customer's starting site. ALWAYS read it from the
+   * record, never from the sidebar cookie. NOT `siteKey` below.
+   */
+  siteId?: string;
   /** Legacy: pre-refactor site linkage (kept for old records + cascades). */
   siteKey: string;
   name: string;
