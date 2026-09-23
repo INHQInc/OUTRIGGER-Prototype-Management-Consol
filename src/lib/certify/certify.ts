@@ -36,6 +36,29 @@ export interface CertificationReport {
 const BUDGET_WARN = 150_000;  // bytes
 const BUDGET_FAIL = 400_000;
 
+/**
+ * THE RULES THE BUILD IS JUDGED BY, AS NUMBERS, so the branch can carry them.
+ *
+ * Certification runs at cut time and the agent had only prose about it — it
+ * learned the byte cap by failing. A limit you can read beforehand is a
+ * constraint; one you discover afterwards is a surprise.
+ *
+ * `forbidden` is deliberately in plain words rather than the regex sources.
+ * It is also the sharp edge: `MeasurementPanel` asks the builder to instrument
+ * whenever the measurement plan has gaps, and adding any of these FAILS the
+ * push. Handing both to the agent is how that contradiction gets raised by
+ * someone rather than silently resolved into an undecidable experiment.
+ */
+export const CERTIFICATION_LIMITS = {
+  bytesWarn: BUDGET_WARN,
+  bytesFail: BUDGET_FAIL,
+  forbidden: [
+    "gtag(", "ga('…')", "fbq(", "dataLayer.push(", "_satellite", "adobeDataLayer",
+    "google-analytics.com", "googletagmanager.com", "connect.facebook.net",
+    "hotjar / mouseflow / clarity / qualtrics / segment",
+  ],
+} as const;
+
 /** Trackers/analytics that must never ride along with a variation. */
 const ANALYTICS = [
   /\bgtag\s*\(/, /\bga\s*\(\s*['"]/, /\bfbq\s*\(/, /dataLayer\s*\.\s*push\s*\(/,

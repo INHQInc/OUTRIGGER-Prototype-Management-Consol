@@ -275,5 +275,52 @@ console.log("\n12. the agent's own instructions are written in the customer's wo
     "the fallback is the path taken when seeding already failed — the moment a dropped vocabulary goes unnoticed");
 }
 
+console.log("\n13. the builder is told what else is in play");
+{
+  // Siblings and lineage were both recorded and neither reached the branch, so
+  // the agent built as though nothing else existed: it could duplicate a
+  // sibling arm (the experiment then splits traffic across arms that are not
+  // different) or rebuild what the previous round already ruled out.
+  const { lineageFor, renderLineageMd } = await import("../../src/lib/prototypes/lineage");
+  const { CERTIFICATION_LIMITS } = await import("../../src/lib/certify/certify");
+  const store = await getContentStore();
+
+  const base = (over: Record<string, unknown>) => ({ ...(proto(tgt()) as object), ...over }) as PrototypeRecord;
+  await store.putPrototype(base({ key: "arm-a", name: "Arm A", arm: { groupId: "g1", groupName: "Hero test", addedAt: "x" },
+    brief: { change: "Pin the bar to the top" } }));
+  await store.putPrototype(base({ key: "arm-b", name: "Arm B", arm: { groupId: "g1", groupName: "Hero test", addedAt: "x" } }));
+  await store.putPrototype(base({ key: "round-1", name: "Round one" }));
+
+  const mine = base({ key: "arm-b", name: "Arm B", arm: { groupId: "g1", groupName: "Hero test", addedAt: "x" }, parentKey: "round-1" });
+  const l = await lineageFor(mine);
+  ok("siblings are found", l.arms.length === 1 && l.arms[0].key === "arm-a", JSON.stringify(l.arms));
+  ok("...and never include itself", !l.arms.some((a) => a.key === "arm-b"));
+  ok("...carrying what that arm is building", l.arms[0]?.change === "Pin the bar to the top",
+    "a list of keys does not tell you whether you are about to duplicate one");
+  ok("the prior round is found", l.prior?.key === "round-1");
+  ok("...and says its verdict is unstamped rather than inventing one", l.prior?.verdict === "not stamped");
+
+  const md = renderLineageMd(l);
+  ok("the rendered section names the sibling", md.includes("`arm-a`") && md.includes("Arm A"));
+  ok("...and warns about splitting the run", /splits its traffic/.test(md));
+
+  ok("no lineage renders NOTHING, not an empty heading",
+    renderLineageMd(await lineageFor(base({ key: "solo" }))) === "",
+    "an empty 'other arms' section teaches the agent that a section can be noise");
+
+  // The limits the cut is judged by. The agent used to learn the byte cap by
+  // failing certification.
+  const b = brief(tgt());
+  ok("the size limits are numbers in the brief",
+    b.includes(`${(CERTIFICATION_LIMITS.bytesFail / 1000).toFixed(0)}KB`) && b.includes(`${(CERTIFICATION_LIMITS.bytesWarn / 1000).toFixed(0)}KB`));
+  ok("every forbidden pattern is listed", CERTIFICATION_LIMITS.forbidden.every((f) => b.includes(f)));
+  // The live contradiction is surfaced rather than left for the agent to hit.
+  ok("the instrument-vs-certify conflict is stated", /can conflict/.test(b) && /undecidable/.test(b));
+  const lines = b.split("\n");
+  const i = lines.findIndex((l) => l.includes("can conflict"));
+  ok("...in its own block, not inside the last bullet", i > 0 && lines[i - 1].trim() === "",
+    `previous line: ${JSON.stringify(lines[i - 1])}`);
+}
+
 console.log(failures ? `\n${failures} FAILED\n` : "\nall good\n");
 process.exit(failures ? 1 : 0);

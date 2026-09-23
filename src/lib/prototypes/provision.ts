@@ -23,6 +23,8 @@ import { enabledSkillsForPrototype } from "../skills/skills";
 import { ensureSkillsSeeded } from "../skills/seed";
 import { isTaxonomyUnavailable, resolveVocabulary } from "../brand/profile";
 import { brandBasis, customerContextFor, renderCustomerMd } from "./customer-context";
+import { lineageFor, renderLineageMd, type Lineage } from "./lineage";
+import { CERTIFICATION_LIMITS } from "../certify/certify";
 import { injectionPasses, isBriefComplete, type PrototypeRecord, type PrototypeTarget } from "./types";
 
 const DEFAULT_ARTIFACT = "dist/variation.js";
@@ -139,7 +141,7 @@ type EnvLite = { origin: string; label: string; kind: string; loaderKey: string;
 
 /** Exported for `docs/dev/builder-context-smoke.mts` — the loader-tag warning
  *  is a claim about the customer’s page, so it is asserted by RENDERING it. */
-export function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>, consoleUrl: string, provisionedAt: string): string {
+export function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, EnvLite>, consoleUrl: string, provisionedAt: string, lineage: Lineage = { arms: [] }): string {
   const b = proto.brief;
   // Split deliberately: `injectionPasses` is the PASS test, and its negation
   // lumps "proven absent" together with "nobody looked".
@@ -202,6 +204,26 @@ export function renderBriefMd(proto: PrototypeRecord, envByOrigin: Map<string, E
         ? `\n_No page here has been verified as carrying the loader tag yet — that means nobody has checked, not that it is missing. If \`?opmc\` renders nothing, verify on the Pages tab before suspecting your code._\n`
         : ``,
     `Read \`.opmc/targets/<slug>/skeleton.html\` + \`selectors.md\` to author robust selectors offline; verify on the live review link.`,
+    ``,
+    renderLineageMd(lineage),
+    // THE RULES THE CUT IS JUDGED BY, as numbers. The agent learned the byte
+    // cap by failing certification; a limit you can read beforehand is a
+    // constraint, one you discover afterwards is a surprise.
+    `## What certification will check`,
+    `The cut is judged by \`certifyVariation\` before it can be pushed:\n`,
+    `- **Size** \u2014 warn over ${(CERTIFICATION_LIMITS.bytesWarn / 1000).toFixed(0)}KB, FAIL over ${(CERTIFICATION_LIMITS.bytesFail / 1000).toFixed(0)}KB. Usually embedded images or duplicated CSS.`,
+    `- **Zero added analytics** \u2014 FAILS on: ${CERTIFICATION_LIMITS.forbidden.map((f) => `\`${f}\``).join(", ")}.`,
+    `- **Same-origin assets** \u2014 nothing loaded from a host outside the target origins.`,
+    ``,
+    // Leading newline, same reason as the loader-tag warning: the `` entries in
+    // this array are blank lines and `.filter(Boolean)` eats them, so a
+    // paragraph after a list gets absorbed INTO the last list item.
+    `\n\u26A0 **Those two rules can conflict, and nobody has resolved it yet.** The`,
+    `console asks the builder to instrument when the measurement plan has gaps,`,
+    `and the rule above fails the push for doing exactly that. If you hit it,`,
+    `SAY SO and stop \u2014 do not quietly ship without the event. The safe-looking`,
+    `move leaves the experiment undecidable rather than broken, and nothing`,
+    `downstream notices the difference.`,
     ``,
   ].filter(Boolean).join("\n");
 }
@@ -314,6 +336,13 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
     try { envByOrigin.set(new URL(e.url).origin, { origin: new URL(e.url).origin, label: e.label, kind: e.kind, loaderKey: e.siteKey ?? e.id, url: e.url }); } catch { /* */ }
   }
 
+  // WHAT ELSE IS IN PLAY — sibling arms and the round this was promoted from.
+  // Deliberately NOT in contentHashOf: it is advisory context rather than the
+  // spec the agent builds against, and hashing it would make four surfaces
+  // resolve lineage asynchronously per card. It refreshes on any re-sync that
+  // captures a page, which in practice is all of them.
+  const lineage = await lineageFor(proto).catch(() => ({ arms: [] }) as Lineage);
+
   const provisionedAt = new Date().toISOString();
   const files: { path: string; content: Buffer }[] = [];
   const captures: ProvisionResult["captures"] = [];
@@ -354,7 +383,7 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
   const contentHash = contentHashOf(proto, customer.profileRev);
 
   // Human brief + machine twin.
-  files.push({ path: ".opmc/brief.md", content: Buffer.from(renderBriefMd(proto, envByOrigin, consoleUrl, provisionedAt), "utf8") });
+  files.push({ path: ".opmc/brief.md", content: Buffer.from(renderBriefMd(proto, envByOrigin, consoleUrl, provisionedAt, lineage), "utf8") });
   // The customer, resolved. Everything a visitor will read is written from this.
   files.push({ path: ".opmc/customer.md", content: Buffer.from(renderCustomerMd(customer, provisionedAt), "utf8") });
   const context = {
@@ -382,6 +411,11 @@ export async function provisionBranch(prototypeKey: string, consoleUrl: string, 
         snapshot: `.opmc/targets/${slugForUrl(t.url)}/`,
       };
     }),
+    // Sibling arms + the round before. See `lineage.ts` for why each matters.
+    lineage,
+    // The numbers the cut is judged by, readable before the failure rather than
+    // learned from it.
+    certification: CERTIFICATION_LIMITS,
     // Read-only production source checkouts. Identity + notes only — the local
     // path is machine-specific and lives in the init script, never committed.
     referenceRepos: await listReferenceRepos(orgId).catch(() => []),
