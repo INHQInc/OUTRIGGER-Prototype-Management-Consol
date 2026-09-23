@@ -56,6 +56,28 @@ export interface Taxonomy {
   entityKinds: string[];
 }
 
+/**
+ * Every field a customer must state before anything is written in their name.
+ */
+export const TAXONOMY_FIELDS = [
+  "visitorNoun", "visitorNounPlural", "offeringNoun", "offeringNounPlural",
+  "primaryAction", "conversionSurface", "entityKinds",
+] as const satisfies readonly (keyof Taxonomy)[];
+
+
+/**
+ * Which fields a (possibly partial) taxonomy still lacks. THE definition of
+ * "complete" — `requireTaxonomy` refuses on it and onboarding's Approve is
+ * disabled on it, so the screen and the gate cannot disagree about whether a
+ * customer is described.
+ */
+export function missingTaxonomyFields(t: Partial<Taxonomy> | null | undefined): (typeof TAXONOMY_FIELDS)[number][] {
+  return TAXONOMY_FIELDS.filter((k) => {
+    const v = t?.[k];
+    return Array.isArray(v) ? v.length === 0 : !String(v ?? "").trim();
+  });
+}
+
 /** Vertical-neutral. Never hospitality, never retail — the profile supplies the vertical. */
 export const DEFAULT_TAXONOMY: Taxonomy = {
   visitorNoun: "visitor",

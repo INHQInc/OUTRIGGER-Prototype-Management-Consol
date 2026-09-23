@@ -35,11 +35,11 @@ export function taxonomyRefusal(e: unknown, what: string): Refusal | null {
   // console", sending the one person who could fix it to report it instead.
   const error =
     e.reason === "no-profile"
-      ? `This customer hasn't been characterised yet, so there are no words to write the ${what} in. Run onboarding for the site, or seed the customer default, then try again.`
+      ? `This customer's brand hasn't been described yet, so there are no words to write the ${what} in. Describe it under Configuration → Brand, then try again.`
       : e.reason === "incomplete"
         // Its own message NAMES the missing fields, which is the whole value of
         // the per-field check — paraphrasing it here would throw that away.
-        ? `${e.message} Fill those in, then try again.`
+        ? `${e.message} Fill those in under Configuration → Brand, then try again.`
         : `No organisation was resolved for this request, so there is no vocabulary to write in. That's a bug in the console rather than something you can fix here — please report it.`;
   return { status: 409, body: { error, reason: e.reason } };
 }

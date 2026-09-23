@@ -111,7 +111,8 @@ const freshErr = await (async () => {
   catch (e) { return e instanceof TaxonomyUnavailable ? e : null; }
 })();
 ok("an unread site refuses", freshErr?.reason === "no-profile", String(freshErr?.reason));
-ok("...and says what to do about it", Boolean(freshErr?.message.includes("onboard")), freshErr?.message);
+// The remedy is a SCREEN every customer can use — it used to be a script only one could.
+ok("...and says what to do about it", Boolean(freshErr?.message.includes("Configuration → Brand")), freshErr?.message);
 
 console.log("\n2. resolution merges field by field");
 await store.addSiteProfile(

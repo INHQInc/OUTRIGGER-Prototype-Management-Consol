@@ -7,41 +7,36 @@
  * told to build its answer from. A word baked into a derivation cannot be fixed
  * by editing a prompt, which is why this is a seam and not a find-and-replace.
  *
- * RESOLUTION ORDER, most specific first:
- *   1. the site's own approved profile   — observed and corrected for THIS site
- *   2. the customer's default profile    — siteId "*", for what is genuinely company-wide
- *   3. DEFAULT_TAXONOMY                  — vertical-neutral; visitors, products, convert
+ * TWO TIERS, split by WHO SUPPLIES THE FACT (decided 23 Sep 2026):
+ *   - the CUSTOMER default, siteId "*" — what a person STATES about the brand:
+ *     the vocabulary, how it sounds, who it serves, what it sells. Captured as
+ *     the first step of creating a customer (`/brand`, `lib/brand/onboarding.ts`).
+ *   - a SITE profile — what a read SEES and an interview SETTLES for one site:
+ *     its fonts, palette, button labels. It overrides the customer field by
+ *     field and inherits wherever it is silent. No site profile is written yet;
+ *     every caller today resolves the customer default alone.
  *
- * Voice and design never inherit from the customer, because two sites of one
- * company rarely sound the same. Only the taxonomy does, because products and
- * commercial model usually are company-wide.
+ * There is NO third tier. `DEFAULT_TAXONOMY` is never resolved from and never
+ * served; it survives only to seed a draft a human corrects.
  *
- * This sits in front of every model call, so it must be cheap and it must never
- * throw. A store that is down degrades to the neutral default. Throwing here
- * would take down every AI surface at once.
+ * IT THROWS, DELIBERATELY. An earlier version of this comment said the resolver
+ * must never throw and should degrade to neutral words on a store failure. That
+ * was wrong for customer-facing prose: a Neon blip during a readout would turn
+ * "guests who reach the booking engine" into "visitors who reach the checkout"
+ * with no error and no log, and the customer reads it before we do. Bland and
+ * confidently wrong is worse than absent, because nothing signals it.
  *
- * THAT DEGRADATION IS NOT HARMLESS FOR CUSTOMER-FACING PROSE, which an earlier
- * version of this comment claimed. A Neon blip during a readout would silently
- * turn "guests who reach the booking engine" into "visitors who reach the
- * checkout" — no error, no log, and the customer reads it before we do. Bland
- * and confidently wrong is worse than absent, because nothing signals it.
- *
- * There used to be two resolvers, and the choice between them was the choice
- * between degrading and refusing. As of 22 Sep 2026 there is ONE:
- *
- *   requireTaxonomy() — throws unless EVERY field is recorded. For anything a
- *                       customer will read, which is all of it.
- *
- * The total one was deleted rather than documented, because a resolver that
- * degrades is only ever one careless import away from a customer surface, and
- * "use the strict one" is a rule a file cannot enforce about itself.
- *
- * DEFAULT_TAXONOMY survives for exactly one job: seeding a DRAFT that a human
- * corrects. It is never resolved from and never served.
+ * So there is ONE resolver, `requireTaxonomy()`, and it throws unless every
+ * field is recorded. The total one was deleted rather than documented: a
+ * resolver that degrades is one careless import away from a customer surface,
+ * and "use the strict one" is a rule a file cannot enforce about itself.
  */
 
 import { getContentStore } from "../content/store";
-import { DEFAULT_TAXONOMY, type BrandFact, type SiteProfile, type Taxonomy } from "./types";
+import { DEFAULT_TAXONOMY, TAXONOMY_FIELDS, missingTaxonomyFields, type BrandFact, type SiteProfile, type Taxonomy } from "./types";
+// Re-exported: the definition lives in types.ts because the browser needs it too
+// (the Brand screen enables Approve on it) and this file imports the store.
+export { TAXONOMY_FIELDS, missingTaxonomyFields };
 
 /** The customer-level row. A profile at this siteId holds inherited defaults only. */
 export const ORG_DEFAULT_SITE_ID = "*";
@@ -50,10 +45,7 @@ export const ORG_DEFAULT_SITE_ID = "*";
 
 /** Every field a customer must have described. Derived from Taxonomy so a new
  *  field cannot be added without this check noticing it. */
-const TAXONOMY_FIELDS = [
-  "visitorNoun", "visitorNounPlural", "offeringNoun", "offeringNounPlural",
-  "primaryAction", "conversionSurface", "entityKinds",
-] as const satisfies readonly (keyof Taxonomy)[];
+
 
 /** Thrown when prose a customer will read has no vocabulary to write it in. */
 export class TaxonomyUnavailable extends Error {
@@ -130,7 +122,7 @@ export async function requireTaxonomy(orgId: string, siteId?: string): Promise<T
   if (!site && !orgDefault) {
     throw new TaxonomyUnavailable(
       "no-profile",
-      `No approved brand profile for "${id}"${siteId ? ` or its site "${siteId}"` : ""}. Writing for a customer in generic words would be worse than not writing: onboard the site, or seed the customer default, then retry.`,
+      `No approved brand profile for "${id}"${siteId ? ` or its site "${siteId}"` : ""}. Writing for a customer in generic words would be worse than not writing: describe the brand (Configuration → Brand), then retry.`,
     );
   }
 
@@ -144,10 +136,7 @@ export async function requireTaxonomy(orgId: string, siteId?: string): Promise<T
       : orgDefault?.taxonomy?.entityKinds,
   };
 
-  const missing = TAXONOMY_FIELDS.filter((k) => {
-    const v = resolved[k];
-    return Array.isArray(v) ? v.length === 0 : !String(v ?? "").trim();
-  });
+  const missing = missingTaxonomyFields(resolved);
   if (missing.length) {
     throw new TaxonomyUnavailable(
       "incomplete",

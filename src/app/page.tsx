@@ -19,6 +19,7 @@ import { SetupChecklist, type SetupStep } from "@/components/SetupChecklist";
 import { NewPrototype } from "@/components/NewPrototype";
 import { PROTOTYPE_STAGES, STAGE_LABEL, STAGE_TONE, normalizeStage, type PrototypeStage } from "@/lib/prototypes/types";
 import type { Promotion } from "@/lib/promotions/types";
+import { brandStatus } from "@/lib/brand/onboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,9 @@ export default async function Dashboard() {
   }
 
   const store = await getContentStore();
-  const [org, environments, gitStatus, expCfg, orgRepos, events] = await Promise.all([
+  const [org, brand, environments, gitStatus, expCfg, orgRepos, events] = await Promise.all([
     getOrg(orgId),
+    brandStatus(orgId),
     listOrgEnvironments(orgId),
     getGitConnectionStatus(orgId),
     getExperimentationConfig(orgId),
@@ -58,6 +60,13 @@ export default async function Dashboard() {
 
   // ── Setup checklist (sequenced; owns the top of the page until complete) ──
   const steps: SetupStep[] = [
+    // STEP ONE, and the one that decides whether "setup complete" is true.
+    // Without it this list could go fully green on a customer provisioning
+    // then refused to build for, because the brand profile is checked before
+    // any git call and nothing here asked for one. Done means the build gate
+    // would pass — the same definition, not a looser one.
+    { label: "Describe the brand", done: brand.ready, href: "/brand", action: brand.approved ? "Finish" : "Describe",
+      hint: brand.ready ? undefined : "The words every prototype, readout and email is written in. Nothing can be built until they are here." },
     { label: "Add the customer's environment(s)", done: environments.length > 0, href: "/environments", action: "Add environment" },
     { label: "Connect GitHub", done: Boolean(gitStatus.connected || gitStatus.envFallback), href: "/settings/repositories", action: "Connect" },
     { label: "Register the prototype repo", done: orgRepos.some((r) => r.roles.includes("prototypes")), href: "/settings/repositories", action: "Register" },

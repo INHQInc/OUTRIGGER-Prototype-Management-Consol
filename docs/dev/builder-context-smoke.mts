@@ -148,7 +148,8 @@ console.log("\n6. an undescribed customer cannot be provisioned at all");
   ok("it refuses BEFORE the branch is touched",
     SRC.indexOf("customerContextFor(orgId)") < SRC.indexOf("client.getBranchSha("),
     "failing after createBranch leaves a half-provisioned branch behind");
-  ok("the refusal names the fix", /seed-taxonomy|brand profile/.test(SRC.slice(SRC.indexOf("customerContextFor(orgId)"), SRC.indexOf("customerContextFor(orgId)") + 700)));
+  ok("the refusal names the fix", /Configuration → Brand/.test(SRC.slice(SRC.indexOf("customerContextFor(orgId)"), SRC.indexOf("customerContextFor(orgId)") + 1400)),
+    "the Brand screen, which every customer can use — not the seed script, which only one could");
 }
 
 console.log("\n7. a described customer gets its own words, never the neutral defaults");
@@ -197,15 +198,17 @@ console.log("\n8. an uncharacterized section still carries an instruction");
 
 console.log("\n9. a remedy that does not work is worse than no remedy");
 {
-  // The first version of this refusal named two fixes and both were wrong: a
-  // console screen that does not exist, and `--dry`, which is the flag that
-  // writes NOTHING. A user follows it, sees exit 0, re-syncs, and gets the
-  // identical error with nothing explaining why.
-  const msg = SRC.slice(SRC.indexOf("This customer has no usable brand profile"), SRC.indexOf("This customer has no usable brand profile") + 600);
-  ok("does not send the user to a dry run", !msg.includes("--dry"));
-  ok("names the actual org, not a placeholder", msg.includes("${orgId}") && !msg.includes("<org>"),
-    "a guessed org id is how a row keyed `outrigger` instead of `outrigger-resorts-hotels` cost a day");
-  ok("is honest that no screen exists yet", /no onboarding screen/.test(msg));
+  // This refusal has named three remedies. The first two were wrong: a console
+  // screen that did not exist, and `--dry`, the flag that writes NOTHING — so a
+  // user followed it, saw it succeed, retried, and got the identical error. The
+  // third was a CLI seed script whose allowlist held one customer. Since 23 Sep
+  // there is a screen every customer can use, and the refusal names it.
+  const at = SRC.indexOf("This customer's brand hasn't been described yet");
+  const msg = at >= 0 ? SRC.slice(at, at + 400) : "";
+  ok("the refusal exists", at >= 0);
+  ok("it names the screen that fixes it", msg.includes("Configuration → Brand"));
+  ok("...and says what to do after", /approve it, then re-sync/.test(msg));
+  ok("it no longer sends anyone to a script", !msg.includes("seed-taxonomy") && !msg.includes("--dry"));
 }
 
 console.log("\n10. the loader-tag warning is not swallowed by the table above it");

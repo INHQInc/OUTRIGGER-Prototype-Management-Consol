@@ -170,6 +170,9 @@ export function Sidebar({ user, orgs, activeOrgId, canCreate, build }: { user: S
         {renderLink({ href: "/reports", label: "Reports", icon: ICON.reports })}
 
         {sectionHeader("Configuration")}
+        {/* FIRST, because it is step one of a customer: nothing is built or
+            written in their name until their words are here. */}
+        {renderLink({ href: "/brand", label: "Brand", icon: ICON.brand })}
         {renderLink({ href: "/environments", label: "Environments", icon: ICON.pages })}
         {renderLink({ href: "/skills", label: "Skills", icon: ICON.flask })}
 

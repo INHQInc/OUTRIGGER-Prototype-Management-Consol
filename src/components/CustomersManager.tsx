@@ -38,7 +38,11 @@ export function CustomersManager({ initialCustomers, activeOrgId, canManage }: {
       if (!res.ok) { setError(data.error ?? "Could not create customer"); return; }
       setRows((r) => [...r, { id: data.org.id, name: data.org.name, createdAt: data.org.createdAt, prototypeCount: 0, envCount: 0 }]);
       setNewName(""); setCreating(false);
-      router.refresh();
+      // Step one of a customer is its brand. This used to stay on the list
+      // without even switching to the new customer, so its first screen was
+      // somebody else's dashboard.
+      setActiveOrgCookie(data.org.id);
+      router.push("/brand"); router.refresh();
     } finally { setBusy(false); }
   }
 

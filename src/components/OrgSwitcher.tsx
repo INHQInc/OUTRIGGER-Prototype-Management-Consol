@@ -36,7 +36,8 @@ export function OrgSwitcher({ orgs, activeOrgId, canCreate }: { orgs: OrgOption[
       if (!res.ok) { setError(data.error ?? "Could not create org"); return; }
       setActiveOrgCookie(data.org.id);
       setName(""); setCreating(false); setOpen(false);
-      router.push("/"); router.refresh();
+      // Step one of a customer is its brand — creation lands there.
+      router.push("/brand"); router.refresh();
     } finally {
       setBusy(false);
     }
