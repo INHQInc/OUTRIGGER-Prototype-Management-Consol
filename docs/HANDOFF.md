@@ -61,8 +61,12 @@ by `docs/dev/brand-onboarding-smoke.mts`. What comes next is the site.
 - **⚠ Revised the same day: NO brand layer.** Bryan: "brand is generi wrapper",
   "exp are per site". Everything lives on the site: its words, voice, look and
   experiments. The customer is a container (users, connectors). The brief sets
-  what one experiment is about (offering, its words, its action, where it
-  finishes → metric → readout). Nothing inherits; adding a site may copy another
+  the experiment's GOAL — what we want people to do, not always a sale
+  ("Not all exp are for sellin git might be email it might be downloads") — plus
+  what it is about, the words to use, and what we'll count → readout. Where the
+  goal is completed is worked out by the reader and never asked ("Where it finishes this literally does not make sense to human users");
+  it surfaces only as a plain note on the metric when we can't count it. The site's main offering/action/finish are reader notes that suggest
+  each brief's goal; onboarding does not ask them. Nothing inherits; adding a site may copy another
   site's answers once. And: "onboardin is one flow for a site not a brand, adding a brand is a name continer for us to organize our customers". So **`/brand` (Configuration → Brand, on
   staging since 23 Sep as "step one of every customer") becomes the selected
   site's page**, and creating a customer asks only for its name. The original
@@ -135,9 +139,46 @@ This reverses the old "three nouns only" rule; AGENTS.md now says so.
   one knowledge section per broad type) driving a Claude loop with Firecrawl as
   its tools, and a code check that decides what may be pre-filled.
 
+### Decided 23 Sep after the all-states mockup (Bryan) — build to this
+
+Mockup: https://claude.ai/artifact/XppRLQaVkFjMpj7M8z6mNY (17 boards: every step and its states).
+
+- **Site details = Site name, Site URL, Site source, Design files.** Site source is
+  a repository (read only) or a local folder (read by the build agent on the
+  operator's machine — the console in a browser cannot open it). Design files are
+  Figma/style-guide links and attached files (PDF brand guide), the same editors
+  as the brief's Supporting material. Both optional at setup.
+- **The site's code is REQUIRED TO BUILD** (Bryan: "we gate the ability to build a
+  prototype withour source coode acess"). Setup may skip it, with a warning. A
+  prototype's step 2 (Branch & agent) is blocked until its site has a source, in
+  the same warning box InitScript already uses for "no repo yet"; writing the brief
+  stays open. A local folder counts once the agent checks in and confirms it can
+  read it. Today the source is per customer (`listReferenceRepos(orgId)`) and
+  optional (InitScript's "Website source checkout (optional)", saved in the
+  browser); it moves to the site and becomes required.
+- **Brand identity step** (was "The look"): brand voice + colors + fonts + buttons.
+  Precedence: the site's code > design files > the scan. With the code connected,
+  the scan's questions answer themselves (Outrigger's code: Arial/Roboto only in a
+  date picker and a Wi-Fi form; headings use both Duplicate Ionic and Montserrat,
+  so that one stays a question).
+- **Review** = what you call your customers, words to avoid, don't change, plus a
+  read-only site summary.
+- **Plain product labels only** (Bryan: "LLM slop speak"): Site details, Industry,
+  Scan, Review, Brand identity, Approve; tags "From your site", "From your code",
+  "Please review", "Optional".
+- **A test's goal is its hypothesis's outcome** — no separate Goal field (it would
+  repeat the hypothesis). The brief gains **Key terms** (read from the goal's own
+  pages) and a plain note on the metric when the goal completes where we can't
+  count it ("Appointments are booked on Asana Spa's website, so we can only count
+  clicks").
+
 ### Next, in order
 
-1. Bryan reacts to the mockup and the site-reader plan.
+1. **Building (Bryan, 23 Sep: "lets start building then and the backend")** — in
+   slices, on `phase1/taxonomy-injection` → `staging`: (1) the Site entity and its
+   store, (2) the sidebar selector and site-scoped pages, (3) the site setup flow
+   with manual answers, (4) the reader (scan) backend, (5) the build gate and the
+   brief's Key terms.
    Known gaps the mockup doesn't draw yet: a catalogue instead of one product
    word; two actions or audiences; a read that finds little (login walls, apps).
 2. Write the Site build plan from the rules above and his reactions; present it

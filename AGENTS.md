@@ -34,7 +34,10 @@ SITE IS COMING BACK — decided by Bryan 23 Sep 2026, NOT BUILT YET:
   picked from a sidebar selector with NO "All sites". EVERYTHING LIVES ON
   THE SITE (Bryan, 23 Sep: "brand is generi wrapper"): vocabulary, voice,
   look, experiments. The customer is a container (users, connectors), with no
-  vocabulary of its own and NO inheritance; the brief overrides per experiment.
+  vocabulary of its own and NO inheritance. The site holds who it serves,
+  voice, look, never-rules; each brief holds its GOAL (not always a sale —
+  email, downloads…), its words, what we'll count, readout. Screens say it
+  in human words — never "where it finishes", "offering", "conversion".
   Onboarding is one flow, per SITE; adding a customer is just a name.
   New names only (siteId / site_id / org_site /
   lib/site/) — the legacy siteKey is load-bearing. The Site eliminated 07-21

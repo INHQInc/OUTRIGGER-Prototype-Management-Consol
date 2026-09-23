@@ -45,18 +45,33 @@ No brand layer: the customer is a named container. Two levels:
 
 | Site (onboarding asks, pre-filled when proven) | Brief (per experiment) |
 |---|---|
-| broad type · who it serves · main offering · main action · where that finishes · voice · look · words never used · what must never change | what this test is trying to sell (defaults to the site's main offering) · that offering's words · its action and where it finishes · the primary metric · the readout |
+| broad type · who it serves · voice · look · words never used · what must never change | the GOAL: what we want people to do (not always a sale — Bryan: "Not all exp are for sellin git might be email it might be downloads") · what it is about (optional) · the words to use · what we'll count (the metric) · the readout |
 
-The reader also NOTES, without asking: the sub-type, the kinds of page the site
-is built from, the audience and business summaries, the site's sections. They go
+Goals across the sites read so far: book a spa appointment (finishes on
+asanaspakona.com, another site), sign up (Linear), shop (Patagonia), sign a
+petition (Patagonia Action Works), contact sales (Linear, finished by a
+salesperson). Language on screen stays neutral and human: "goal", "what people do", "what
+we'll count" — never "sell", "offering", "conversion" or "where it finishes"
+(Bryan: "Where it finishes this literally does not make sense to human users"). The reader works out where a goal is completed; a person
+sees it only as a plain note on the metric when we can't count the real thing
+(the spa appointment is made on asanaspakona.com, so the test counts clicks on
+Book your appointment).
+
+The reader also NOTES, without asking: what the site is mostly about and its most
+common action and where that finishes (used to SUGGEST each brief's goal), the
+sub-type, the kinds of page the site is built from, the audience and business
+summaries, the site's sections. They go
 to the builder as background; nobody confirms them. The brief reads its own
 target and offering pages when it is written, so a spa test on a rooms page gets
 spa words from the spa page and onboarding never needs to know the spa exists.
 
-**The build gate changes with this:** it requires the site's four words (who it
-serves, main offering, main action, where it finishes); `entityKinds` becomes a
-note, and the brief may override the offering, action and finish for its own
-experiment. The resolver is site → brief; no `"*"` default.
+**The build gate changes with this:** it requires the site's "who it serves"
+and the BRIEF's goal and its words; where the goal completes comes from the
+reader, not from a person. `offeringNoun`,
+`primaryAction` and `conversionSurface` move from the profile to the brief;
+`entityKinds` becomes a note. Existing prototypes have no goal yet: backfill each
+from its site's notes (for Outrigger: hotel, book, booking engine) so nothing
+already built fails the gate. No `"*"` default.
 
 ## The skill: `opmc-site-reader`
 

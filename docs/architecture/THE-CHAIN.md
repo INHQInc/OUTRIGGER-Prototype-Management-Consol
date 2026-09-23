@@ -238,11 +238,17 @@ experiment, picked from a sidebar selector with no "All sites".
 if we dont really care too much about brand and everything really pivotes around
 each site", then "exp are per site / brand is generi wrapper". So beta-2 was
 right that the brand is a container. The customer holds users and connectors
-only. The SITE holds its words (who it serves, main offering, main action, where
-that finishes), voice, look and never-rules. The BRIEF holds what one experiment
-is trying to sell, that offering's words and action, where it finishes, and so
-its metric and readout: a spa test on a rooms page names "spa" there. Nothing
-inherits. Onboarding is ONE flow, for a site: "onboardin is one flow for a site not a brand, adding a brand is a name continer for us to organize our customers". Adding a site may COPY another site's answers once ("start from
+only. The SITE holds who it serves, its voice, its look and its never-rules. The
+BRIEF holds the experiment's GOAL — what we want people to do, which is not
+always a sale ("Not all exp are for sellin git might be email it might be downloads"): book a spa appointment, sign up for emails, download
+a guide, sign a petition — plus what it is about, the words to use, and what
+we'll count (the metric), and so the readout. Where the goal is actually
+completed is worked out by the reader and NEVER asked ("Where it finishes this literally does not make sense to human users"); a person sees
+it only as a plain note on the metric when it happens somewhere we can't count
+("the appointment is made on Asana Spa's own website, so we'll count clicks on
+Book your appointment"). The site's main offering, main action and
+where that finishes are READER NOTES used to suggest each brief's goal, never
+asked at the site. Nothing inherits. Onboarding is ONE flow, for a site: "onboardin is one flow for a site not a brand, adding a brand is a name continer for us to organize our customers". Adding a site may COPY another site's answers once ("start from
 outrigger.com's answers"), and an edit may be applied to other sites once;
 neither is a live link.
 
