@@ -372,5 +372,20 @@ console.log("\n15. changing what a skill SAYS is a change");
   ok("no manifest at all still compares the ids", skillsChangedFrom(null, ids, ["a:1", "b:1"]));
 }
 
+console.log("\n16. the agent is TOLD to read the customer file, not just given it");
+{
+  // `.opmc/customer.md` shipped, and `brief.md` pointed at it, while the skill
+  // the agent AUTO-LOADS listed the files to read and never named it. A file
+  // the agent is not told to open is the same as no file — this repo's own
+  // words, in the comment above the attachments block.
+  const { PROTOTYPE_SKILL } = await import("../../src/lib/skills/builtins");
+  ok("the orientation list names customer.md", PROTOTYPE_SKILL.includes(".opmc/customer.md"),
+    "delivering a file the read protocol omits is delivering nothing");
+  const i = PROTOTYPE_SKILL.indexOf(".opmc/customer.md");
+  const j = PROTOTYPE_SKILL.indexOf(".opmc/attachments/");
+  ok("...in the orientation section, beside the other inputs", i > 0 && j > 0 && Math.abs(i - j) < 1200);
+  ok("...and says WHEN to read it", /before you write/i.test(PROTOTYPE_SKILL.slice(i, i + 400)));
+}
+
 console.log(failures ? `\n${failures} FAILED\n` : "\nall good\n");
 process.exit(failures ? 1 : 0);
