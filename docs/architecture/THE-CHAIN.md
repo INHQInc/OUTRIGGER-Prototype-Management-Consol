@@ -216,7 +216,12 @@ and approved as a new revision on finish. `requireTaxonomy` completeness is the
 real readiness signal — not an invented percentage. The setup checklist gains
 "Describe the brand" as its first step; done means provisioning would succeed.
 
-**Site tier — later, and this is where beta-2's interview lives.**
+**Site tier — later, and this is where beta-2's interview lives.** The read is
+now TESTED, not assumed: `docs/investigations/FIRECRAWL-SITE-READ-2026-09.md`.
+Firecrawl's agent found "condos" for the condo site on its own and proved 10 of
+12 vocabulary answers with its own quotes, against 4 of 12 for a single-page
+extraction — which also presented the generic "visitor" as the customer's word.
+The rule that came out of it: pre-fill only what an answer's own quote proves.
 Read (real: `deriveDesignTokens` feeding an `ObservedFacts` writer) → Ask
 (questions generated from what the read could see but not decide, recorded in
 `ObservedFacts.unsettled`) → Correct (approve / edit / hand back with a note,
