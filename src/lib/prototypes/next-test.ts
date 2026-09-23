@@ -44,7 +44,7 @@ import type { MetricView } from "./readout-model";
 
 /** The effect the NEXT test is planned to resolve. 20% is the smallest move
  *  worth a fortnight of traffic on a page-level change; smaller effects need
- *  more traffic than a hospitality site produces in a sane window. */
+ *  more traffic than most sites produce in a sane window. */
 export const TARGET_REL = 0.2;
 /** Beyond this, a test is a quarter-long commitment and should be an explicit
  *  decision rather than a default. */

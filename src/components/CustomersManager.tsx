@@ -76,7 +76,7 @@ export function CustomersManager({ initialCustomers, activeOrgId, canManage }: {
             <div className="flex items-end gap-2 w-full rounded-xl border border-border bg-surface p-3">
               <div className="flex-1">
                 <label className="block text-[14px] text-muted mb-1.5">Customer / brand name</label>
-                <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} autoFocus placeholder="e.g. Outrigger Hotels & Resorts" className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] focus:border-accent focus:outline-none" />
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} autoFocus placeholder="e.g. Acme Retail Group" className="w-full rounded-lg bg-background border border-border px-3 py-2 text-[15px] focus:border-accent focus:outline-none" />
               </div>
               <button onClick={() => { setCreating(false); setError(null); }} className="h-9 px-3 rounded-lg text-[15px] text-muted hover:text-foreground">Cancel</button>
               <button onClick={create} disabled={busy || !newName.trim()} className="h-9 px-4 rounded-lg bg-accent text-accent-fg text-[15px] font-semibold hover:bg-accent-hover disabled:opacity-40">Create</button>

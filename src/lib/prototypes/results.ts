@@ -14,6 +14,7 @@
  * and the analyst never see a partial shape.
  */
 import { getContentStore } from "../content/store";
+import type { Taxonomy } from "../brand/types";
 
 export interface VariationResult {
   variationId: string;
@@ -330,7 +331,7 @@ export function isCompositeOf(c: CompositeMetric): boolean {
 /** What a composite is made of, in one sentence — the ONE description, so the
  *  index, the readout and the per-metric rows can never disagree about what a
  *  number is actually counting. */
-export function describeComposite(c: CompositeMetric, armName?: (variationId: string) => string): string {
+export function describeComposite(c: CompositeMetric, t: Taxonomy, armName?: (variationId: string) => string): string {
   const per = c.armEvents?.length
     ? c.armEvents.map((a) => `${armName?.(a.variationId) ?? a.variationId}: ${a.events.join(" + ")}`).join("  ·  ")
     : "";
@@ -345,7 +346,12 @@ export function describeComposite(c: CompositeMetric, armName?: (variationId: st
     : shared
       ? `Composite metric — sums ${ev.length} Optimizely event${ev.length === 1 ? "" : "s"}: ${shared}`
       : "Composite metric";
-  return `${head}. Counted as ACTION totals per visitor, so one guest acting on more than one of these counts each time.${c.definition ? ` ${c.definition}` : ""}`;
+  // THE CUSTOMER'S OWN NOUN, and the `visitor` it replaces was not neutral
+  // ground — it was one hardcoded word standing in for another. This sentence
+  // is shown in the console, in the readout and in the weekly email, so three
+  // surfaces were telling a customer what their own numbers count in words
+  // they never chose.
+  return `${head}. Counted as ACTION totals per ${t.visitorNoun}, so one ${t.visitorNoun} acting on more than one of these counts each time.${c.definition ? ` ${c.definition}` : ""}`;
 }
 
 /** THE TOP LINE — the supporting metrics the team chose to SHOW, in their own
@@ -566,7 +572,7 @@ export async function mutateMetricMap(
 }
 
 /** Compute a composite's per-variation row by SUMMING its member events.
- *  Semantics are ACTION TOTALS, not unique visitors: a guest clicking both
+ *  Semantics are ACTION TOTALS, not unique people: one person clicking both
  *  CTAs counts twice, so the derived "rate" (summed conversions / visitors)
  *  is actions-per-visitor and CAN exceed 100% — displayed with that caveat,
  *  never clamped. Lift derives from those rates; significance is per-event

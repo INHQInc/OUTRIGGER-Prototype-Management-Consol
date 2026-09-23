@@ -67,20 +67,52 @@ const HOSPITALITY = /\b(guests?|hotels?|resorts?|hospitality|lodging|accommodati
 /**
  * THE BUDGET — how many hardcoded references each file is still allowed.
  *
+ * IT IS EMPTY, AND THAT IS THE GOAL STATE (22 Sep 2026, from 48). Leave it
+ * empty: a file with a hit and no budget fails as "no budget", which is a
+ * louder failure than passing under an allowance. Do not add an entry to make
+ * a new hit pass — resolve the word from the customer's profile instead, or
+ * reword a COMMENT, which nothing reads at runtime.
+ *
  * Every number here is a debt, not a target. Lower them as the prompts move to
  * `taxonomyPrompt()`; never raise one. A file at zero should be deleted from
  * this list so that re-introducing a word fails as "not allowed any".
  */
 const BUDGET: Record<string, number> = {
-  "lib/ai/next-test.ts": 2,
-  "lib/prototypes/results.ts": 2,
-  "lib/prototypes/stats.ts": 2,
-  "lib/prototypes/verdict.ts": 1,
-  "lib/prototypes/next-test.ts": 1,
 };
 
 /** Where prose that reaches a customer is generated or derived. */
-const SCANNED = ["lib/ai", "lib/skills", "lib/prototypes", "lib/email"];
+/**
+ * EVERYTHING, not four directories. The scan covered `lib/ai`, `lib/skills`,
+ * `lib/prototypes` and `lib/email`, so a customer's noun in a React component
+ * was invisible to it \u2014 and five of them were there, in placeholders and
+ * helper text a customer reads directly.
+ */
+const SCANNED = ["lib", "components", "app"];
+
+/**
+ * COUNT THE PROSE, NOT THE COMMENTARY.
+ *
+ * The count used to be per line, so a comment EXPLAINING a removed word counted
+ * as the word. That is not pedantry: it forced three separate rewordings today
+ * of comments whose whole job was to record why "guests" had to go, and the
+ * brand module's own documentation \u2014 "a hotel's profile says guests; a clinic's
+ * says patients" \u2014 is the clearest statement of the rule anywhere in the repo.
+ * A rule that deletes its own rationale is a rule nobody can maintain.
+ *
+ * What ships to a customer or a model is in strings. What a maintainer reads is
+ * in comments. Only the first is a leak.
+ */
+function codeOnly(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .split("\n")
+    .filter((l) => !/^\s*\/\//.test(l))
+    // Trailing comments too — the tracker blocklist annotates its entries
+    // inline. Requiring whitespace before `//` and no quote after it leaves a
+    // URL inside a string alone, which is the only thing that looks similar.
+    .map((l) => l.replace(/\s+\/\/[^"'`]*$/, ""))
+    .join("\n");
+}
 
 async function walk(dir: string): Promise<string[]> {
   const out: string[] = [];
@@ -97,12 +129,17 @@ for (const d of SCANNED) files.push(...(await walk(join(SRC, d)).catch(() => [])
 
 const counts = new Map<string, number>();
 for (const f of files) {
-  const text = await readFile(f, "utf8");
+  const text = codeOnly(await readFile(f, "utf8"));
   const n = (text.match(HOSPITALITY) ?? []).length;
   if (n > 0) counts.set(relative(SRC, f), n);
 }
 
 console.log("\n1. no file exceeds its budget of hardcoded vocabulary");
+// THE SCAN ITSELF HAS TO HAVE HAPPENED. With every budget gone the two loops
+// below iterate over nothing, so a broken walk would print an empty section
+// and exit 0 — the shape of a passing suite that checks nothing.
+ok(`${files.length} files scanned`, files.length > 200, "the walk found almost nothing \u2014 the scan is broken, not the code");
+if (counts.size === 0) console.log("  ok   the whole tree is clean \u2014 no budgets left");
 for (const [file, n] of [...counts].sort()) {
   const allowed = BUDGET[file];
   if (allowed === undefined) {
@@ -114,6 +151,7 @@ for (const [file, n] of [...counts].sort()) {
 }
 
 console.log("\n2. every budget is still needed, and none is padded");
+if (!Object.keys(BUDGET).length) console.log("  ok   there are no budgets \u2014 a re-introduction now fails as \"no budget\"");
 for (const [file, allowed] of Object.entries(BUDGET)) {
   const n = counts.get(file) ?? 0;
   if (n === 0) {
@@ -266,10 +304,16 @@ console.log("\n7. a templated skill body must actually BE resolved");
   const raw: string[] = [];
   for (const f of files) {
     const rel = relative(SRC, f);
-    // `skills.ts` is where the resolving reader lives. `seed.ts` reads a body
-    // to store it, and storing it UNRESOLVED is the design — one row serves
-    // every customer, and the substitution happens at delivery.
+    // THE RULE IS "not to a MODEL", so three readers are legitimate and named
+    // rather than pattern-matched: `skills.ts` is where the resolving reader
+    // lives; `seed.ts` reads a body to STORE it, and storing it unresolved is
+    // the design (one row serves every customer); the skills route reads the
+    // frontmatter to keep the stored description in step. A component that
+    // renders a body in a `<pre>` is showing a human a template, which is what
+    // it is — so `components/` is out of scope for this check, not for the
+    // count above.
     if (rel === "lib/skills/skills.ts" || rel === "lib/skills/seed.ts") continue;
+    if (rel === "app/api/skills/route.ts" || rel.startsWith("components/")) continue;
     const text = await readFile(f, "utf8");
     text.split("\n").forEach((line, i) => {
       if (!/\bparseFrontmatter\(|\bsk\.body\b|\bskill\.body\b/.test(line)) return;
@@ -295,12 +339,12 @@ console.log("\n7. a templated skill body must actually BE resolved");
   // forms inside backticks, and an unbalanced backtick in a comment pairs up
   // with a real template literal and drags the comment in as "prose" — which
   // is how this guard first failed on its own documentation.
-  const onlyTemplates = (src: string) => {
-    const code = src
-      .replace(/\/\*[\s\S]*?\*\//g, " ")
-      .split("\n").filter((l) => !/^\s*\/\//.test(l)).join("\n");
-    return (code.match(/`(?:\\.|[^`\\])*`/gs) ?? []).join("\n").replace(NEWLINES, " ");
-  };
+  const onlyTemplates = (src: string) =>
+    // `codeOnly` first, for the same reason it exists above: a JSDoc
+    // explaining this rule quotes the broken forms inside backticks, and an
+    // unbalanced backtick in a comment pairs with a real template literal and
+    // drags the comment in as "prose".
+    (codeOnly(src).match(/`(?:\\.|[^`\\])*`/gs) ?? []).join("\n").replace(NEWLINES, " ");
   const PROMPTS: [string, string][] = [
     ["lib/skills/builtins.ts", onlyTemplates(builtins)],
     ["lib/ai/results.ts", onlyTemplates(await readFile(join(SRC, "lib/ai/results.ts"), "utf8"))],

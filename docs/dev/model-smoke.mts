@@ -33,6 +33,11 @@ const stats = {
 };
 
 const model = buildReadoutModel({
+  // The suites are not a customer, so they carry an obviously invented one —
+  // a hospitality noun here would be the hardcoding these very suites police.
+  taxonomy: { visitorNoun: "rider", visitorNounPlural: "riders", offeringNoun: "route",
+    offeringNounPlural: "routes", primaryAction: "book a ride", conversionSurface: "ride sheet",
+    entityKinds: ["trail", "clinic"] },
   prototypeName: "Home Page Hero No Offer",
   prototypeKey: "home-page-hero-no-offer",
   results: { fetchedAt: stats.computedAt, startTime: "2026-07-31T00:00:00Z", totalVisitors: N * 2,

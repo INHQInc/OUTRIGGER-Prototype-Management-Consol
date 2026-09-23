@@ -62,7 +62,8 @@ export interface Discovery {
 /** THE WHOLE CLAIM, in one sentence, from the four parts the brief stores.
  *  The rationale used to be dropped here, so every surface that printed "the
  *  hypothesis" was printing three quarters of it — and the "because" is the
- *  part that says what the team actually believed about guests. */
+ *  part that says what the team actually believed about the people on the
+ *  page. */
 export function composeHypothesis(h: { change?: string; audience?: string; outcome?: string; rationale?: string }): string {
   const base = `We believe ${h.change || "…"} for ${h.audience || "…"} will cause ${h.outcome || "…"}`;
   const why = h.rationale?.trim();

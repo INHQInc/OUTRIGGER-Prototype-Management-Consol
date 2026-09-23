@@ -13,6 +13,7 @@
  */
 import type { ExperimentResults, MetricMap, CompositeMetric, MetricResult } from "./results";
 import { compositeMembers, resolveMetricRow, armEventsFor, allCompositeEvents } from "./results";
+import type { Taxonomy } from "../brand/types";
 
 // ── numeric primitives ─────────────────────────────────────────────────────
 
@@ -544,6 +545,9 @@ function noveltyCheck(history: DailySnapshot[], memberNamesByArm: Map<string, Se
 export function computeStatsReport(opts: {
   results: ExperimentResults;
   map: MetricMap | null;
+  /** The customer's words. REQUIRED: a validity flag is read by the customer
+   *  and quoted by the analyst, so it is prose, not an internal label. */
+  taxonomy: Taxonomy;
   /** The variation this prototype's code runs in (adjudication focus). */
   focusVariationId?: string;
   /** Allocation weights by variationId (Optimizely weight units) for SRM. */
@@ -616,7 +620,7 @@ export function computeStatsReport(opts: {
   if (composites.length) {
     flags.push({
       code: "ACTION_OVERDISPERSION",
-      text: "Composite p-values treat repeat actions as independent; per-guest clustering makes them slightly optimistic. Read them as strong evidence, not exact probabilities.",
+      text: `Composite p-values treat repeat actions as independent; clustering by ${opts.taxonomy.visitorNoun} makes them slightly optimistic. Read them as strong evidence, not exact probabilities.`,
     });
   }
 
@@ -638,7 +642,7 @@ export function computeStatsReport(opts: {
   // A CTA that exists only in the variation reports ZERO on control forever —
   // "lift vs baseline" against a structural zero is meaningless (and explodes
   // to +20,000% via the zero-cell correction), and calling it a "discovery"
-  // is dishonest: nobody discovered that guests click a button the control
+  // is dishonest: nobody discovered that people click a button the control
   // doesn't have. Such metrics become ADOPTION views: rates stay, comparative
   // inference is stripped, discovery eligibility revoked. (Inside composites
   // they remain legitimate members — total intent across arms is the point.)

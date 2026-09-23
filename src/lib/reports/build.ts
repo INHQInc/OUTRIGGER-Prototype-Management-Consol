@@ -19,6 +19,7 @@ import { getContentStore } from "../content/store";
 import { resolvePrototypeOrg } from "../prototypes/org";
 import type { Report } from "./types";
 import type { PrototypeRecord } from "../prototypes/types";
+import { requireTaxonomy } from "../brand/profile";
 
 /** The experiments a report covers, right now. `all-live` is resolved at send
  *  time on purpose — a report that keeps up with the programme is the point. */
@@ -53,10 +54,16 @@ export async function buildFor(orgId: string, proto: PrototypeRecord) {
       results = null; // buildReadoutModel falls back to the frozen snapshot
     }
 
+    // THE CUSTOMER'S WORDS, and this surface is the one that most needs them:
+    // the weekly email is read by the customer with nobody in the loop. It
+    // throws when the customer is undescribed, and the caller already skips a
+    // report it cannot build — one customer gets no email rather than an email
+    // describing their numbers in words they never chose.
+    const taxonomy = await requireTaxonomy(orgId);
     const stored = await getMetricMap(proto.key);
     const { map: resolved, source: decisionSource } = resolveDecisionMap(stored, results);
     const stats = results
-      ? computeStatsReport({ results, map: resolved, focusVariationId: proto.experiment?.variationId, experimentStart: results.startTime })
+      ? computeStatsReport({ results, map: resolved, taxonomy, focusVariationId: proto.experiment?.variationId, experimentStart: results.startTime })
       : null;
     const [verdict, reading] = await Promise.all([getVerdict(proto.key), getReading(proto.key)]);
 
@@ -73,6 +80,7 @@ export async function buildFor(orgId: string, proto: PrototypeRecord) {
     const model = buildReadoutModel({
       prototypeName: proto.name,
       prototypeKey: proto.key,
+      taxonomy,
       results, stats, verdict, reading,
       plan: stored,
       decision: decisionComposite

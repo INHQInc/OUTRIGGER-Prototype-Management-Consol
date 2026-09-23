@@ -862,7 +862,7 @@ export function EvidencePanel({ prototypeKey, bound }: { prototypeKey: string; b
           <div className="w-full max-w-lg rounded-xl border border-border bg-surface shadow-xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <div className="text-[14px] font-bold">What is happening here?</div>
             <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} rows={3} maxLength={240}
-              placeholder="e.g. guests take this route instead of the room-card CTA below"
+              placeholder="What you saw, where on the page, and what you expected instead"
               className="w-full px-3 py-2 rounded-lg border border-border bg-background text-[14px] leading-snug focus:border-accent focus:outline-none resize-none" />
             <div className="flex justify-end gap-2">
               <button onClick={() => setNoteFor(null)} className="h-8 px-3 rounded-lg border border-border text-[12.5px] font-medium text-muted hover:text-foreground">Cancel</button>

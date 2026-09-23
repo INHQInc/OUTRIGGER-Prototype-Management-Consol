@@ -107,10 +107,22 @@ tells it to stop and say so rather than ship an undecidable experiment. That is
 not a fix — the product decision is still open — it stops the contradiction
 being resolved silently in the meantime.
 
-**Vocabulary ratchet: 8**, from 48 at the start of the day. `lib/ai/results.ts`
-and `lib/skills/builtins.ts` are both at zero and off the budget list. What
-remains: `lib/ai/next-test.ts` (2), `lib/prototypes/` results (2), stats (2),
-verdict (1), next-test (1).
+**Vocabulary ratchet: ZERO**, from 48 at the start of the day, and the budget
+list is empty. Leave it empty — a file with a hit and no budget fails as "no
+budget", which is louder than passing under an allowance.
+
+Two things changed about the ratchet itself in the same commit, and both matter
+more than the number. Its SCOPE is now all of `src` (275 files) rather than four
+`lib` directories, which is how five customer-facing strings sat in React
+components the whole time. And it counts PROSE, not commentary: comments are
+stripped before the match, because the old per-line count made a comment
+explaining a removed word count as the word — it forced three rewordings today
+of comments whose only job was to record why "guests" had to go.
+
+**Known gap, costed:** `tsconfig.json` excludes `docs/dev`, so the suites are
+the only code here strict mode never sees. Including them is 96 errors, mostly
+loose fixtures and `.ts`-extension imports that `tsx` allows and the app's
+config does not. It wants its own tsconfig, not a flag on the main one.
 
 ### The other half: the builder is brand-blind
 

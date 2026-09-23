@@ -45,6 +45,11 @@ const results = {
 const build = (reading: Reading | null) =>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   buildReadoutModel({
+  // The suites are not a customer, so they carry an obviously invented one —
+  // a hospitality noun here would be the hardcoding these very suites police.
+  taxonomy: { visitorNoun: "rider", visitorNounPlural: "riders", offeringNoun: "route",
+    offeringNounPlural: "routes", primaryAction: "book a ride", conversionSurface: "ride sheet",
+    entityKinds: ["trail", "clinic"] },
     prototypeName: "Hero", prototypeKey: "hero", results, stats,
     verdict: {
       state: "draft", verdict: "keep_running", headline: "", gates: [], guardrails: [], discoveries: [],

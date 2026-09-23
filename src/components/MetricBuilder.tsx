@@ -18,9 +18,12 @@
 import { useMemo, useState } from "react";
 import type { ExperimentResults, CompositeMetric } from "@/lib/prototypes/results";
 import { computeComposite } from "@/lib/prototypes/results";
+import type { Taxonomy } from "@/lib/brand/types";
 
-export function MetricBuilder({ results, editing, baselineId, busy, onSave, onClose }: {
+export function MetricBuilder({ results, taxonomy, editing, baselineId, busy, onSave, onClose }: {
   results: ExperimentResults;
+  /** The customer’s words — this panel explains what their numbers count. */
+  taxonomy: Taxonomy;
   /** Present = editing an existing custom metric. */
   editing?: CompositeMetric | null;
   baselineId?: string;
@@ -257,7 +260,7 @@ export function MetricBuilder({ results, editing, baselineId, busy, onSave, onCl
               </div>
             )}
             <p className="text-[12px] text-muted-2 mt-2 leading-snug">
-              Summed ACTIONS, not unique guests: someone who clicks two of these counts twice, so the rate is actions per visitor and can exceed 100%.
+              Summed ACTIONS, not unique {taxonomy.visitorNounPlural}: one {taxonomy.visitorNoun} who clicks two of these counts twice, so the rate is actions per {taxonomy.visitorNoun} and can exceed 100%.
             </p>
           </div>
         </div>

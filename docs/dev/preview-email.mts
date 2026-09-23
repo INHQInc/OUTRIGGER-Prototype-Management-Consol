@@ -83,6 +83,11 @@ const args = {
 // The renderer is now a SKIN: it gets the model, and the model is built from
 // exactly what the server path passes it (docs/READOUT-MODEL.md).
 const model = buildReadoutModel({
+  // The suites are not a customer, so they carry an obviously invented one —
+  // a hospitality noun here would be the hardcoding these very suites police.
+  taxonomy: { visitorNoun: "rider", visitorNounPlural: "riders", offeringNoun: "route",
+    offeringNounPlural: "routes", primaryAction: "book a ride", conversionSurface: "ride sheet",
+    entityKinds: ["trail", "clinic"] },
   prototypeName: args.prototypeName,
   prototypeKey: args.prototypeKey,
   results, stats, verdict: args.verdict, reading: args.reading,

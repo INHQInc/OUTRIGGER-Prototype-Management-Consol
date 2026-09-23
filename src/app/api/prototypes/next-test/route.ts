@@ -7,6 +7,9 @@ import { deriveNextTest } from "@/lib/prototypes/next-test";
 import { buildReadoutModel } from "@/lib/prototypes/readout-model";
 import { draftNextTest, type NextTestDraft } from "@/lib/ai/next-test";
 import { getMetricMap } from "@/lib/prototypes/results";
+import { requireTaxonomy } from "@/lib/brand/profile";
+import { taxonomyRefusal } from "@/lib/brand/refusal";
+import type { Taxonomy } from "@/lib/brand/types";
 
 export const dynamic = "force-dynamic";
 // One model call, with a single retry when the first draft is refused.
@@ -63,8 +66,20 @@ export async function POST(req: NextRequest) {
   if (!stats) return NextResponse.json({ error: "The stamped verdict carries no frozen statistics." }, { status: 409 });
 
   const metricMap = await getMetricMap(proto!.key).catch(() => null);
+  // RESOLVED, and passed EXPLICITLY. The `as any` below silences the missing
+  // required inputs, so adding `taxonomy` to ReadoutInput typechecked here
+  // while leaving it undefined at runtime \u2014 `describeComposite` would have
+  // thrown on the first composite. A cast is not a default.
+  let taxonomy: Taxonomy;
+  try {
+    taxonomy = await requireTaxonomy(g.orgId);
+  } catch (e) {
+    const refusal = taxonomyRefusal(e, "follow-up test");
+    if (refusal) return NextResponse.json(refusal.body, { status: refusal.status });
+    throw e;
+  }
   const model = buildReadoutModel({
-    prototypeName: proto!.name, prototypeKey: proto!.key,
+    prototypeName: proto!.name, prototypeKey: proto!.key, taxonomy,
     results: null, stats, verdict, reading: null,
     plan: metricMap ?? { composites: [], confirmed: false },
     // Left null on purpose: the model falls back to `stats.primaryKey`, which
@@ -81,6 +96,7 @@ export async function POST(req: NextRequest) {
 
   const next = deriveNextTest(model.all, stats.power);
   const draft = await draftNextTest({
+    orgId: g.orgId,
     next,
     parentKey: proto!.key,
     parentName: proto!.name,

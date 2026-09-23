@@ -47,6 +47,12 @@ const verdictOf = (verdict: string, gates: unknown[] = [], guardrails: unknown[]
   ...extra,
 });
 
+/** An invented customer: a hospitality noun in a suite that polices hardcoded
+ *  hospitality nouns would be the joke writing itself. */
+const TAX = { visitorNoun: "rider", visitorNounPlural: "riders", offeringNoun: "route",
+  offeringNounPlural: "routes", primaryAction: "book a ride", conversionSurface: "ride sheet",
+  entityKinds: ["trail", "clinic"] };
+
 type Case = { id: string; why: string; input: Parameters<typeof buildReadoutModel>[0] };
 
 const decisionOf = (label: string) => ({ key: "m1", label, source: "console" as const, directionDeclared: true, direction: "increase" as const });
@@ -148,7 +154,7 @@ const seen = new Map<string, string>();
 
 for (const c of CASES) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const model = buildReadoutModel(c.input as any);
+  const model = buildReadoutModel({ ...c.input, taxonomy: TAX } as any);
   const h = model.headlineFloor;
   const t = model.headlineTrace;
   console.log(`\n${c.id}`);
@@ -167,7 +173,7 @@ for (const c of CASES) {
 
 // The specific regression: the old sentence, on the case that produced it.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const f1 = buildReadoutModel(CASES[0].input as any);
+const f1 = buildReadoutModel({ ...CASES[0].input, taxonomy: TAX } as any);
 if (/nothing separates/i.test(f1.headlineFloor)) fail("F1", "STILL says nothing separates the two versions");
 if (headlineContradiction("Nothing separates the two versions yet", f1) === null) {
   fail("F1", "the contradiction test does NOT catch the sentence that shipped");

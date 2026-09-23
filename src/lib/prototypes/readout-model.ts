@@ -34,6 +34,7 @@ import type { VerdictRecord, VerdictState, VerdictGate } from "./verdict";
 import { VERDICT_THRESHOLDS, nextStep, guardrailHarmSide } from "./verdict";
 import type { Reading } from "./notebook";
 import { deriveHeadline, headlineContradiction, type HeadlineTrace } from "./readout-headline";
+import type { Taxonomy } from "../brand/types";
 
 // ────────────────────────────────────────────────────────────────────────────
 // TOKENS — the enums every skin maps to its own palette. No hex here, ever.
@@ -374,6 +375,15 @@ export interface ReadoutInput {
   prototypeName: string;
   prototypeKey: string;
 
+  /**
+   * THE CUSTOMER'S WORDS. Required, like every other input here: this model is
+   * the ONE interpretation the console, the readout and the weekly email all
+   * render, so a metric description written in the wrong nouns is wrong in
+   * three places at once. Optional would have let the client component skip it
+   * silently, which is the call site most likely to.
+   */
+  taxonomy: Taxonomy;
+
   results: ExperimentResults | null;
   stats: StatsReport | null;
   verdict: VerdictRecord | null;
@@ -536,7 +546,7 @@ export function buildReadoutModel(input: ReadoutInput): ReadoutModel {
           isComposite: isCompositeOf(comp),
           perArm: Boolean(comp.armEvents?.length),
           chipLabel: comp.armEvents?.length ? "composite · per version" : "composite",
-          description: describeComposite(comp),
+          description: describeComposite(comp, input.taxonomy),
         }
       : null;
 

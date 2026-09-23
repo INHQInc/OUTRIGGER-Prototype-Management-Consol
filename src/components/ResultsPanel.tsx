@@ -17,6 +17,7 @@ import { deriveNextTest } from "@/lib/prototypes/next-test";
 import { NextTestPanel } from "@/components/NextTestPanel";
 import type { Reading, OrgNotebook, ProtoNotebook } from "@/lib/prototypes/notebook";
 import type { AnalystAnswer } from "@/lib/ai/results";
+import type { Taxonomy } from "@/lib/brand/types";
 
 /**
  * Experiment results — READOUT-FIRST.
@@ -516,6 +517,10 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const [attachedMetrics, setAttachedMetrics] = useState<string[]>([]);
   const [map, setMap] = useState<MetricMap | null>(null);
   const [stats, setStats] = useState<StatsReport | null>(null);
+  // THE CUSTOMER'S WORDS, from the server. The browser has no store, so the
+  // one surface that could not resolve them is the one that would have kept a
+  // hardcoded noun after everything else stopped.
+  const [taxonomy, setTaxonomy] = useState<Taxonomy | null>(null);
   const [verdict, setVerdict] = useState<VerdictRecord | null>(null);
   const [reading, setReading] = useState<Reading | null>(null);
   const [readingStale, setReadingStale] = useState(false);
@@ -612,6 +617,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
       setMap(data.metricMap ?? null);
       setDecision(data.decision ?? null);
       setStats(data.stats ?? null);
+      if (data.taxonomy) setTaxonomy(data.taxonomy as Taxonomy);
       setVerdict(data.verdict ?? null);
       setReading(data.reading ?? null);
       setReadingStale(Boolean(data.readingStale));
@@ -846,6 +852,14 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   if (!results && !verdict && !preLaunch) {
     return <div className="rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[13.5px] text-muted-2">{resultsError ?? "No results yet."}</div>;
   }
+  // NO WORDS, NO READOUT. The model describes metrics in the customer's nouns,
+  // so rendering it before they arrive would print one frame in a default
+  // vocabulary and then swap it — the silent degradation the strict resolver
+  // exists to prevent, just briefly. The load sets this on the same response
+  // as the results, so in practice this is the first paint only.
+  if (!taxonomy) {
+    return <div className="rounded-lg border border-border bg-surface px-3.5 py-2.5 text-[13.5px] text-muted-2">Loading…</div>;
+  }
   const live = results ?? (verdict?.state === "stamped" ? verdict.frozenResults ?? null : null) ?? preLaunch;
   const statsEff = stats ?? (verdict?.state === "stamped" ? verdict.frozenStats ?? null : null);
 
@@ -865,6 +879,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const model = buildReadoutModel({
     prototypeName: prototypeKey,
     prototypeKey,
+    taxonomy,
     results: live, stats: statsEff, verdict, reading,
     plan: map,
     decision,
@@ -1061,7 +1076,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
           )}
           {computed.length > 0 && rows(computed, `composite:${c.id}`, false)}
           {computed.length > 0 && (
-            <p className="text-[11px] text-muted-2 mt-1">Summed ACTIONS, not unique visitors — a guest clicking both counts twice, so the rate is actions-per-visitor and can exceed 100%. CI and p computed by the console (rate-ratio inference on action totals; slightly optimistic under per-guest clustering).</p>
+            <p className="text-[11px] text-muted-2 mt-1">Summed ACTIONS, not unique {taxonomy.visitorNounPlural} — one {taxonomy.visitorNoun} clicking both counts twice, so the rate is actions per {taxonomy.visitorNoun} and can exceed 100%. CI and p computed by the console (rate-ratio inference on action totals; slightly optimistic under clustering by {taxonomy.visitorNoun}).</p>
           )}
         </div>
       </div>
@@ -1312,7 +1327,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
   const compositeFlag = (key: string) => {
     const c = compositeFor(key);
     if (!c || !isCompositeOf(c)) return null;
-    return <CompositeChip text={describeComposite(c, armNameOf)} perVersion={Boolean(c.armEvents?.length)} />;
+    return <CompositeChip text={describeComposite(c, taxonomy, armNameOf)} perVersion={Boolean(c.armEvents?.length)} />;
   };
 
   const zoneHeader = (label: string, right?: React.ReactNode, id?: string, busyLabel?: string) => (
@@ -1816,6 +1831,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
 
       {builder && live && (
         <MetricBuilder
+          taxonomy={taxonomy}
           results={live}
           editing={builder.editing}
           baselineId={statsEff?.baselineVariationId}
@@ -2442,7 +2458,7 @@ export function ResultsPanel({ prototypeKey, bound, running, view = "readout", h
               return (
                 <button onClick={() => toggleSupporting(rowKey, !on)}
                   title={on
-                    ? "Observed — this metric gets a written read of what guests are doing. Click to stop observing it."
+                    ? `Observed — this metric gets a written read of what ${taxonomy.visitorNounPlural} are doing. Click to stop observing it.`
                     : "Observe this metric: it gets a written read in Observations. (What the SUMMARY is about is the Type column.)"}
                   className={on ? "text-accent" : "text-muted-2 hover:text-foreground"}>
                   <Glyph kind={on ? "watchOn" : "watch"} />

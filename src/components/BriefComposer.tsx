@@ -250,7 +250,7 @@ function SectionHead({ label, section, open, text, busy, err, onToggle, onChange
       {open && (
         <div className="mt-2 rounded-lg border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_5%,transparent)] p-2.5 space-y-2">
           <textarea value={text} onChange={(e) => onChangeText(e.target.value)} rows={2} autoFocus
-            className={ta + " text-[13px]"} placeholder={`What's off about ${label.toLowerCase()}? e.g. "the audience is returning guests, not first-timers"`} />
+            className={ta + " text-[13px]"} placeholder={`What's off about ${label.toLowerCase()}? Name the part that is wrong and what it should say instead.`} />
           {err && <div className="text-[13px] text-danger">{err}</div>}
           <div className="flex items-center justify-end gap-2">
             <button onClick={onCancel} className="text-[13px] text-muted hover:text-foreground">Cancel</button>

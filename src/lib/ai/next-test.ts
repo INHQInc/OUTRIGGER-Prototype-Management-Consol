@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { normaliseProse, rejectReason } from "./results";
 import type { NextTest } from "../prototypes/next-test";
+import { vocabularyFor, type Vocabulary } from "../brand/profile";
 
 /**
  * THE PROSE HALF of "what to test next".
@@ -52,6 +53,9 @@ export interface NextTestDraft {
 }
 
 export interface DraftInput {
+  /** Whose test this is. REQUIRED \u2014 the prompt names the customer and writes
+   *  in their words, and there is no sensible default for either. */
+  orgId: string;
   next: NextTest;
   parentKey: string;
   parentName: string;
@@ -99,7 +103,9 @@ function figuresFor(next: NextTest): string {
   return l.join("\n");
 }
 
-const SYSTEM = `You write the follow-up to a concluded A/B test for a hotel group's experimentation console.
+/** Resolved per customer: this names the business it writes for and the words
+ *  its team uses, and both were one vertical's. */
+const systemFor = (v: Vocabulary) => `You write the follow-up to a concluded A/B test for the experimentation console at ${v.customer}.
 
 The primary metric, the guardrails, the duration and the ruled-out directions have ALREADY BEEN COMPUTED and are given to you. You do not choose them and you do not second-guess them. Your job is to say what change we should make and why this run points at it.
 
@@ -107,7 +113,7 @@ HARD RULES.
 - NEVER write a digit or a number in words. Every figure is computed and printed beside your text. If you write one too, the reader gets two sources for one fact.
 - NEVER use statistical vocabulary: significant, p-value, confidence, power, uplift, variance.
 - NEVER propose testing something listed as an answered direction. Those are settled and repeating them wastes a fortnight.
-- The hypothesis must name the CHANGE, the AUDIENCE, and the EFFECT the recommended primary metric should show. One sentence. Plain words a hotel marketer would use.
+- The hypothesis must name the CHANGE, the AUDIENCE, and the EFFECT the recommended primary metric should show. One sentence. Plain words a marketer at ${v.customer} would use, about ${v.taxonomy.visitorNounPlural} and the ${v.taxonomy.offeringNounPlural} they came for.
 - Build candidates must be things someone could actually build on a web page. Concrete surfaces, not strategies.
 
 Return JSON only:
@@ -144,13 +150,16 @@ export async function draftNextTest(inp: DraftInput): Promise<NextTestDraft | nu
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
   const client = new Anthropic({ apiKey });
+  // Refuses for an undescribed customer, like every other surface that writes
+  // prose. The route turns it into a 409.
+  const system = systemFor(await vocabularyFor(inp.orgId));
   const rejected: string[] = [];
 
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await client.messages.create({
       model: "claude-opus-4-8",
       max_tokens: 1400,
-      system: SYSTEM,
+      system,
       messages: [{
         role: "user",
         content: attempt === 0 ? userMessage(inp)

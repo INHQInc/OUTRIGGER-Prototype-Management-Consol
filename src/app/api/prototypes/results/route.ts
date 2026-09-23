@@ -15,6 +15,8 @@ import {
 import { proposeMetricMap, analyzeResults, analystSkill, generateReading, defineCustomMetric } from "@/lib/ai/results";
 import { deepObservation, type DeepObservation } from "@/lib/ai/observation";
 import { taxonomyRefusal } from "@/lib/brand/refusal";
+import { requireTaxonomy } from "@/lib/brand/profile";
+import type { Taxonomy } from "@/lib/brand/types";
 import { describeUpstream } from "@/lib/upstream";
 import { taxonomyRevision } from "@/lib/brand/profile";
 import { resolveRepoSource } from "@/lib/prototypes/source";
@@ -169,7 +171,7 @@ async function fetchResults(orgId: string, experimentId?: string): Promise<Bundl
 }
 
 /** stats + draft verdict, derived fresh from a results bundle. */
-async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats: StatsReport | null; verdict: VerdictRecord | null; history: ResultsHistory; map: MetricMap | null }> {
+async function analyze(proto: PrototypeRecord, bundle: Bundle, taxonomy: Taxonomy): Promise<{ stats: StatsReport | null; verdict: VerdictRecord | null; history: ResultsHistory; map: MetricMap | null }> {
   const existing = await getVerdict(proto.key);
   // The RESOLVED map is what every reader downstream must use — the stored
   // one is what every WRITER mutates. Mixing them would let the page and the
@@ -186,6 +188,7 @@ async function analyze(proto: PrototypeRecord, bundle: Bundle): Promise<{ stats:
   const stats = computeStatsReport({
     results: bundle.results,
     map,
+    taxonomy,
     focusVariationId: proto.experiment?.variationId,
     weights: bundle.weights,
     history: history.days,
@@ -323,7 +326,13 @@ async function obsBasisFor(opts: BasisInput): Promise<string> {
 export async function GET(req: NextRequest) {
   const g = await guardPrototypeAccess(req.nextUrl.searchParams.get("key"), req.headers.get("authorization"), { tokenAllowed: false });
   if ("error" in g) return NextResponse.json({ error: g.error }, { status: g.status });
-  const [bundle, metricMap, orgNb, protoNb, reading] = await Promise.all([
+  // THE CUSTOMER'S WORDS, RESOLVED ONCE for this request and handed to every
+  // derivation below AND to the browser. `describeComposite` and the validity
+  // flags are prose a customer reads, and the client could not resolve them —
+  // it has no store. Refusing here is the same rule the readout already
+  // follows, and the catch below turns it into a 409 with words.
+  const [taxonomy, bundle, metricMap, orgNb, protoNb, reading] = await Promise.all([
+    requireTaxonomy(g.orgId),
     fetchResults(g.orgId, g.proto.experiment?.experimentId),
     getMetricMap(g.proto.key),
     getOrgNotebook(g.orgId),
@@ -333,7 +342,7 @@ export async function GET(req: NextRequest) {
   // `effMap` carries the RESOLVED decision metric (Optimizely's own primary
   // when the console has no nomination). Every reader below uses it; the
   // stored `metricMap` is only what writes mutate.
-  const { stats, verdict, history, map: effMap } = await analyze(g.proto, bundle);
+  const { stats, verdict, history, map: effMap } = await analyze(g.proto, bundle, taxonomy);
   // Measurement drift: results reporting EVENTS the stamped plan never
   // reviewed = the build (or Opti config) moved past the plan. Compared in
   // ONE namespace: a row's baseName (registry name) counts as known — the
@@ -355,6 +364,7 @@ export async function GET(req: NextRequest) {
       windowStats = computeStatsReport({
         results: windowView.results,
         map: effMap,
+        taxonomy,
         focusVariationId: g.proto.experiment?.variationId,
         weights: bundle.weights,
         history: [],
@@ -375,6 +385,12 @@ export async function GET(req: NextRequest) {
     // the printed readout should name the experiment it is about, and state
     // what was being tested even when nothing is frozen yet
     prototypeName: g.proto.name,
+    // THE CUSTOMER'S WORDS GO TO THE BROWSER. The page builds the same readout
+    // model the email does, and `describeComposite` and the validity flags are
+    // prose a customer reads — the client has no store, so it cannot resolve
+    // them itself. Sending them is what stops the client being the one surface
+    // that quietly keeps a hardcoded noun.
+    taxonomy,
     liveHypothesis: g.proto.hypothesis?.change || g.proto.hypothesis?.outcome
       ? `We believe ${g.proto.hypothesis.change || "…"} for ${g.proto.hypothesis.audience || "…"} will cause ${g.proto.hypothesis.outcome || "…"}.`
       : null,
@@ -484,6 +500,9 @@ export async function POST(req: NextRequest) {
   const actor = user?.name ?? user?.sub ?? "user";
 
   try {
+    // Resolved once for the whole handler, inside the try so the refusal
+    // becomes the same 409 every other path here returns.
+    const taxonomy = await requireTaxonomy(g.orgId);
     if (body.propose) {
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to map yet." }, { status: 400 });
@@ -508,7 +527,7 @@ export async function POST(req: NextRequest) {
           : prior?.priorConfirmations,
       })))!;
       await audit(g.orgId, actor, "results.map-proposed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
-      const { stats, verdict } = await analyze(g.proto, bundle);
+      const { stats, verdict } = await analyze(g.proto, bundle, taxonomy);
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
@@ -585,7 +604,7 @@ export async function POST(req: NextRequest) {
       await audit(g.orgId, actor, "results.map-confirmed", g.proto.name, composites.map((c) => `${c.label} = ${c.events.join(" + ")}`).join(" · ").slice(0, 400));
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       const { stats, verdict } = bundle.results
-        ? await analyze(g.proto, bundle)
+        ? await analyze(g.proto, bundle, taxonomy)
         : { stats: null, verdict: await getVerdict(g.proto.key) };
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
@@ -604,7 +623,7 @@ export async function POST(req: NextRequest) {
       if (!bundle.experimentStatus) {
         return NextResponse.json({ error: "Couldn't verify the experiment has stopped (Optimizely didn't return its status) — try again in a moment." }, { status: 400 });
       }
-      const { stats, verdict } = await analyze(g.proto, bundle);
+      const { stats, verdict } = await analyze(g.proto, bundle, taxonomy);
       if (!stats || !verdict) return NextResponse.json({ error: "Couldn't derive a verdict to stamp." }, { status: 400 });
       // Approve-what-you-see: the stamp freezes a FRESH derivation, so if the
       // numbers moved it since the human read the draft, force a re-review
@@ -771,7 +790,7 @@ export async function POST(req: NextRequest) {
 
       await audit(g.orgId, actor, b.id ? "results.metric-rebuilt" : "results.metric-built", g.proto.name,
         `${label} = ${armEvents.length ? armEvents.map((a) => `${a.variationId}:[${a.events.join(" + ")}]`).join(" vs ") : events.join(" + ")}`.slice(0, 400));
-      const { stats, verdict } = await analyze(g.proto, bundle);
+      const { stats, verdict } = await analyze(g.proto, bundle, taxonomy);
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict,
         attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
@@ -813,7 +832,7 @@ export async function POST(req: NextRequest) {
       // rather than its own optimistic guess about what a reset means.
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       const map = await getMetricMap(g.proto.key);
-      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: null };
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle, taxonomy) : { stats: null, verdict: null };
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
       return NextResponse.json({
         cleared: wanted,
@@ -838,7 +857,7 @@ export async function POST(req: NextRequest) {
       const key = String(body.deepDive.key).slice(0, 220);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
-      const { stats, verdict, history, map } = await analyze(g.proto, bundle);
+      const { stats, verdict, history, map } = await analyze(g.proto, bundle, taxonomy);
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
       const basis = await obsBasisFor({ orgId: g.orgId, history, verdict, map, orgNb, protoNb });
 
@@ -886,7 +905,10 @@ export async function POST(req: NextRequest) {
           if (variationJs) codeSource = "console";
         }
       }
-      const { system, taxonomy } = await analystSkill(g.orgId);
+      // The handler already resolved the customer's words; taking a second
+      // copy here shadowed that one for the whole block and let one request
+      // read half its output from one resolution and half from another.
+      const { system } = await analystSkill(g.orgId);
 
       const observation = await deepObservation({
         metricKey: key, proto: g.proto, results: bundle.results, map, stats, verdict,
@@ -935,7 +957,7 @@ export async function POST(req: NextRequest) {
       });
       await audit(g.orgId, actor, "results.direction-set", g.proto.name, `${rowKey}: ${from} → ${direction}`);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: null };
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle, taxonomy) : { stats: null, verdict: null };
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict,
         attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
@@ -1039,7 +1061,7 @@ export async function POST(req: NextRequest) {
       if (!fromLabel) return NextResponse.json({ error: "There is no decision metric to stand down." }, { status: 400 });
       await audit(g.orgId, actor, "results.primary-cleared", g.proto.name, fromLabel);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle, taxonomy) : { stats: null, verdict: await getVerdict(g.proto.key) };
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict,
         attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
@@ -1101,7 +1123,7 @@ export async function POST(req: NextRequest) {
       if (!toLabel) return NextResponse.json({ error: "That metric is already the decision metric." }, { status: 400 });
       await audit(g.orgId, actor, "results.primary-changed", g.proto.name, `${fromLabel} → ${toLabel}`);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle, taxonomy) : { stats: null, verdict: await getVerdict(g.proto.key) };
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attachedMetrics: bundle.attachedMetrics, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
@@ -1137,7 +1159,7 @@ export async function POST(req: NextRequest) {
       if (!toLabel) return NextResponse.json({ error: "Can't make that the primary — it's already primary, doesn't exist, or fires in only one arm (the control couldn't convert on it)." }, { status: 400 });
       await audit(g.orgId, actor, "results.primary-changed", g.proto.name, `${fromLabel} → ${toLabel}`);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle, taxonomy) : { stats: null, verdict: await getVerdict(g.proto.key) };
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
@@ -1177,7 +1199,7 @@ export async function POST(req: NextRequest) {
       await audit(g.orgId, actor, planOwned ? "results.plan-metric-removed" : "results.custom-metric-removed", g.proto.name,
         planOwned ? `${removed} — removed from the measurement plan; plan is now unconfirmed` : removed);
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
-      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle) : { stats: null, verdict: await getVerdict(g.proto.key) };
+      const { stats, verdict } = bundle.results ? await analyze(g.proto, bundle, taxonomy) : { stats: null, verdict: await getVerdict(g.proto.key) };
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, planUnconfirmed: planOwned,
         attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
@@ -1223,7 +1245,7 @@ export async function POST(req: NextRequest) {
         { kind: "note", text: `Added console metric “${composite.label}” = ${composite.events.join(" + ")}. ${explanation}` },
       ]);
       const orgNbNow = await getOrgNotebook(g.orgId);
-      const { stats, verdict } = await analyze(g.proto, bundle);
+      const { stats, verdict } = await analyze(g.proto, bundle, taxonomy);
       return NextResponse.json({ metricMap: map, results: bundle.results, stats, verdict, explanation, notebook: { org: orgNbNow, proto: protoNbAfter }, attention: attentionFor({ results: bundle.results, map, stats, verdict, experimentStatus: bundle.experimentStatus }) });
     }
 
@@ -1234,7 +1256,7 @@ export async function POST(req: NextRequest) {
       // for N generations of the same basis.
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results to read yet." }, { status: 400 });
-      const { stats, verdict, history, map } = await analyze(g.proto, bundle);
+      const { stats, verdict, history, map } = await analyze(g.proto, bundle, taxonomy);
       const [orgNb, protoNb, cached] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key), getReading(g.proto.key)]);
       const basis = await basisFor({ orgId: g.orgId, history, verdict, map, orgNb, protoNb, stats, results: bundle.results });
       if (!body.force && cached?.basisKey === basis) {
@@ -1303,7 +1325,7 @@ export async function POST(req: NextRequest) {
     if (body.ask !== undefined || body.explain) {
       const bundle = await fetchResults(g.orgId, g.proto.experiment?.experimentId);
       if (!bundle.results) return NextResponse.json({ error: bundle.error ?? "No results yet." }, { status: 400 });
-      const { stats, verdict, map } = await analyze(g.proto, bundle);
+      const { stats, verdict, map } = await analyze(g.proto, bundle, taxonomy);
       const [orgNb, protoNb] = await Promise.all([getOrgNotebook(g.orgId), getProtoNotebook(g.proto.key)]);
       const question = body.explain ? undefined : String(body.ask ?? "");
       const answer = await analyzeResults({
