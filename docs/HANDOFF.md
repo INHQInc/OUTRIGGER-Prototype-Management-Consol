@@ -1,6 +1,6 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-09-22. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+*Updated: 2026-09-23. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
 
 ## ⚠ THESE DOCS EXIST ONLY ON `phase1/taxonomy-injection` (22 Sep 2026)
 
@@ -37,6 +37,104 @@ declared in full with zero writers, and so is the earned layer, so nothing a
 concluded experiment learns reaches the next build.
 
 Everything below this line is state and history. That document is the plan.
+
+---
+
+## IN FLIGHT — SITE, AND SITE ONBOARDING (23 Sep 2026): decided and designed, NOT built
+
+**Brand onboarding shipped to the staging environment on 23 Sep** — `/brand`
+(Configuration → Brand) is step one of every customer, and its promises are held
+by `docs/dev/brand-onboarding-smoke.mts`. What comes next is the site.
+
+### Site is coming back — Bryan's decisions, binding
+
+- **Customer → Site → Environment, and every prototype belongs to exactly one
+  site.** "we cant run a test across sites." Its target pages must resolve to
+  that site's own environments — enforce it, don't trust it.
+- **Picked from a sidebar selector** under the customer switcher; choosing a
+  site loads that site's experiments, environments, knowledge and settings. "it
+  must be in the side bar." A Sites page in place of Environments was offered and
+  rejected.
+- **No "All sites" option — exactly one site is always selected.** "there cannot
+  be an all sites in the drop down." A customer with no sites sees "Add a site",
+  and site-owned pages send you there. Switching customer resets the site.
+- **Vocabulary is per site, inheriting from the brand.** "each site might call a
+  product something different" — outrigger.com says hotels,
+  hawaiivacationcondos.outrigger.com says condos. The brand default holds the
+  words stated at onboarding; a site overrides only where it differs.
+  `requireTaxonomy(orgId, siteId)` already merges field by field; nothing passes
+  a siteId yet. `/brand` must edit the selected site and show, per answer,
+  whether it is inherited or the site's own.
+
+This reverses the old "three nouns only" rule; AGENTS.md now says so.
+
+### Traps the site-scoping map found (four independent reads agreed)
+
+- **New names only: `siteId` / `site_id` / table `org_site` / module
+  `lib/site/`.** The legacy `siteKey` is load-bearing three ways: it partitions
+  brief attachments and evidence (change it and attachments vanish, and branches
+  silently stop receiving `.opmc/attachments/**`); it is Outrigger's live loader
+  key (`/loader/prep-outrigger` resolves only through the prep environment's
+  `siteKey`); and `deleteSite(siteKey)` cascade-deletes on it across eight
+  tables. Neon's `site` table name is already taken.
+- **A prototype's site comes from its record, never the sidebar cookie.**
+  `contentHashOf`'s brandRev, the reading cache and the tokenless sync-status
+  route all need it, and agent calls carry no cookie. Read it from the cookie
+  anywhere and every card flips out of sync and agents re-provision in a loop.
+- **Neon lists environment columns by hand** (`mapEnv`, `updateEnvironment`). A
+  new column round-trips on the filesystem store and is silently dropped on Neon.
+- **No automatic grouping of environments by domain.** Both Outrigger sites share
+  outrigger.com, so domain grouping merges them; prep. and www. are one site, so
+  host grouping splits them. Migrate each customer into ONE starting site and let
+  a person split it, with a way to move an environment and its prototypes.
+- **Pre-existing bug — fix it in the rebuild:** environment ids collide across
+  customers. `acme` + "EU Prod" and `acme-eu` + "Prod" both become
+  `acme-eu-prod`; the second reports success and is never saved.
+- **Pre-existing, filed as its own task:** the evidence-screenshot bucket is
+  shared across customers — a tenant boundary.
+
+### Site onboarding — designed with Bryan; proposals until he reacts to the mockup
+
+- **The read is tested:** `docs/investigations/FIRECRAWL-SITE-READ-2026-09.md` —
+  `map` for the inventory, `branding` aggregated across one page per template,
+  the agent with our schema for the meaning, then the evidence check: pre-fill
+  only what an answer's own quote proves.
+- **Business type first** (Bryan's idea — it changes the "what do you sell"
+  question: retail may have fifty product types, hospitality hotels or cruises).
+  Proposed: detected from the read and confirmed, never asked blank; a primary
+  type plus traits (the condo site also recruits property owners); the list is
+  exactly the schemas we have; the type picks which questions are asked and
+  never supplies an answer.
+- **The offering noun resolves page → site → brand**, in one of three shapes: one
+  offering, a portfolio of kinds (outrigger.com — the agent correctly declined to
+  pick one word), or a catalogue (retail; Firecrawl's `product` format).
+- **After the read, an interview** (Bryan's idea: step through what it learned,
+  answer or validate each item, refine any answer with AI). Proposed: four kinds
+  of item — *proven* (pre-filled, quote and page beside it), *found but
+  unproven* (offered as a labelled option, never pre-filled), *unsettled* (the
+  site does not decide — e.g. booking completes on an off-site engine), *only you
+  know* (what no crawl can see — words never used, what must never change).
+  Refine with AI rewrites ONE answer from the person's words and shows
+  was → now before it is accepted.
+- **Mockup, in progress:** https://claude.ai/artifact/XppRLQaVkFjMpj7M8z6mNY —
+  the real read of hawaiivacationcondos.outrigger.com, drawn in the console's own
+  design language.
+
+### Next, in order
+
+1. Finish the mockup; Bryan reacts.
+2. Write the Site build plan from the rules above and his reactions; present it
+   before building.
+3. Build on `staging` — `main` is frozen.
+
+### Bryan's to check
+
+- **Vercel's deployed `FIRECRAWL_API_KEY`.** The local one was dead. If staging
+  and production hold the same key, every page snapshot has been failing
+  silently — capture is best-effort and never blocks provisioning.
+- **Firecrawl agent billing** — both test runs billed 0 credits at completion.
+  Do not plan on it being free.
+- Assumed, not confirmed: the customer switcher stays above the site selector.
 
 ---
 

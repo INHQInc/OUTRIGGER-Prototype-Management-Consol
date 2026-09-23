@@ -227,6 +227,17 @@ Read (real: `deriveDesignTokens` feeding an `ObservedFacts` writer) → Ask
 `ObservedFacts.unsettled`) → Correct (approve / edit / hand back with a note,
 kept as a `Correction`) → a new revision. The source repo shortens it.
 
+**Designed 23 Sep with Bryan — proposals until he has reacted to the mockup.**
+Site is a real entity again: Customer → Site → Environment, one site per
+experiment, picked from a sidebar selector with no "All sites", and vocabulary
+per site inheriting from the brand. Site onboarding then runs: business type
+(detected and confirmed; it picks which questions are asked, never an answer) →
+the read → the evidence check → an interview in four kinds (proven, found but
+unproven, unsettled, only you know), each answer refinable with AI as a
+was → now diff → approve as a new revision. The offering noun resolves
+page → site → brand, in one of three shapes: one offering, a portfolio of kinds,
+or a catalogue. Rules, traps and the mockup: `docs/HANDOFF.md` → "IN FLIGHT — SITE".
+
 **Kept from beta-2:** a question carries a *because* line saying why it is being
 asked; options show a hint before the click; every question offers "I don't
 know — record it as unknown"; three rounds at most, then whatever is open is
