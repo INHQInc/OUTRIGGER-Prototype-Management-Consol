@@ -123,7 +123,7 @@ console.log("\nThe events route");
   const bad = await metricsGET(new NextRequest(`${BASE}/api/loader/metrics?key=../etc`));
   check("refuses a malformed key", bad.status, 400);
   check("answers any site (CORS)", bad.headers.get("access-control-allow-origin"), "*");
-  check("is CDN-cached, even a refusal", /s-maxage=\d+/.test(bad.headers.get("cache-control") ?? ""), true);
+  check("is never cached, so an edit in Optimizely shows on the next reload", bad.headers.get("cache-control"), "no-store");
 }
 
 console.log("\nWhat the overlay is told about the experiment");
