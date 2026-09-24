@@ -9,7 +9,7 @@
  *
  * Read-only against Optimizely. Reached only through /api/loader/metrics,
  * which the loader calls ONLY when the page's address carries
- * opmc_metrics=1, and which is CDN-cached. A normal page load never gets here.
+ * opmc_metrics=1. A normal page load never gets here.
  */
 import { getContentStore } from "../content/store";
 import { getOptimizelyClientForOrg } from "../experimentation";
