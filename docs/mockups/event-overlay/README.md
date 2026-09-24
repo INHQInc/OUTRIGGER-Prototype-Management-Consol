@@ -79,6 +79,9 @@ In the Map variation:
   nothing visible to click in this variation.
 - **Popover and list-tile events** appear only after you open a popover or
   switch to the list.
+- **The popover's "Learn More" is counted twice.** Both **Map - Popover
+  Property Learn More Click** and **Default - Property Learn More Click**
+  match it, so one click adds to both events.
 
 In the control (Default Destination Selector), at desktop width:
 
