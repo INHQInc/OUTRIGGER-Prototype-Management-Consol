@@ -85,7 +85,9 @@
     "#panel.left{top:0;left:0;bottom:0;border-width:0 1px 0 0;box-shadow:8px 0 24px rgba(23,32,43,.12)}" +
     "#panel.bottom{left:0;right:0;bottom:0;border-width:1px 0 0 0;box-shadow:0 -8px 24px rgba(23,32,43,.12)}" +
     "#panel.min.right,#panel.min.left{bottom:auto}" +
-    "#panel.min .list{display:none}" +
+    // !important: the bottom dock's grid rule below has the same specificity
+    // and would otherwise keep the list open when minimised.
+    "#panel.min .list{display:none!important}" +
     "header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #E3E8EE;flex-shrink:0}.ttl{flex:1 1 auto;min-width:0}" +
     "#panel.min header{border-bottom:0}" +
     "#panel.float header{cursor:move}" +
