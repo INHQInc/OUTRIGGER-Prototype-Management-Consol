@@ -6,15 +6,18 @@
  * scroll, resize, and whatever the variation reveals as you click around. A
  * panel lists every event: not seen yet, hidden on this page, on screen, on the
  * page, seen earlier. The panel floats or docks left / bottom / right, like a
- * browser's developer tools.
+ * browser's developer tools. A switcher at the top of the panel opens the
+ * experiment's other variations.
  *
  * Everything lives in ONE shadow root, so the page's CSS cannot reach it (the
  * host's Bootstrap `.row` was wrapping the panel's rows) and the page's
  * querySelectorAll can never match the overlay's own nodes.
  *
- * In the product the OPMC loader runs this when the URL carries opmc_metrics=1,
- * with the events fetched from Optimizely through the console. In the mockup it
- * is injected by hand with the events inlined (window.__OPMC_EVENTS__).
+ * In the product the OPMC loader on prep runs this when the URL carries
+ * opmc_metrics=1, with the events fetched from Optimizely through the console.
+ * It runs on prep only: no metrics code goes into the experiment or production.
+ * In the mockup it is injected by hand with the events inlined
+ * (window.__OPMC_EVENTS__), and again after each variation switch.
  */
 (function () {
   var Q = new URLSearchParams(location.search);
@@ -27,7 +30,15 @@
   var PALETTE = ["#E6194B", "#3CB44B", "#4363D8", "#F58231", "#911EB4", "#0AAFC0", "#F032E6",
                  "#9A6324", "#469990", "#808000", "#000075", "#800000", "#D4A000", "#5C5C5C"];
   var DARK_TEXT = { "#D4A000": 1 };
-  var TEST_ROOT = CFG.testRoot || "";
+  // The experiment's variations, from Optimizely. Which one this page shows
+  // comes from the URL: a variation built in OPMC carries its ?opmc= key, and
+  // the variation without a key is the page as it is.
+  var here = "";
+  Q.forEach(function (v, k) { if (k.toLowerCase() === "opmc") here = v; });
+  var VARS = CFG.variations && CFG.variations.length ? CFG.variations
+    : [{ id: "", name: CFG.variation || "This page", opmc: here || null }];
+  var CUR = VARS.filter(function (v) { return (v.opmc || "") === here; })[0] || null;
+  var TEST_ROOT = (CUR && CUR.testRoot) || CFG.testRoot || "";
   var events = CFG.events.map(function (e, i) {
     return { name: e.name, selector: e.selector, color: PALETTE[i % PALETTE.length], on: true,
              els: [], shown: [], visible: [], shared: [], seen: false, status: "none", error: null, outside: 0 };
@@ -51,7 +62,10 @@
     left: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
     bottom: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18"/>',
     right: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+    eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    eyeOff: '<path d="M10.7 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.4"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/>',
   };
+  var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235D6B7E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E";
   function icon(name) {
     return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + "</svg>";
   }
@@ -72,19 +86,29 @@
     "#panel.bottom{left:0;right:0;bottom:0;border-width:1px 0 0 0;box-shadow:0 -8px 24px rgba(23,32,43,.12)}" +
     "#panel.min.right,#panel.min.left{bottom:auto}" +
     "#panel.min .list{display:none}" +
-    "header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #E3E8EE;flex-shrink:0}.ttl{flex:1 1 180px;min-width:0}" +
+    "header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #E3E8EE;flex-shrink:0}.ttl{flex:1 1 auto;min-width:0}" +
     "#panel.min header{border-bottom:0}" +
     "#panel.float header{cursor:move}" +
     "h2{margin:0;font-size:14px;font-weight:600;line-height:1.3}" +
-    ".sub{color:#5D6B7E;font-size:12.5px;margin-top:2px}" +
+    ".sub{flex:1 1 100%;color:#5D6B7E;font-size:12.5px}" +
+    ".build{flex:1 1 100%;font-size:12px;color:#5D6B7E}.build.off{color:#B45309;font-weight:500}#panel.bottom .build{order:4}" +
+    // The variation switcher gets its own row under the title. Docked to the
+    // bottom there's room, so title, switcher, count and tools share one row.
+    ".vrow{flex:1 1 100%;display:flex;align-items:center;gap:8px;min-width:0}" +
+    ".vrow label{flex:0 0 auto;font-size:12px;font-weight:600;color:#5D6B7E}" +
+    "select{flex:1 1 auto;min-width:0;max-width:420px;height:32px;margin:0;padding:0 30px 0 10px;border:1px solid #C9D2DC;border-radius:6px;" +
+      "background:#fff url(\"" + CHEVRON + "\") no-repeat right 8px center/16px 16px;color:#17202B;font:500 13px/1.2 " + FONT + ";" +
+      "-webkit-appearance:none;appearance:none;cursor:pointer;text-overflow:ellipsis}" +
+    "select:hover{border-color:#1D4ED8}" +
+    "select:disabled{opacity:.6;cursor:default}" +
+    "select:focus-visible,.ic:focus-visible{outline:2px solid #1D4ED8;outline-offset:1px}" +
+    "#panel.bottom .ttl{flex:0 0 auto}#panel.bottom .vrow{order:1;flex:0 1 420px}#panel.bottom .sub{order:2;flex:1 1 160px}#panel.bottom .tools{order:3}" +
     ".tools{margin-left:auto;display:flex;gap:2px;align-items:center;flex-shrink:0}" +
     ".ic{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:6px;" +
       "background:transparent;color:#5D6B7E;cursor:pointer;padding:0;margin:0}" +
     ".ic:hover{background:#F1F4F8;color:#17202B}" +
     ".ic[aria-pressed=true]{background:#EAF0FB;color:#1D4ED8;border-color:rgba(29,78,216,.35)}" +
     ".sep{width:1px;height:18px;background:#E3E8EE;margin:0 4px}" +
-    ".btn{height:28px;padding:0 10px;border:1px solid #C9D2DC;border-radius:6px;background:#fff;color:#17202B;font:12.5px/1 " + FONT + ";white-space:nowrap;cursor:pointer;margin:0}" +
-    ".btn:hover{border-color:#1D4ED8;color:#1D4ED8}" +
     ".list{overflow:auto;padding:4px 0 8px;flex:1 1 auto;min-height:0}" +
     "#panel.bottom .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-content:start}" +
     "#panel.bottom .grp{grid-column:1/-1}" +
@@ -120,16 +144,19 @@
     '<section id="panel" role="complementary" aria-label="Tracked events">' +
       '<div class="rz" data-a="resize"></div>' +
       "<header>" +
-        '<div class="ttl"><h2>Tracked events</h2><div class="sub"></div></div>' +
+        '<div class="ttl"><h2>Tracked events</h2></div>' +
         '<div class="tools">' +
           '<button type="button" class="ic" data-dock="float" title="Float" aria-label="Float">' + icon("float") + "</button>" +
           '<button type="button" class="ic" data-dock="left" title="Dock to left" aria-label="Dock to left">' + icon("left") + "</button>" +
           '<button type="button" class="ic" data-dock="bottom" title="Dock to bottom" aria-label="Dock to bottom">' + icon("bottom") + "</button>" +
           '<button type="button" class="ic" data-dock="right" title="Dock to right" aria-label="Dock to right">' + icon("right") + "</button>" +
           '<span class="sep"></span>' +
-          '<button type="button" class="btn" data-a="toggle">Hide boxes</button>' +
+          '<button type="button" class="ic" data-a="toggle" title="Hide boxes" aria-label="Hide boxes">' + icon("eye") + "</button>" +
           '<button type="button" class="ic" data-a="min" title="Minimise" aria-label="Minimise">–</button>' +
         "</div>" +
+        '<div class="vrow"><label for="opmc-var">Variation</label><select id="opmc-var"></select></div>' +
+        '<div class="sub" aria-live="polite"></div>' +
+        '<div class="build" hidden></div>' +
       "</header>" +
       '<div class="list"></div>' +
     "</section>";
@@ -139,6 +166,48 @@
   var panel = sh.getElementById("panel"), sub = sh.querySelector(".sub"), list = sh.querySelector(".list");
   var svgNS = "http://www.w3.org/2000/svg";
   var showBoxes = true, hover = null;
+
+  // ── variation switcher ────────────────────────────────────────────────────
+  // Picking a variation reloads the page with its ?opmc= key (none for the page
+  // as it is) and keeps opmc_metrics=1. In the product the loader draws the
+  // overlay again when the page arrives; in the mockup it is re-injected.
+  var vsel = sh.getElementById("opmc-var"), switching = "";
+
+  // The build on the page against the build Optimizely holds for this
+  // variation. ?opmc= runs our latest build, which can differ from the one
+  // pushed into the experiment. Say so, because the events are checked
+  // against what is on the page.
+  var buildEl = sh.querySelector(".build"), pageBuild = null;
+  function findPageBuild() {
+    if (pageBuild) return pageBuild;
+    var ss = document.querySelectorAll("script[data-opmc]");
+    for (var i = 0; i < ss.length; i++) {
+      var m = /built from src ([0-9a-f]+)/.exec(ss[i].textContent.slice(0, 400));
+      if (m) return (pageBuild = m[1]);
+    }
+    return null;
+  }
+  function renderBuild() {
+    var want = CUR && CUR.optimizelyBuild, have = findPageBuild();
+    if (!want || !have) { buildEl.hidden = true; return; }
+    buildEl.hidden = false;
+    buildEl.className = "build" + (have === want ? "" : " off");
+    buildEl.textContent = have === want ? "Same build as in Optimizely (" + have + ")."
+      : "This page runs our build " + have + ". Optimizely has " + want + ".";
+  }
+  vsel.innerHTML = (CUR ? "" : '<option value="" selected disabled>Not one of this test\'s variations</option>') +
+    VARS.map(function (v) { return '<option value="' + esc(v.id) + '"' + (v === CUR ? " selected" : "") + ">" + esc(v.name) + "</option>"; }).join("");
+  vsel.disabled = VARS.length < 2 && !!CUR;
+  vsel.addEventListener("change", function () {
+    var v = VARS.filter(function (x) { return x.id === vsel.value; })[0];
+    if (!v || v === CUR) return;
+    var u = new URL(location.href), drop = [];
+    u.searchParams.forEach(function (_, k) { if (k.toLowerCase() === "opmc") drop.push(k); });
+    drop.forEach(function (k) { u.searchParams.delete(k); });
+    if (v.opmc) u.searchParams.set("opmc", v.opmc);
+    switching = v.name; vsel.disabled = true; renderList();
+    location.assign(u.toString());
+  });
 
   // ── docking ───────────────────────────────────────────────────────────────
   // A docked panel pushes the page aside (padding on <html>), the way a
@@ -181,7 +250,12 @@
     var b = ev.target.closest("[data-a]");
     if (b) {
       var a = b.getAttribute("data-a");
-      if (a === "toggle") { showBoxes = !showBoxes; b.textContent = showBoxes ? "Hide boxes" : "Show boxes"; draw(); }
+      if (a === "toggle") {
+        showBoxes = !showBoxes;
+        var t = showBoxes ? "Hide boxes" : "Show boxes";
+        b.innerHTML = icon(showBoxes ? "eye" : "eyeOff"); b.title = t; b.setAttribute("aria-label", t);
+        draw();
+      }
       if (a === "min") { layout.min = !layout.min; applyLayout(); }
       return;
     }
@@ -205,7 +279,7 @@
     var head = ev.target.closest("header");
     if (rz && layout.dock !== "float") {
       move = { kind: "resize" };
-    } else if (head && layout.dock === "float" && !ev.target.closest("button")) {
+    } else if (head && layout.dock === "float" && !ev.target.closest("button,select,label")) {
       var r = panel.getBoundingClientRect();
       move = { kind: "drag", ox: ev.clientX - r.left, oy: ev.clientY - r.top };
     } else return;
@@ -392,7 +466,7 @@
       out += grp("amber", "Hidden on this page", g.hidden.length);
       g.hidden.forEach(function (p) {
         var e = p[0];
-        out += row(e, p[1], '<span style="color:#B45309">' + e.els.length + " matching, none visible. Can't be clicked here.</span>" + '<div class="sel">' + esc(e.selector) + "</div>");
+        out += row(e, p[1], '<span style="color:#B45309">' + e.els.length + " matching, none visible yet. Click around to reveal them. If they never show, this event can't fire here.</span>" + '<div class="sel">' + esc(e.selector) + "</div>");
       });
     }
     if (g.screen.length) {
@@ -408,7 +482,8 @@
       g.earlier.forEach(function (p) { var e = p[0]; out += row(e, p[1], "Appeared earlier in this visit"); });
     }
     var seen = events.filter(function (e) { return e.seen; }).length;
-    sub.textContent = (CFG.variation ? CFG.variation + " · " : "") + seen + " of " + events.length + " events seen so far";
+    sub.textContent = switching ? "Opening " + switching + "…" : seen + " of " + events.length + " events seen so far";
+    renderBuild();
     if (out !== lastList) { list.innerHTML = out; lastList = out; }
   }
 
@@ -430,6 +505,7 @@
 
   window.__opmcMetricsOverlay = {
     events: events,
+    variation: CUR,
     setDock: function (d) { layout.dock = d; applyLayout(); },
     destroy: function () {
       clearInterval(iv); mo.disconnect();

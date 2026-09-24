@@ -1,6 +1,9 @@
 {
-  "variation": "Map Destination Selector",
-  "testRoot": ".opmc-dsm-card",
+  "experiment": { "id": "6619287249485824", "name": "Destination Selector With Map" },
+  "variations": [
+    { "id": "5493387342643200", "name": "Default Destination Selector", "opmc": null, "testRoot": ".destination-selection" },
+    { "id": "6490208667959296", "name": "Map Destination Selector", "opmc": "destination-selector-with-map", "testRoot": ".opmc-dsm-card", "optimizelyBuild": "3cc97bb27092" }
+  ],
   "events": [
     { "name": "Map - Destination Pill Click", "selector": ".opmc-dsm-where-nav > button" },
     { "name": "Map - Destination Tile Click", "selector": ".opmc-dsm-gtile-hit" },

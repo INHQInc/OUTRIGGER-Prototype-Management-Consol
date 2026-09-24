@@ -42,13 +42,18 @@ Everything below this line is state and history. That document is the plan.
 
 ## MOCKUP — TRACKED EVENTS ON THE LIVE PAGE (24 Sep 2026): a mockup, NOT built
 
-`docs/mockups/event-overlay/` is Bryan's idea. Open a variation with
+`docs/mockups/event-overlay/` is Bryan's idea. Open a variation on prep with
 `opmc_metrics=1` and every element tied to the experiment's Optimizely events
-is drawn on the live page. Events that match nothing are called out. It was
-tried on the Map destination selector (experiment 6619287249485824), and the
-README says how to run it and what it found. Building it for real (loader,
-console endpoint, "Visualize events" link in analytics) waits for Bryan. The
-site work below stays next.
+is drawn on the page. Events that match nothing are called out. A dropdown
+switches variations, including the control. It was tried on the Map
+destination selector (experiment 6619287249485824).
+
+**Decided with Bryan:** it runs on prep only, through our loader, and only
+when the address asks. No metrics code goes into the experiment or
+production. Two routes were considered and set aside: Optimizely's preview of
+www, and a check in the experiment's shared code. The README covers how to run
+it, what it found, and what building it needs. Building it waits for Bryan.
+The site work below stays next.
 
 ## IN FLIGHT — SITE, AND SITE ONBOARDING (23 Sep 2026): decided and designed, NOT built
 
