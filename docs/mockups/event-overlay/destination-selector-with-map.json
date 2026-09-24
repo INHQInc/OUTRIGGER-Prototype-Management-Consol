@@ -1,0 +1,20 @@
+{
+  "variation": "Map Destination Selector",
+  "testRoot": ".opmc-dsm-card",
+  "events": [
+    { "name": "Map - Destination Pill Click", "selector": ".opmc-dsm-where-nav > button" },
+    { "name": "Map - Destination Tile Click", "selector": ".opmc-dsm-gtile-hit" },
+    { "name": "Map - Explore Destination CTA Click", "selector": "article:nth-of-type(1) .opmc-dsm-gtile-link" },
+    { "name": "Map - Property Tile Book Now CTA Click", "selector": "article .button.bw-magic-link" },
+    { "name": "Map - Map View Click", "selector": ".opmc-dsm-where-views > button:nth-of-type(2)" },
+    { "name": "Map - Grid View Clicked", "selector": ".opmc-dsm-where-views > button:nth-of-type(1)" },
+    { "name": "Map - Property List Tile Click", "selector": ".opmc-dsm-ptile-body" },
+    { "name": "Map - Popover Property CTA Click", "selector": ".opmc-dsm-card-actions > .button.bw-magic-link" },
+    { "name": "Map - Popover Property Learn More Click", "selector": ".opmc-dsm-card-actions > .card-view-property" },
+    { "name": "Default - Destination Clicked", "selector": ".destination-selection-tabs-list button" },
+    { "name": "Default - Drop Down Click", "selector": ".dropdown-item" },
+    { "name": "Default - Property CTA Click", "selector": ".swiper-wrapper > div .button.bw-magic-link" },
+    { "name": "Default - Property Learn More Click", "selector": ".card-view-property" },
+    { "name": "Default - Property Title Clicked", "selector": ".swiper-wrapper > div h4 span" }
+  ]
+}

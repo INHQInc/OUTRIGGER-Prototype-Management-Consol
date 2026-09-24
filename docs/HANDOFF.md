@@ -1,6 +1,6 @@
 # HANDOFF — Current State & Continuity
 
-*Updated: 2026-09-23. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
+*Updated: 2026-09-24. Read AGENTS.md first (model + rules), then this (state + next moves). Touching UI? `docs/DESIGN-PRINCIPLES.md`. Debugging? `docs/RUNBOOK.md`.*
 
 ## ⚠ THESE DOCS EXIST ONLY ON `phase1/taxonomy-injection` (22 Sep 2026)
 
@@ -39,6 +39,16 @@ concluded experiment learns reaches the next build.
 Everything below this line is state and history. That document is the plan.
 
 ---
+
+## MOCKUP — TRACKED EVENTS ON THE LIVE PAGE (24 Sep 2026): a mockup, NOT built
+
+`docs/mockups/event-overlay/` is Bryan's idea. Open a variation with
+`opmc_metrics=1` and every element tied to the experiment's Optimizely events
+is drawn on the live page. Events that match nothing are called out. It was
+tried on the Map destination selector (experiment 6619287249485824), and the
+README says how to run it and what it found. Building it for real (loader,
+console endpoint, "Visualize events" link in analytics) waits for Bryan. The
+site work below stays next.
 
 ## IN FLIGHT — SITE, AND SITE ONBOARDING (23 Sep 2026): decided and designed, NOT built
 
