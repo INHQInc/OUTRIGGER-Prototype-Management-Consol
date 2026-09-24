@@ -21,7 +21,7 @@
 (function () {
   var Q = new URLSearchParams(location.search);
   var on = false;
-  Q.forEach(function (v, k) { if (k.toLowerCase() === "opmc_metrics" && v === "1") on = true; });
+  Q.forEach(function (v, k) { k = k.toLowerCase(); if ((k === "opmc_metrics" || k === "opmc_analytics") && v === "1") on = true; });
   if (!on) return;
   if (window.__opmcMetricsOverlay) window.__opmcMetricsOverlay.destroy();
 
@@ -39,6 +39,15 @@
     : [{ id: "", name: CFG.variation || "This page", opmc: here || null }];
   var CUR = VARS.filter(function (v) { return only ? v.id === only : (v.opmc || "") === here; })[0] || null;
   var TEST_ROOT = (CUR && CUR.testRoot) || CFG.testRoot || "";
+  // Results (opmc_analytics=1): one reading per event, worded as on the
+  // Evidence board. Variation first, then control.
+  var A = CFG.analytics || null, RD = {};
+  if (A && A.readings) A.readings.forEach(function (r) { RD[r.event] = r; });
+  function readingShort(r) { return r.tone === "new" ? "new · " + r.variationRate : r.delta + " · " + r.variationRate + " vs " + r.controlRate; }
+  function readingLong(r) {
+    return r.tone === "new" ? "Only in the variation · " + r.variationRate + " used it (" + r.counts + ")"
+      : r.delta + " · " + r.variationRate + " vs " + r.controlRate + " · " + r.settled;
+  }
   var events = CFG.events.map(function (e, i) {
     return { name: e.name, selector: e.selector, color: PALETTE[i % PALETTE.length], on: true,
              els: [], shown: [], visible: [], shared: [], seen: false, status: "none", error: null, outside: 0 };
@@ -95,6 +104,10 @@
     "h2{margin:0;font-size:14px;font-weight:600;line-height:1.3}" +
     ".sub{flex:1 1 100%;color:#5D6B7E;font-size:12.5px}" +
     ".build{flex:1 1 100%;font-size:12px;color:#5D6B7E}.build.off{color:#B45309;font-weight:500}#panel.bottom .build{order:4}" +
+    ".rsum{flex:1 1 100%;font-size:12px;color:#17202B;font-weight:600}#panel.bottom .rsum{order:5}" +
+    ".cl .rd{display:inline-block;margin-left:8px;padding:0 6px;border-radius:4px;background:#fff;line-height:18px;font-weight:700}" +
+    ".rd.up,.res.up{color:#067A55}.rd.down,.res.down{color:#C42B2B}.rd.flat,.res.flat{color:#4A5768}.rd.new,.res.new{color:#1D4ED8}" +
+    ".res{font-size:12px;font-weight:600;margin-top:1px}" +
     // The variation switcher gets its own row under the title. Docked to the
     // bottom there's room, so title, switcher, count and tools share one row.
     ".vrow{flex:1 1 100%;display:flex;align-items:center;gap:8px;min-width:0}" +
@@ -165,6 +178,7 @@
         '<div class="vrow"><label for="opmc-var">Variation</label><select id="opmc-var"></select></div>' +
         '<div class="sub" aria-live="polite"></div>' +
         '<div class="build" hidden></div>' +
+        '<div class="rsum" hidden></div>' +
       "</header>" +
       '<div class="list"></div>' +
     "</section>";
@@ -187,6 +201,11 @@
   // pushed into the experiment. Say so, because the events are checked
   // against what is on the page.
   var buildEl = sh.querySelector(".build"), pageBuild = null;
+  var rsumEl = sh.querySelector(".rsum");
+  if (A) {
+    rsumEl.hidden = false;
+    rsumEl.textContent = A.readings ? "Results: " + A.visitors + " visitors, variation vs control" : "No results yet for this test.";
+  }
   function findPageBuild() {
     if (pageBuild) return pageBuild;
     var ss = document.querySelectorAll("script[data-opmc]");
@@ -429,8 +448,13 @@
       var l = e.labelEl;
       var a = e.visible[0].getBoundingClientRect();
       e.anchor = a;
-      var text = e.name + (e.visible.length > 1 ? "  ×" + e.visible.length : "");
-      if (l.textContent !== text) l.textContent = text;
+      var rd = RD[e.name];
+      var html = esc(e.name + (e.visible.length > 1 ? "  ×" + e.visible.length : "")) +
+        (rd ? '<span class="rd ' + rd.tone + '">' + esc(readingShort(rd)) + "</span>" : "");
+      if (l._html !== html) {
+        l.innerHTML = html; l._html = html;
+        l.title = (rd ? readingLong(rd) + " — " : "") + "Drag to move · double-click to put back";
+      }
       l.style.display = ""; e.lineEl.style.display = ""; e.dotEl.style.display = "";
       var w = l.offsetWidth || 160, h = 22, x, y;
       if (e.pin) {
@@ -476,6 +500,7 @@
     if (e.shared.length) warn.push("Same element also counted by: " + e.shared.join(", "));
     return '<div class="ev' + (cls ? " " + cls : "") + '" data-i="' + i + '"><span class="sw" style="background:' + e.color + '"></span><div class="txt">' +
       '<div class="nm">' + esc(e.name) + "</div>" +
+      (RD[e.name] ? '<div class="res ' + RD[e.name].tone + '">' + esc(readingLong(RD[e.name])) + "</div>" : "") +
       '<div class="meta">' + extra + "</div>" +
       (warn.length ? '<div class="warn">' + esc(warn.join(" · ")) + "</div>" : "") +
       "</div></div>";
@@ -485,6 +510,15 @@
     var g = { none: [], hidden: [], screen: [], page: [], earlier: [] };
     events.forEach(function (e, i) { g[e.status].push([e, i]); });
     var out = "";
+    var drawn = {}; events.forEach(function (e) { drawn[e.name] = 1; });
+    var elsewhere = A && A.readings ? A.readings.filter(function (r) { return !drawn[r.event]; }) : [];
+    if (elsewhere.length) {
+      out += grp("", "Results without an element", elsewhere.length);
+      elsewhere.forEach(function (r) {
+        out += '<div class="ev"><span class="sw" style="background:#C9D2DC"></span><div class="txt"><div class="nm">' + esc(r.event) + "</div>" +
+          '<div class="res ' + r.tone + '">' + esc(readingLong(r)) + "</div></div></div>";
+      });
+    }
     if (g.screen.length) {
       out += grp("good", "On screen now", g.screen.length);
       g.screen.forEach(function (p) { var e = p[0]; out += row(e, p[1], e.visible.length + " on screen" + (e.shown.length > e.visible.length ? " · " + e.shown.length + " on the page" : "")); });

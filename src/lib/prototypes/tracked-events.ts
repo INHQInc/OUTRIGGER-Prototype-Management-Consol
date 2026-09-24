@@ -15,6 +15,8 @@ import { getContentStore } from "../content/store";
 import { getOptimizelyClientForOrg } from "../experimentation";
 import { OptimizelyClient, type OptiChange, type OptiEvent, type OptiExperiment } from "../optimizely/api";
 import { getSite } from "../sites";
+import { buildFor } from "../reports/build";
+import type { StatsReport } from "./stats";
 
 export interface TrackedVariation {
   id: string;
@@ -94,4 +96,80 @@ export async function trackedEventsFor(key: string): Promise<{ data: TrackedEven
   }
   if (bound.variationId) keyFor.set(String(bound.variationId), proto.key);
   return { data: assembleTrackedEvents(exp, metricEvents, keyFor) };
+}
+
+// ── results on the page (?opmc_analytics=1) ─────────────────────────────────
+
+/** One event's result, worded the way the Evidence board words its chips, so
+ *  the page and the board can't disagree. Variation first, then control. */
+export interface EventReading {
+  event: string;
+  /** up / down only once the interval excludes zero; new = the element
+   *  exists only in the variation, so the number is adoption, not lift. */
+  tone: "up" | "down" | "flat" | "new";
+  delta: string;
+  variationRate: string;
+  controlRate: string;
+  counts: string;
+  settled: "settled" | "not settled" | "new surface";
+}
+
+export interface TrackedResults {
+  experimentName: string;
+  /** Visitors, variation vs control: "25,181 vs 25,096". */
+  visitors: string;
+  readings: EventReading[];
+}
+
+const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`);
+// Two decimals below 10%, as in the readout and on the Evidence board.
+const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(Math.abs(v * 100) >= 10 ? 1 : 2)}%`);
+const count = (v?: number) => (v === undefined ? "—" : v.toLocaleString("en-US"));
+
+/** Pure: one reading per per-event metric in a stats report (composites are
+ *  the plan's sums of events, so they have no single element to sit on). */
+export function resultReadings(stats: StatsReport): EventReading[] {
+  return stats.metrics.filter((m) => m.kind === "metric").map((m) => {
+    const focus = m.cells.find((c) => c.variationId === stats.focusVariationId);
+    const base = m.cells.find((c) => c.variationId === stats.baselineVariationId);
+    const sig = Boolean(focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0);
+    const featureOnly = Boolean(m.featureOnly);
+    return {
+      event: m.key.startsWith("metric:") ? m.key.slice("metric:".length) : m.label,
+      tone: featureOnly ? "new" : !sig ? "flat" : (focus?.lift ?? 0) >= 0 ? "up" : "down",
+      delta: featureOnly ? "new" : pct(focus?.lift),
+      variationRate: rate(focus?.rate),
+      controlRate: featureOnly ? "—" : rate(base?.rate),
+      counts: featureOnly ? count(focus?.count) : `${count(focus?.count)} vs ${count(base?.count)}`,
+      settled: featureOnly ? "new surface" : sig ? "settled" : "not settled",
+    };
+  });
+}
+
+/** The results for a prototype, for the overlay (?opmc_analytics=1).
+ *
+ * NOT GATED, by Bryan's decision (24 Sep 2026, "lets not gate it for now"):
+ * anyone who opens a page with the flag and the prototype's key can read these
+ * results. The gated version, the emailed readout's signed token
+ * (lib/reports/link), was proposed and set aside for now. */
+export async function trackedResultsFor(key: string): Promise<{ data: TrackedResults } | { status: number; error: string }> {
+  const store = await getContentStore();
+  const proto = await store.getPrototype(key);
+  if (!proto) return { status: 404, error: "No prototype with that key." };
+  // resolvePrototypeOrg would backfill a legacy record; this route is public,
+  // so it only reads.
+  const orgId = proto.orgId || (proto.siteKey ? (await getSite(proto.siteKey))?.orgId ?? "" : "");
+  if (!orgId) return { status: 404, error: "No customer for this prototype." };
+  const built = await buildFor(orgId, proto);
+  if ("unavailable" in built || !built.stats) return { status: 404, error: "No results yet." };
+  const stats = built.stats;
+  const first = stats.metrics.find((m) => m.cells.length);
+  const n = (id?: string) => first?.cells.find((c) => c.variationId === id)?.n;
+  return {
+    data: {
+      experimentName: proto.experiment?.experimentName ?? proto.name,
+      visitors: `${count(n(stats.focusVariationId))} vs ${count(n(stats.baselineVariationId))}`,
+      readings: resultReadings(stats),
+    },
+  };
 }

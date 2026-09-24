@@ -11,8 +11,9 @@ import { NextRequest, NextResponse } from "next/server";
  *
  * Adding &opmc_metrics=1 also draws the tracked-events overlay: every element
  * the experiment's Optimizely click events count, boxed and named
- * (/api/loader/metrics + /opmc-metrics.js). Without that flag the loader makes
- * no extra call. &opmc_variation=<id>, set by the overlay's variation switcher,
+ * (/api/loader/metrics + /opmc-metrics.js). &opmc_analytics=1 draws it too,
+ * with each event's result on its label (/api/loader/analytics). Without
+ * either flag the loader makes no extra call. &opmc_variation=<id>, set by the overlay's variation switcher,
  * shows a variation that isn't this prototype (usually the original): the
  * overlay still loads for this prototype's test, and the prototype's code is
  * skipped.
@@ -38,12 +39,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ site
     if (window.__opmcLoaded) return; window.__opmcLoaded = {};
     if (window.__opmcLoaded[key]) return; window.__opmcLoaded[key] = true;
     // Tracked-events overlay: ONLY when the address asks for it.
-    var metrics = false, otherVariation = false;
+    var metrics = false, analytics = false, otherVariation = false;
     q.forEach(function (v, k) {
       k = k.toLowerCase();
       if (k === 'opmc_metrics' && v === '1') metrics = true;
+      if (k === 'opmc_analytics' && v === '1') analytics = true;
       if (k === 'opmc_variation' && v) otherVariation = true;
     });
+    // Results ride on the tracked-events overlay, so asking for them draws it.
+    if (analytics) metrics = true;
     if (!(metrics && otherVariation)) {
       fetch(${JSON.stringify(base)} + '/api/loader?site=' + ${JSON.stringify(encodeURIComponent(siteKey))} + '&key=' + encodeURIComponent(key))
         .then(function (r) { return r.ok ? r.json() : null; })
@@ -57,10 +61,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ site
         .catch(function () {});
     }
     if (metrics) {
-      fetch(${JSON.stringify(base)} + '/api/loader/metrics?site=' + ${JSON.stringify(encodeURIComponent(siteKey))} + '&key=' + encodeURIComponent(key))
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
+      var get = function (path) {
+        return fetch(${JSON.stringify(base)} + path + '?site=' + ${JSON.stringify(encodeURIComponent(siteKey))} + '&key=' + encodeURIComponent(key))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { return null; });
+      };
+      Promise.all([get('/api/loader/metrics'), analytics ? get('/api/loader/analytics') : null])
+        .then(function (res) {
+          var d = res[0];
           if (!d || !d.events) return;
+          if (analytics) d.analytics = res[1] || { unavailable: true };
           window.__OPMC_EVENTS__ = d;
           var s = document.createElement('script');
           s.src = ${JSON.stringify(base)} + '/opmc-metrics.js';
