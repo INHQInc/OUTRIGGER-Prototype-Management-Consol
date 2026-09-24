@@ -6,8 +6,8 @@
  * bound to: a see-through box per element, one colour per event, and a
  * draggable callout naming the event. It follows the page live: scroll,
  * resize, and whatever the variation reveals as you click around. A panel
- * lists every event: not seen yet, hidden on this page, on screen, on the
- * page, seen earlier. It floats or docks left / bottom / right, like a
+ * lists every event: on screen, covered on screen (under a popup), on the
+ * page, seen earlier, hidden on this page, not seen yet. It floats or docks left / bottom / right, like a
  * browser's developer tools, and a switcher at the top opens the
  * experiment's other variations.
  *
@@ -380,6 +380,26 @@
     return !(s.visibility === "hidden" || s.display === "none" || +s.opacity === 0);
   }
   function inViewport(r) { return r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; }
+  // ON TOP, not just on screen. An open popup or modal covers the page, and the
+  // elements under it can't be clicked, so they get no box and no label. The
+  // same test catches a click-area overlay that sits over the tracked element.
+  // Sample the centre and four inner points and ask the browser what is
+  // uppermost there, ignoring this overlay (its panel and labels aren't page).
+  var SAMPLE = [[0.5, 0.5], [0.2, 0.2], [0.8, 0.2], [0.2, 0.8], [0.8, 0.8]];
+  function onTop(el) {
+    var r = el.getBoundingClientRect();
+    for (var i = 0; i < SAMPLE.length; i++) {
+      var x = r.left + r.width * SAMPLE[i][0], y = r.top + r.height * SAMPLE[i][1];
+      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+      var stack = document.elementsFromPoint(x, y);
+      for (var j = 0; j < stack.length; j++) {
+        if (stack[j] === host) continue;
+        if (stack[j] === el || el.contains(stack[j])) return true;
+        break;
+      }
+    }
+    return false;
+  }
   function measure() {
     var owner = new Map();
     events.forEach(function (e) {
@@ -387,11 +407,14 @@
       try { e.els = Array.prototype.slice.call(document.querySelectorAll(e.selector)); }
       catch (err) { e.els = []; e.error = "The selector isn't valid CSS."; }
       e.shown = e.els.filter(isShown);
-      e.visible = e.shown.filter(function (el) { return inViewport(el.getBoundingClientRect()); });
+      var inView = e.shown.filter(function (el) { return inViewport(el.getBoundingClientRect()); });
+      e.visible = inView.filter(onTop);
+      e.covered = inView.length - e.visible.length;
       if (e.shown.length) e.seen = true;
-      // screen · page (scroll to it) · earlier (appeared this visit, gone now) ·
-      // hidden (matches, never visible: can't be clicked) · none (never matched yet)
-      e.status = e.error ? "none" : e.visible.length ? "screen" : e.shown.length ? "page" : e.seen ? "earlier" : e.els.length ? "hidden" : "none";
+      // screen · covered (on screen, under a popup or another layer) · page
+      // (scroll to it) · earlier (appeared this visit, gone now) · hidden
+      // (matches, never visible: can't be clicked) · none (never matched yet)
+      e.status = e.error ? "none" : e.visible.length ? "screen" : e.covered ? "covered" : e.shown.length ? "page" : e.seen ? "earlier" : e.els.length ? "hidden" : "none";
       e.outside = TEST_ROOT ? e.shown.filter(function (el) { return !el.closest(TEST_ROOT); }).length : 0;
       e.els.forEach(function (el) { var l = owner.get(el) || []; l.push(e); owner.set(el, l); });
     });
@@ -620,7 +643,7 @@
   }
   var lastList = "";
   function renderList() {
-    var g = { none: [], hidden: [], screen: [], page: [], earlier: [] };
+    var g = { none: [], hidden: [], covered: [], screen: [], page: [], earlier: [] };
     events.forEach(function (e, i) { g[e.status].push([e, i]); });
     var out = "";
     var drawn = {}; events.forEach(function (e) { drawn[e.name] = 1; });
@@ -634,7 +657,7 @@
     }
     if (g.screen.length) {
       out += grp("good", "On screen now", g.screen.length);
-      g.screen.forEach(function (p) { var e = p[0]; out += row(e, p[1], e.visible.length + " on screen" + (e.shown.length > e.visible.length ? " · " + e.shown.length + " on the page" : "")); });
+      g.screen.forEach(function (p) { var e = p[0]; out += row(e, p[1], e.visible.length + " on screen" + (e.covered ? " · " + e.covered + " covered" : "") + (e.shown.length > e.visible.length ? " · " + e.shown.length + " on the page" : "")); });
     }
     if (g.page.length) {
       out += grp("", "On the page, scroll to see", g.page.length);
@@ -643,6 +666,13 @@
     if (g.earlier.length) {
       out += grp("", "Seen earlier", g.earlier.length);
       g.earlier.forEach(function (p) { var e = p[0]; out += row(e, p[1], "Appeared earlier in this visit"); });
+    }
+    if (g.covered.length) {
+      out += grp("", "Covered on screen", g.covered.length, "covered");
+      if (openGroups.covered) g.covered.forEach(function (p) {
+        var e = p[0];
+        out += row(e, p[1], e.covered + " on screen, under something on top, such as an open popup. It can't be clicked until that closes.");
+      });
     }
     if (g.hidden.length) {
       out += grp("amber", "Hidden on this page", g.hidden.length, "hidden");
