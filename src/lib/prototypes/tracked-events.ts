@@ -112,6 +112,12 @@ export interface EventReading {
   controlRate: string;
   counts: string;
   settled: "settled" | "not settled" | "new surface";
+  /** The card's closing line, the Evidence board's words. */
+  detail: string;
+  /** A plan metric that sums several events: no single element to sit on. */
+  composite?: boolean;
+  /** The plan's decision metric. */
+  primary?: boolean;
 }
 
 export interface TrackedResults {
@@ -126,14 +132,16 @@ const pct = (v?: number) => (v === undefined ? "—" : `${v >= 0 ? "+" : ""}${(v
 const rate = (v?: number) => (v === undefined ? "—" : `${(v * 100).toFixed(Math.abs(v * 100) >= 10 ? 1 : 2)}%`);
 const count = (v?: number) => (v === undefined ? "—" : v.toLocaleString("en-US"));
 
-/** Pure: one reading per per-event metric in a stats report (composites are
- *  the plan's sums of events, so they have no single element to sit on). */
+/** Pure: one reading per metric in a stats report, the decision metric and
+ *  the plan's sums first. The words are the Evidence board's
+ *  (components/EvidencePanel.tsx builds the same chip and card on the client). */
 export function resultReadings(stats: StatsReport): EventReading[] {
-  return stats.metrics.filter((m) => m.kind === "metric").map((m) => {
+  const rows = stats.metrics.map((m): EventReading => {
     const focus = m.cells.find((c) => c.variationId === stats.focusVariationId);
     const base = m.cells.find((c) => c.variationId === stats.baselineVariationId);
     const sig = Boolean(focus?.liftCi && focus.liftCi.lo * focus.liftCi.hi > 0);
     const featureOnly = Boolean(m.featureOnly);
+    const composite = m.kind === "composite";
     return {
       event: m.key.startsWith("metric:") ? m.key.slice("metric:".length) : m.label,
       tone: featureOnly ? "new" : !sig ? "flat" : (focus?.lift ?? 0) >= 0 ? "up" : "down",
@@ -142,8 +150,15 @@ export function resultReadings(stats: StatsReport): EventReading[] {
       controlRate: featureOnly ? "—" : rate(base?.rate),
       counts: featureOnly ? count(focus?.count) : `${count(focus?.count)} vs ${count(base?.count)}`,
       settled: featureOnly ? "new surface" : sig ? "settled" : "not settled",
+      detail: featureOnly
+        ? "This element exists only in the variation, so there is no lift to read — the number is adoption."
+        : sig ? "The gap is beyond what luck explains." : "Moved, but still inside the range luck could produce.",
+      ...(composite ? { composite: true } : {}),
+      ...(m.key === stats.primaryKey ? { primary: true } : {}),
     };
   });
+  const rank = (r: EventReading) => (r.primary ? 0 : r.composite ? 1 : 2);
+  return rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).map((x) => x.r);
 }
 
 /** The results for a prototype, for the overlay (?opmc_analytics=1).

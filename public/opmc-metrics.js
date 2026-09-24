@@ -43,7 +43,6 @@
   // Evidence board. Variation first, then control.
   var A = CFG.analytics || null, RD = {};
   if (A && A.readings) A.readings.forEach(function (r) { RD[r.event] = r; });
-  function readingShort(r) { return r.tone === "new" ? "new · " + r.variationRate : r.delta + " · " + r.variationRate + " vs " + r.controlRate; }
   function readingLong(r) {
     return r.tone === "new" ? "Only in the variation · " + r.variationRate + " used it (" + r.counts + ")"
       : r.delta + " · " + r.variationRate + " vs " + r.controlRate + " · " + r.settled;
@@ -105,8 +104,28 @@
     ".sub{flex:1 1 100%;color:#5D6B7E;font-size:12.5px}" +
     ".build{flex:1 1 100%;font-size:12px;color:#5D6B7E}.build.off{color:#B45309;font-weight:500}#panel.bottom .build{order:4}" +
     ".rsum{flex:1 1 100%;font-size:12px;color:#17202B;font-weight:600}#panel.bottom .rsum{order:5}" +
-    ".cl .rd{display:inline-block;margin-left:8px;padding:0 6px;border-radius:4px;background:#fff;line-height:18px;font-weight:700}" +
-    ".rd.up,.res.up{color:#067A55}.rd.down,.res.down{color:#C42B2B}.rd.flat,.res.flat{color:#4A5768}.rd.new,.res.new{color:#1D4ED8}" +
+    ".res.up{color:#067A55}.res.down{color:#C42B2B}.res.flat{color:#4A5768}.res.new{color:#1D4ED8}" +
+    // The Evidence board's chip (components/EvidencePanel.tsx), in results mode.
+    ".cl.chip{height:auto;display:inline-flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid;border-radius:8px;background:#fff;" +
+      "font:700 13px/18px " + FONT + ";font-variant-numeric:tabular-nums;box-shadow:0 1px 3px rgba(23,32,43,.18)}" +
+    ".cl.chip.t-up{border-color:#067A55;color:#067A55}.cl.chip.t-down{border-color:#C42B2B;color:#C42B2B}" +
+    ".cl.chip.t-flat{border-color:#8A96A6;color:#4A5768}.cl.chip.t-new{border-color:rgba(29,78,216,.7);border-style:dashed;color:#1D4ED8}" +
+    ".cl.chip .lb{font-weight:600;color:#17202B;max-width:22rem;overflow:hidden;text-overflow:ellipsis}" +
+    ".cl.chip .rt{font-weight:600;color:#5D6B7E}.cl.chip .rt b{font-weight:600;color:#17202B}" +
+    ".cl.chip .tray{position:absolute;left:100%;margin-left:-8px;top:-1px;bottom:-1px;display:flex;align-items:center;padding:0 9px 0 13px;" +
+      "background:#fff;border:1px solid;border-left:0;border-color:inherit;border-radius:0 8px 8px 0;opacity:0;pointer-events:none;transform:translateX(-6px);transition:opacity .15s,transform .15s}" +
+    ".cl.chip:hover .tray{opacity:1;pointer-events:auto;transform:none}" +
+    ".tray button,.card .cb{all:unset;display:inline-flex;cursor:pointer;color:#5D6B7E}.tray button:hover,.card .cb:hover{color:#17202B}" +
+    ".tray button:focus-visible,.card .cb:focus-visible{outline:2px solid #1D4ED8;outline-offset:2px;border-radius:3px}" +
+    ".card{position:absolute;z-index:3;width:288px;border:1px solid #C9D2DC;border-radius:12px;background:#fff;box-shadow:0 10px 30px rgba(23,32,43,.18);" +
+      "font:13.5px/1.4 " + FONT + ";color:#17202B;text-align:left;pointer-events:auto}" +
+    ".card .ch{display:flex;align-items:flex-start;gap:8px;padding:12px 14px 8px}.card .ct{flex:1 1 auto;min-width:0;font-size:14px;font-weight:700;line-height:1.3}" +
+    ".card .cb{flex:0 0 auto;margin-top:2px}.card .cb.on{color:#1D4ED8}" +
+    ".card .cg{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;padding:0 14px;font-variant-numeric:tabular-nums}" +
+    ".card .k{color:#5D6B7E}.card .v{text-align:right;font-weight:600}.card .v.n{font-weight:400}.card .dl{font-weight:700}" +
+    ".card .t-up{color:#067A55}.card .t-down{color:#C42B2B}.card .t-flat{color:#4A5768}.card .t-new{color:#1D4ED8}" +
+    ".card .cd{margin:10px 14px 14px;padding-top:10px;border-top:1px solid #E3E8EE;color:#4A5768;font-size:13px;line-height:1.35}" +
+    "@media (prefers-reduced-motion:reduce){.cl.chip .tray{transition:none}}" +
     ".res{font-size:12px;font-weight:600;margin-top:1px}" +
     // The variation switcher gets its own row under the title. Docked to the
     // bottom there's room, so title, switcher, count and tools share one row.
@@ -310,6 +329,7 @@
     var e = events[+row.getAttribute("data-i")];
     var target = e.visible[0] || e.shown[0] || e.els[0];
     if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (A && RD[e.name]) { cardOpen[e.name] = true; draw(); }
   });
   panel.addEventListener("mouseover", function (ev) {
     var row = ev.target.closest(".ev[data-i]");
@@ -388,43 +408,116 @@
   // offset from its element, and it rides along as the page scrolls.
   // Double-click a callout to put it back.
   function textOn(color) { return DARK_TEXT[color] ? "#17202B" : "#fff"; }
+
+  // Results mode (opmc_analytics=1) draws the Evidence board's chip and card:
+  // a white chip with the change and both rates, in the earned tone, and on a
+  // press a card with the numbers. Box, line and dot take the tone too. Only
+  // the numbers button sits in the chip's tray: no colour, note or delete here.
+  var TONE = {
+    up: { line: "#067A55", border: "#067A55", fill: "rgba(6,122,85,.15)" },
+    down: { line: "#C42B2B", border: "#C42B2B", fill: "rgba(196,43,43,.15)" },
+    flat: { line: "#8A96A6", border: "#8A96A6", fill: "rgba(23,32,43,.05)" },
+    "new": { line: "#1D4ED8", border: "rgba(29,78,216,.7)", fill: "rgba(29,78,216,.10)", dashed: true },
+  };
+  var SVG16 = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  var I_EXPAND = SVG16 + '<path d="M6.5 2H2v4.5M9.5 2H14v4.5M6.5 14H2V9.5M9.5 14H14V9.5"/></svg>';
+  var I_COLLAPSE = SVG16 + '<path d="M2 6.5h4.5V2M14 6.5H9.5V2M2 9.5h4.5V14M14 9.5H9.5V14"/></svg>';
+  var I_PIN = SVG16 + '<circle cx="8" cy="5.4" r="3.2"/><path d="M8 8.6V14"/></svg>';
+  var I_CLOSE = SVG16 + '<path d="M4 4l8 8M12 4l-8 8"/></svg>';
+  // A pinned card stays open, and is remembered with the layout (it survives
+  // a reload and a variation switch). An opened one lasts for this page.
+  var pins = layout.pins && typeof layout.pins === "object" ? layout.pins : (layout.pins = {});
+  var cardOpen = {};
+  function isOpen(e) { return !!(cardOpen[e.name] || pins[e.name]); }
+  function toggleCard(e) {
+    if (isOpen(e)) { cardOpen[e.name] = false; pins[e.name] = false; saveLayout(); }
+    else cardOpen[e.name] = true;
+    draw();
+  }
+  function chipHtml(e, rd) {
+    var name = esc(e.name + (e.visible.length > 1 ? "  ×" + e.visible.length : ""));
+    if (!rd) return '<span class="lb">' + name + '</span><span class="rt">No result yet</span>';
+    var open = isOpen(e);
+    return '<span class="lb">' + name + '</span><span class="dl">' + esc(rd.delta) + "</span>" +
+      (rd.tone === "new" ? '<span class="rt"><b>' + esc(rd.variationRate) + "</b></span>"
+        : '<span class="rt"><b>' + esc(rd.variationRate) + "</b> vs " + esc(rd.controlRate) + "</span>") +
+      '<span class="tray"><button type="button" data-act="open" title="' + (open ? "Collapse the numbers" : "Open the numbers") + '">' +
+      (open ? I_COLLAPSE : I_EXPAND) + "</button></span>";
+  }
+  function cardHtml(e, rd) {
+    var pinned = !!pins[e.name];
+    return '<div class="ch"><div class="ct">' + esc(e.name) + "</div>" +
+      '<button type="button" class="cb' + (pinned ? " on" : "") + '" data-act="pin" title="' + (pinned ? "Unpin" : "Pin open, so it stays open") + '">' + I_PIN + "</button>" +
+      '<button type="button" class="cb" data-act="close" title="Close">' + I_CLOSE + "</button></div>" +
+      '<div class="cg"><span class="k">Change</span><span class="v dl t-' + rd.tone + '">' + esc(rd.delta) + "</span>" +
+      '<span class="k">Variation</span><span class="v">' + esc(rd.variationRate) + "</span>" +
+      (rd.tone === "new" ? "" : '<span class="k">Control</span><span class="v">' + esc(rd.controlRate) + "</span>") +
+      '<span class="k">Events</span><span class="v n">' + esc(rd.counts) + "</span>" +
+      '<span class="k">Reading</span><span class="v n">' + esc(rd.settled) + "</span></div>" +
+      '<p class="cd">' + esc(rd.detail || "") + "</p>";
+  }
   var drag = null;
   function ensureCallout(e) {
     if (e.labelEl) return;
     var l = document.createElement("div");
     l.className = "cl";
-    l.title = "Drag to move · double-click to put back";
-    l.style.background = e.color; l.style.color = textOn(e.color);
     l.addEventListener("pointerdown", function (ev) {
+      if (ev.target.closest(".tray")) return; // the tray's button, not a drag
       ev.preventDefault(); ev.stopPropagation();
       var r = l.getBoundingClientRect();
-      drag = { e: e, ox: ev.clientX - r.left, oy: ev.clientY - r.top };
+      drag = { e: e, ox: ev.clientX - r.left, oy: ev.clientY - r.top, sx: ev.clientX, sy: ev.clientY, moved: false };
       try { l.setPointerCapture(ev.pointerId); } catch (x) {}
       l.style.cursor = "grabbing";
     });
     l.addEventListener("pointermove", function (ev) {
       if (!drag || drag.e !== e || !e.anchor) return;
+      if (!drag.moved && Math.abs(ev.clientX - drag.sx) + Math.abs(ev.clientY - drag.sy) < 4) return;
+      drag.moved = true;
       e.pin = { dx: ev.clientX - drag.ox - e.anchor.left, dy: ev.clientY - drag.oy - e.anchor.top };
       draw();
     });
     function end(ev) {
       if (!drag || drag.e !== e) return;
+      var pressed = !drag.moved;
       drag = null; l.style.cursor = "grab";
       try { l.releasePointerCapture(ev.pointerId); } catch (x) {}
+      // A press, not a drag, opens the numbers, as on the Evidence board.
+      if (pressed && ev.type === "pointerup" && A && RD[e.name]) toggleCard(e);
     }
     l.addEventListener("pointerup", end);
     l.addEventListener("pointercancel", end);
-    l.addEventListener("click", function (ev) { ev.preventDefault(); ev.stopPropagation(); });
+    l.addEventListener("click", function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (ev.target.closest('[data-act="open"]')) toggleCard(e);
+    });
     l.addEventListener("dblclick", function (ev) { ev.preventDefault(); ev.stopPropagation(); e.pin = null; draw(); });
     labels.appendChild(l);
     e.labelEl = l;
     e.lineEl = document.createElementNS(svgNS, "line");
-    e.lineEl.setAttribute("stroke", e.color); e.lineEl.setAttribute("stroke-width", "2");
+    e.lineEl.setAttribute("stroke-width", "2");
     e.dotEl = document.createElementNS(svgNS, "circle");
-    e.dotEl.setAttribute("r", "3.5"); e.dotEl.setAttribute("fill", e.color);
+    e.dotEl.setAttribute("r", "3.5");
     svg.appendChild(e.lineEl); svg.appendChild(e.dotEl);
   }
+  function ensureCard(e) {
+    if (e.cardEl) return e.cardEl;
+    var c = document.createElement("div");
+    c.className = "card";
+    c.addEventListener("pointerdown", function (ev) { ev.stopPropagation(); });
+    c.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      var b = ev.target.closest("[data-act]"); if (!b) return;
+      var act = b.getAttribute("data-act");
+      if (act === "pin") { pins[e.name] = !pins[e.name]; if (pins[e.name]) cardOpen[e.name] = true; saveLayout(); }
+      if (act === "close") { cardOpen[e.name] = false; pins[e.name] = false; saveLayout(); }
+      draw();
+    });
+    labels.appendChild(c);
+    e.cardEl = c;
+    return c;
+  }
   function hideCallout(e) {
+    if (e.cardEl) e.cardEl.style.display = "none";
     if (!e.labelEl) return;
     e.labelEl.style.display = "none"; e.lineEl.style.display = "none"; e.dotEl.style.display = "none";
   }
@@ -436,33 +529,39 @@
     events.forEach(function (e, i) {
       if (!showBoxes || !e.on || !e.visible.length) { hideCallout(e); return; }
       var dim = hv !== null && hv !== i;
+      var rd = A ? RD[e.name] : null;
+      var T = A ? TONE[rd ? rd.tone : "flat"] : null;
       e.visible.forEach(function (el) {
         var r = el.getBoundingClientRect();
         var b = document.createElement("div");
         b.className = "box";
         b.style.cssText = "left:" + (r.left - 2) + "px;top:" + (r.top - 2) + "px;width:" + (r.width + 4) + "px;height:" + (r.height + 4) + "px;" +
-          "border-color:" + e.color + ";background:" + e.color + (dim ? "0D" : "33") + ";opacity:" + (dim ? 0.25 : 1) + ";";
+          (T ? "border-color:" + T.border + ";border-style:" + (T.dashed ? "dashed" : "solid") + ";background:" + T.fill + ";"
+             : "border-color:" + e.color + ";background:" + e.color + (dim ? "0D" : "33") + ";") +
+          "opacity:" + (dim ? 0.25 : 1) + ";";
         boxes.appendChild(b);
       });
       ensureCallout(e);
       var l = e.labelEl;
       var a = e.visible[0].getBoundingClientRect();
       e.anchor = a;
-      var rd = RD[e.name];
-      var html = esc(e.name + (e.visible.length > 1 ? "  ×" + e.visible.length : "")) +
-        (rd ? '<span class="rd ' + rd.tone + '">' + esc(readingShort(rd)) + "</span>" : "");
-      if (l._html !== html) {
-        l.innerHTML = html; l._html = html;
-        l.title = (rd ? readingLong(rd) + " — " : "") + "Drag to move · double-click to put back";
+      var html = A ? chipHtml(e, rd) : esc(e.name + (e.visible.length > 1 ? "  ×" + e.visible.length : ""));
+      var cls = A ? "cl chip t-" + (rd ? rd.tone : "flat") : "cl";
+      if (l._html !== html || l.className !== cls) {
+        l.innerHTML = html; l._html = html; l.className = cls;
+        l.style.background = A ? "" : e.color; l.style.color = A ? "" : textOn(e.color);
+        l.title = (rd ? readingLong(rd) + " · press for the numbers · " : "") + "Drag to move · double-click to put back";
       }
+      var ink = T ? T.line : e.color;
+      e.lineEl.setAttribute("stroke", ink); e.dotEl.setAttribute("fill", ink);
       l.style.display = ""; e.lineEl.style.display = ""; e.dotEl.style.display = "";
-      var w = l.offsetWidth || 160, h = 22, x, y;
+      var w = l.offsetWidth || 160, h = l.offsetHeight || 22, x, y;
       if (e.pin) {
         x = a.left + e.pin.dx; y = a.top + e.pin.dy;
       } else {
         var right = a.right + 18 + w < innerWidth;
         x = right ? a.right + 18 : Math.max(4, a.left - 18 - w);
-        y = Math.max(4, a.top - 30);
+        y = Math.max(4, a.top - h - 8);
         for (var guard = 0; guard < 40; guard++) {
           var hit = placed.some(function (p) { return x < p.x + p.w + 4 && x + w + 4 > p.x && y < p.y + p.h + 4 && y + h + 4 > p.y; });
           if (!hit) break;
@@ -482,6 +581,18 @@
       e.lineEl.setAttribute("opacity", dim ? "0.25" : "1");
       e.dotEl.setAttribute("cx", p1.x); e.dotEl.setAttribute("cy", p1.y);
       e.dotEl.setAttribute("opacity", dim ? "0.25" : "1");
+      // The numbers card, under its chip (above it when there's no room below).
+      if (A && rd && isOpen(e)) {
+        var c = ensureCard(e), ch = cardHtml(e, rd);
+        if (c._html !== ch) { c.innerHTML = ch; c._html = ch; }
+        c.style.display = "";
+        var cw = c.offsetWidth || 288, chh = c.offsetHeight || 200;
+        var cy = y + h + 6;
+        if (cy + chh > innerHeight - 4) cy = Math.max(4, y - chh - 6);
+        c.style.left = Math.max(4, Math.min(x, innerWidth - cw - 4)) + "px";
+        c.style.top = cy + "px";
+        c.style.opacity = dim ? 0.3 : 1;
+      } else if (e.cardEl) e.cardEl.style.display = "none";
     });
   }
 
@@ -498,7 +609,9 @@
     var warn = [];
     if (e.outside) warn.push(e.outside + " outside this test's area");
     if (e.shared.length) warn.push("Same element also counted by: " + e.shared.join(", "));
-    return '<div class="ev' + (cls ? " " + cls : "") + '" data-i="' + i + '"><span class="sw" style="background:' + e.color + '"></span><div class="txt">' +
+    // In results mode the swatch wears the reading's tone, like the event's box and chip.
+    var swatch = A ? TONE[RD[e.name] ? RD[e.name].tone : "flat"].line : e.color;
+    return '<div class="ev' + (cls ? " " + cls : "") + '" data-i="' + i + '"><span class="sw" style="background:' + swatch + '"></span><div class="txt">' +
       '<div class="nm">' + esc(e.name) + "</div>" +
       (RD[e.name] ? '<div class="res ' + RD[e.name].tone + '">' + esc(readingLong(RD[e.name])) + "</div>" : "") +
       '<div class="meta">' + extra + "</div>" +
@@ -550,7 +663,8 @@
     var nd = (CFG.notDrawable || []).length;
     sub.textContent = switching ? "Opening " + switching + "…"
       : seen + " of " + events.length + " events seen so far" +
-        (nd ? " · " + nd + (nd === 1 ? " more isn't a click event" : " more aren't click events") + ", so not shown" : "");
+        // In results mode those events are listed, under "Results without an element".
+        (nd && !(A && A.readings) ? " · " + nd + (nd === 1 ? " more isn't a click event" : " more aren't click events") + ", so not shown" : "");
     renderBuild();
     if (out !== lastList) { list.innerHTML = out; lastList = out; }
   }

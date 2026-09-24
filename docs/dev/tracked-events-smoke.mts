@@ -199,10 +199,12 @@ console.log("\nResults, worded as on the Evidence board");
     ],
   } as unknown as Parameters<typeof resultReadings>[0];
   const r = resultReadings(stats);
-  check("one reading per event, composites left out", r.map((x) => x.event), ["Tile Check Availability Clicked", "View Room Details Clicked", "Booking Complete"]);
-  check("a settled rise is up, with both rates", [r[0].tone, r[0].delta, r[0].variationRate, r[0].controlRate, r[0].counts, r[0].settled], ["up", "+1040.0%", "9.06%", "0.80%", "2,281 vs 200", "settled"]);
-  check("an element only in the variation reads as adoption", [r[1].tone, r[1].delta, r[1].variationRate, r[1].controlRate, r[1].settled], ["new", "new", "15.9%", "—", "new surface"]);
-  check("a move inside the noise stays grey", [r[2].tone, r[2].delta, r[2].settled], ["flat", "-0.5%", "not settled"]);
+  check("the plan's sums lead, then one reading per event", r.map((x) => x.event), ["Booking intent", "Tile Check Availability Clicked", "View Room Details Clicked", "Booking Complete"]);
+  check("a sum is marked as one", [r[0].composite, r[1].composite], [true, undefined]);
+  check("the card's closing line, as on the Evidence board", [r[1].detail, r[3].detail], ["The gap is beyond what luck explains.", "Moved, but still inside the range luck could produce."]);
+  check("a settled rise is up, with both rates", [r[1].tone, r[1].delta, r[1].variationRate, r[1].controlRate, r[1].counts, r[1].settled], ["up", "+1040.0%", "9.06%", "0.80%", "2,281 vs 200", "settled"]);
+  check("an element only in the variation reads as adoption", [r[2].tone, r[2].delta, r[2].variationRate, r[2].controlRate, r[2].settled], ["new", "new", "15.9%", "—", "new surface"]);
+  check("a move inside the noise stays grey", [r[3].tone, r[3].delta, r[3].settled], ["flat", "-0.5%", "not settled"]);
 }
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");
