@@ -38,7 +38,12 @@ import { SESSION_COOKIE } from "@/lib/auth/config";
 // only this file sets. The cron routes are NOT unguarded: each one requires the
 // bearer to equal CRON_SECRET and refuses to run at all when it is unset, so
 // the guard moved from the edge into the route rather than disappearing.
-const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron", "/r", "/api/version"];
+//
+// `/opmc-metrics.js` is the tracked-events overlay (public/). The loader adds it
+// to a customer's page only when the address carries ?opmc_metrics=1, for
+// anonymous visitors like the loader itself. It is a static script with no data
+// in it; the data comes from /api/loader/metrics.
+const PUBLIC_PATHS = ["/login", "/api/auth/admin-login", "/api/auth/verify", "/loader", "/api/loader", "/api/git/webhook", "/api/prototypes/sync-status", "/api/cron", "/r", "/api/version", "/opmc-metrics.js"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

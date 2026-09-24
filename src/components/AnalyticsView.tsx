@@ -15,10 +15,12 @@ type View = "readout" | "numbers" | "evidence" | "plan";
  * refetches or loses in-progress state; #measurement / #results deep
  * links land on the right view.
  */
-export function AnalyticsView({ prototypeKey, bound, running, experimentName, experimentId, variationName, boundAt, experimentStatus }: {
+export function AnalyticsView({ prototypeKey, bound, running, experimentName, experimentId, variationName, boundAt, experimentStatus, eventsUrl }: {
   prototypeKey: string;
   bound: boolean;
   running: boolean;
+  /** Passed to the measurement plan: the page with the tracked-events overlay. */
+  eventsUrl?: string;
   /** Identity of the experiment these numbers come from — the one thing that
    *  is true in every view here, and is stated nowhere else in the room. */
   experimentName?: string;
@@ -99,7 +101,7 @@ export function AnalyticsView({ prototypeKey, bound, running, experimentName, ex
         <EvidencePanel prototypeKey={prototypeKey} bound={bound} />
       </div>
       <div className={view === "plan" ? "" : "hidden"} id="measurement">
-        <MeasurementPanel prototypeKey={prototypeKey} bound={bound} running={running} onPending={onPending} />
+        <MeasurementPanel prototypeKey={prototypeKey} bound={bound} running={running} onPending={onPending} eventsUrl={eventsUrl} />
       </div>
       <div id="results">
         <ResultsPanel prototypeKey={prototypeKey} bound={bound} running={running} view={view === "numbers" ? "numbers" : "readout"} hidden={view === "plan" || view === "evidence"} />
