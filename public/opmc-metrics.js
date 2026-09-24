@@ -1,0 +1,531 @@
+/* Tracked-events overlay (opmc-metrics.js).
+ *
+ * The loader (/loader/<siteKey>) adds this to a page ONLY when the address
+ * carries ?opmc_metrics=1, after setting window.__OPMC_EVENTS__ from
+ * /api/loader/metrics. It draws every element an experiment's click events are
+ * bound to: a see-through box per element, one colour per event, and a
+ * draggable callout naming the event. It follows the page live: scroll,
+ * resize, and whatever the variation reveals as you click around. A panel
+ * lists every event: not seen yet, hidden on this page, on screen, on the
+ * page, seen earlier. It floats or docks left / bottom / right, like a
+ * browser's developer tools, and a switcher at the top opens the
+ * experiment's other variations.
+ *
+ * Everything lives in ONE shadow root, so the page's CSS cannot reach it (the
+ * host's Bootstrap `.row` was wrapping the panel's rows) and the page's
+ * querySelectorAll can never match the overlay's own nodes.
+ *
+ * Lower environments only: nothing here goes into an experiment's code or
+ * onto a production site.
+ */
+(function () {
+  var Q = new URLSearchParams(location.search);
+  var on = false;
+  Q.forEach(function (v, k) { if (k.toLowerCase() === "opmc_metrics" && v === "1") on = true; });
+  if (!on) return;
+  if (window.__opmcMetricsOverlay) window.__opmcMetricsOverlay.destroy();
+
+  var CFG = window.__OPMC_EVENTS__ || { variation: "", events: [] };
+  var PALETTE = ["#E6194B", "#3CB44B", "#4363D8", "#F58231", "#911EB4", "#0AAFC0", "#F032E6",
+                 "#9A6324", "#469990", "#808000", "#000075", "#800000", "#D4A000", "#5C5C5C"];
+  var DARK_TEXT = { "#D4A000": 1 };
+  // The experiment's variations, from Optimizely. Which one this page shows
+  // comes from the URL: ?opmc= is the prototype that shows its variation, and
+  // &opmc_variation=<id> (set by the switcher) names a variation that isn't
+  // ours, usually the original, for which the loader skipped our code.
+  var here = "", only = "";
+  Q.forEach(function (v, k) { k = k.toLowerCase(); if (k === "opmc") here = v; if (k === "opmc_variation") only = v; });
+  var VARS = CFG.variations && CFG.variations.length ? CFG.variations
+    : [{ id: "", name: CFG.variation || "This page", opmc: here || null }];
+  var CUR = VARS.filter(function (v) { return only ? v.id === only : (v.opmc || "") === here; })[0] || null;
+  var TEST_ROOT = (CUR && CUR.testRoot) || CFG.testRoot || "";
+  var events = CFG.events.map(function (e, i) {
+    return { name: e.name, selector: e.selector, color: PALETTE[i % PALETTE.length], on: true,
+             els: [], shown: [], visible: [], shared: [], seen: false, status: "none", error: null, outside: 0 };
+  });
+
+  // ── layout preference (per browser) ───────────────────────────────────────
+  var LS = "opmc-metrics-layout";
+  var layout = { dock: "float", w: 340, h: 260, x: null, y: null, min: false };
+  try { var saved = JSON.parse(localStorage.getItem(LS) || "null"); if (saved) for (var k in saved) layout[k] = saved[k]; } catch (x) {}
+  function saveLayout() { try { localStorage.setItem(LS, JSON.stringify(layout)); } catch (x) {} }
+
+  // ── the host and its shadow root ──────────────────────────────────────────
+  var Z = 2147483000;
+  var host = document.createElement("opmc-metrics");
+  host.setAttribute("style", "all:initial;position:fixed;inset:0;pointer-events:none;z-index:" + Z + ";");
+  var sh = host.attachShadow({ mode: "open" });
+  var FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+  var MONO = "ui-monospace,SFMono-Regular,Menlo,monospace";
+  var ICON = {
+    float: '<rect x="3" y="7" width="13" height="12" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-3"/>',
+    left: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+    bottom: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 14h18"/>',
+    right: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+    eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    eyeOff: '<path d="M10.7 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-2.6 3.4"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.6 9.6 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/>',
+  };
+  var CHEVRON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235D6B7E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E";
+  function icon(name) {
+    return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[name] + "</svg>";
+  }
+  sh.innerHTML =
+    "<style>" +
+    ":host{all:initial}" +
+    "*{box-sizing:border-box}" +
+    "#boxes,#labels{position:fixed;inset:0;pointer-events:none}" +
+    "#lines{position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;overflow:visible}" +
+    ".box{position:absolute;border:2px solid;border-radius:4px}" +
+    ".cl{position:absolute;height:22px;padding:0 8px;border-radius:6px;font:600 12px/22px " + FONT + ";white-space:nowrap;" +
+      "box-shadow:0 2px 6px rgba(0,0,0,.25);pointer-events:auto;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}" +
+    "#panel{position:fixed;pointer-events:auto;display:flex;flex-direction:column;background:#fff;color:#17202B;" +
+      "border:1px solid #C9D2DC;font:13px/1.4 " + FONT + ";box-shadow:0 12px 32px rgba(23,32,43,.22);text-align:left}" +
+    "#panel.float{border-radius:12px;max-height:70vh}" +
+    "#panel.right{top:0;right:0;bottom:0;border-width:0 0 0 1px;box-shadow:-8px 0 24px rgba(23,32,43,.12)}" +
+    "#panel.left{top:0;left:0;bottom:0;border-width:0 1px 0 0;box-shadow:8px 0 24px rgba(23,32,43,.12)}" +
+    "#panel.bottom{left:0;right:0;bottom:0;border-width:1px 0 0 0;box-shadow:0 -8px 24px rgba(23,32,43,.12)}" +
+    "#panel.min.right,#panel.min.left{bottom:auto}" +
+    // !important: the bottom dock's grid rule below has the same specificity
+    // and would otherwise keep the list open when minimised.
+    "#panel.min .list{display:none!important}" +
+    "header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #E3E8EE;flex-shrink:0}.ttl{flex:1 1 auto;min-width:0}" +
+    "#panel.min header{border-bottom:0}" +
+    "#panel.float header{cursor:move}" +
+    "h2{margin:0;font-size:14px;font-weight:600;line-height:1.3}" +
+    ".sub{flex:1 1 100%;color:#5D6B7E;font-size:12.5px}" +
+    ".build{flex:1 1 100%;font-size:12px;color:#5D6B7E}.build.off{color:#B45309;font-weight:500}#panel.bottom .build{order:4}" +
+    // The variation switcher gets its own row under the title. Docked to the
+    // bottom there's room, so title, switcher, count and tools share one row.
+    ".vrow{flex:1 1 100%;display:flex;align-items:center;gap:8px;min-width:0}" +
+    ".vrow label{flex:0 0 auto;font-size:12px;font-weight:600;color:#5D6B7E}" +
+    "select{flex:1 1 auto;min-width:0;max-width:420px;height:32px;margin:0;padding:0 30px 0 10px;border:1px solid #C9D2DC;border-radius:6px;" +
+      "background:#fff url(\"" + CHEVRON + "\") no-repeat right 8px center/16px 16px;color:#17202B;font:500 13px/1.2 " + FONT + ";" +
+      "-webkit-appearance:none;appearance:none;cursor:pointer;text-overflow:ellipsis}" +
+    "select:hover{border-color:#1D4ED8}" +
+    "select:disabled{opacity:.6;cursor:default}" +
+    "select:focus-visible,.ic:focus-visible{outline:2px solid #1D4ED8;outline-offset:1px}" +
+    "#panel.bottom .ttl{flex:0 0 auto}#panel.bottom .vrow{order:1;flex:0 1 420px}#panel.bottom .sub{order:2;flex:1 1 160px}#panel.bottom .tools{order:3}" +
+    ".tools{margin-left:auto;display:flex;gap:2px;align-items:center;flex-shrink:0}" +
+    ".ic{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:6px;" +
+      "background:transparent;color:#5D6B7E;cursor:pointer;padding:0;margin:0}" +
+    ".ic:hover{background:#F1F4F8;color:#17202B}" +
+    ".ic[aria-pressed=true]{background:#EAF0FB;color:#1D4ED8;border-color:rgba(29,78,216,.35)}" +
+    ".sep{width:1px;height:18px;background:#E3E8EE;margin:0 4px}" +
+    ".list{overflow:auto;padding:4px 0 8px;flex:1 1 auto;min-height:0}" +
+    "#panel.bottom .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-content:start}" +
+    "#panel.bottom .grp{grid-column:1/-1}" +
+    // Section headers: a tinted band with a rule above and below, the status
+    // colour, a count badge, and sticky so the section stays named while scrolling.
+    ".grp{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;padding:8px 14px;margin-top:8px;" +
+      "background:#F4F6F9;border-top:1px solid #C9D2DC;border-bottom:1px solid #C9D2DC;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#17202B}" +
+    ".list>.grp:first-child{margin-top:0;border-top:0}" +
+    ".grp .dot{width:8px;height:8px;border-radius:999px;background:#5D6B7E;flex:0 0 8px}" +
+    ".grp .n{margin-left:auto;min-width:22px;height:20px;padding:0 7px;border-radius:999px;background:#5D6B7E;color:#fff;font-size:11.5px;line-height:20px;text-align:center;letter-spacing:0}" +
+    ".grp.bad{background:#FDECEC;color:#A11D1D;border-color:rgba(196,43,43,.35)}.grp.bad .dot,.grp.bad .n{background:#C42B2B}" +
+    ".grp.amber{background:#FFF4E5;color:#8A4B08;border-color:rgba(180,83,9,.35)}.grp.amber .dot,.grp.amber .n{background:#B45309}" +
+    ".grp.good{background:#E8F5EF;color:#05603F;border-color:rgba(6,122,85,.35)}.grp.good .dot,.grp.good .n{background:#067A55}" +
+    ".ev+.ev{border-top:1px solid #EDF1F5}" +
+    ".ev{display:flex;gap:10px;align-items:flex-start;padding:7px 14px;cursor:pointer}" +
+    ".ev:hover{background:#F1F4F8}" +
+    ".ev.missing{background:rgba(196,43,43,.05)}" +
+    ".sw{width:12px;height:12px;border-radius:3px;margin-top:3px;flex:0 0 12px}" +
+    ".txt{min-width:0;flex:1 1 auto}" +
+    ".nm{font-weight:500}" +
+    ".meta{color:#5D6B7E;font-size:12px}" +
+    ".sel{font:11.5px/1.35 " + MONO + ";color:#4A5768;word-break:break-all}" +
+    ".warn{color:#B45309;font-size:12px}" +
+    ".rz{position:absolute;z-index:2}" +
+    "#panel.right .rz{left:-4px;top:0;bottom:0;width:8px;cursor:ew-resize}" +
+    "#panel.left .rz{right:-4px;top:0;bottom:0;width:8px;cursor:ew-resize}" +
+    "#panel.bottom .rz{top:-4px;left:0;right:0;height:8px;cursor:ns-resize}" +
+    "#panel.float .rz,#panel.min .rz{display:none}" +
+    "</style>" +
+    '<div id="boxes"></div>' +
+    '<svg id="lines" xmlns="http://www.w3.org/2000/svg"></svg>' +
+    '<div id="labels"></div>' +
+    '<section id="panel" role="complementary" aria-label="Tracked events">' +
+      '<div class="rz" data-a="resize"></div>' +
+      "<header>" +
+        '<div class="ttl"><h2>Tracked events</h2></div>' +
+        '<div class="tools">' +
+          '<button type="button" class="ic" data-dock="float" title="Float" aria-label="Float">' + icon("float") + "</button>" +
+          '<button type="button" class="ic" data-dock="left" title="Dock to left" aria-label="Dock to left">' + icon("left") + "</button>" +
+          '<button type="button" class="ic" data-dock="bottom" title="Dock to bottom" aria-label="Dock to bottom">' + icon("bottom") + "</button>" +
+          '<button type="button" class="ic" data-dock="right" title="Dock to right" aria-label="Dock to right">' + icon("right") + "</button>" +
+          '<span class="sep"></span>' +
+          '<button type="button" class="ic" data-a="toggle" title="Hide boxes" aria-label="Hide boxes">' + icon("eye") + "</button>" +
+          '<button type="button" class="ic" data-a="min" title="Minimise" aria-label="Minimise">–</button>' +
+        "</div>" +
+        '<div class="vrow"><label for="opmc-var">Variation</label><select id="opmc-var"></select></div>' +
+        '<div class="sub" aria-live="polite"></div>' +
+        '<div class="build" hidden></div>' +
+      "</header>" +
+      '<div class="list"></div>' +
+    "</section>";
+  document.documentElement.appendChild(host);
+
+  var boxes = sh.getElementById("boxes"), svg = sh.getElementById("lines"), labels = sh.getElementById("labels");
+  var panel = sh.getElementById("panel"), sub = sh.querySelector(".sub"), list = sh.querySelector(".list");
+  var svgNS = "http://www.w3.org/2000/svg";
+  var showBoxes = true, hover = null;
+
+  // ── variation switcher ────────────────────────────────────────────────────
+  // Picking a variation reloads the page with opmc_metrics=1 kept: our
+  // prototype's ?opmc= key for a variation we build, or this test's key plus
+  // &opmc_variation=<id> for one we don't (the original), so the loader still
+  // knows the test and skips our code. The loader draws the overlay again.
+  var vsel = sh.getElementById("opmc-var"), switching = "";
+
+  // The build on the page against the build Optimizely holds for this
+  // variation. ?opmc= runs our latest build, which can differ from the one
+  // pushed into the experiment. Say so, because the events are checked
+  // against what is on the page.
+  var buildEl = sh.querySelector(".build"), pageBuild = null;
+  function findPageBuild() {
+    if (pageBuild) return pageBuild;
+    var ss = document.querySelectorAll("script[data-opmc]");
+    for (var i = 0; i < ss.length; i++) {
+      var m = /built from src ([0-9a-f]+)/.exec(ss[i].textContent.slice(0, 400));
+      if (m) return (pageBuild = m[1]);
+    }
+    return null;
+  }
+  function renderBuild() {
+    // A variation we don't build that still changes the page (made in
+    // Optimizely's editor): prep can't show those changes.
+    if (CUR && !CUR.opmc && CUR.pageAsIs === false) {
+      buildEl.hidden = false;
+      buildEl.className = "build off";
+      buildEl.textContent = "This variation was changed in Optimizely's editor. This page doesn't show those changes.";
+      return;
+    }
+    var want = CUR && CUR.optimizelyBuild, have = findPageBuild();
+    if (!want || !have) { buildEl.hidden = true; return; }
+    buildEl.hidden = false;
+    buildEl.className = "build" + (have === want ? "" : " off");
+    buildEl.textContent = have === want ? "Same build as in Optimizely (" + have + ")."
+      : "This page runs our build " + have + ". Optimizely has " + want + ".";
+  }
+  vsel.innerHTML = (CUR ? "" : '<option value="" selected disabled>Not one of this test\'s variations</option>') +
+    VARS.map(function (v) { return '<option value="' + esc(v.id) + '"' + (v === CUR ? " selected" : "") + ">" + esc(v.name) + "</option>"; }).join("");
+  vsel.disabled = VARS.length < 2 && !!CUR;
+  vsel.addEventListener("change", function () {
+    var v = VARS.filter(function (x) { return x.id === vsel.value; })[0];
+    if (!v || v === CUR) return;
+    var u = new URL(location.href), drop = [];
+    u.searchParams.forEach(function (_, k) { var l = k.toLowerCase(); if (l === "opmc" || l === "opmc_variation") drop.push(k); });
+    drop.forEach(function (k) { u.searchParams.delete(k); });
+    u.searchParams.set("opmc", v.opmc || here);
+    if (!v.opmc) u.searchParams.set("opmc_variation", v.id);
+    switching = v.name; vsel.disabled = true; renderList();
+    location.assign(u.toString());
+  });
+
+  // ── docking ───────────────────────────────────────────────────────────────
+  // A docked panel pushes the page aside (padding on <html>), the way a
+  // browser's docked developer tools shrink the page, so nothing hides under it.
+  var html = document.documentElement;
+  var PADS = ["padding-left", "padding-right", "padding-bottom"];
+  var original = {};
+  PADS.forEach(function (p) { original[p] = [html.style.getPropertyValue(p), html.style.getPropertyPriority(p)]; });
+  function restorePads() { PADS.forEach(function (p) { html.style.setProperty(p, original[p][0], original[p][1]); }); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function applyLayout() {
+    var d = layout.dock;
+    panel.className = d + (layout.min ? " min" : "");
+    panel.style.cssText = "";
+    restorePads();
+    if (d === "float") {
+      var w = clamp(layout.w, 280, innerWidth - 24);
+      panel.style.width = w + "px";
+      if (layout.x === null || layout.y === null) { panel.style.right = "12px"; panel.style.bottom = "12px"; }
+      else { panel.style.left = clamp(layout.x, 0, innerWidth - 120) + "px"; panel.style.top = clamp(layout.y, 0, innerHeight - 48) + "px"; }
+    } else if (d === "bottom") {
+      var h = clamp(layout.h, 140, Math.round(innerHeight * 0.7));
+      if (!layout.min) { panel.style.height = h + "px"; html.style.setProperty("padding-bottom", h + "px", "important"); }
+    } else {
+      var sw = clamp(layout.w, 260, Math.round(innerWidth * 0.6));
+      panel.style.width = sw + "px";
+      if (!layout.min) html.style.setProperty(d === "left" ? "padding-left" : "padding-right", sw + "px", "important");
+    }
+    sh.querySelectorAll("[data-dock]").forEach(function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-dock") === d ? "true" : "false"); });
+    var mb = sh.querySelector('[data-a="min"]');
+    mb.textContent = layout.min ? "+" : "–";
+    mb.title = mb.ariaLabel = layout.min ? "Expand" : "Minimise";
+    saveLayout();
+    tick();
+  }
+
+  panel.addEventListener("click", function (ev) {
+    var dockBtn = ev.target.closest("[data-dock]");
+    if (dockBtn) { layout.dock = dockBtn.getAttribute("data-dock"); applyLayout(); return; }
+    var b = ev.target.closest("[data-a]");
+    if (b) {
+      var a = b.getAttribute("data-a");
+      if (a === "toggle") {
+        showBoxes = !showBoxes;
+        var t = showBoxes ? "Hide boxes" : "Show boxes";
+        b.innerHTML = icon(showBoxes ? "eye" : "eyeOff"); b.title = t; b.setAttribute("aria-label", t);
+        draw();
+      }
+      if (a === "min") { layout.min = !layout.min; applyLayout(); }
+      return;
+    }
+    var row = ev.target.closest(".ev[data-i]");
+    if (!row) return;
+    var e = events[+row.getAttribute("data-i")];
+    var target = e.visible[0] || e.shown[0] || e.els[0];
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  panel.addEventListener("mouseover", function (ev) {
+    var row = ev.target.closest(".ev[data-i]");
+    var i = row ? +row.getAttribute("data-i") : null;
+    if (i !== hover) { hover = i; draw(); }
+  });
+  panel.addEventListener("mouseleave", function () { hover = null; draw(); });
+
+  // Floating: drag by the header. Docked: drag the inner edge to resize.
+  var move = null;
+  panel.addEventListener("pointerdown", function (ev) {
+    var rz = ev.target.closest('[data-a="resize"]');
+    var head = ev.target.closest("header");
+    if (rz && layout.dock !== "float") {
+      move = { kind: "resize" };
+    } else if (head && layout.dock === "float" && !ev.target.closest("button,select,label")) {
+      var r = panel.getBoundingClientRect();
+      move = { kind: "drag", ox: ev.clientX - r.left, oy: ev.clientY - r.top };
+    } else return;
+    ev.preventDefault();
+    try { panel.setPointerCapture(ev.pointerId); } catch (x) {}
+  });
+  panel.addEventListener("pointermove", function (ev) {
+    if (!move) return;
+    if (move.kind === "drag") {
+      layout.x = ev.clientX - move.ox; layout.y = ev.clientY - move.oy;
+      panel.style.right = ""; panel.style.bottom = "";
+      panel.style.left = clamp(layout.x, 0, innerWidth - 120) + "px";
+      panel.style.top = clamp(layout.y, 0, innerHeight - 48) + "px";
+    } else if (layout.dock === "right") { layout.w = innerWidth - ev.clientX; applyLayout(); }
+    else if (layout.dock === "left") { layout.w = ev.clientX; applyLayout(); }
+    else if (layout.dock === "bottom") { layout.h = innerHeight - ev.clientY; applyLayout(); }
+  });
+  function endMove(ev) {
+    if (!move) return;
+    move = null; saveLayout();
+    try { panel.releasePointerCapture(ev.pointerId); } catch (x) {}
+  }
+  panel.addEventListener("pointerup", endMove);
+  panel.addEventListener("pointercancel", endMove);
+
+  // ── measure ───────────────────────────────────────────────────────────────
+  function isShown(el) {
+    if (!el.isConnected) return false;
+    var r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return false;
+    var s = getComputedStyle(el);
+    return !(s.visibility === "hidden" || s.display === "none" || +s.opacity === 0);
+  }
+  function inViewport(r) { return r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; }
+  function measure() {
+    var owner = new Map();
+    events.forEach(function (e) {
+      e.error = null;
+      try { e.els = Array.prototype.slice.call(document.querySelectorAll(e.selector)); }
+      catch (err) { e.els = []; e.error = "The selector isn't valid CSS."; }
+      e.shown = e.els.filter(isShown);
+      e.visible = e.shown.filter(function (el) { return inViewport(el.getBoundingClientRect()); });
+      if (e.shown.length) e.seen = true;
+      // screen · page (scroll to it) · earlier (appeared this visit, gone now) ·
+      // hidden (matches, never visible: can't be clicked) · none (never matched yet)
+      e.status = e.error ? "none" : e.visible.length ? "screen" : e.shown.length ? "page" : e.seen ? "earlier" : e.els.length ? "hidden" : "none";
+      e.outside = TEST_ROOT ? e.shown.filter(function (el) { return !el.closest(TEST_ROOT); }).length : 0;
+      e.els.forEach(function (el) { var l = owner.get(el) || []; l.push(e); owner.set(el, l); });
+    });
+    events.forEach(function (e) {
+      var shared = {};
+      e.els.forEach(function (el) { (owner.get(el) || []).forEach(function (o) { if (o !== e) shared[o.name] = 1; }); });
+      e.shared = Object.keys(shared);
+    });
+  }
+
+  // ── draw ──────────────────────────────────────────────────────────────────
+  // Boxes are redrawn every tick. Each event's callout (label + line + dot) is
+  // one persistent set of nodes, so it can be dragged: a drag pins it at an
+  // offset from its element, and it rides along as the page scrolls.
+  // Double-click a callout to put it back.
+  function textOn(color) { return DARK_TEXT[color] ? "#17202B" : "#fff"; }
+  var drag = null;
+  function ensureCallout(e) {
+    if (e.labelEl) return;
+    var l = document.createElement("div");
+    l.className = "cl";
+    l.title = "Drag to move · double-click to put back";
+    l.style.background = e.color; l.style.color = textOn(e.color);
+    l.addEventListener("pointerdown", function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      var r = l.getBoundingClientRect();
+      drag = { e: e, ox: ev.clientX - r.left, oy: ev.clientY - r.top };
+      try { l.setPointerCapture(ev.pointerId); } catch (x) {}
+      l.style.cursor = "grabbing";
+    });
+    l.addEventListener("pointermove", function (ev) {
+      if (!drag || drag.e !== e || !e.anchor) return;
+      e.pin = { dx: ev.clientX - drag.ox - e.anchor.left, dy: ev.clientY - drag.oy - e.anchor.top };
+      draw();
+    });
+    function end(ev) {
+      if (!drag || drag.e !== e) return;
+      drag = null; l.style.cursor = "grab";
+      try { l.releasePointerCapture(ev.pointerId); } catch (x) {}
+    }
+    l.addEventListener("pointerup", end);
+    l.addEventListener("pointercancel", end);
+    l.addEventListener("click", function (ev) { ev.preventDefault(); ev.stopPropagation(); });
+    l.addEventListener("dblclick", function (ev) { ev.preventDefault(); ev.stopPropagation(); e.pin = null; draw(); });
+    labels.appendChild(l);
+    e.labelEl = l;
+    e.lineEl = document.createElementNS(svgNS, "line");
+    e.lineEl.setAttribute("stroke", e.color); e.lineEl.setAttribute("stroke-width", "2");
+    e.dotEl = document.createElementNS(svgNS, "circle");
+    e.dotEl.setAttribute("r", "3.5"); e.dotEl.setAttribute("fill", e.color);
+    svg.appendChild(e.lineEl); svg.appendChild(e.dotEl);
+  }
+  function hideCallout(e) {
+    if (!e.labelEl) return;
+    e.labelEl.style.display = "none"; e.lineEl.style.display = "none"; e.dotEl.style.display = "none";
+  }
+  function nearest(r, px, py) { return { x: Math.max(r.left, Math.min(px, r.right)), y: Math.max(r.top, Math.min(py, r.bottom)) }; }
+  function draw() {
+    boxes.innerHTML = "";
+    var hv = hover !== null && events[hover] && events[hover].visible.length ? hover : null;
+    var placed = [];
+    events.forEach(function (e, i) {
+      if (!showBoxes || !e.on || !e.visible.length) { hideCallout(e); return; }
+      var dim = hv !== null && hv !== i;
+      e.visible.forEach(function (el) {
+        var r = el.getBoundingClientRect();
+        var b = document.createElement("div");
+        b.className = "box";
+        b.style.cssText = "left:" + (r.left - 2) + "px;top:" + (r.top - 2) + "px;width:" + (r.width + 4) + "px;height:" + (r.height + 4) + "px;" +
+          "border-color:" + e.color + ";background:" + e.color + (dim ? "0D" : "33") + ";opacity:" + (dim ? 0.25 : 1) + ";";
+        boxes.appendChild(b);
+      });
+      ensureCallout(e);
+      var l = e.labelEl;
+      var a = e.visible[0].getBoundingClientRect();
+      e.anchor = a;
+      var text = e.name + (e.visible.length > 1 ? "  ×" + e.visible.length : "");
+      if (l.textContent !== text) l.textContent = text;
+      l.style.display = ""; e.lineEl.style.display = ""; e.dotEl.style.display = "";
+      var w = l.offsetWidth || 160, h = 22, x, y;
+      if (e.pin) {
+        x = a.left + e.pin.dx; y = a.top + e.pin.dy;
+      } else {
+        var right = a.right + 18 + w < innerWidth;
+        x = right ? a.right + 18 : Math.max(4, a.left - 18 - w);
+        y = Math.max(4, a.top - 30);
+        for (var guard = 0; guard < 40; guard++) {
+          var hit = placed.some(function (p) { return x < p.x + p.w + 4 && x + w + 4 > p.x && y < p.y + p.h + 4 && y + h + 4 > p.y; });
+          if (!hit) break;
+          y += h + 4;
+        }
+        y = Math.min(y, innerHeight - h - 4);
+      }
+      placed.push({ x: x, y: y, w: w, h: h });
+      l.style.left = x + "px"; l.style.top = y + "px";
+      l.style.opacity = dim ? 0.3 : 1;
+      l.style.zIndex = drag && drag.e === e ? 2 : 1;
+      var lr = { left: x, top: y, right: x + w, bottom: y + h };
+      var p1 = nearest(a, x + w / 2, y + h / 2);
+      var p2 = nearest(lr, p1.x, p1.y);
+      e.lineEl.setAttribute("x1", p1.x); e.lineEl.setAttribute("y1", p1.y);
+      e.lineEl.setAttribute("x2", p2.x); e.lineEl.setAttribute("y2", p2.y);
+      e.lineEl.setAttribute("opacity", dim ? "0.25" : "1");
+      e.dotEl.setAttribute("cx", p1.x); e.dotEl.setAttribute("cy", p1.y);
+      e.dotEl.setAttribute("opacity", dim ? "0.25" : "1");
+    });
+  }
+
+  // ── the list ──────────────────────────────────────────────────────────────
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function grp(cls, label, n) {
+    return '<div class="grp' + (cls ? " " + cls : "") + '"><span class="dot"></span><span>' + label + '</span><span class="n">' + n + "</span></div>";
+  }
+  function row(e, i, extra, cls) {
+    var warn = [];
+    if (e.outside) warn.push(e.outside + " outside this test's area");
+    if (e.shared.length) warn.push("Same element also counted by: " + e.shared.join(", "));
+    return '<div class="ev' + (cls ? " " + cls : "") + '" data-i="' + i + '"><span class="sw" style="background:' + e.color + '"></span><div class="txt">' +
+      '<div class="nm">' + esc(e.name) + "</div>" +
+      '<div class="meta">' + extra + "</div>" +
+      (warn.length ? '<div class="warn">' + esc(warn.join(" · ")) + "</div>" : "") +
+      "</div></div>";
+  }
+  var lastList = "";
+  function renderList() {
+    var g = { none: [], hidden: [], screen: [], page: [], earlier: [] };
+    events.forEach(function (e, i) { g[e.status].push([e, i]); });
+    var out = "";
+    if (g.none.length) {
+      out += grp("bad", "Not seen yet", g.none.length);
+      g.none.forEach(function (p) {
+        var e = p[0];
+        var why = e.error || "Not on the page yet. Click around to reveal it. If it never appears, this event can't fire.";
+        out += row(e, p[1], '<span style="color:#C42B2B">' + esc(why) + '</span><div class="sel">' + esc(e.selector) + "</div>", "missing");
+      });
+    }
+    if (g.hidden.length) {
+      out += grp("amber", "Hidden on this page", g.hidden.length);
+      g.hidden.forEach(function (p) {
+        var e = p[0];
+        out += row(e, p[1], '<span style="color:#B45309">' + e.els.length + " matching, none visible yet. Click around to reveal them. If they never show, this event can't fire here.</span>" + '<div class="sel">' + esc(e.selector) + "</div>");
+      });
+    }
+    if (g.screen.length) {
+      out += grp("good", "On screen now", g.screen.length);
+      g.screen.forEach(function (p) { var e = p[0]; out += row(e, p[1], e.visible.length + " on screen" + (e.shown.length > e.visible.length ? " · " + e.shown.length + " on the page" : "")); });
+    }
+    if (g.page.length) {
+      out += grp("", "On the page, scroll to see", g.page.length);
+      g.page.forEach(function (p) { var e = p[0]; out += row(e, p[1], e.shown.length + " on the page"); });
+    }
+    if (g.earlier.length) {
+      out += grp("", "Seen earlier", g.earlier.length);
+      g.earlier.forEach(function (p) { var e = p[0]; out += row(e, p[1], "Appeared earlier in this visit"); });
+    }
+    var seen = events.filter(function (e) { return e.seen; }).length;
+    var nd = (CFG.notDrawable || []).length;
+    sub.textContent = switching ? "Opening " + switching + "…"
+      : seen + " of " + events.length + " events seen so far" +
+        (nd ? " · " + nd + (nd === 1 ? " more isn't a click event" : " more aren't click events") + ", so not shown" : "");
+    renderBuild();
+    if (out !== lastList) { list.innerHTML = out; lastList = out; }
+  }
+
+  // ── keep it live ──────────────────────────────────────────────────────────
+  var pending = false;
+  function tick() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(function () { pending = false; measure(); draw(); renderList(); });
+  }
+  function onResize() { applyLayout(); }
+  addEventListener("scroll", tick, { passive: true, capture: true });
+  addEventListener("resize", onResize);
+  // The overlay lives in a shadow root, so this only ever sees the page.
+  var mo = new MutationObserver(tick);
+  mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "hidden", "aria-expanded"] });
+  var iv = setInterval(tick, 700);
+  applyLayout();
+
+  window.__opmcMetricsOverlay = {
+    events: events,
+    variation: CUR,
+    setDock: function (d) { layout.dock = d; applyLayout(); },
+    destroy: function () {
+      clearInterval(iv); mo.disconnect();
+      removeEventListener("scroll", tick, { capture: true }); removeEventListener("resize", onResize);
+      restorePads(); host.remove(); window.__opmcMetricsOverlay = null;
+    },
+  };
+})();

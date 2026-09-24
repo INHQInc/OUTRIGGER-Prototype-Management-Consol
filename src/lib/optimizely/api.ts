@@ -77,6 +77,8 @@ export interface OptiEvent {
   name: string;
   event_type?: string;
   archived?: boolean;
+  /** A click event carries the CSS selector it counts clicks on. */
+  config?: { selector?: string; [k: string]: unknown };
 }
 
 /**

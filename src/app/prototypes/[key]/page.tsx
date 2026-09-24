@@ -539,6 +539,9 @@ export default async function PrototypeWorkspace({ params, searchParams }: {
               variationName={p.experiment?.variationName}
               boundAt={p.experiment?.boundAt}
               experimentStatus={experimentStatus ?? undefined}
+              eventsUrl={/^https?:\/\//.test(p.targets[0]?.url ?? "")
+                ? `${p.targets[0].url}${p.targets[0].url.includes("?") ? "&" : "?"}opmc=${encodeURIComponent(key)}&opmc_metrics=1`
+                : undefined}
             />
           </Room>
         )}

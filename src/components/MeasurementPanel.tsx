@@ -13,13 +13,16 @@ import type { MetricMap, CompositeMetric } from "@/lib/prototypes/results";
  * human confirms — stamping the plan pre-start. Gaps become
  * instrumentation asks; new events appearing later trip the drift banner.
  */
-export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
+export function MeasurementPanel({ prototypeKey, bound, running, onPending, eventsUrl }: {
   prototypeKey: string;
   /** Open-question count, reported up so the tab can carry the badge —
    *  an unanswered plan question is invisible from the other views. */
   onPending?: (n: number) => void;
   bound: boolean;
   running: boolean;
+  /** The prototype's page with ?opmc_metrics=1: the tracked-events overlay,
+   *  to check every event has something to click before traffic runs. */
+  eventsUrl?: string;
 }) {
   const [plan, setPlan] = useState<MetricMap | null>(null);
   const [attached, setAttached] = useState<string[]>([]);
@@ -149,6 +152,12 @@ export function MeasurementPanel({ prototypeKey, bound, running, onPending }: {
     <div className="space-y-3">
       {err && <div className="text-[13px] text-danger">{err}</div>}
       {enumError && <div className="text-[13px] text-warn">{enumError}</div>}
+      {eventsUrl && (
+        <div className="flex items-center gap-2 flex-wrap text-[13px] text-muted-2">
+          <span>Check every event has something to click before traffic runs.</span>
+          <a href={eventsUrl} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">See events on the page ↗</a>
+        </div>
+      )}
 
       {/* Drift: the build (or Opti config) moved past the stamped plan. */}
       {drift.length > 0 && plan?.plannedAt && (
