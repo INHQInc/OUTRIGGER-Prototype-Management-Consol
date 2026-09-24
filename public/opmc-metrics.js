@@ -49,6 +49,7 @@
   var layout = { dock: "float", w: 340, h: 260, x: null, y: null, min: false };
   try { var saved = JSON.parse(localStorage.getItem(LS) || "null"); if (saved) for (var k in saved) layout[k] = saved[k]; } catch (x) {}
   function saveLayout() { try { localStorage.setItem(LS, JSON.stringify(layout)); } catch (x) {} }
+  var openGroups = layout.open && typeof layout.open === "object" ? layout.open : (layout.open = {});
 
   // ── the host and its shadow root ──────────────────────────────────────────
   var Z = 2147483000;
@@ -124,6 +125,11 @@
     ".grp.bad{background:#FDECEC;color:#A11D1D;border-color:rgba(196,43,43,.35)}.grp.bad .dot,.grp.bad .n{background:#C42B2B}" +
     ".grp.amber{background:#FFF4E5;color:#8A4B08;border-color:rgba(180,83,9,.35)}.grp.amber .dot,.grp.amber .n{background:#B45309}" +
     ".grp.good{background:#E8F5EF;color:#05603F;border-color:rgba(6,122,85,.35)}.grp.good .dot,.grp.good .n{background:#067A55}" +
+    // Hidden and not-seen-yet sit last and fold away: their header is a button.
+    "button.grp{width:100%;margin-left:0;margin-right:0;border-left:0;border-right:0;border-radius:0;font-family:inherit;line-height:inherit;text-align:left;cursor:pointer}" +
+    "button.grp:hover{filter:brightness(.97)}button.grp:focus-visible{outline:2px solid #1D4ED8;outline-offset:-2px}" +
+    ".grp .chev{flex:0 0 12px;display:inline-flex;transition:transform .15s}.grp[aria-expanded=true] .chev{transform:rotate(90deg)}" +
+    "@media (prefers-reduced-motion:reduce){.grp .chev{transition:none}}" +
     ".ev+.ev{border-top:1px solid #EDF1F5}" +
     ".ev{display:flex;gap:10px;align-items:flex-start;padding:7px 14px;cursor:pointer}" +
     ".ev:hover{background:#F1F4F8}" +
@@ -269,6 +275,15 @@
         draw();
       }
       if (a === "min") { layout.min = !layout.min; applyLayout(); }
+      return;
+    }
+    var fold = ev.target.closest("button.grp[data-g]");
+    if (fold) {
+      var key = fold.getAttribute("data-g");
+      openGroups[key] = !openGroups[key];
+      saveLayout(); renderList();
+      var again = list.querySelector('button.grp[data-g="' + key + '"]');
+      if (again) again.focus();
       return;
     }
     var row = ev.target.closest(".ev[data-i]");
@@ -448,8 +463,12 @@
 
   // ── the list ──────────────────────────────────────────────────────────────
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-  function grp(cls, label, n) {
-    return '<div class="grp' + (cls ? " " + cls : "") + '"><span class="dot"></span><span>' + label + '</span><span class="n">' + n + "</span></div>";
+  var CHEV = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+  function grp(cls, label, n, key) {
+    var inner = '<span class="dot"></span><span>' + label + '</span><span class="n">' + n + "</span>";
+    if (!key) return '<div class="grp' + (cls ? " " + cls : "") + '">' + inner + "</div>";
+    return '<button type="button" class="grp' + (cls ? " " + cls : "") + '" data-g="' + key + '" aria-expanded="' + (openGroups[key] ? "true" : "false") + '">' +
+      '<span class="chev">' + CHEV + "</span>" + inner + "</button>";
   }
   function row(e, i, extra, cls) {
     var warn = [];
@@ -466,21 +485,6 @@
     var g = { none: [], hidden: [], screen: [], page: [], earlier: [] };
     events.forEach(function (e, i) { g[e.status].push([e, i]); });
     var out = "";
-    if (g.none.length) {
-      out += grp("bad", "Not seen yet", g.none.length);
-      g.none.forEach(function (p) {
-        var e = p[0];
-        var why = e.error || "Not on the page yet. Click around to reveal it. If it never appears, this event can't fire.";
-        out += row(e, p[1], '<span style="color:#C42B2B">' + esc(why) + '</span><div class="sel">' + esc(e.selector) + "</div>", "missing");
-      });
-    }
-    if (g.hidden.length) {
-      out += grp("amber", "Hidden on this page", g.hidden.length);
-      g.hidden.forEach(function (p) {
-        var e = p[0];
-        out += row(e, p[1], '<span style="color:#B45309">' + e.els.length + " matching, none visible yet. Click around to reveal them. If they never show, this event can't fire here.</span>" + '<div class="sel">' + esc(e.selector) + "</div>");
-      });
-    }
     if (g.screen.length) {
       out += grp("good", "On screen now", g.screen.length);
       g.screen.forEach(function (p) { var e = p[0]; out += row(e, p[1], e.visible.length + " on screen" + (e.shown.length > e.visible.length ? " · " + e.shown.length + " on the page" : "")); });
@@ -492,6 +496,21 @@
     if (g.earlier.length) {
       out += grp("", "Seen earlier", g.earlier.length);
       g.earlier.forEach(function (p) { var e = p[0]; out += row(e, p[1], "Appeared earlier in this visit"); });
+    }
+    if (g.hidden.length) {
+      out += grp("amber", "Hidden on this page", g.hidden.length, "hidden");
+      if (openGroups.hidden) g.hidden.forEach(function (p) {
+        var e = p[0];
+        out += row(e, p[1], '<span style="color:#B45309">' + e.els.length + " matching, none visible yet. Click around to reveal them. If they never show, this event can't fire here.</span>" + '<div class="sel">' + esc(e.selector) + "</div>");
+      });
+    }
+    if (g.none.length) {
+      out += grp("bad", "Not seen yet", g.none.length, "none");
+      if (openGroups.none) g.none.forEach(function (p) {
+        var e = p[0];
+        var why = e.error || "Not on the page yet. Click around to reveal it. If it never appears, this event can't fire.";
+        out += row(e, p[1], '<span style="color:#C42B2B">' + esc(why) + '</span><div class="sel">' + esc(e.selector) + "</div>", "missing");
+      });
     }
     var seen = events.filter(function (e) { return e.seen; }).length;
     var nd = (CFG.notDrawable || []).length;
