@@ -1,6 +1,9 @@
 # Tracked events on the live page — mockup
 
-*24 Sep 2026. A mockup; nothing in `src/` uses it yet.*
+*24 Sep 2026. **Built and shipped the same day** as a hotfix to production
+(`3a5ba25`). The loader now draws this by itself when the address has
+`opmc_metrics=1`; see `public/opmc-metrics.js` and `/api/loader/metrics`. This
+folder keeps the mockup and the decisions behind it.*
 
 Open a variation on prep with `opmc_metrics=1` and every element tied to the
 experiment's Optimizely events is drawn on the page: a see-through box per

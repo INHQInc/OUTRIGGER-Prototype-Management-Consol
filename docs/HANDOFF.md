@@ -40,7 +40,19 @@ Everything below this line is state and history. That document is the plan.
 
 ---
 
-## MOCKUP — TRACKED EVENTS ON THE LIVE PAGE (24 Sep 2026): a mockup, NOT built
+## SHIPPED — TRACKED EVENTS ON PREP (24 Sep 2026): hotfix to production, 3a5ba25
+
+Bryan approved this as the one exception to the release freeze. The Map
+destination selector test needed its events checked before launch. Open
+`https://prep.outrigger.com/?opmc=<key>&opmc_metrics=1`, or use "See events on
+the page" in Analytics → Measurement plan. The loader then draws the overlay
+itself, and the dropdown switches variations (`&opmc_variation=<id>` for the
+original). The pieces are the loader branch, `/api/loader/metrics`
+(Optimizely, read-only, CDN-cached 5 min), `public/opmc-metrics.js`, and
+`docs/dev/tracked-events-smoke.mts`. `main` was merged back into this branch,
+so the release keeps it.
+
+### How it was designed (the mockup)
 
 `docs/mockups/event-overlay/` is Bryan's idea. Open a variation on prep with
 `opmc_metrics=1` and every element tied to the experiment's Optimizely events
@@ -52,8 +64,8 @@ destination selector (experiment 6619287249485824).
 when the address asks. No metrics code goes into the experiment or
 production. Two routes were considered and set aside: Optimizely's preview of
 www, and a check in the experiment's shared code. The README covers how to run
-it, what it found, and what building it needs. Building it waits for Bryan.
-The site work below stays next.
+it, what it found, and what building it needed. The site work below stays
+next.
 
 ## IN FLIGHT — SITE, AND SITE ONBOARDING (23 Sep 2026): decided and designed, NOT built
 
